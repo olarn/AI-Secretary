@@ -40,6 +40,20 @@ Invalid transitions (e.g. jumping straight from IDLE to WORKING) are rejected
 and shown in red; valid transitions are appended to the visible history log
 with their reason, timestamp, task ID, and tool status.
 
+## Custom character art
+
+The built-in avatar is original placeholder vector art (no licensed
+characters). To use your own image locally, drop a PNG at:
+
+```
+~/Library/Application Support/AISecretary/character.png
+```
+
+`CharacterView` loads it automatically if present, otherwise falls back to
+the placeholder. This path is outside the repo and never committed — it's
+the intended way to use a personal/licensed asset (e.g. official character
+art you own) without distributing it via version control.
+
 ## Test
 
 ```sh
@@ -67,8 +81,8 @@ in UI code.
 
 ## Known limitations
 
-- Character art is a placeholder (SF Symbol in a colored circle), not final
-  production art.
+- Character art is original placeholder vector art by default; see
+  "Custom character art" above to use your own image locally.
 - Chat panel exposes every transition as a manual button for demonstration;
   there is no real intent interpretation.
 - No persistence — state and history reset when the app quits.
