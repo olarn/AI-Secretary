@@ -23,10 +23,32 @@ public struct TranscriptEntry: Identifiable, Equatable, Sendable {
     }
 }
 
+/// A tool operation the Secretary can run through the approval pipeline: either
+/// a read-only Git command or a read-only file access. Both are `.readOnly`, so
+/// they share the same approval and audit path.
+public enum PlannedOperation: Equatable, Sendable {
+    case git(CodeToolOperation)
+    case file(FileOperation)
+
+    public var actionClass: ActionClass {
+        switch self {
+        case .git(let op): return op.actionClass
+        case .file(let op): return op.actionClass
+        }
+    }
+
+    public var humanDescription: String {
+        switch self {
+        case .git(let op): return op.humanDescription
+        case .file(let op): return op.humanDescription
+        }
+    }
+}
+
 /// A request waiting on the user: either confirm an action, or pick a project.
 public enum PendingDecision: Equatable, Sendable {
-    case approval(ApprovalRequest, operation: CodeToolOperation)
-    case projectChoice(candidates: [Project], operation: CodeToolOperation)
+    case approval(ApprovalRequest, operation: PlannedOperation)
+    case projectChoice(candidates: [Project], operation: PlannedOperation)
 }
 
 /// Orchestration layer. Interprets a message, resolves context, applies policy,
@@ -49,6 +71,7 @@ public final class Secretary {
     @ObservationIgnored private let registry: ProjectRegistry
     @ObservationIgnored private let policy: PermissionPolicy
     @ObservationIgnored private let adapter: CodeToolAdapter
+    @ObservationIgnored private let fileAdapter: FileToolAdapter
     @ObservationIgnored private let classifier: IntentClassifying
     @ObservationIgnored private let audit: AuditLogging
     @ObservationIgnored private let chatProvider: ChatProvider
@@ -64,6 +87,7 @@ public final class Secretary {
         registry: ProjectRegistry,
         policy: PermissionPolicy = DefaultPermissionPolicy(),
         adapter: CodeToolAdapter = GitReadOnlyAdapter(),
+        fileAdapter: FileToolAdapter = FileReadOnlyAdapter(),
         classifier: IntentClassifying = RuleBasedIntentClassifier(),
         audit: AuditLogging = AuditLog(),
         chatProvider: ChatProvider
@@ -72,6 +96,7 @@ public final class Secretary {
         self.registry = registry
         self.policy = policy
         self.adapter = adapter
+        self.fileAdapter = fileAdapter
         self.classifier = classifier
         self.audit = audit
         self.chatProvider = chatProvider
@@ -111,7 +136,9 @@ public final class Secretary {
         case .help:
             finish(success: true, message: helpText, reason: "answered help")
         case .codeTool(let operation, let projectQuery):
-            handleCodeTool(operation: operation, projectQuery: projectQuery)
+            handleTool(operation: .git(operation), projectQuery: projectQuery)
+        case .fileTool(let operation, let projectQuery):
+            handleTool(operation: .file(operation), projectQuery: projectQuery)
         case .unknown:
             startChat(trimmed, taskID: taskID)
         }
@@ -269,7 +296,7 @@ public final class Secretary {
 
     // MARK: - Git pipeline
 
-    private func handleCodeTool(operation: CodeToolOperation, projectQuery: String?) {
+    private func handleTool(operation: PlannedOperation, projectQuery: String?) {
         let taskID = activeTaskID ?? "-"
 
         switch registry.resolve(query: projectQuery) {
@@ -302,15 +329,15 @@ public final class Secretary {
         }
     }
 
-    private func proceed(operation: CodeToolOperation, project: Project) {
+    private func proceed(operation: PlannedOperation, project: Project) {
         let taskID = activeTaskID ?? "-"
 
         let request = ApprovalRequest(
             taskID: taskID,
-            toolID: adapter.toolID,
+            toolID: toolID(for: operation),
             actionClass: operation.actionClass,
             project: project,
-            commandSummary: adapter.summary(for: operation),
+            commandSummary: summary(for: operation),
             rationale: operation.humanDescription
         )
 
@@ -328,15 +355,15 @@ public final class Secretary {
         }
     }
 
-    private func execute(_ operation: CodeToolOperation, in project: Project) {
+    private func execute(_ operation: PlannedOperation, in project: Project) {
         let taskID = activeTaskID ?? "-"
-        let summary = adapter.summary(for: operation)
+        let summary = summary(for: operation)
 
         stateMachine.send(.beginExecuting, reason: summary, taskID: taskID, toolStatus: "running")
         audit.record(AuditEntry(taskID: taskID, kind: .executionStarted, detail: summary))
 
         do {
-            let result = try adapter.run(operation, in: project)
+            let result = try run(operation, in: project)
             audit.record(AuditEntry(taskID: taskID, kind: .executionFinished, detail: "exit \(result.exitCode)"))
 
             let body = result.output.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -359,6 +386,29 @@ public final class Secretary {
             let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             audit.record(AuditEntry(taskID: taskID, kind: .failed, detail: message))
             finish(success: false, message: message, reason: "tool threw", toolStatus: "error")
+        }
+    }
+
+    // MARK: - Adapter dispatch
+
+    private func toolID(for operation: PlannedOperation) -> String {
+        switch operation {
+        case .git: return adapter.toolID
+        case .file: return fileAdapter.toolID
+        }
+    }
+
+    private func summary(for operation: PlannedOperation) -> String {
+        switch operation {
+        case .git(let op): return adapter.summary(for: op)
+        case .file(let op): return fileAdapter.summary(for: op)
+        }
+    }
+
+    private func run(_ operation: PlannedOperation, in project: Project) throws -> ToolResult {
+        switch operation {
+        case .git(let op): return try adapter.run(op, in: project)
+        case .file(let op): return try fileAdapter.run(op, in: project)
         }
     }
 
@@ -385,6 +435,9 @@ public final class Secretary {
         switch intent {
         case .codeTool(let operation, let query):
             return "codeTool(\(operation.rawValue)) project=\(query ?? "-")"
+        case .fileTool(let operation, let query):
+            let kind = { switch operation { case .listDirectory: return "list"; case .readFile: return "read" } }()
+            return "fileTool(\(kind) \(operation.relativePath)) project=\(query ?? "-")"
         case .help: return "help"
         case .unknown: return "chat"
         }
@@ -392,9 +445,10 @@ public final class Secretary {
 
     private static let systemPrompt = """
     You are the AI Secretary, a friendly macOS desktop companion. Chat naturally \
-    and concisely. You can also run a small set of read-only Git commands when the \
-    user types things like "git status in <project>" — mention that only if relevant. \
-    Do not claim to have taken actions you did not take.
+    and concisely. You can also run a small set of read-only Git commands (e.g. \
+    "status in <project>") and read-only file access (e.g. "list src in <project>" \
+    or "read README.md in <project>") — mention that only if relevant. Do not claim \
+    to have taken actions you did not take.
     """
 
     private var helpText: String {
@@ -404,6 +458,10 @@ public final class Secretary {
         • diff — summary of uncommitted changes
         • branch — current branch
         • log — 20 most recent commits
+
+        I can also read files in a registered project (read-only):
+        • list [path] — list a directory, e.g. “list src in AI-Secretary”
+        • read <path> — show a text file, e.g. “read README.md in AI-Secretary”
 
         Add “in <project>” to pick a project, e.g. “status in AI-Secretary”.
         Anything else I treat as a conversation.

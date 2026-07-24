@@ -43,6 +43,13 @@ public enum ToolError: Error, Equatable, LocalizedError {
     case executableMissing(String)
     case timedOut(seconds: Int)
     case launchFailed(String)
+    // File adapter cases:
+    case pathEscapesProject(String)
+    case fileNotFound(String)
+    case notADirectory(String)
+    case notAFile(String)
+    case fileTooLarge(path: String, limit: Int)
+    case notReadableText(String)
 
     public var errorDescription: String? {
         switch self {
@@ -58,6 +65,18 @@ public enum ToolError: Error, Equatable, LocalizedError {
             return "Command exceeded its \(seconds)s timeout and was terminated."
         case .launchFailed(let message):
             return "Failed to launch command: \(message)"
+        case .pathEscapesProject(let path):
+            return "That path is outside the project and won't be accessed: \(path)"
+        case .fileNotFound(let path):
+            return "No such file or directory: \(path)"
+        case .notADirectory(let path):
+            return "Not a directory: \(path)"
+        case .notAFile(let path):
+            return "Not a readable file: \(path)"
+        case .fileTooLarge(let path, let limit):
+            return "File exceeds the \(limit)-byte read limit: \(path)"
+        case .notReadableText(let path):
+            return "File is not UTF-8 text and won't be shown: \(path)"
         }
     }
 }

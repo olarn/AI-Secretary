@@ -19,6 +19,12 @@ model is `claude-sonnet-5` at `medium` effort, switchable in-chat with `/model`
 and `/effort`. Chat is a conversation only — the model is not given tool access
 to the Git adapter.
 
+**Phase 4 — File & folder access (read-only, done).** The Secretary can now
+list a directory or read a text file inside a registered project, through the
+same approval-gated pipeline as Git. Paths are always project-relative and
+verified to stay inside the project root — `..`, absolute paths, and symlinks
+that point outside are refused before anything is read.
+
 Not built yet: giving Claude tool-use access to run project tools, web search,
 voice, MCP integrations, and any action that writes, deletes, installs, or
 changes Git history.
@@ -69,6 +75,17 @@ read-only Git operations:
 | `diff` | `git diff --stat` |
 | `branch` | `git branch --show-current` |
 | `log` | `git log --oneline -n 20` |
+
+It also reads files in a registered project (read-only):
+
+| Say | Does |
+|---|---|
+| `list [path]` | List a directory (root if no path), e.g. `list src in AI-Secretary` |
+| `read <path>` | Show a UTF-8 text file, e.g. `read README.md in AI-Secretary` |
+
+Paths are project-relative and bound-checked: anything resolving outside the
+project root (via `..`, an absolute path, or a symlink) is refused, binary
+files are declined rather than dumped, and reads are size-capped.
 
 Add `in <project>` to choose a project, e.g. `status in AI-Secretary`. Type
 `help` for the same summary in-app. Anything not clearly matching an operation
@@ -138,7 +155,8 @@ Sources/
   AssistantState/    State machine: states, events, guarded transitions
   ProjectRegistry/   Project type, JSON persistence, name resolution
   Permissions/       Action classes, approval requests, policy decisions
-  ToolAdapters/      CodeToolAdapter protocol, GitReadOnlyAdapter
+  ToolAdapters/      CodeToolAdapter + GitReadOnlyAdapter,
+                     FileToolAdapter + FileReadOnlyAdapter (bound-checked)
   LLMProvider/       ChatProvider protocol, ClaudeChatProvider (SSE),
                      AnthropicStreamDecoder (pure, testable)
   Credentials/       CredentialStore + Keychain-backed API-key storage
@@ -162,6 +180,13 @@ constrained by construction:
 - The subprocess gets a minimal environment, a 15s timeout, and an output cap.
 - Every step is recorded in an audit trail correlated by task ID: request,
   intent, project, approval decision, execution, and result.
+
+The file adapter runs no external process at all: it resolves the requested
+path against the project root, resolves symlinks, and refuses anything landing
+outside the root before reading. Note that once `file.readOnly` is approved for
+a project, any text file in it (including `.env` or checked-in secrets) can be
+read without re-prompting — the same approve-once model as Git, applied to a
+higher-stakes capability.
 
 Read-only work is the only class that can run without re-prompting, and only
 after the project has been approved once. Every other action class
