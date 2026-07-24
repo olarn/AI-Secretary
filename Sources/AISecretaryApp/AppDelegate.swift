@@ -11,9 +11,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private let characterSize: CGFloat = 120
     private let chatSize = CGSize(width: 340, height: 460)
-    /// Fraction of the bubble's width where the tail sits before mirroring.
+    /// Fraction of the bubble's tail-bearing edge where the tail sits before mirroring/flipping.
     private let tailFraction: CGFloat = 0.22
+    /// Gap kept between the bubble and the screen edge when clamping horizontally.
     private let screenMargin: CGFloat = 8
+    /// Gap between the character and the bubble so the tail visibly overlaps/touches it.
+    private let characterGap: CGFloat = 2
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let characterHost = NSHostingView(
@@ -71,17 +74,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Repositions the bubble relative to the character's current frame,
-    /// flipping to the opposite side (mirroring the tail) whenever the
-    /// natural placement would run off the visible screen edge.
+    /// Repositions the bubble relative to the character's current frame.
+    /// Flips horizontally (mirroring the tail) if the natural placement
+    /// would run off the left/right screen edge, and flips vertically
+    /// (bubble below instead of above, tail pointing up) if placing it
+    /// above the character would run off the top of the screen.
     private func applyChatLayout(in visibleFrame: NSRect) {
         let characterFrame = characterPanel.frame
         let characterCenterX = characterFrame.midX
 
         let naturalX = characterCenterX - chatSize.width * tailFraction
-        let wouldOverflowRight = naturalX + chatSize.width > visibleFrame.maxX - screenMargin
-
-        let mirrored = wouldOverflowRight
+        let mirrored = naturalX + chatSize.width > visibleFrame.maxX - screenMargin
         var originX = mirrored
             ? characterCenterX - chatSize.width * (1 - tailFraction)
             : naturalX
@@ -90,9 +93,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             visibleFrame.maxX - chatSize.width - screenMargin
         )
 
-        let originY = characterFrame.minY + characterFrame.height + screenMargin
+        let aboveY = characterFrame.minY + characterFrame.height + characterGap
+        let flippedVertically = aboveY + chatSize.height > visibleFrame.maxY - screenMargin
+        let originY = flippedVertically
+            ? characterFrame.minY - chatSize.height - characterGap
+            : aboveY
 
         chatLayout.isMirrored = mirrored
+        chatLayout.isFlippedVertically = flippedVertically
         chatPanel.setFrameOrigin(NSPoint(x: originX, y: originY))
     }
 

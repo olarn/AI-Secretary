@@ -68,11 +68,11 @@ struct ChatPanelView: View {
         .padding(18)
         .frame(width: 340)
         .background(
-            SpeechBubbleShape(isMirrored: layout.isMirrored)
+            SpeechBubbleShape(isMirrored: layout.isMirrored, isFlippedVertically: layout.isFlippedVertically)
                 .fill(.regularMaterial)
         )
         .overlay(
-            SpeechBubbleShape(isMirrored: layout.isMirrored)
+            SpeechBubbleShape(isMirrored: layout.isMirrored, isFlippedVertically: layout.isFlippedVertically)
                 .stroke(Color.primary.opacity(0.85), lineWidth: 2)
         )
         .overlay(alignment: .topTrailing) {
@@ -86,7 +86,7 @@ struct ChatPanelView: View {
             .padding(.trailing, 10)
         }
         .onExitCommand(perform: onClose)
-        .frame(width: 340, height: 460, alignment: .top)
+        .frame(width: 340, height: 460, alignment: layout.isFlippedVertically ? .bottom : .top)
     }
 
     private func actionButton(_ title: String, action: @escaping () -> Void) -> some View {
