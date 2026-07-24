@@ -13,15 +13,22 @@ import SwiftUI
 /// character regardless of which side/orientation is chosen.
 struct SpeechBubbleShape: Shape {
     /// Shared so layout code can reserve exactly this much room for the tail.
-    static let defaultTailLength: CGFloat = 26
+    static let defaultTailLength: CGFloat = 30
+    /// The drawn tail stops slightly short of the reserved strip so the tip
+    /// hovers next to the character instead of poking into it.
+    static let tailLengthRatio: CGFloat = 0.9
 
     var cornerRadius: CGFloat = 22
-    /// Fraction of the tail-bearing edge (0 = start) where the tail's base is centered, before mirroring.
-    var tailHorizontalPosition: CGFloat = 0.22
+    /// Fraction of the tail-bearing edge (0 = start) where the tail's base is
+    /// centered, before mirroring. Centered so mirroring keeps the base put
+    /// and only the slant direction swaps.
+    var tailHorizontalPosition: CGFloat = 0.5
     var tailBaseWidth: CGFloat = 30
-    var tailLength: CGFloat = Self.defaultTailLength
-    /// How far the tip drifts from the base center, for a slight diagonal comic-tail slant.
-    var tailDrift: CGFloat = 8
+    var tailLength: CGFloat = Self.defaultTailLength * Self.tailLengthRatio
+    /// How far the tip drifts sideways from the base, giving the long
+    /// diagonal comic-tail slant that points toward the character (which the
+    /// window layout aligns near the 0.22 width fraction).
+    var tailDrift: CGFloat = 55
     var isMirrored: Bool = false
     var isFlippedVertically: Bool = false
 
