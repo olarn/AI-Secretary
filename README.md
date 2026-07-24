@@ -59,6 +59,21 @@ swift build
 swift run AISecretaryApp
 ```
 
+### Run from Finder (no Terminal window)
+
+`swift run` keeps a Terminal window open. To get a normal double-clickable app
+instead, package it into a proper `.app` bundle:
+
+```sh
+./scripts/package-app.sh        # produces ./AISecretary.app (release build)
+open AISecretary.app            # or just double-click it in Finder
+```
+
+The bundle is marked `LSUIElement`, so it launches with no Terminal, no Dock
+icon, and no main menu — it lives in the floating character and a menu bar
+item (✨) whose menu can open the chat, show/hide the character, and **Quit**.
+Copy it to `/Applications` to keep it around.
+
 A floating character appears near the bottom-right of the screen. It is
 draggable, and clicking it toggles a speech bubble containing the conversation
 panel. The bubble follows the character and flips horizontally or vertically so
