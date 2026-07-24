@@ -57,6 +57,22 @@ final class ProjectRegistryTests: XCTestCase {
         XCTAssertEqual(registry.resolve(query: nil), .needsSelection(candidates: []))
     }
 
+    func testAddingTheSamePathTwiceIsDeduplicated() throws {
+        let registry = ProjectRegistry(store: InMemoryProjectStore())
+        XCTAssertTrue(try registry.add(alpha))
+
+        let duplicate = Project(name: "Alpha again", path: alpha.path)
+        XCTAssertFalse(try registry.add(duplicate), "A second add of the same path should be ignored")
+        XCTAssertEqual(registry.projects.count, 1)
+    }
+
+    func testAddingPathWithTrailingSlashIsTreatedAsDuplicate() throws {
+        let registry = ProjectRegistry(store: InMemoryProjectStore())
+        try registry.add(Project(name: "A", path: "/tmp/alpha"))
+        XCTAssertFalse(try registry.add(Project(name: "A2", path: "/tmp/alpha/")))
+        XCTAssertEqual(registry.projects.count, 1)
+    }
+
     func testAddAndRemovePersistThroughStore() throws {
         let store = InMemoryProjectStore()
         let registry = ProjectRegistry(store: store)

@@ -18,6 +18,7 @@ struct ChatPanelView: View {
     @State private var showDebug = false
     @State private var showProjects = false
     @State private var lastRejection: String?
+    @State private var addProjectNote: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -197,12 +198,22 @@ struct ChatPanelView: View {
             }
 
             Button("Add project…") {
+                addProjectNote = nil
                 if let project = ProjectPicker.promptForProject() {
-                    try? registry.add(project)
+                    let added = (try? registry.add(project)) ?? false
+                    if !added {
+                        addProjectNote = "“\(project.name)” is already registered."
+                    }
                 }
             }
             .buttonStyle(.bordered)
             .font(.caption2)
+
+            if let addProjectNote {
+                Text(addProjectNote)
+                    .font(.system(size: 9))
+                    .foregroundStyle(.secondary)
+            }
         }
         .padding(10)
         .background(Color.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))

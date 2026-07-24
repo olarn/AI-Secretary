@@ -13,9 +13,26 @@ public final class ProjectRegistry {
         projects = (try? store.load()) ?? []
     }
 
-    public func add(_ project: Project) throws {
+    /// Whether a project already points at the same directory. Paths are
+    /// compared after standardising, so "/a/b" and "/a/b/" are one place.
+    public func containsProject(atPath path: String) -> Bool {
+        let target = Self.normalize(path)
+        return projects.contains { Self.normalize($0.path) == target }
+    }
+
+    /// Registers a project unless its directory is already registered, in
+    /// which case the existing entry is kept and this returns `false`. This is
+    /// what keeps "Add project…" from creating duplicate rows for one folder.
+    @discardableResult
+    public func add(_ project: Project) throws -> Bool {
+        guard !containsProject(atPath: project.path) else { return false }
         projects.append(project)
         try store.save(projects)
+        return true
+    }
+
+    private static func normalize(_ path: String) -> String {
+        URL(fileURLWithPath: path).standardizedFileURL.path
     }
 
     public func remove(id: UUID) throws {
