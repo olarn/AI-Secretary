@@ -25,12 +25,21 @@ let package = Package(
             dependencies: ["ProjectRegistry", "Permissions"]
         ),
         .target(
+            name: "LLMProvider"
+        ),
+        .target(
+            name: "Credentials"
+        ),
+        .target(
             name: "SecretaryCore",
-            dependencies: ["AssistantState", "ProjectRegistry", "Permissions", "ToolAdapters"]
+            dependencies: ["AssistantState", "ProjectRegistry", "Permissions", "ToolAdapters", "LLMProvider"]
         ),
         .executableTarget(
             name: "AISecretaryApp",
-            dependencies: ["AssistantState", "SecretaryCore", "ProjectRegistry", "Permissions", "ToolAdapters"]
+            dependencies: [
+                "AssistantState", "SecretaryCore", "ProjectRegistry",
+                "Permissions", "ToolAdapters", "LLMProvider", "Credentials"
+            ]
         ),
         .testTarget(
             name: "AssistantStateTests",
@@ -49,8 +58,16 @@ let package = Package(
             dependencies: ["ToolAdapters", "ProjectRegistry", "Permissions"]
         ),
         .testTarget(
+            name: "LLMProviderTests",
+            dependencies: ["LLMProvider"]
+        ),
+        .testTarget(
+            name: "CredentialsTests",
+            dependencies: ["Credentials"]
+        ),
+        .testTarget(
             name: "SecretaryCoreTests",
-            dependencies: ["SecretaryCore", "AssistantState", "ProjectRegistry", "Permissions", "ToolAdapters"]
+            dependencies: ["SecretaryCore", "AssistantState", "ProjectRegistry", "Permissions", "ToolAdapters", "LLMProvider"]
         )
     ]
 )

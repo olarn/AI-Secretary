@@ -3,12 +3,23 @@ import SwiftUI
 import AssistantState
 import ProjectRegistry
 import SecretaryCore
+import LLMProvider
+import Credentials
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let stateMachine = AssistantStateMachine()
     private let chatLayout = ChatBubbleLayout()
     private let registry = ProjectRegistry()
-    private lazy var secretary = Secretary(stateMachine: stateMachine, registry: registry)
+    private let credentials = KeychainCredentialStore()
+    private lazy var chatProvider = ClaudeChatProvider(
+        apiKeyProvider: { [credentials] in credentials.apiKey() }
+    )
+    private lazy var secretary = Secretary(
+        stateMachine: stateMachine,
+        registry: registry,
+        chatProvider: chatProvider
+    )
     private var characterPanel: FloatingPanel!
     private var chatPanel: FloatingPanel!
     private var isChatVisible = false
@@ -46,6 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 machine: stateMachine,
                 secretary: secretary,
                 registry: registry,
+                credentials: credentials,
                 layout: chatLayout,
                 onClose: { [weak self] in self?.hideChatPanel() }
             )

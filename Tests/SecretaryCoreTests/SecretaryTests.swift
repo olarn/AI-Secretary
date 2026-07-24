@@ -3,6 +3,7 @@ import AssistantState
 import ProjectRegistry
 import Permissions
 import ToolAdapters
+import LLMProvider
 @testable import SecretaryCore
 
 // MARK: - Test doubles
@@ -19,6 +20,44 @@ final class SpyAdapter: CodeToolAdapter {
         runCalls.append((operation, project))
         if let stubbedError { throw stubbedError }
         return stubbedResult
+    }
+}
+
+/// Emits canned stream events (or an error) with no network or API key.
+final class FakeChatProvider: ChatProvider, @unchecked Sendable {
+    enum Script {
+        case events([ChatStreamEvent])
+        case failure(Error)
+    }
+
+    private let script: Script
+    private(set) var callCount = 0
+    private(set) var lastMessages: [ChatMessage] = []
+    private(set) var lastModel: ChatModel?
+    private(set) var lastEffort: Effort?
+
+    init(_ script: Script) { self.script = script }
+
+    func stream(
+        messages: [ChatMessage],
+        model: ChatModel,
+        effort: Effort,
+        maxTokens: Int,
+        system: String?
+    ) -> AsyncThrowingStream<ChatStreamEvent, Error> {
+        callCount += 1
+        lastMessages = messages
+        lastModel = model
+        lastEffort = effort
+        return AsyncThrowingStream { continuation in
+            switch script {
+            case .events(let events):
+                for event in events { continuation.yield(event) }
+                continuation.finish()
+            case .failure(let error):
+                continuation.finish(throwing: error)
+            }
+        }
     }
 }
 
@@ -72,6 +111,7 @@ final class RuleBasedIntentClassifierTests: XCTestCase {
 
 // MARK: - Orchestration
 
+@MainActor
 final class SecretaryTests: XCTestCase {
     private var machine: AssistantStateMachine!
     private var adapter: SpyAdapter!
@@ -90,15 +130,27 @@ final class SecretaryTests: XCTestCase {
         policy = DefaultPermissionPolicy()
     }
 
-    private func makeSecretary(projects: [Project]) -> Secretary {
+    private func makeSecretary(
+        projects: [Project],
+        chat: FakeChatProvider = FakeChatProvider(.events([.completed(stopReason: nil, usage: nil)]))
+    ) -> Secretary {
         Secretary(
             stateMachine: machine,
             registry: ProjectRegistry(store: InMemoryProjectStore(projects: projects)),
             policy: policy,
             adapter: adapter,
             classifier: RuleBasedIntentClassifier(),
-            audit: AuditLog()
+            audit: AuditLog(),
+            chatProvider: chat
         )
+    }
+
+    /// Chat replies stream on a background task; give them time to land.
+    private func waitUntilIdle(timeout: TimeInterval = 2) async {
+        let deadline = Date().addingTimeInterval(timeout)
+        while machine.state != .idle && Date() < deadline {
+            try? await Task.sleep(nanoseconds: 5_000_000)
+        }
     }
 
     func testFirstRequestAsksForApprovalAndRunsNothingYet() {
@@ -192,13 +244,97 @@ final class SecretaryTests: XCTestCase {
         XCTAssertTrue(secretary.transcript.last?.text.contains("not in the allowlist") ?? false)
     }
 
-    func testUnknownIntentRunsNothingAndEndsInIdle() {
-        let secretary = makeSecretary(projects: [project])
-        secretary.submit("please delete the database")
+    func testNonGitMessageIsRoutedToChatAndStreamsAReply() async {
+        let chat = FakeChatProvider(.events([
+            .thinking,
+            .textDelta("Hi"),
+            .textDelta(" there!"),
+            .completed(stopReason: "end_turn", usage: ChatUsage(inputTokens: 5, outputTokens: 2))
+        ]))
+        let secretary = makeSecretary(projects: [project], chat: chat)
 
-        XCTAssertTrue(adapter.runCalls.isEmpty)
+        secretary.submit("hello, how are you?")
+        await waitUntilIdle()
+
+        XCTAssertEqual(chat.callCount, 1)
+        XCTAssertTrue(adapter.runCalls.isEmpty, "Chat must not touch the git adapter")
         XCTAssertEqual(machine.state, .idle)
-        XCTAssertTrue(secretary.transcript.last?.text.contains("didn't understand") ?? false)
+        XCTAssertEqual(secretary.transcript.last?.text, "Hi there!")
+        XCTAssertEqual(chat.lastMessages.last?.content, "hello, how are you?")
+    }
+
+    func testChatWalksThinkingThenWorkingThenSuccess() async {
+        let chat = FakeChatProvider(.events([
+            .thinking,
+            .textDelta("ok"),
+            .completed(stopReason: nil, usage: nil)
+        ]))
+        let secretary = makeSecretary(projects: [project], chat: chat)
+
+        secretary.submit("what's the weather like on the moon?")
+        await waitUntilIdle()
+
+        XCTAssertEqual(
+            machine.history.map(\.to),
+            [.listening, .thinking, .working, .success, .idle]
+        )
+    }
+
+    func testChatRefusalEndsInError() async {
+        let chat = FakeChatProvider(.events([
+            .completed(stopReason: "refusal", usage: nil)
+        ]))
+        let secretary = makeSecretary(projects: [project], chat: chat)
+
+        secretary.submit("do something disallowed")
+        await waitUntilIdle()
+
+        XCTAssertTrue(machine.history.contains { $0.to == .error })
+        XCTAssertEqual(machine.state, .idle)
+    }
+
+    func testChatNetworkErrorIsReportedNotCrashed() async {
+        let chat = FakeChatProvider(.failure(ChatError.missingAPIKey))
+        let secretary = makeSecretary(projects: [project], chat: chat)
+
+        secretary.submit("hello")
+        await waitUntilIdle()
+
+        XCTAssertTrue(machine.history.contains { $0.to == .error })
+        XCTAssertTrue(secretary.transcript.last?.text.contains("API key") ?? false)
+    }
+
+    func testSlashModelSwitchesModelWithoutHittingTheNetwork() {
+        let chat = FakeChatProvider(.events([]))
+        let secretary = makeSecretary(projects: [project], chat: chat)
+
+        secretary.submit("/model claude-opus-4-8")
+
+        XCTAssertEqual(secretary.model, .opus48)
+        XCTAssertEqual(chat.callCount, 0)
+        XCTAssertTrue(secretary.transcript.last?.text.contains("claude-opus-4-8") ?? false)
+    }
+
+    func testSlashEffortRejectsUnknownLevel() {
+        let secretary = makeSecretary(projects: [project])
+        let original = secretary.effort
+
+        secretary.submit("/effort turbo")
+
+        XCTAssertEqual(secretary.effort, original)
+        XCTAssertTrue(secretary.transcript.last?.text.contains("Unknown effort") ?? false)
+    }
+
+    func testGitKeywordStillRoutesToTheGitPipeline() {
+        let chat = FakeChatProvider(.events([]))
+        let secretary = makeSecretary(projects: [project], chat: chat)
+
+        secretary.submit("git status")
+
+        guard case .approval = secretary.pendingDecision else {
+            return XCTFail("git command should still reach the approval prompt")
+        }
+        XCTAssertEqual(chat.callCount, 0, "A git command must not go to chat")
     }
 
     func testAdapterFailureIsReportedWithoutCrashing() {

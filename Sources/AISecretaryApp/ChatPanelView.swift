@@ -2,23 +2,27 @@ import SwiftUI
 import AssistantState
 import ProjectRegistry
 import SecretaryCore
+import Credentials
 
 /// The conversation panel, rendered as a manga-style speech bubble anchored to
 /// the character. Shows the transcript, the input field, whatever decision the
-/// Secretary is waiting on, and a collapsible debug section that still drives
-/// the state machine directly.
+/// Secretary is waiting on, and collapsible Settings/Projects/Debug sections.
 struct ChatPanelView: View {
     let machine: AssistantStateMachine
     let secretary: Secretary
     let registry: ProjectRegistry
+    let credentials: any CredentialStore
     let layout: ChatBubbleLayout
     let onClose: () -> Void
 
     @State private var draft: String = ""
     @State private var showDebug = false
     @State private var showProjects = false
+    @State private var showSettings = false
     @State private var lastRejection: String?
     @State private var addProjectNote: String?
+    @State private var apiKeyDraft: String = ""
+    @State private var settingsNote: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -26,6 +30,7 @@ struct ChatPanelView: View {
             transcript
             pendingDecisionView
             inputRow
+            if showSettings { settingsSection }
             if showProjects { projectsSection }
             if showDebug { debugSection }
             footer
@@ -75,7 +80,7 @@ struct ChatPanelView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 8) {
                     if secretary.transcript.isEmpty {
-                        Text("Ask me for `status`, `diff`, `branch`, or `log` in a registered project. Type `help` for details.")
+                        Text("Chat with me, or run read-only Git commands like `status in <project>`. Type `help`, or set your API key in Settings to start chatting.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -165,6 +170,53 @@ struct ChatPanelView: View {
         }
     }
 
+    private var settingsSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Settings")
+                .font(.caption.bold())
+
+            Text("Claude API key")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            HStack(spacing: 6) {
+                SecureField(credentials.hasAPIKey ? "•••• stored in Keychain" : "sk-ant-…", text: $apiKeyDraft)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.caption)
+                Button("Save") { saveAPIKey() }
+                    .buttonStyle(.bordered)
+                    .font(.caption2)
+                    .disabled(apiKeyDraft.trimmingCharacters(in: .whitespaces).isEmpty)
+                if credentials.hasAPIKey {
+                    Button("Clear") { clearAPIKey() }
+                        .buttonStyle(.plain)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Text("Stored only in your macOS Keychain — never logged or committed.")
+                .font(.system(size: 9))
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 10) {
+                Text("Model: \(secretary.model.displayName)")
+                Text("Effort: \(secretary.effort.rawValue)")
+            }
+            .font(.caption2.monospaced())
+            .foregroundStyle(.secondary)
+            Text("Change with /model <id> or /effort <level> in the chat.")
+                .font(.system(size: 9))
+                .foregroundStyle(.secondary)
+
+            if let settingsNote {
+                Text(settingsNote)
+                    .font(.system(size: 9))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(10)
+        .background(Color.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+    }
+
     private var projectsSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Projects")
@@ -248,6 +300,7 @@ struct ChatPanelView: View {
 
     private var footer: some View {
         HStack(spacing: 10) {
+            Toggle("Settings", isOn: $showSettings)
             Toggle("Projects", isOn: $showProjects)
             Toggle("Debug", isOn: $showDebug)
             Spacer()
@@ -263,6 +316,21 @@ struct ChatPanelView: View {
         let text = draft
         draft = ""
         secretary.submit(text)
+    }
+
+    private func saveAPIKey() {
+        do {
+            try credentials.setAPIKey(apiKeyDraft.trimmingCharacters(in: .whitespaces))
+            apiKeyDraft = ""
+            settingsNote = "API key saved."
+        } catch {
+            settingsNote = "Could not save: \(error.localizedDescription)"
+        }
+    }
+
+    private func clearAPIKey() {
+        try? credentials.setAPIKey(nil)
+        settingsNote = "API key cleared."
     }
 
     private func debugButton(_ title: String, action: @escaping () -> Void) -> some View {

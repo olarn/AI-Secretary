@@ -4,14 +4,16 @@ import AssistantState
 import ProjectRegistry
 import Permissions
 import ToolAdapters
+import LLMProvider
 
-/// A message shown in the conversation transcript.
+/// A message shown in the conversation transcript. `text` is mutable so a
+/// streamed reply can grow token-by-token in the same entry.
 public struct TranscriptEntry: Identifiable, Equatable, Sendable {
     public enum Speaker: Sendable { case user, secretary }
 
     public let id = UUID()
     public let speaker: Speaker
-    public let text: String
+    public var text: String
     public let timestamp: Date
 
     public init(speaker: Speaker, text: String, timestamp: Date = Date()) {
@@ -28,12 +30,20 @@ public enum PendingDecision: Equatable, Sendable {
 }
 
 /// Orchestration layer. Interprets a message, resolves context, applies policy,
-/// and — only after that — invokes a tool. Drives the shared `AssistantState`
-/// machine so the character UI reflects real work rather than mock transitions.
+/// and invokes a tool — or, for conversational messages, streams a reply from
+/// the Claude API. Drives the shared `AssistantState` machine so the character
+/// UI reflects real work.
+///
+/// `@MainActor` because every mutation here feeds an `@Observable` SwiftUI view;
+/// the chat provider does its network work off the main actor and this type
+/// consumes the stream back on the main actor.
+@MainActor
 @Observable
 public final class Secretary {
     public private(set) var transcript: [TranscriptEntry] = []
     public private(set) var pendingDecision: PendingDecision?
+    public private(set) var model: ChatModel = .sonnet5
+    public private(set) var effort: Effort = .medium
 
     @ObservationIgnored public let stateMachine: AssistantStateMachine
     @ObservationIgnored private let registry: ProjectRegistry
@@ -41,8 +51,13 @@ public final class Secretary {
     @ObservationIgnored private let adapter: CodeToolAdapter
     @ObservationIgnored private let classifier: IntentClassifying
     @ObservationIgnored private let audit: AuditLogging
+    @ObservationIgnored private let chatProvider: ChatProvider
 
     @ObservationIgnored private var activeTaskID: String?
+    @ObservationIgnored private var conversation: [ChatMessage] = []
+    @ObservationIgnored private var streamingTask: Task<Void, Never>?
+
+    private let chatMaxTokens = 4096
 
     public init(
         stateMachine: AssistantStateMachine,
@@ -50,7 +65,8 @@ public final class Secretary {
         policy: PermissionPolicy = DefaultPermissionPolicy(),
         adapter: CodeToolAdapter = GitReadOnlyAdapter(),
         classifier: IntentClassifying = RuleBasedIntentClassifier(),
-        audit: AuditLogging = AuditLog()
+        audit: AuditLogging = AuditLog(),
+        chatProvider: ChatProvider
     ) {
         self.stateMachine = stateMachine
         self.registry = registry
@@ -58,6 +74,7 @@ public final class Secretary {
         self.adapter = adapter
         self.classifier = classifier
         self.audit = audit
+        self.chatProvider = chatProvider
     }
 
     public var auditEntries: [AuditEntry] { audit.entries }
@@ -67,32 +84,36 @@ public final class Secretary {
     public func submit(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-
-        let taskID = UUID().uuidString.prefix(8).lowercased()
-        activeTaskID = String(taskID)
         pendingDecision = nil
         say(.user, trimmed)
-        audit.record(AuditEntry(taskID: String(taskID), kind: .requestReceived, detail: "message received"))
 
-        stateMachine.send(.userBeganInput, reason: "user submitted a message", taskID: String(taskID))
-        stateMachine.send(.beginInterpreting, reason: "classifying intent", taskID: String(taskID))
+        // Local commands first: never hit the network or the state machine.
+        if trimmed.hasPrefix("/") {
+            handleSlashCommand(trimmed)
+            return
+        }
+        if trimmed.lowercased() == "help" || trimmed == "?" {
+            say(.secretary, helpText)
+            return
+        }
+
+        let taskID = String(UUID().uuidString.prefix(8).lowercased())
+        activeTaskID = taskID
+        audit.record(AuditEntry(taskID: taskID, kind: .requestReceived, detail: "message received"))
+
+        stateMachine.send(.userBeganInput, reason: "user submitted a message", taskID: taskID)
+        stateMachine.send(.beginInterpreting, reason: "classifying intent", taskID: taskID)
 
         let intent = classifier.classify(trimmed)
-        audit.record(AuditEntry(taskID: String(taskID), kind: .intentClassified, detail: describe(intent)))
+        audit.record(AuditEntry(taskID: taskID, kind: .intentClassified, detail: describe(intent)))
 
         switch intent {
         case .help:
             finish(success: true, message: helpText, reason: "answered help")
-
-        case .unknown:
-            finish(
-                success: false,
-                message: "I didn't understand that. I currently handle: status, diff, branch, log. Type 'help' for details.",
-                reason: "intent not recognised"
-            )
-
         case .codeTool(let operation, let projectQuery):
             handleCodeTool(operation: operation, projectQuery: projectQuery)
+        case .unknown:
+            startChat(trimmed, taskID: taskID)
         }
     }
 
@@ -125,7 +146,128 @@ public final class Secretary {
         finish(success: false, message: "Cancelled.", reason: "user cancelled")
     }
 
-    // MARK: - Pipeline
+    // MARK: - Slash commands
+
+    private func handleSlashCommand(_ text: String) {
+        let parts = text.dropFirst().split(separator: " ", maxSplits: 1).map(String.init)
+        let command = parts.first?.lowercased() ?? ""
+        let argument = parts.count > 1 ? parts[1] : nil
+
+        switch command {
+        case "model":
+            guard let argument else {
+                let list = ChatModel.known.map(\.id).joined(separator: ", ")
+                say(.secretary, "Model: \(model.id)\nAvailable: \(list)")
+                return
+            }
+            if let resolved = ChatModel.named(argument) {
+                model = resolved
+                say(.secretary, "Model set to \(resolved.id).")
+            } else {
+                say(.secretary, "Unknown model “\(argument)”. Available: \(ChatModel.known.map(\.id).joined(separator: ", "))")
+            }
+
+        case "effort":
+            guard let argument else {
+                let list = Effort.allCases.map(\.rawValue).joined(separator: ", ")
+                say(.secretary, "Effort: \(effort.rawValue)\nAvailable: \(list)")
+                return
+            }
+            if let resolved = Effort.named(argument) {
+                effort = resolved
+                say(.secretary, "Effort set to \(resolved.rawValue).")
+            } else {
+                say(.secretary, "Unknown effort “\(argument)”. Available: \(Effort.allCases.map(\.rawValue).joined(separator: ", "))")
+            }
+
+        default:
+            say(.secretary, "Unknown command “/\(command)”. Try /model or /effort.")
+        }
+    }
+
+    // MARK: - Chat
+
+    private func startChat(_ text: String, taskID: String) {
+        conversation.append(ChatMessage(role: .user, content: text))
+
+        let replyEntry = TranscriptEntry(speaker: .secretary, text: "")
+        transcript.append(replyEntry)
+        let replyID = replyEntry.id
+
+        audit.record(AuditEntry(taskID: taskID, kind: .executionStarted, detail: "chat model=\(model.id) effort=\(effort.rawValue)"))
+
+        let stream = chatProvider.stream(
+            messages: conversation,
+            model: model,
+            effort: effort,
+            maxTokens: chatMaxTokens,
+            system: Self.systemPrompt
+        )
+
+        streamingTask?.cancel()
+        streamingTask = Task { [weak self] in
+            var reply = ""
+            var movedToWorking = false
+
+            func ensureWorking() {
+                guard let self, !movedToWorking else { return }
+                self.stateMachine.send(.beginExecuting, reason: "streaming reply", taskID: taskID, toolStatus: "streaming")
+                movedToWorking = true
+            }
+
+            do {
+                for try await event in stream {
+                    guard let self else { return }
+                    switch event {
+                    case .thinking:
+                        break // stay in THINKING until the first token
+                    case .textDelta(let chunk):
+                        ensureWorking()
+                        reply += chunk
+                        self.updateEntry(id: replyID, text: reply)
+                    case .completed(let stopReason, let usage):
+                        ensureWorking()
+                        self.audit.record(AuditEntry(
+                            taskID: taskID,
+                            kind: .executionFinished,
+                            detail: "stop=\(stopReason ?? "end_turn") in=\(usage?.inputTokens ?? 0) out=\(usage?.outputTokens ?? 0)"
+                        ))
+                        if stopReason == "refusal" {
+                            self.finishChat(entryID: replyID, taskID: taskID, success: false,
+                                            finalText: reply.isEmpty ? "(The model declined to respond.)" : reply)
+                        } else {
+                            self.conversation.append(ChatMessage(role: .assistant, content: reply))
+                            self.finishChat(entryID: replyID, taskID: taskID, success: true, finalText: reply)
+                        }
+                    }
+                }
+            } catch {
+                guard let self else { return }
+                ensureWorking()
+                let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                self.audit.record(AuditEntry(taskID: taskID, kind: .failed, detail: "chat error"))
+                self.finishChat(entryID: replyID, taskID: taskID, success: false, finalText: message)
+            }
+            self?.streamingTask = nil
+        }
+    }
+
+    private func finishChat(entryID: UUID, taskID: String, success: Bool, finalText: String) {
+        updateEntry(id: entryID, text: finalText)
+        if stateMachine.state != .working {
+            stateMachine.send(.beginExecuting, reason: "chat completed", taskID: taskID)
+        }
+        stateMachine.send(success ? .succeeded : .failed, reason: success ? "chat reply delivered" : "chat failed", taskID: taskID)
+        stateMachine.send(.acknowledge, reason: "result delivered", taskID: taskID)
+        activeTaskID = nil
+    }
+
+    private func updateEntry(id: UUID, text: String) {
+        guard let index = transcript.firstIndex(where: { $0.id == id }) else { return }
+        transcript[index].text = text
+    }
+
+    // MARK: - Git pipeline
 
     private func handleCodeTool(operation: CodeToolOperation, projectQuery: String?) {
         let taskID = activeTaskID ?? "-"
@@ -195,9 +337,7 @@ public final class Secretary {
 
         do {
             let result = try adapter.run(operation, in: project)
-            audit.record(
-                AuditEntry(taskID: taskID, kind: .executionFinished, detail: "exit \(result.exitCode)")
-            )
+            audit.record(AuditEntry(taskID: taskID, kind: .executionFinished, detail: "exit \(result.exitCode)"))
 
             let body = result.output.trimmingCharacters(in: .whitespacesAndNewlines)
             if result.succeeded {
@@ -227,8 +367,6 @@ public final class Secretary {
     private func finish(success: Bool, message: String, reason: String, toolStatus: String? = nil) {
         let taskID = activeTaskID ?? "-"
 
-        // The machine only accepts success/failure from WORKING, so a request
-        // rejected before execution passes through it to keep transitions legal.
         if stateMachine.state != .working {
             stateMachine.send(.beginExecuting, reason: reason, taskID: taskID, toolStatus: toolStatus)
         }
@@ -248,20 +386,31 @@ public final class Secretary {
         case .codeTool(let operation, let query):
             return "codeTool(\(operation.rawValue)) project=\(query ?? "-")"
         case .help: return "help"
-        case .unknown: return "unknown"
+        case .unknown: return "chat"
         }
     }
 
+    private static let systemPrompt = """
+    You are the AI Secretary, a friendly macOS desktop companion. Chat naturally \
+    and concisely. You can also run a small set of read-only Git commands when the \
+    user types things like "git status in <project>" — mention that only if relevant. \
+    Do not claim to have taken actions you did not take.
+    """
+
     private var helpText: String {
         """
-        I can run these read-only Git commands in a registered project:
+        I can chat with you, and run these read-only Git commands in a registered project:
         • status — working tree status
         • diff — summary of uncommitted changes
         • branch — current branch
         • log — 20 most recent commits
 
         Add “in <project>” to pick a project, e.g. “status in AI-Secretary”.
-        I always ask before running anything in a project for the first time.
+        Anything else I treat as a conversation.
+
+        Slash commands:
+        • /model <id> — switch the chat model
+        • /effort <low|medium|high|xhigh|max> — adjust reasoning depth
         """
     }
 }
