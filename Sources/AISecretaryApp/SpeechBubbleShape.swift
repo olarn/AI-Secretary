@@ -32,6 +32,19 @@ struct SpeechBubbleShape: Shape {
     var isMirrored: Bool = false
     var isFlippedVertically: Bool = false
 
+    /// Where the tail tip lands, as a fraction of the bubble's width, for the
+    /// un-mirrored shape. Window placement uses this to line the tip up with
+    /// the character instead of duplicating the geometry as a magic number.
+    static func tailTipFraction(forWidth width: CGFloat) -> CGFloat {
+        let shape = SpeechBubbleShape()
+        guard width > 0 else { return shape.tailHorizontalPosition }
+        let baseLeft = max(
+            shape.cornerRadius,
+            width * shape.tailHorizontalPosition - shape.tailBaseWidth / 2
+        )
+        return (baseLeft - shape.tailDrift) / width
+    }
+
     func path(in rect: CGRect) -> Path {
         let r = cornerRadius
         let tailCenterX = rect.minX + rect.width * tailHorizontalPosition

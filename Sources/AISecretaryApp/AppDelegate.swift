@@ -1,18 +1,25 @@
 import AppKit
 import SwiftUI
 import AssistantState
+import ProjectRegistry
+import SecretaryCore
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let stateMachine = AssistantStateMachine()
     private let chatLayout = ChatBubbleLayout()
+    private let registry = ProjectRegistry()
+    private lazy var secretary = Secretary(stateMachine: stateMachine, registry: registry)
     private var characterPanel: FloatingPanel!
     private var chatPanel: FloatingPanel!
     private var isChatVisible = false
 
     private let characterSize: CGFloat = 120
-    private let chatSize = CGSize(width: 340, height: 460)
-    /// Fraction of the bubble's tail-bearing edge where the tail sits before mirroring/flipping.
-    private let tailFraction: CGFloat = 0.22
+    private let chatSize = CGSize(width: 360, height: 520)
+    /// Where the tail tip sits across the bubble's width, taken from the shape
+    /// itself so the two can't drift apart.
+    private var tailFraction: CGFloat {
+        SpeechBubbleShape.tailTipFraction(forWidth: chatSize.width)
+    }
     /// Gap kept between the bubble and the screen edge when clamping horizontally.
     private let screenMargin: CGFloat = 8
     /// Gap between the character and the bubble window. The tail tip now ends
@@ -35,9 +42,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
 
         let chatHost = NSHostingView(
-            rootView: ChatPanelView(machine: stateMachine, layout: chatLayout, onClose: { [weak self] in
-                self?.hideChatPanel()
-            })
+            rootView: ChatPanelView(
+                machine: stateMachine,
+                secretary: secretary,
+                registry: registry,
+                layout: chatLayout,
+                onClose: { [weak self] in self?.hideChatPanel() }
+            )
         )
         chatHost.frame = NSRect(origin: .zero, size: chatSize)
 

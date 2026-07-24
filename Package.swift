@@ -13,13 +13,44 @@ let package = Package(
         .target(
             name: "AssistantState"
         ),
+        .target(
+            name: "ProjectRegistry"
+        ),
+        .target(
+            name: "Permissions",
+            dependencies: ["ProjectRegistry"]
+        ),
+        .target(
+            name: "ToolAdapters",
+            dependencies: ["ProjectRegistry", "Permissions"]
+        ),
+        .target(
+            name: "SecretaryCore",
+            dependencies: ["AssistantState", "ProjectRegistry", "Permissions", "ToolAdapters"]
+        ),
         .executableTarget(
             name: "AISecretaryApp",
-            dependencies: ["AssistantState"]
+            dependencies: ["AssistantState", "SecretaryCore", "ProjectRegistry", "Permissions", "ToolAdapters"]
         ),
         .testTarget(
             name: "AssistantStateTests",
             dependencies: ["AssistantState"]
+        ),
+        .testTarget(
+            name: "ProjectRegistryTests",
+            dependencies: ["ProjectRegistry"]
+        ),
+        .testTarget(
+            name: "PermissionsTests",
+            dependencies: ["Permissions", "ProjectRegistry"]
+        ),
+        .testTarget(
+            name: "ToolAdaptersTests",
+            dependencies: ["ToolAdapters", "ProjectRegistry", "Permissions"]
+        ),
+        .testTarget(
+            name: "SecretaryCoreTests",
+            dependencies: ["SecretaryCore", "AssistantState", "ProjectRegistry", "Permissions", "ToolAdapters"]
         )
     ]
 )
