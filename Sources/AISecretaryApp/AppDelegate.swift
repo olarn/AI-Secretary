@@ -15,9 +15,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let tailFraction: CGFloat = 0.22
     /// Gap kept between the bubble and the screen edge when clamping horizontally.
     private let screenMargin: CGFloat = 8
-    /// Gap between the character and the bubble; kept small/negative so the
-    /// bubble sits snug against the character instead of floating above it.
-    private let characterGap: CGFloat = -10
+    /// Gap between the character and the bubble window. The tail tip now ends
+    /// exactly at the window edge, and the character's avatar sits ~12pt inside
+    /// its own window, so a small negative gap makes the tail visually touch
+    /// the avatar.
+    private let characterGap: CGFloat = -14
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let characterHost = NSHostingView(

@@ -67,6 +67,9 @@ struct ChatPanelView: View {
         }
         .padding(18)
         .frame(width: 340)
+        // Fill the whole window height so the bubble body ends exactly where
+        // the reserved tail strip begins — no invisible dead space below it.
+        .frame(maxHeight: .infinity, alignment: .top)
         .background(
             SpeechBubbleShape(isMirrored: layout.isMirrored, isFlippedVertically: layout.isFlippedVertically)
                 .fill(.regularMaterial)
@@ -86,7 +89,12 @@ struct ChatPanelView: View {
             .padding(.trailing, 10)
         }
         .onExitCommand(perform: onClose)
-        .frame(width: 340, height: 460, alignment: layout.isFlippedVertically ? .bottom : .top)
+        // Reserve exactly the tail's length at the tail-bearing edge; the
+        // shape draws its tail beyond its own rect into this strip, so the
+        // tail tip lands on the window edge (which AppDelegate butts against
+        // the character).
+        .padding(layout.isFlippedVertically ? .top : .bottom, SpeechBubbleShape.defaultTailLength)
+        .frame(width: 340, height: 460)
     }
 
     private func actionButton(_ title: String, action: @escaping () -> Void) -> some View {
