@@ -22,7 +22,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     )
     private var characterPanel: FloatingPanel!
     private var chatPanel: FloatingPanel!
+    private var statusBar: StatusBarController!
     private var isChatVisible = false
+    private var isCharacterVisible = true
 
     private let characterSize: CGFloat = 120
     private let chatSize = CGSize(width: 360, height: 520)
@@ -73,7 +75,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         positionInitialWindows()
         observeWindowMovement()
 
+        statusBar = StatusBarController(
+            onOpenChat: { [weak self] in self?.openChatFromMenu() },
+            onToggleCharacter: { [weak self] in self?.toggleCharacterVisibility() ?? true }
+        )
+
         characterPanel.orderFrontRegardless()
+    }
+
+    /// Opens the chat, making the character visible first if it was hidden so the
+    /// bubble has something to anchor to.
+    private func openChatFromMenu() {
+        if !isCharacterVisible { _ = toggleCharacterVisibility() }
+        showChatPanel()
+    }
+
+    /// Shows or hides the floating character. Returns the new visibility so the
+    /// menu can relabel its item. Hiding the character also hides the chat.
+    @discardableResult
+    private func toggleCharacterVisibility() -> Bool {
+        isCharacterVisible.toggle()
+        if isCharacterVisible {
+            characterPanel.orderFrontRegardless()
+        } else {
+            if isChatVisible { hideChatPanel() }
+            characterPanel.orderOut(nil)
+        }
+        return isCharacterVisible
     }
 
     private func positionInitialWindows() {
