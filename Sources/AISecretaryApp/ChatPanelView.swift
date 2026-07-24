@@ -4,8 +4,12 @@ import AssistantState
 /// Mock chat/task panel: lets the user manually walk the state machine
 /// through its transitions to demonstrate the lifecycle. No real
 /// interpretation, tool execution, or network calls happen here.
+///
+/// Rendered as a manga-style speech bubble anchored to the character.
 struct ChatPanelView: View {
     let machine: AssistantStateMachine
+    let layout: ChatBubbleLayout
+    let onClose: () -> Void
     @State private var lastRejection: String?
 
     var body: some View {
@@ -61,9 +65,28 @@ struct ChatPanelView: View {
             }
             .frame(maxHeight: 160)
         }
-        .padding(16)
+        .padding(18)
         .frame(width: 340)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .background(
+            SpeechBubbleShape(isMirrored: layout.isMirrored)
+                .fill(.regularMaterial)
+        )
+        .overlay(
+            SpeechBubbleShape(isMirrored: layout.isMirrored)
+                .stroke(Color.primary.opacity(0.85), lineWidth: 2)
+        )
+        .overlay(alignment: .topTrailing) {
+            Button(action: onClose) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 18))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 10)
+            .padding(.trailing, 10)
+        }
+        .onExitCommand(perform: onClose)
+        .frame(width: 340, height: 460, alignment: .top)
     }
 
     private func actionButton(_ title: String, action: @escaping () -> Void) -> some View {
