@@ -15,8 +15,8 @@ struct SpeechBubbleShape: Shape {
     var cornerRadius: CGFloat = 22
     /// Fraction of the tail-bearing edge (0 = start) where the tail's base is centered, before mirroring.
     var tailHorizontalPosition: CGFloat = 0.22
-    var tailBaseWidth: CGFloat = 34
-    var tailLength: CGFloat = 40
+    var tailBaseWidth: CGFloat = 30
+    var tailLength: CGFloat = 26
     /// How far the tip drifts from the base center, for a slight diagonal comic-tail slant.
     var tailDrift: CGFloat = 8
     var isMirrored: Bool = false

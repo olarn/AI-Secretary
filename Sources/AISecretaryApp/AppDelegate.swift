@@ -15,8 +15,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let tailFraction: CGFloat = 0.22
     /// Gap kept between the bubble and the screen edge when clamping horizontally.
     private let screenMargin: CGFloat = 8
-    /// Gap between the character and the bubble so the tail visibly overlaps/touches it.
-    private let characterGap: CGFloat = 2
+    /// Gap between the character and the bubble; kept small/negative so the
+    /// bubble sits snug against the character instead of floating above it.
+    private let characterGap: CGFloat = -10
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let characterHost = NSHostingView(
