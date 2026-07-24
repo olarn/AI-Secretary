@@ -74,6 +74,12 @@ icon, and no main menu — it lives in the floating character and a menu bar
 item (✨) whose menu can open the chat, show/hide the character, and **Quit**.
 Copy it to `/Applications` to keep it around.
 
+Its Finder icon is generated at package time from your local character image
+(`~/Library/Application Support/AISecretary/character.png`), aspect-fit onto a
+transparent square — so the licensed art is never committed to the repo. Point
+it elsewhere with `ICON_SRC=/path/to/image.png ./scripts/package-app.sh`; if no
+image is found it simply builds without a custom icon.
+
 A floating character appears near the bottom-right of the screen. It is
 draggable, and clicking it toggles a speech bubble containing the conversation
 panel. The bubble follows the character and flips horizontally or vertically so

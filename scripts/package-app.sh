@@ -43,6 +43,24 @@ mkdir -p "$MACOS" "$CONTENTS/Resources"
 
 cp "$BIN_PATH" "$MACOS/$EXECUTABLE"
 
+# Generate the app icon from the local character image, if present. The art is
+# never committed (it may be licensed), so the icon is built at package time
+# from whatever character.png the user has installed. Override with ICON_SRC.
+ICON_SRC="${ICON_SRC:-$HOME/Library/Application Support/AISecretary/character.png}"
+ICON_LINE=""
+if [[ -f "$ICON_SRC" ]]; then
+    echo "▸ Building icon from ${ICON_SRC}…"
+    if swift "$ROOT/scripts/make-icon.swift" "$ICON_SRC" "$CONTENTS/Resources/AppIcon.icns" 2>/dev/null; then
+        ICON_LINE="    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>"
+    else
+        echo "  (icon generation failed — bundling without a custom icon)"
+    fi
+else
+    echo "▸ No character.png found — bundling without a custom icon."
+    echo "  (set ICON_SRC=/path/to/image.png to use your own)"
+fi
+
 cat > "$CONTENTS/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -56,6 +74,7 @@ cat > "$CONTENTS/Info.plist" <<PLIST
     <string>$BUNDLE_ID</string>
     <key>CFBundleExecutable</key>
     <string>$EXECUTABLE</string>
+$ICON_LINE
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
