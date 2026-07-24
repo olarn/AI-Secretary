@@ -12,8 +12,29 @@ request now drives real work: the Secretary classifies the intent, resolves an
 explicitly registered project, asks for approval, and runs a fixed set of
 read-only Git commands, reporting the result back in the transcript.
 
-Not built yet: Claude Code invocation, web search, voice, MCP integrations, and
-any action that writes, deletes, installs, or changes Git history.
+**Phase 3 — Chat with me (done).** Any message that isn't a Git command or a
+slash command streams a real reply from the Claude API through the character.
+The API key lives only in the macOS Keychain (set it in Settings); the default
+model is `claude-sonnet-5` at `medium` effort, switchable in-chat with `/model`
+and `/effort`. Chat is a conversation only — the model is not given tool access
+to the Git adapter.
+
+Not built yet: giving Claude tool-use access to run project tools, web search,
+voice, MCP integrations, and any action that writes, deletes, installs, or
+changes Git history.
+
+### Chatting
+
+Type anything that isn't a Git command. The reply streams token-by-token, and
+the character walks IDLE → THINKING (while the model reasons) → WORKING (as text
+arrives) → SUCCESS/ERROR. Set your Anthropic **API** key (billed separately from
+any Claude subscription, at [console.anthropic.com](https://console.anthropic.com))
+in **Settings** first. Slash commands, handled locally with no network call:
+
+| Command | Effect |
+|---|---|
+| `/model <id>` | Switch chat model (allowlisted IDs only) |
+| `/effort <low\|medium\|high\|xhigh\|max>` | Adjust reasoning depth |
 
 ## Requirements
 
@@ -118,7 +139,10 @@ Sources/
   ProjectRegistry/   Project type, JSON persistence, name resolution
   Permissions/       Action classes, approval requests, policy decisions
   ToolAdapters/      CodeToolAdapter protocol, GitReadOnlyAdapter
-  SecretaryCore/     Intent classification, orchestration, audit trail
+  LLMProvider/       ChatProvider protocol, ClaudeChatProvider (SSE),
+                     AnthropicStreamDecoder (pure, testable)
+  Credentials/       CredentialStore + Keychain-backed API-key storage
+  SecretaryCore/     Intent classification, chat routing, orchestration, audit
   AISecretaryApp/    SwiftUI + AppKit: FloatingPanel, CharacterView,
                      ChatPanelView, ProjectPicker, AppDelegate
 ```
