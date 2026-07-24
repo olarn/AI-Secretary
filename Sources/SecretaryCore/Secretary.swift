@@ -232,11 +232,14 @@ public final class Secretary {
         )
 
         streamingTask?.cancel()
-        streamingTask = Task { [weak self] in
+        // Explicitly main-actor: every branch below touches @MainActor state
+        // (transcript, state machine, audit). The stream itself does its network
+        // work off-actor and we consume it back here on the main actor.
+        streamingTask = Task { @MainActor [weak self] in
             var reply = ""
             var movedToWorking = false
 
-            func ensureWorking() {
+            @MainActor func ensureWorking() {
                 guard let self, !movedToWorking else { return }
                 self.stateMachine.send(.beginExecuting, reason: "streaming reply", taskID: taskID, toolStatus: "streaming")
                 movedToWorking = true

@@ -123,8 +123,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             object: characterPanel,
             queue: .main
         ) { [weak self] _ in
-            guard let self, let screen = self.characterPanel.screen ?? NSScreen.main else { return }
-            self.applyChatLayout(in: screen.visibleFrame)
+            // Delivered on the main queue, so it's safe to assert main-actor
+            // isolation to reach the panel and layout without a warning.
+            MainActor.assumeIsolated {
+                guard let self, let screen = self.characterPanel.screen ?? NSScreen.main else { return }
+                self.applyChatLayout(in: screen.visibleFrame)
+            }
         }
     }
 
