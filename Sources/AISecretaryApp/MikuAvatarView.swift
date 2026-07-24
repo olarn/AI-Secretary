@@ -2,56 +2,69 @@ import SwiftUI
 import AssistantState
 
 /// Original placeholder character: a friendly chibi avatar with teal
-/// twin-tails, evoking a generic anime-companion look. This is not licensed
+/// twin-tails, big eyes, and a hint of a sailor-style collar — evoking a
+/// generic anime-companion look. This is original vector art, not licensed
 /// character art (e.g. not Hatsune Miku) — swap in a real/licensed asset
 /// later behind the same `CharacterView` seam.
-private let avatarTeal = Color(red: 0.18, green: 0.75, blue: 0.72)
-private let avatarSkin = Color(red: 1.0, green: 0.89, blue: 0.80)
+private let avatarTeal = Color(red: 0.16, green: 0.74, blue: 0.72)
+private let avatarTealLight = Color(red: 0.55, green: 0.90, blue: 0.88)
+private let avatarSkin = Color(red: 1.0, green: 0.90, blue: 0.82)
 
 struct MikuAvatarView: View {
     var body: some View {
         ZStack {
-            // Twin tails, behind the head.
-            Capsule()
+            // Twin tails, behind the head, with a lighter inner highlight.
+            twinTail.rotationEffect(.degrees(-16)).offset(x: -32, y: 12)
+            twinTail.rotationEffect(.degrees(16)).offset(x: 32, y: 12)
+                .scaleEffect(x: -1, y: 1)
+
+            // Collar hint at the base of the neck.
+            RoundedRectangle(cornerRadius: 6)
+                .fill(Color.white.opacity(0.9))
+                .frame(width: 34, height: 16)
+                .offset(y: 34)
+            Triangle()
                 .fill(avatarTeal)
-                .frame(width: 16, height: 58)
-                .rotationEffect(.degrees(-18))
-                .offset(x: -30, y: 10)
-            Capsule()
-                .fill(avatarTeal)
-                .frame(width: 16, height: 58)
-                .rotationEffect(.degrees(18))
-                .offset(x: 30, y: 10)
+                .frame(width: 10, height: 12)
+                .offset(y: 32)
 
             // Head.
             Circle()
                 .fill(avatarSkin)
                 .frame(width: 58, height: 58)
 
-            // Side hair tufts.
-            Circle().fill(avatarTeal).frame(width: 20, height: 22).offset(x: -27, y: -6)
-            Circle().fill(avatarTeal).frame(width: 20, height: 22).offset(x: 27, y: -6)
+            // Side hair tufts framing the face.
+            Circle().fill(avatarTeal).frame(width: 22, height: 24).offset(x: -27, y: -4)
+            Circle().fill(avatarTeal).frame(width: 22, height: 24).offset(x: 27, y: -4)
 
-            // Hair top / bangs.
-            Capsule()
+            // Full bangs with a center part.
+            BangsShape()
                 .fill(avatarTeal)
-                .frame(width: 60, height: 26)
-                .offset(y: -22)
+                .frame(width: 60, height: 30)
+                .offset(y: -20)
 
-            // Eyes.
-            HStack(spacing: 16) {
+            // Eyes: large, expressive, with lashes and double highlight.
+            HStack(spacing: 15) {
                 EyeView()
                 EyeView()
             }
-            .offset(y: 2)
+            .offset(y: 3)
 
-            // Mouth.
-            Capsule()
-                .fill(Color.black.opacity(0.55))
-                .frame(width: 8, height: 2.5)
-                .offset(y: 14)
+            // Open, smiling mouth.
+            SmileShape()
+                .fill(Color(red: 0.55, green: 0.2, blue: 0.2))
+                .frame(width: 12, height: 7)
+                .offset(y: 15)
         }
         .frame(width: 90, height: 90)
+    }
+
+    private var twinTail: some View {
+        ZStack {
+            Capsule().fill(avatarTeal).frame(width: 17, height: 60)
+            Capsule().fill(avatarTealLight).frame(width: 6, height: 42)
+                .offset(x: -2, y: -4)
+        }
     }
 }
 
@@ -59,13 +72,68 @@ private struct EyeView: View {
     var body: some View {
         ZStack {
             Ellipse()
-                .fill(avatarTeal.opacity(0.9))
-                .frame(width: 10, height: 13)
+                .fill(avatarTeal.opacity(0.92))
+                .frame(width: 11, height: 14)
+            Ellipse()
+                .fill(Color.black.opacity(0.65))
+                .frame(width: 6, height: 8)
+                .offset(y: 2)
             Circle()
                 .fill(.white)
                 .frame(width: 3, height: 3)
                 .offset(x: -2, y: -3)
+            Circle()
+                .fill(.white.opacity(0.8))
+                .frame(width: 1.5, height: 1.5)
+                .offset(x: 1.5, y: 1)
         }
+    }
+}
+
+/// Simple rounded-top bangs silhouette with a soft center part.
+private struct BangsShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
+        path.addQuadCurve(
+            to: CGPoint(x: rect.midX - 4, y: rect.minY + 4),
+            control: CGPoint(x: rect.minX + 2, y: rect.minY)
+        )
+        path.addQuadCurve(
+            to: CGPoint(x: rect.midX + 4, y: rect.minY + 4),
+            control: CGPoint(x: rect.midX, y: rect.minY + 10)
+        )
+        path.addQuadCurve(
+            to: CGPoint(x: rect.maxX, y: rect.maxY),
+            control: CGPoint(x: rect.maxX - 2, y: rect.minY)
+        )
+        path.closeSubpath()
+        return path
+    }
+}
+
+/// A small open, smiling mouth.
+private struct SmileShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addQuadCurve(
+            to: CGPoint(x: rect.maxX, y: rect.minY),
+            control: CGPoint(x: rect.midX, y: rect.maxY)
+        )
+        path.closeSubpath()
+        return path
+    }
+}
+
+private struct Triangle: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.midX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.closeSubpath()
+        return path
     }
 }
 
