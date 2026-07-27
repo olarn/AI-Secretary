@@ -121,9 +121,22 @@ Build in phases.
 ### Phase 3: Chat with me.
 
 - Integration with Claude as a mask app.
+- ใช้ Claude Code ที่ user ติดตั้งและ login ไว้แล้ว (บัญชีของ user เอง ไม่ต้องใช้ API key) — ถ้าเครื่องไม่มี ให้แนะนำวิธีติดตั้งและ login
+- context ต่อเนื่องเหมือน ChatGPT: ผลลัพธ์คำสั่งและเนื้อหาไฟล์ที่อ่านต้องอยู่ใน context เพื่อถามต่อเนื่องได้
+- จำ project ล่าสุดที่ทำงานอยู่ ไม่ต้องพิมพ์ `in <project>` ซ้ำทุกครั้ง
+- ถ้า add project มากกว่า 1 ต้องเข้าใจบริบทของทุก project พร้อมกัน
+- ต่อ local / localhost MCP ได้ โดยอ่าน config จาก Claude Code ของ user เอง ไม่ต้องตั้งค่าซ้ำในแอป
+- แสดงข้อความ activity ที่ AI กำลังทำ (กำลังคิด / เรียกเครื่องมือไหน) แทรกอยู่ในสายของ chat และมีกรอบข้อความ เพื่อให้เห็นชัดว่านี่ไม่ใช่คำตอบ
+- ปิด/เปิด activity ได้ด้วยการ toggle icon status และบอกผลการ toggle ในสาย chat ด้วยกรอบเดียวกัน จำค่าไว้ข้ามการเปิดแอป ครั้งแรก default ซ่อน
+- เวลา AI ตอบ chat ถ้า position อยู่ที่ bottom ให้ auto scroll ตาม แต่ถ้า user scroll ขึ้นไปอ่าน message เก่าๆ ไม่ต้อง auto scroll จนกว่า user จะ scroll ลงมาล่างสุด
+- แสดง markdown table เป็นตารางจริงใน chat ถ้าตารางกว้างเกินหน้าต่าง ให้ scroll แนวขวางได้เฉพาะ content ของตาราง ไม่ใช่ทั้ง chat
 
 ### Phase 4: Setings
 
+- ใช้ window chat เดิมได้ ไม่ต้องมีหน้าต่างใหม่
+- เพิ่ม increase / decrease font size (มีปุ่มแค่ + -) max ที่ 32
+- เพิ่ม increase / decrease ขนาดหน้าต่าง chat (มีปุ่มแค่ + -) แล้วหน้าต่างจะยืดหดได้ (แนวตั้งเท่านั้น) โดย minimum เท่าขนาด default และ max ไม่เกินขนาดหน้าจอ
+- เลือก model และ effort ได้จากหน้า setting (คลิกที่ชื่อแล้วมี popup ให้เลือก) โดย default ใช้ค่าเดียวกับ Claude Code ของ user และบอกการเปลี่ยนแปลงใน chat
 
 ### Phase 5: External tools and proactive assistance
 
