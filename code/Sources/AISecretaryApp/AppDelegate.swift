@@ -33,10 +33,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var isChatVisible = false
     private var isCharacterVisible = true
 
-    /// The character window follows the S/M/L choice, so this is derived rather
-    /// than fixed. `CharacterView` scales its content to match.
-    private var characterSize: CGFloat {
-        CharacterView.baseSize * appearance.settings.appScale.factor
+    /// What the character view asks for at 1×, measured from the view itself
+    /// rather than written down here — a hard-coded window that was a few points
+    /// too small clipped the halo into a flat edge across the top of the head.
+    private var characterBaseSize: CGSize = .zero
+    /// The window follows the S/M/L choice; `CharacterView` scales to match.
+    private var characterSize: CGSize {
+        let factor = appearance.settings.appScale.factor
+        return CGSize(
+            width: characterBaseSize.width * factor,
+            height: characterBaseSize.height * factor
+        )
     }
     /// Width is fixed: the bubble's tail is positioned against it, so letting
     /// the width change would pull the tail away from the character. Height is
@@ -75,10 +82,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 onTap: { [weak self] in self?.toggleChatPanel() }
             )
         )
-        characterHost.frame = NSRect(x: 0, y: 0, width: characterSize, height: characterSize)
+        // Ask the view how big it wants to be at 1×, then give it exactly that
+        // (times the S/M/L factor) so nothing is cropped.
+        characterBaseSize = characterHost.fittingSize
+        characterHost.frame = NSRect(origin: .zero, size: characterSize)
 
         characterPanel = FloatingPanel(
-            contentRect: NSRect(x: 0, y: 0, width: characterSize, height: characterSize),
+            contentRect: NSRect(origin: .zero, size: characterSize),
             content: characterHost
         )
 
@@ -143,13 +153,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func applyWindowSizes() {
         let old = characterPanel.frame
         let size = characterSize
-        if old.width != size {
+        if old.size != size {
             characterPanel.setFrame(
                 NSRect(
-                    x: old.midX - size / 2,
+                    x: old.midX - size.width / 2,
                     y: old.minY,
-                    width: size,
-                    height: size
+                    width: size.width,
+                    height: size.height
                 ),
                 display: true
             )

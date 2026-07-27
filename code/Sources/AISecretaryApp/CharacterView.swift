@@ -15,20 +15,19 @@ struct CharacterView: View {
     let onTap: () -> Void
 
     /// S/M/L is a whole-character zoom rather than a re-layout: the badge, the
-    /// halo, and the bubble's tail are all positioned against these sizes, so
-    /// scaling the finished view keeps them in the same relationship. The frame
-    /// is then the scaled size, since `scaleEffect` alone doesn't change layout.
+    /// halo, and the bubble's tail are all positioned against each other, so
+    /// scaling the finished view keeps them in the same relationship.
+    ///
+    /// `fixedSize` makes it take its own ideal size rather than whatever the
+    /// window offers. The window is then sized from that ideal (see
+    /// `AppDelegate.characterSize`): sized the other way round, a window even a
+    /// few points too small clipped the halo into a flat edge across the top of
+    /// the character's head.
     var body: some View {
         content
+            .fixedSize()
             .scaleEffect(appearance.settings.appScale.factor)
-            .frame(
-                width: CharacterView.baseSize * appearance.settings.appScale.factor,
-                height: CharacterView.baseSize * appearance.settings.appScale.factor
-            )
     }
-
-    /// The size the character has always been drawn at — `AppScale.medium`.
-    static let baseSize: CGFloat = 120
 
     private var content: some View {
         VStack(spacing: 6) {
