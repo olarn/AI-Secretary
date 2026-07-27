@@ -1,7 +1,10 @@
 # AI Secretary
 
 A macOS desktop companion, built in the phases described in
-`initial-implementation-prompt.md` and governed by `CLAUDE.md`.
+`../initial-implementation-prompt.md` and governed by `../CLAUDE.md`.
+
+The Swift package lives in this `code/` directory; the repository root holds
+the project charter and documents. All commands below are run from here.
 
 **Phase 1 — Desktop companion shell (done).** A floating, transparent,
 always-on-top character window that is draggable, opens a manga-style speech

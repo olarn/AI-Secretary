@@ -1,6 +1,18 @@
+# Build products (paths are relative-anywhere, so they cover code/ too)
 .build/
 .swiftpm/
 *.xcodeproj
 DerivedData/
 .DS_Store
 AISecretary.app/
+
+# Credentials must never be committed. The Anthropic API key belongs in the
+# macOS Keychain (Settings in the app puts it there); anything resembling a key
+# file sitting in the working tree is ignored so a stray `git add -A` can't
+# publish it.
+claude-api-key.txt
+*api*key*.txt
+*.key
+*.pem
+.env
+.env.*
