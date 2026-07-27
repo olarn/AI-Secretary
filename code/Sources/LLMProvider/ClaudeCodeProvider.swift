@@ -93,70 +93,116 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
         let resume = self.sessionID
 
         return AsyncThrowingStream { continuation in
-            let task = Task { [weak self, installation, logger] in
+            let task = Task { [weak self] in
                 guard let self else { return continuation.finish() }
-                let process = Process()
-                process.executableURL = installation.executableURL
-                process.arguments = Self.arguments(
-                    prompt: prompt,
-                    model: model,
-                    system: system,
-                    resume: resume,
-                    configuration: configuration
-                )
-                process.currentDirectoryURL = configuration.workingDirectory
-                process.environment = Self.childEnvironment(for: installation)
-
-                let output = Pipe()
-                let errors = Pipe()
-                process.standardOutput = output
-                process.standardError = errors
-                process.standardInput = FileHandle.nullDevice
+                // The model is working from the moment the process starts; no
+                // text arrives until it has decided what to do.
+                continuation.yield(.thinking)
 
                 do {
-                    try process.run()
-                } catch {
-                    continuation.finish(throwing: ChatError.claudeCodeFailed(error.localizedDescription))
-                    return
-                }
-
-                logger.info("Claude Code turn started (resume=\(resume != nil, privacy: .public))")
-
-                do {
-                    // The model is working from the moment the process starts;
-                    // no text arrives until it has decided what to do.
-                    continuation.yield(.thinking)
-
-                    for try await line in output.fileHandleForReading.bytes.lines {
-                        try Task.checkCancellation()
-                        for event in self.handle(line: line) {
-                            continuation.yield(event)
-                        }
-                    }
-
-                    process.waitUntilExit()
-                    if process.terminationStatus != 0 {
-                        let detail = String(
-                            decoding: errors.fileHandleForReading.readDataToEndOfFile(),
-                            as: UTF8.self
-                        ).trimmingCharacters(in: .whitespacesAndNewlines)
-                        throw ChatError.claudeCodeFailed(
-                            detail.isEmpty
-                                ? "exited with code \(process.terminationStatus)"
-                                : String(detail.suffix(400))
+                    let outcome = try await self.runTurn(
+                        prompt: prompt, model: model, system: system,
+                        resume: resume, configuration: configuration,
+                        continuation: continuation
+                    )
+                    // The session we tried to resume is gone — a different
+                    // directory, or one that has since been cleaned up. Starting
+                    // over loses the earlier context, but that beats showing the
+                    // user an internal error they can do nothing about.
+                    if outcome == .staleSession {
+                        self.resetSession()
+                        _ = try await self.runTurn(
+                            prompt: prompt, model: model, system: system,
+                            resume: nil, configuration: configuration,
+                            continuation: continuation
                         )
                     }
                     continuation.finish()
                 } catch is CancellationError {
-                    process.terminate()
                     continuation.finish()
                 } catch {
-                    process.terminate()
                     continuation.finish(throwing: error)
                 }
             }
             continuation.onTermination = { _ in task.cancel() }
         }
+    }
+
+    enum TurnOutcome: Equatable {
+        case finished
+        /// `--resume` named a session Claude Code doesn't have.
+        case staleSession
+    }
+
+    private func runTurn(
+        prompt: String,
+        model: ChatModel,
+        system: String?,
+        resume: String?,
+        configuration: Configuration,
+        continuation: AsyncThrowingStream<ChatStreamEvent, Error>.Continuation
+    ) async throws -> TurnOutcome {
+        let process = Process()
+        process.executableURL = installation.executableURL
+        process.arguments = Self.arguments(
+            prompt: prompt, model: model, system: system,
+            resume: resume, configuration: configuration
+        )
+        process.currentDirectoryURL = configuration.workingDirectory
+        process.environment = Self.childEnvironment(for: installation)
+
+        let output = Pipe()
+        let errors = Pipe()
+        process.standardOutput = output
+        process.standardError = errors
+        process.standardInput = FileHandle.nullDevice
+
+        do {
+            try process.run()
+        } catch {
+            throw ChatError.claudeCodeFailed(error.localizedDescription)
+        }
+
+        logger.info("Claude Code turn started (resume=\(resume != nil, privacy: .public))")
+
+        var emittedText = false
+        do {
+            for try await line in output.fileHandleForReading.bytes.lines {
+                try Task.checkCancellation()
+                for event in handle(line: line) {
+                    if case .textDelta = event { emittedText = true }
+                    continuation.yield(event)
+                }
+            }
+        } catch {
+            process.terminate()
+            throw error
+        }
+
+        process.waitUntilExit()
+        guard process.terminationStatus != 0 else { return .finished }
+
+        let detail = String(
+            decoding: errors.fileHandleForReading.readDataToEndOfFile(),
+            as: UTF8.self
+        ).trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Only worth retrying if nothing reached the user yet — a mid-turn
+        // failure would otherwise replay the answer from the top.
+        if resume != nil, !emittedText, Self.isMissingSession(detail) {
+            logger.info("Resumed session was gone; starting a fresh one")
+            return .staleSession
+        }
+
+        throw ChatError.claudeCodeFailed(
+            detail.isEmpty
+                ? "exited with code \(process.terminationStatus)"
+                : String(detail.suffix(400))
+        )
+    }
+
+    static func isMissingSession(_ message: String) -> Bool {
+        message.localizedCaseInsensitiveContains("No conversation found")
     }
 
     // MARK: - Wire format

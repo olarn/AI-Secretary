@@ -14,11 +14,22 @@ public protocol WorkspaceScopedProvider: AnyObject, Sendable {
 }
 
 extension ClaudeCodeProvider: WorkspaceScopedProvider {
+    /// Changing the directory also drops the session.
+    ///
+    /// Claude Code scopes session lookup to the working directory, so resuming
+    /// a session started elsewhere fails with "No conversation found with
+    /// session ID". That is exactly what happens on the normal path here: the
+    /// first message runs in the scratch directory, the user then approves a
+    /// project, and the next turn would try to resume the scratch session from
+    /// inside the project.
     public func prepare(workingDirectory: URL?, allowedTools: [String]?) {
         var updated = configuration
+        let moved = updated.workingDirectory?.standardizedFileURL
+            != workingDirectory?.standardizedFileURL
         updated.workingDirectory = workingDirectory
         if let allowedTools { updated.allowedTools = allowedTools }
         configuration = updated
+        if moved { resetSession() }
     }
 
     public func resetConversation() { resetSession() }

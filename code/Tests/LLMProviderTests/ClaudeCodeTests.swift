@@ -232,6 +232,53 @@ final class ClaudeCodeProviderStreamTests: XCTestCase {
         }
     }
 
+    /// Claude Code scopes session lookup to the working directory, so a session
+    /// started in the scratch directory cannot be resumed from inside a project.
+    /// Carrying the id across the move produced "No conversation found with
+    /// session ID" on the first message after approving a project.
+    func testMovingToAnotherDirectoryDropsTheSession() {
+        let provider = makeProvider()
+        provider.prepare(workingDirectory: URL(fileURLWithPath: "/tmp/scratch"), allowedTools: nil)
+        _ = provider.handle(line: #"{"type":"system","subtype":"init","session_id":"scratch-session"}"#)
+        XCTAssertEqual(provider.sessionID, "scratch-session")
+
+        provider.prepare(workingDirectory: URL(fileURLWithPath: "/tmp/project"), allowedTools: nil)
+
+        XCTAssertNil(provider.sessionID, "A session from another directory can't be resumed")
+    }
+
+    func testStayingInTheSameDirectoryKeepsTheSession() {
+        let provider = makeProvider()
+        let directory = URL(fileURLWithPath: "/tmp/project")
+        provider.prepare(workingDirectory: directory, allowedTools: nil)
+        _ = provider.handle(line: #"{"type":"system","subtype":"init","session_id":"keep-me"}"#)
+
+        // Same directory, different allowlist — continuity must survive.
+        provider.prepare(workingDirectory: directory, allowedTools: ["Read", "Write"])
+
+        XCTAssertEqual(provider.sessionID, "keep-me")
+    }
+
+    /// Trailing-slash and `..` spellings of the same directory are the same
+    /// directory; they must not look like a move.
+    func testEquivalentPathSpellingsAreNotTreatedAsAMove() {
+        let provider = makeProvider()
+        provider.prepare(workingDirectory: URL(fileURLWithPath: "/tmp/project"), allowedTools: nil)
+        _ = provider.handle(line: #"{"type":"system","subtype":"init","session_id":"keep-me"}"#)
+
+        provider.prepare(workingDirectory: URL(fileURLWithPath: "/tmp/other/../project"), allowedTools: nil)
+
+        XCTAssertEqual(provider.sessionID, "keep-me")
+    }
+
+    func testRecognisesTheMissingSessionErrorClaudeCodeReports() {
+        XCTAssertTrue(ClaudeCodeProvider.isMissingSession(
+            "No conversation found with session ID: ad7ed7bc-8b88-4c08-aaec-13fa733094e6"
+        ))
+        XCTAssertFalse(ClaudeCodeProvider.isMissingSession("Invalid API key"))
+        XCTAssertFalse(ClaudeCodeProvider.isMissingSession(""))
+    }
+
     func testResettingTheSessionStartsAFreshConversation() {
         let provider = makeProvider()
         _ = provider.handle(line: #"{"type":"system","subtype":"init","session_id":"abc"}"#)
