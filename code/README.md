@@ -31,6 +31,17 @@ Settings is used as a fallback.
 adapters still exist and still back the typed commands below, but Claude Code's
 own tools now do this work in normal conversation.
 
+### Who she is
+
+The assistant ships as **Miku**, 17, and her name is what labels her replies in
+the panel. The character is a value (`SecretaryPersona`), not literals sprinkled
+through the prompt, and it's `Codable` — the plan is for the user to supply
+their own: upload a picture, confirm the gender the app guesses, pick a name.
+Only the built-in default exists today.
+
+The personality is written to add warmth without costing usefulness: the prompt
+still asks for the answer first and no padding. Asked "2+2", she answers "4".
+
 ### Chatting
 
 Type anything that isn't a Git command, in your own words. The reply streams

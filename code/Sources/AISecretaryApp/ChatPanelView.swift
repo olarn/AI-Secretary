@@ -192,7 +192,7 @@ struct ChatPanelView: View {
     /// Which tool it reached for, and with what, is the part that exists.
     private var header: some View {
         HStack(spacing: 6) {
-            Text("AI Secretary")
+            Text(secretary.persona.name)
                 .font(.headline)
             Text(machine.state.description.uppercased())
                 .font(.caption2.bold())
@@ -264,7 +264,7 @@ struct ChatPanelView: View {
         case .activity: activityBubble(entry)
         case .message:
             VStack(alignment: .leading, spacing: 4) {
-                Text(entry.speaker == .user ? "You" : "Secretary")
+                Text(entry.speaker == .user ? "You" : secretary.persona.name)
                     .font(.caption2.bold())
                     .foregroundStyle(entry.speaker == .user ? Color.accentColor : .secondary)
                 ForEach(

@@ -106,6 +106,9 @@ public final class Secretary {
     public private(set) var model: ChatModel?
     public private(set) var effort: Effort?
 
+    /// Who the assistant is. Fixed for now; user-supplied later.
+    public let persona: SecretaryPersona
+
     @ObservationIgnored public let stateMachine: AssistantStateMachine
     @ObservationIgnored private let registry: ProjectRegistry
     @ObservationIgnored private let policy: PermissionPolicy
@@ -151,6 +154,7 @@ public final class Secretary {
     public init(
         stateMachine: AssistantStateMachine,
         registry: ProjectRegistry,
+        persona: SecretaryPersona = .miku,
         policy: PermissionPolicy = DefaultPermissionPolicy(),
         adapter: CodeToolAdapter = GitReadOnlyAdapter(),
         fileAdapter: FileToolAdapter = FileReadOnlyAdapter(),
@@ -159,6 +163,7 @@ public final class Secretary {
         activityPreference: ActivityPreferenceStoring = UserDefaultsActivityPreference(),
         chatProvider: ChatProvider
     ) {
+        self.persona = persona
         self.stateMachine = stateMachine
         self.registry = registry
         self.policy = policy
@@ -1009,9 +1014,11 @@ public final class Secretary {
         You can also read these other folders the user has approved, at the paths         listed by your tools: \(others.map { "“\($0)”" }.joined(separator: ", ")).         If a question spans more than one of them, look at each — don't ask the         user to switch projects.
         """
         return """
-        You are the AI Secretary, a friendly macOS desktop companion. The person \
-        talking to you is not necessarily a developer, and may not be working on \
-        code at all — treat this as their assistant, not a coding tool.
+        \(persona.promptDescription)
+
+        You live on the person's Mac as a desktop companion. They are not \
+        necessarily a developer and may not be working on code at all — treat \
+        this as their assistant, not a coding tool.
 
         You are already running inside \(location): the current working directory \
         is that folder. You have your own tools. When the user asks about their \
@@ -1111,10 +1118,10 @@ public final class Secretary {
     private var chatOnlyPrompt: String {
         let names = registry.projects.map(\.name)
         guard !names.isEmpty else {
-            return Self.basePrompt + "\n\nThe user has not registered any projects yet."
+            return basePrompt + "\n\nThe user has not registered any projects yet."
         }
         let list = names.map { "- \($0)" }.joined(separator: "\n")
-        return Self.basePrompt + """
+        return basePrompt + """
 
 
         Projects the user has registered, and that you can therefore work in:
@@ -1126,8 +1133,12 @@ public final class Secretary {
         """
     }
 
-    private static let basePrompt = """
-    You are the AI Secretary, a friendly macOS desktop companion. Chat naturally \
+    private var basePrompt: String {
+        persona.promptDescription + "\n\n" + Self.capabilityPrompt
+    }
+
+    private static let capabilityPrompt = """
+    You live on the person's Mac as a desktop companion. Chat naturally \
     and concisely. You can also run a small set of read-only Git commands (e.g. \
     "status in <project>") and read-only file access (e.g. "list src in <project>" \
     or "read README.md in <project>"), and summarise, explain, analyse or review a \
