@@ -306,3 +306,78 @@ final class ClaudeCodeProviderStreamTests: XCTestCase {
         XCTAssertNil(provider.sessionID)
     }
 }
+
+// MARK: - Refusals
+
+final class ClaudeCodeRefusalTests: XCTestCase {
+    private func makeProvider() -> ClaudeCodeProvider {
+        ClaudeCodeProvider(
+            installation: ClaudeCodeInstallation(executableURL: URL(fileURLWithPath: "/bin/echo"))
+        )
+    }
+
+    /// The refusal only carries the tool_use id, so the earlier assistant turn
+    /// has to be remembered to say what was actually blocked.
+    func testPairsARefusalWithTheCallItRefused() {
+        let provider = makeProvider()
+        _ = provider.handle(line: #"""
+        {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"Write","input":{"file_path":"/tmp/p/out.txt","content":"x"}}]}}
+        """#)
+
+        let events = provider.handle(line: #"""
+        {"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_1","is_error":true,"content":"Claude requested permissions to write to /tmp/p/out.txt, but you haven't granted it yet."}]}}
+        """#)
+
+        XCTAssertEqual(events, [.toolDenied(DeniedTool(name: "Write", target: "/tmp/p/out.txt", rule: "Write"))])
+    }
+
+    /// An ordinary tool failure is not a permission problem — offering to widen
+    /// permissions for a missing file would be nonsense.
+    func testAnOrdinaryToolErrorIsNotTreatedAsARefusal() {
+        let provider = makeProvider()
+        _ = provider.handle(line: #"""
+        {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_2","name":"Read","input":{"file_path":"/tmp/nope"}}]}}
+        """#)
+
+        let events = provider.handle(line: #"""
+        {"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_2","is_error":true,"content":"File does not exist."}]}}
+        """#)
+
+        XCTAssertTrue(events.isEmpty)
+    }
+
+    func testASuccessfulToolResultEmitsNothing() {
+        let provider = makeProvider()
+        _ = provider.handle(line: #"""
+        {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t","name":"Read","input":{}}]}}
+        """#)
+        let events = provider.handle(line: #"""
+        {"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t","content":"contents"}]}}
+        """#)
+        XCTAssertTrue(events.isEmpty)
+    }
+
+    /// Approving one command must not hand over the whole shell.
+    func testABashRefusalNarrowsToTheCommandThatWasTried() {
+        let denied = ClaudeCodeProvider.describe(tool: "Bash", input: ["command": "npm test --watch=false"])
+        XCTAssertEqual(denied.rule, "Bash(npm test *)")
+        XCTAssertEqual(denied.target, "npm test --watch=false")
+    }
+
+    func testAFileToolRuleIsJustTheToolName() {
+        let denied = ClaudeCodeProvider.describe(tool: "Edit", input: ["file_path": "/tmp/a.txt"])
+        XCTAssertEqual(denied.rule, "Edit")
+        XCTAssertEqual(denied.summary, "Edit: /tmp/a.txt")
+    }
+
+    func testRecognisesThePhrasesClaudeCodeUsesForRefusals() {
+        for message in [
+            "Claude requested permissions to write to /tmp/x, but you haven't granted it yet.",
+            "This command requires approval",
+            "Claude requested permissions to edit /tmp/y which is a sensitive file."
+        ] {
+            XCTAssertTrue(ClaudeCodeProvider.isPermissionRefusal(message), "Missed: \(message)")
+        }
+        XCTAssertFalse(ClaudeCodeProvider.isPermissionRefusal("File does not exist."))
+    }
+}

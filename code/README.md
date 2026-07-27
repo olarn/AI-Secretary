@@ -192,13 +192,21 @@ to `git status`/`diff`/`log`/`branch`. Anything outside that — writing a file,
 running an arbitrary command — is refused by Claude Code, which reports the
 refusal rather than doing it.
 
-Two honest caveats:
+When Claude Code is refused something, the assistant notices and offers to
+allow it: it says what was blocked (`Write: /path/to/file`, `Bash: npm test`),
+and approving retries the same request with that rule added. This is the only
+loop available — Claude Code's `--permission-mode manual` does not ask the host
+app mid-turn, it just refuses — so widening is always try → refused → ask → try
+again.
 
-- **There is no mid-turn approval.** Claude Code's `--permission-mode manual`
-  does not ask the host app; an un-granted tool is simply denied. Widening
-  permissions therefore has to be a deny → ask → resume-with-more loop, and
-  that loop isn't built yet. Until it is, the assistant can look at things and
-  answer, not change them.
+A widening grant lasts for **the session only** and is never written to disk.
+Read access to a project persists across launches; permission to change files
+starts closed every time you open the app. Bash rules are narrowed to the
+command that was actually attempted, so approving one `npm test` does not hand
+over the shell.
+
+One honest caveat:
+
 - **`WebSearch`/`WebFetch` are in the read-only default.** They don't touch
   your disk, but they do reach the network with whatever context the model
   includes. Remove them from `ClaudeCodeProvider.readOnlyTools` if that's not

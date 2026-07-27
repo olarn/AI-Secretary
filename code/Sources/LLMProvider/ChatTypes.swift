@@ -58,9 +58,38 @@ public struct ChatUsage: Equatable, Sendable {
     }
 }
 
+/// A tool the backend wanted to use but wasn't allowed to.
+///
+/// Claude Code has no mid-turn approval: an un-granted tool is refused and the
+/// model is told so, which it then reports to the user. Surfacing the refusal
+/// as an event is what lets the orchestration layer offer to widen permissions
+/// and try again, instead of the user hitting a wall they can't act on.
+public struct DeniedTool: Equatable, Sendable {
+    /// Tool name as Claude Code reports it, e.g. `Write`, `Bash`.
+    public let name: String
+    /// What it was going to act on — a path, or the command — for display.
+    public let target: String?
+    /// Permission rule that would allow this, in Claude Code's syntax.
+    public let rule: String
+
+    public init(name: String, target: String?, rule: String) {
+        self.name = name
+        self.target = target
+        self.rule = rule
+    }
+
+    /// One line a human can decide on.
+    public var summary: String {
+        guard let target, !target.isEmpty else { return name }
+        return "\(name): \(target)"
+    }
+}
+
 /// Events surfaced from a streamed reply. The provider maps the raw Anthropic
 /// SSE event types onto this small, UI-agnostic set.
 public enum ChatStreamEvent: Equatable, Sendable {
+    /// The backend was refused a tool. Only Claude Code emits this.
+    case toolDenied(DeniedTool)
     /// The model began thinking (adaptive thinking). No visible text yet.
     case thinking
     /// A chunk of assistant text.

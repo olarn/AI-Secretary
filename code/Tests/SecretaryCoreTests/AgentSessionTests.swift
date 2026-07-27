@@ -16,6 +16,8 @@ final class SpyWorkspaceProvider: ChatProvider, WorkspaceScopedProvider, @unchec
     private(set) var lastSystem: String?
     private(set) var resetCount = 0
     var hasWorkspaceTools = true
+    /// Refusals to emit on the next turn, then cleared — so a retry succeeds.
+    var denialsForNextTurn: [DeniedTool] = []
 
     private(set) var preparedExtras: [[URL]] = []
 
@@ -37,7 +39,10 @@ final class SpyWorkspaceProvider: ChatProvider, WorkspaceScopedProvider, @unchec
         callCount += 1
         lastMessages = messages
         lastSystem = system
+        let denials = denialsForNextTurn
+        denialsForNextTurn = []
         return AsyncThrowingStream { continuation in
+            for denial in denials { continuation.yield(.toolDenied(denial)) }
             continuation.yield(.textDelta("ok"))
             continuation.yield(.completed(stopReason: nil, usage: nil))
             continuation.finish()
@@ -203,6 +208,118 @@ final class AgentSessionTests: XCTestCase {
 
         XCTAssertTrue(provider.lastSystem?.contains("cannot run commands") == true,
                       "Got: \(provider.lastSystem ?? "-")")
+    }
+
+    // MARK: - Widening permissions after a refusal
+
+    private func denyWrite() -> DeniedTool {
+        DeniedTool(name: "Write", target: "/tmp/agent-fixture/out.txt", rule: "Write")
+    }
+
+    /// Claude Code refuses un-granted tools mid-turn rather than asking, so the
+    /// only way to widen is to notice the refusal and offer a retry.
+    func testARefusedToolOffersToAllowItAndTryAgain() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        provider.denialsForNextTurn = [denyWrite()]
+        secretary.submit("create out.txt")
+        await waitUntilIdle()
+
+        guard case .approval(let request, let operation) = secretary.pendingDecision else {
+            return XCTFail("Expected an offer to widen, got: \(String(describing: secretary.pendingDecision))")
+        }
+        XCTAssertEqual(operation, .widenAgentTools(rules: ["Write"], prompt: "create out.txt"))
+        XCTAssertEqual(request.actionClass, .localWrite, "Writing files must never be approve-once")
+        XCTAssertTrue(secretary.transcript.contains { $0.text.contains("out.txt") },
+                      "The prompt should say what was blocked")
+    }
+
+    /// The previous turn ended at IDLE, so the retry has to re-enter the state
+    /// machine properly — otherwise the character sits still through it and any
+    /// caller waiting on "busy then idle" is misled.
+    func testTheRetryDrivesTheStateMachineBackThroughBusy() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        provider.denialsForNextTurn = [denyWrite()]
+        secretary.submit("create out.txt")
+        await waitUntilIdle()
+        XCTAssertEqual(machine.state, .idle)
+
+        var sawBusy = false
+        let watcher = Task { @MainActor in
+            for _ in 0..<200 {
+                if machine.state != .idle { sawBusy = true; return }
+                try? await Task.sleep(nanoseconds: 1_000_000)
+            }
+        }
+        secretary.resolvePendingApproval(granted: true)
+        await watcher.value
+        await waitUntilIdle()
+
+        XCTAssertTrue(sawBusy, "The retry must show as work in progress")
+        XCTAssertEqual(machine.state, .idle)
+    }
+
+    func testApprovingRetriesWithTheToolAllowed() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        provider.denialsForNextTurn = [denyWrite()]
+        secretary.submit("create out.txt")
+        await waitUntilIdle()
+        secretary.resolvePendingApproval(granted: true)
+        await waitUntilIdle()
+
+        XCTAssertEqual(provider.callCount, 2, "The blocked request should be retried")
+        XCTAssertTrue(provider.preparedTools.last??.contains("Write") == true,
+                      "Got: \(String(describing: provider.preparedTools.last ?? nil))")
+    }
+
+    func testDenyingDoesNotRetryAndLeavesToolsClosed() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        provider.denialsForNextTurn = [denyWrite()]
+        secretary.submit("create out.txt")
+        await waitUntilIdle()
+        secretary.resolvePendingApproval(granted: false)
+        await waitUntilIdle()
+
+        XCTAssertEqual(provider.callCount, 1)
+        XCTAssertFalse(provider.preparedTools.last??.contains("Write") == true)
+    }
+
+    /// Read access to a project persists; permission to change files must not.
+    func testAWriteGrantIsNotWrittenToTheProjectFile() async throws {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        provider.denialsForNextTurn = [denyWrite()]
+        secretary.submit("create out.txt")
+        await waitUntilIdle()
+        secretary.resolvePendingApproval(granted: true)
+        await waitUntilIdle()
+
+        let saved = try XCTUnwrap(try store.load().first)
+        XCTAssertFalse(saved.allowedTools.contains("Write"),
+                       "A write grant must not survive a relaunch: \(saved.allowedTools)")
+    }
+
+    func testSeveralRefusalsAreCollectedIntoOneQuestion() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        provider.denialsForNextTurn = [
+            denyWrite(),
+            DeniedTool(name: "Bash", target: "npm test", rule: "Bash(npm test *)"),
+            denyWrite()
+        ]
+        secretary.submit("set the project up")
+        await waitUntilIdle()
+
+        guard case .approval(_, let operation) = secretary.pendingDecision,
+              case .widenAgentTools(let rules, _) = operation else {
+            return XCTFail("Expected one combined offer")
+        }
+        XCTAssertEqual(rules, ["Write", "Bash(npm test *)"], "Duplicates should collapse")
+    }
+
+    func testATurnWithNoRefusalsAsksNothing() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        secretary.submit("just tell me about it")
+        await waitUntilIdle()
+
+        XCTAssertNil(secretary.pendingDecision)
     }
 
     // MARK: - Working with no project

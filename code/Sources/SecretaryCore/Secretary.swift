@@ -36,6 +36,10 @@ public enum PlannedOperation: Equatable, Sendable {
     /// once per project — asking before every message would make the assistant
     /// unusable, so the prompt has to be explicit about what the grant covers.
     case startAgent(prompt: String)
+    /// Re-run a turn with extra tools after Claude Code was refused them.
+    /// `.localWrite`, so it asks every single time — this is the door to
+    /// changing the user's files.
+    case widenAgentTools(rules: [String], prompt: String)
 
     public var actionClass: ActionClass {
         switch self {
@@ -44,6 +48,7 @@ public enum PlannedOperation: Equatable, Sendable {
         case .understand(let op): return op.actionClass
         // Approve-once: the grant is per project, and the prompt says so.
         case .startAgent: return .readOnly
+        case .widenAgentTools: return .localWrite
         }
     }
 
@@ -53,6 +58,8 @@ public enum PlannedOperation: Equatable, Sendable {
         case .file(let op): return op.humanDescription
         case .understand(let op): return op.humanDescription
         case .startAgent: return "Let Claude Code read and work in this project"
+        case .widenAgentTools(let rules, _):
+            return "Allow \(rules.joined(separator: ", ")) for the rest of this session"
         }
     }
 }
@@ -95,6 +102,7 @@ public final class Secretary {
     /// Last project actually worked in, so follow-up commands don't need
     /// "in <project>" repeated on every line.
     @ObservationIgnored private var lastProject: Project?
+    @ObservationIgnored private var _sessionAgentTools: Set<String> = []
     @ObservationIgnored private var conversation: [ChatMessage] = []
     @ObservationIgnored private var streamingTask: Task<Void, Never>?
 
@@ -307,6 +315,79 @@ public final class Secretary {
         streamReply(messages: conversation, taskID: taskID)
     }
 
+    /// After a turn in which Claude Code was refused a tool, offers to allow it
+    /// and run the same request again.
+    ///
+    /// This is how permissions widen at all. Claude Code has no mid-turn
+    /// approval — an un-granted tool is simply refused — so the only honest loop
+    /// is: try, get refused, ask the human, retry with more. The grant is
+    /// `.localWrite`, so it is asked every time and is never persisted to disk:
+    /// permission to change files should not outlive the session.
+    private func offerToWiden(_ denied: [DeniedTool], taskID: String) {
+        guard !denied.isEmpty,
+              let project = lastProject,
+              let prompt = activeRequestText
+        else { return }
+
+        let rules = denied.map(\.rule).reduced()
+        guard !rules.isEmpty else { return }
+
+        let request = ApprovalRequest(
+            taskID: taskID,
+            toolID: Self.claudeCodeToolID,
+            actionClass: .localWrite,
+            project: project,
+            commandSummary: rules.joined(separator: ", "),
+            rationale: "Retry with these tools allowed"
+        )
+        audit.record(AuditEntry(taskID: taskID, kind: .approvalRequested, detail: request.commandSummary))
+
+        let what = denied.map { "• \($0.summary)" }.joined(separator: "\n")
+        say(.secretary, """
+            I was blocked from doing this in \(project.name):
+
+            \(what)
+
+            Shall I go ahead? This allows it for the rest of this session only, \
+            and I'll try your request again.
+            """)
+        pendingDecision = .approval(request, operation: .widenAgentTools(rules: rules, prompt: prompt))
+    }
+
+    /// Adds the rules for this session and retries the request that was blocked.
+    private func widenAndRetry(rules: [String], prompt: String, in project: Project) {
+        let taskID = activeTaskID ?? "-"
+        sessionAgentTools.formUnion(rules)
+        audit.record(AuditEntry(
+            taskID: taskID,
+            kind: .approvalGranted,
+            detail: "session tools: \(rules.joined(separator: ", "))"
+        ))
+
+        guard let scoped = chatProvider as? WorkspaceScopedProvider else { return }
+        lastProject = project
+        prepareWorkspace(primary: project, on: scoped)
+
+        // The previous turn already finished, so the machine is back at IDLE.
+        // Re-enter through the normal path — sending `.beginExecuting` straight
+        // from IDLE is an invalid transition, and the character would sit still
+        // through the whole retry.
+        stateMachine.send(.userBeganInput, reason: "retrying with wider permissions", taskID: taskID)
+        stateMachine.send(.beginInterpreting, reason: "retrying with wider permissions", taskID: taskID)
+
+        // The request itself is already the last user turn in `conversation`.
+        _ = prompt
+        streamReply(messages: conversation, taskID: taskID)
+    }
+
+    /// Extra tool rules granted for this run only. Deliberately not persisted —
+    /// a project keeps its read access across launches, but permission to write
+    /// starts closed every time.
+    private var sessionAgentTools: Set<String> {
+        get { _sessionAgentTools }
+        set { _sessionAgentTools = newValue }
+    }
+
     /// Every project the user has approved for Claude Code.
     private var approvedProjects: [Project] {
         registry.projects.filter { $0.allows(tool: Self.claudeCodeToolID) }
@@ -326,7 +407,7 @@ public final class Secretary {
         scoped.prepare(
             workingDirectory: primary?.url ?? Self.scratchDirectory,
             additionalDirectories: others,
-            allowedTools: nil
+            allowedTools: ClaudeCodeProvider.readOnlyTools + sessionAgentTools.sorted()
         )
     }
 
@@ -401,6 +482,7 @@ public final class Secretary {
         streamingTask = Task { @MainActor [weak self] in
             var reply = ""
             var movedToWorking = false
+            var denied: [DeniedTool] = []
 
             @MainActor func ensureWorking() {
                 guard let self, !movedToWorking else { return }
@@ -417,6 +499,11 @@ public final class Secretary {
                     switch event {
                     case .thinking:
                         break // stay in THINKING until the first token
+                    case .toolDenied(let tool):
+                        // Collected rather than acted on immediately: the turn
+                        // keeps going and may be refused several things, and one
+                        // prompt listing all of them beats a stream of them.
+                        if !denied.contains(tool) { denied.append(tool) }
                     case .textDelta(let chunk):
                         ensureWorking()
                         reply += chunk
@@ -435,6 +522,7 @@ public final class Secretary {
                             self.conversation.append(ChatMessage(role: .assistant, content: reply))
                             self.trimConversation()
                             self.finishChat(entryID: replyID, taskID: taskID, success: true, finalText: reply)
+                            self.offerToWiden(denied, taskID: taskID)
                         }
                     }
                 }
@@ -516,6 +604,10 @@ public final class Secretary {
 
         // Starting the agent in a project is what *creates* the grant, so it
         // can't be gated on the project already holding it.
+        if case .widenAgentTools(let rules, let prompt) = operation {
+            widenAndRetry(rules: rules, prompt: prompt, in: project)
+            return
+        }
         if case .startAgent(let prompt) = operation {
             if project.allows(tool: Self.claudeCodeToolID) {
                 lastProject = project
@@ -566,6 +658,10 @@ public final class Secretary {
         if case .startAgent(let prompt) = operation {
             lastProject = project
             beginAgentSession(prompt: prompt, in: project)
+            return
+        }
+        if case .widenAgentTools(let rules, let prompt) = operation {
+            widenAndRetry(rules: rules, prompt: prompt, in: project)
             return
         }
 
@@ -645,8 +741,8 @@ public final class Secretary {
             </file>
             """ + (wasTruncated ? "\n(Only the first \(readContextMaxBytes / 1024) KB is shown here.)" : "")
 
-        case .understand, .startAgent:
-            // Both write their own history: the model's reply is the record.
+        case .understand, .startAgent, .widenAgentTools:
+            // These write their own history: the model's reply is the record.
             return
         }
 
@@ -748,7 +844,7 @@ public final class Secretary {
 
     private func toolID(for operation: PlannedOperation) -> String {
         switch operation {
-        case .startAgent: return Self.claudeCodeToolID
+        case .startAgent, .widenAgentTools: return Self.claudeCodeToolID
         case .git: return adapter.toolID
         // Understanding reads through the same adapter, so it is gated by the
         // same project allowlist entry. What makes it stricter is its action
@@ -764,6 +860,7 @@ public final class Secretary {
         case .understand(let op):
             return "read \(op.relativePath) and send it to \(model.id) to \(op.task.rawValue)"
         case .startAgent: return "run Claude Code here"
+        case .widenAgentTools(let rules, _): return rules.joined(separator: ", ")
         }
     }
 
@@ -773,8 +870,8 @@ public final class Secretary {
         case .file(let op): return try fileAdapter.run(op, in: project)
         case .understand(let op):
             return try fileAdapter.run(.readFile(relativePath: op.relativePath), in: project)
-        case .startAgent:
-            preconditionFailure("startAgent is handled by execute(_:in:) before dispatch")
+        case .startAgent, .widenAgentTools:
+            preconditionFailure("agent operations are handled before adapter dispatch")
         }
     }
 
@@ -852,11 +949,27 @@ public final class Secretary {
         Reply in the language the user writes in. Keep answers short and lead with \
         the answer; add detail after. Don't narrate every step — say what you found.
 
-        Right now your tools are read-only: you can read, search and browse, but \
-        writing or changing files will be refused. If a request needs that, say so \
-        plainly instead of pretending it worked. Never claim to have done something \
-        you didn't do.
+        \(permissionNote) If something is refused, say so plainly instead of \
+        pretending it worked — the user will be offered the chance to allow it. \
+        Never claim to have done something you didn't do.
         """ + alsoOpen
+    }
+
+    /// Kept in step with the allowlist actually passed to the backend. Telling
+    /// the model it is read-only after the user widened permissions would stop
+    /// it retrying the very thing they just approved.
+    private var permissionNote: String {
+        guard !sessionAgentTools.isEmpty else {
+            return """
+            Right now your tools are read-only: you can read, search and browse, \
+            but writing or running commands will be refused.
+            """
+        }
+        return """
+        You can read, search and browse. The user has also allowed these for this \
+        session: \(sessionAgentTools.sorted().joined(separator: ", ")). Anything \
+        beyond that is still refused.
+        """
     }
 
     private var chatOnlyPrompt: String {
@@ -915,5 +1028,13 @@ public final class Secretary {
         • /model <id> — switch the chat model
         • /effort <low|medium|high|xhigh|max> — adjust reasoning depth
         """
+    }
+}
+
+extension Array where Element == String {
+    /// Drops duplicates while keeping the order the user will read them in.
+    func reduced() -> [String] {
+        var seen = Set<String>()
+        return filter { seen.insert($0).inserted }
     }
 }

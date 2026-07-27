@@ -66,6 +66,9 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
     private let stateLock = NSLock()
     private var _configuration: Configuration
     private var _sessionID: String?
+    /// tool_use id -> (name, input), so a refusal (which carries only the id)
+    /// can be reported with what it was trying to do.
+    private var _pendingToolUses: [String: (name: String, input: [String: Any])] = [:]
 
     public init(installation: ClaudeCodeInstallation, configuration: Configuration = Configuration()) {
         self.installation = installation
@@ -211,6 +214,42 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
         message.localizedCaseInsensitiveContains("No conversation found")
     }
 
+    // MARK: - Refusals
+
+    private static func contentBlocks(of object: [String: Any]) -> [[String: Any]] {
+        guard let message = object["message"] as? [String: Any],
+              let content = message["content"] as? [[String: Any]]
+        else { return [] }
+        return content
+    }
+
+    /// Distinguishes "you may not" from an ordinary tool failure such as a
+    /// missing file. Only the former is worth offering to widen.
+    static func isPermissionRefusal(_ message: String) -> Bool {
+        let phrases = [
+            "haven't granted",
+            "requires approval",
+            "requested permissions"
+        ]
+        return phrases.contains { message.localizedCaseInsensitiveContains($0) }
+    }
+
+    /// Turns a refused call into something a human can decide on, plus the rule
+    /// that would allow it.
+    ///
+    /// Bash is narrowed to the command that was actually attempted — approving
+    /// one `npm test` must not hand over the whole shell.
+    static func describe(tool name: String, input: [String: Any]) -> DeniedTool {
+        if name == "Bash", let command = input["command"] as? String {
+            let head = command.split(separator: " ").prefix(2).joined(separator: " ")
+            return DeniedTool(name: name, target: command, rule: "Bash(\(head) *)")
+        }
+        let target = (input["file_path"] as? String)
+            ?? (input["path"] as? String)
+            ?? (input["url"] as? String)
+        return DeniedTool(name: name, target: target, rule: name)
+    }
+
     // MARK: - Wire format
 
     /// Maps one line of `--output-format stream-json` onto our UI-agnostic
@@ -233,6 +272,30 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
                 stateLock.withLock { _sessionID = id }
             }
             return []
+
+        case "assistant":
+            // Remember what each tool call was for; the refusal that may follow
+            // carries only the id.
+            for block in Self.contentBlocks(of: object) where block["type"] as? String == "tool_use" {
+                guard let id = block["id"] as? String, let name = block["name"] as? String else { continue }
+                stateLock.withLock {
+                    _pendingToolUses[id] = (name, block["input"] as? [String: Any] ?? [:])
+                }
+            }
+            return []
+
+        case "user":
+            var denied: [ChatStreamEvent] = []
+            for block in Self.contentBlocks(of: object)
+            where block["type"] as? String == "tool_result" && block["is_error"] as? Bool == true {
+                guard let id = block["tool_use_id"] as? String,
+                      Self.isPermissionRefusal(String(describing: block["content"] ?? ""))
+                else { continue }
+                let call = stateLock.withLock { _pendingToolUses.removeValue(forKey: id) }
+                guard let call else { continue }
+                denied.append(.toolDenied(Self.describe(tool: call.name, input: call.input)))
+            }
+            return denied
 
         case "stream_event":
             guard let event = object["event"] as? [String: Any],
