@@ -55,7 +55,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// How far the bubble is pushed sideways, away from the character, as a
     /// fraction of its own width. Lining the tail's tip up with the character's
     /// centre put most of the bubble across the character; this backs it off.
-    private let bubbleClearanceFraction: CGFloat = 0.2
+    private let bubbleClearanceFraction: CGFloat = 0.1
     /// Gap between the character and the bubble window. The tail tip now ends
     /// exactly at the window edge, and the character's avatar sits ~12pt inside
     /// its own window, so a small negative gap makes the tail visually touch
