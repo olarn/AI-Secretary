@@ -293,6 +293,87 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
         XCTAssertEqual(fileAdapter.runCalls.count, 1, "Only the approved read has run")
     }
 
+    /// The exact reported sequence: list a directory, then ask a follow-up about
+    /// it. The model must be able to see the listing rather than asking again.
+    func testFollowUpQuestionSeesTheEarlierListing() async {
+        fileAdapter.stubbedContents = "notes.md\nplan.md\nbudget.xlsx\n"
+        let chat = reply("Two.")
+        let secretary = makeSecretary(chat: chat)
+
+        secretary.submit("list files in Fixture")
+        secretary.resolvePendingApproval(granted: true)
+        await waitUntilIdle()
+        XCTAssertEqual(chat.callCount, 0, "Listing a directory needs no model call")
+
+        secretary.submit("มี .md file กี่ file?")
+        await waitUntilIdle()
+
+        XCTAssertEqual(chat.callCount, 1)
+        let sent = chat.lastMessages.map(\.content).joined(separator: "\n")
+        XCTAssertTrue(sent.contains("notes.md"), "The listing must be in context. Sent:\n\(sent)")
+        XCTAssertTrue(sent.contains("list files in Fixture"), "The original request should be there too")
+        XCTAssertTrue(sent.contains("มี .md file กี่ file?"), "…along with the follow-up")
+    }
+
+    /// Continuity must not become a back door: a local `read` puts a marker in
+    /// context, never the bytes.
+    func testFileContentsFromAPlainReadNeverEnterTheConversation() async {
+        fileAdapter.stubbedContents = "API_KEY=XYZZY-42"
+        let chat = reply("ok")
+        let secretary = makeSecretary(chat: chat)
+
+        secretary.submit("read .env in Fixture")
+        secretary.resolvePendingApproval(granted: true)
+        await waitUntilIdle()
+
+        secretary.submit("what was in it?")
+        await waitUntilIdle()
+
+        let sent = chat.lastMessages.map(\.content).joined(separator: "\n")
+        XCTAssertFalse(sent.contains("XYZZY-42"), "A local read must not leak into the next chat turn")
+        XCTAssertTrue(sent.contains("did not share the contents"), "Sent:\n\(sent)")
+    }
+
+    func testGitOutputIsCarriedIntoContextToo() async {
+        let chat = reply("ok")
+        let adapter = SpyAdapter()
+        adapter.stubbedResult = ToolResult(output: "## main...origin/main", exitCode: 0, commandSummary: "git status")
+        let secretary = Secretary(
+            stateMachine: machine,
+            registry: ProjectRegistry(store: InMemoryProjectStore(projects: [project])),
+            policy: policy,
+            adapter: adapter,
+            fileAdapter: fileAdapter,
+            classifier: RuleBasedIntentClassifier(),
+            audit: AuditLog(),
+            chatProvider: chat
+        )
+
+        secretary.submit("git status in Fixture")
+        secretary.resolvePendingApproval(granted: true)
+        // Deliberately not a Git keyword — "which branch…" would route back to
+        // the adapter instead of the model.
+        secretary.submit("สรุปสั้นๆ ให้หน่อย")
+        await waitUntilIdle()
+
+        let sent = chat.lastMessages.map(\.content).joined(separator: "\n")
+        XCTAssertTrue(sent.contains("origin/main"), "Sent:\n\(sent)")
+    }
+
+    func testFailedToolRunIsNotRemembered() async {
+        fileAdapter.stubbedError = ToolError.fileNotFound("nope.txt")
+        let chat = reply("ok")
+        let secretary = makeSecretary(chat: chat)
+
+        secretary.submit("list nope in Fixture")
+        secretary.resolvePendingApproval(granted: true)
+        secretary.submit("and now?")
+        await waitUntilIdle()
+
+        let sent = chat.lastMessages.map(\.content).joined(separator: "\n")
+        XCTAssertFalse(sent.contains("<tool-output>"), "A failed run has no output worth remembering")
+    }
+
     func testForAndOnAlsoSelectTheProject() {
         let classifier = RuleBasedIntentClassifier()
         for text in ["review Sources/Main.swift for Fixture", "analyze report.md on Fixture"] {

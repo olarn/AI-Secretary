@@ -53,6 +53,19 @@ in **Settings** first. Slash commands, handled locally with no network call:
 | `/model <id>` | Switch chat model (allowlisted IDs only) |
 | `/effort <low\|medium\|high\|xhigh\|max>` | Adjust reasoning depth |
 
+### Continuity between commands and chat
+
+Commands and conversation share one thread. Running `list files in X` and then
+asking "how many .md files?" works: the request and its output are written into
+the conversation the model sees, so it can answer instead of asking again. Git
+output and directory listings are carried in full (capped at 4 KB each, and the
+whole conversation is trimmed oldest-first past 200 KB).
+
+File **contents** are the exception. `read <path>` shows the file on screen and
+leaves only a marker in the model's context — approving a local read must never
+become an upload one turn later. To let the model reason about a file, use
+`summarize <path>`, which asks first.
+
 ## Requirements
 
 - macOS 14 (Sonoma) or later
@@ -259,7 +272,8 @@ implemented yet.
 - Intent classification is keyword-based, not a model call; phrasings outside
   the table are reported as not understood.
 - Approvals are remembered per run, not persisted across launches.
-- Transcript and audit trail are in memory only.
+- Transcript, conversation and audit trail are in memory only — quitting the app
+  starts a fresh thread.
 - The build is not sandboxed yet; a distributable build would need
   user-selected-file entitlements.
 - No Claude Code adapter, web search, voice, or MCP integrations yet.
