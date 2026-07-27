@@ -7,5 +7,9 @@ MainActor.assumeIsolated {
     let delegate = AppDelegate()
     app.delegate = delegate
     app.setActivationPolicy(.accessory)
+    // An agent app draws no menu bar, but NSApplication still dispatches
+    // command-key equivalents through mainMenu — this is what makes ⌘Q (and the
+    // editing shortcuts in the chat field) work. See AppMenu.
+    app.mainMenu = AppMenu.make()
     app.run()
 }

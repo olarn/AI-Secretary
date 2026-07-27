@@ -70,9 +70,16 @@ open AISecretary.app            # or just double-click it in Finder
 ```
 
 The bundle is marked `LSUIElement`, so it launches with no Terminal, no Dock
-icon, and no main menu — it lives in the floating character and a menu bar
-item (✨) whose menu can open the chat, show/hide the character, and **Quit**.
-Copy it to `/Applications` to keep it around.
+icon, and no visible menu bar — it lives in the floating character and a menu
+bar item (✨) whose menu can open the chat, show/hide the character, and
+**Quit**. Copy it to `/Applications` to keep it around.
+
+An invisible main menu is still installed so the standard shortcuts work while
+the app is active (i.e. with the chat bubble focused): **⌘Q** to quit, plus
+⌘Z/⌘X/⌘C/⌘V/⌘A in the chat field. When only the character is on screen the app
+is not the frontmost application — the character panel is deliberately
+non-activating — so ⌘Q then belongs to whatever app *is* frontmost, exactly
+like any other menu-bar utility. Quit from the ✨ menu always works.
 
 Its Finder icon is generated at package time from your local character image
 (`~/Library/Application Support/AISecretary/character.png`), aspect-fit onto a
