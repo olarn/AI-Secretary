@@ -92,8 +92,8 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
 
     public func stream(
         messages: [ChatMessage],
-        model: ChatModel,
-        effort: Effort,
+        model: ChatModel?,
+        effort: Effort?,
         maxTokens: Int,
         system: String?
     ) -> AsyncThrowingStream<ChatStreamEvent, Error> {
@@ -110,7 +110,7 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
 
                 do {
                     let outcome = try await self.runTurn(
-                        prompt: prompt, model: model, system: system,
+                        prompt: prompt, model: model, effort: effort, system: system,
                         resume: resume, configuration: configuration,
                         continuation: continuation
                     )
@@ -121,7 +121,7 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
                     if outcome == .staleSession {
                         self.resetSession()
                         _ = try await self.runTurn(
-                            prompt: prompt, model: model, system: system,
+                            prompt: prompt, model: model, effort: effort, system: system,
                             resume: nil, configuration: configuration,
                             continuation: continuation
                         )
@@ -145,7 +145,8 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
 
     private func runTurn(
         prompt: String,
-        model: ChatModel,
+        model: ChatModel?,
+        effort: Effort?,
         system: String?,
         resume: String?,
         configuration: Configuration,
@@ -154,7 +155,7 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
         let process = Process()
         process.executableURL = installation.executableURL
         process.arguments = Self.arguments(
-            prompt: prompt, model: model, system: system,
+            prompt: prompt, model: model, effort: effort, system: system,
             resume: resume, configuration: configuration
         )
         process.currentDirectoryURL = configuration.workingDirectory
@@ -324,7 +325,8 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
 
     static func arguments(
         prompt: String,
-        model: ChatModel,
+        model: ChatModel?,
+        effort: Effort?,
         system: String?,
         resume: String?,
         configuration: Configuration
@@ -334,9 +336,13 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
             "--output-format", "stream-json",
             "--verbose",
             "--include-partial-messages",
-            "--model", model.id,
             "--permission-mode", configuration.permissionMode
         ]
+        // Only override what the user actually chose. Claude Code already has
+        // their model and effort configured; forcing ours would hand them a
+        // different assistant than the one they set up in the terminal.
+        if let model { arguments += ["--model", model.id] }
+        if let effort { arguments += ["--effort", effort.rawValue] }
         if !configuration.allowedTools.isEmpty {
             arguments += ["--allowedTools", configuration.allowedTools.joined(separator: ",")]
         }

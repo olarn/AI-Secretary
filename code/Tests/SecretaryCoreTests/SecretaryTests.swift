@@ -33,7 +33,7 @@ final class FakeChatProvider: ChatProvider, @unchecked Sendable {
     private let script: Script
     private(set) var callCount = 0
     private(set) var lastMessages: [ChatMessage] = []
-    private(set) var lastModel: ChatModel?
+    private(set) var lastModel: ChatModel?  // nil also means 'inherit'
     private(set) var lastEffort: Effort?
     private(set) var lastSystem: String?
 
@@ -41,8 +41,8 @@ final class FakeChatProvider: ChatProvider, @unchecked Sendable {
 
     func stream(
         messages: [ChatMessage],
-        model: ChatModel,
-        effort: Effort,
+        model: ChatModel?,
+        effort: Effort?,
         maxTokens: Int,
         system: String?
     ) -> AsyncThrowingStream<ChatStreamEvent, Error> {

@@ -46,8 +46,15 @@ Slash commands, handled locally with no network call:
 
 | Command | Effect |
 |---|---|
-| `/model <id>` | Switch chat model (allowlisted IDs only) |
+| `/model <id>` | Switch model — full IDs, or `opus`/`sonnet`/`fable`/`haiku` |
+| `/model default` | Go back to your own Claude Code setting |
 | `/effort <low\|medium\|high\|xhigh\|max>` | Adjust reasoning depth |
+| `/effort default` | Go back to your own Claude Code setting |
+
+**Model and effort are inherited, not imposed.** Out of the box the app passes
+neither `--model` nor `--effort`, so a turn runs on whatever your Claude Code is
+already configured to use — if your `~/.claude/settings.json` says `opus`, you
+get Opus. Pick one here only if you want to override it for this app.
 
 ### Continuity between commands and chat
 

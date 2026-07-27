@@ -200,8 +200,8 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
             return XCTFail("Expected an approval request")
         }
         XCTAssertEqual(request.actionClass, .externalNetwork)
-        XCTAssertTrue(request.commandSummary.contains("send it to claude-sonnet-5"),
-                      "The prompt must say where the file goes: \(request.commandSummary)")
+        XCTAssertTrue(request.commandSummary.contains("send it to Claude"),
+                      "The prompt must say the file leaves this Mac: \(request.commandSummary)")
         XCTAssertTrue(fileAdapter.runCalls.isEmpty, "Nothing may be read before approval")
         XCTAssertEqual(chat.callCount, 0, "Nothing may be sent before approval")
     }

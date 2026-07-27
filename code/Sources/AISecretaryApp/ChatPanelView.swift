@@ -245,8 +245,8 @@ struct ChatPanelView: View {
                 .foregroundStyle(.secondary)
 
             HStack(spacing: 10) {
-                Text("Model: \(secretary.model.displayName)")
-                Text("Effort: \(secretary.effort.rawValue)")
+                Text("Model: \(secretary.model?.displayName ?? "your default")")
+                Text("Effort: \(secretary.effort?.rawValue ?? "your default")")
             }
             .font(.caption2.monospaced())
             .foregroundStyle(.secondary)

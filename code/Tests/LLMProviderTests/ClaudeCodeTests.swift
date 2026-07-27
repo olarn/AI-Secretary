@@ -81,17 +81,42 @@ final class ClaudeCodeProviderLaunchTests: XCTestCase {
     )
 
     private func arguments(
+        model: ChatModel? = .sonnet5,
+        effort: Effort? = nil,
         resume: String? = nil,
         system: String? = nil,
         configuration: ClaudeCodeProvider.Configuration = .init()
     ) -> [String] {
         ClaudeCodeProvider.arguments(
             prompt: "hello",
-            model: .sonnet5,
+            model: model,
+            effort: effort,
             system: system,
             resume: resume,
             configuration: configuration
         )
+    }
+
+    /// The app is a face over the user's own Claude Code. If they haven't
+    /// picked a model or effort here, theirs must stand — overriding it hands
+    /// them a different assistant than the one they configured.
+    func testLeavesTheModelAndEffortAloneWhenTheUserHasNotChosen() {
+        let args = arguments(model: nil, effort: nil)
+        XCTAssertFalse(args.contains("--model"))
+        XCTAssertFalse(args.contains("--effort"))
+    }
+
+    func testPassesTheChosenModel() {
+        let args = arguments(model: .opus5)
+        guard let index = args.firstIndex(of: "--model") else { return XCTFail("Expected --model") }
+        XCTAssertEqual(args[index + 1], "claude-opus-5")
+    }
+
+    /// Previously dropped on the floor: the setting existed but was never sent.
+    func testPassesTheChosenEffort() {
+        let args = arguments(effort: .xhigh)
+        guard let index = args.firstIndex(of: "--effort") else { return XCTFail("Expected --effort") }
+        XCTAssertEqual(args[index + 1], "xhigh")
     }
 
     func testAsksForTheStreamingJSONProtocolWeParse() {
@@ -379,5 +404,37 @@ final class ClaudeCodeRefusalTests: XCTestCase {
             XCTAssertTrue(ClaudeCodeProvider.isPermissionRefusal(message), "Missed: \(message)")
         }
         XCTAssertFalse(ClaudeCodeProvider.isPermissionRefusal("File does not exist."))
+    }
+}
+
+// MARK: - Choosing a model
+
+final class ChatModelChoiceTests: XCTestCase {
+    /// Claude Opus 5 is the current flagship and a common Claude Code default;
+    /// it was missing from the allowlist, so `/model claude-opus-5` was refused.
+    func testOpus5IsSelectable() {
+        XCTAssertEqual(ChatModel.named("claude-opus-5"), .opus5)
+        XCTAssertTrue(ChatModel.known.contains(.opus5))
+    }
+
+    /// The short names Claude Code accepts should work here too.
+    func testShortNamesResolveToTheCurrentModelOfThatFamily() {
+        XCTAssertEqual(ChatModel.named("opus"), .opus5)
+        XCTAssertEqual(ChatModel.named("sonnet"), .sonnet5)
+        XCTAssertEqual(ChatModel.named("fable"), .fable5)
+        XCTAssertEqual(ChatModel.named("haiku"), .haiku45)
+        XCTAssertEqual(ChatModel.named("OPUS"), .opus5, "Case shouldn't matter")
+    }
+
+    func testDefaultMeansInheritRatherThanAModel() {
+        XCTAssertTrue(ChatModel.meansInherit("default"))
+        XCTAssertTrue(ChatModel.meansInherit("auto"))
+        XCTAssertFalse(ChatModel.meansInherit("opus"))
+        XCTAssertNil(ChatModel.named("default"), "It isn't a model")
+    }
+
+    func testAnUnknownNameIsStillRejected() {
+        XCTAssertNil(ChatModel.named("gpt-4"))
+        XCTAssertFalse(ChatModel.meansInherit("gpt-4"))
     }
 }

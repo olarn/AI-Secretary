@@ -83,8 +83,10 @@ public enum PendingDecision: Equatable, Sendable {
 public final class Secretary {
     public private(set) var transcript: [TranscriptEntry] = []
     public private(set) var pendingDecision: PendingDecision?
-    public private(set) var model: ChatModel = .sonnet5
-    public private(set) var effort: Effort = .medium
+    /// nil means "whatever the backend is already set up to use" — for Claude
+    /// Code that's the model and effort from the user's own settings.
+    public private(set) var model: ChatModel?
+    public private(set) var effort: Effort?
 
     @ObservationIgnored public let stateMachine: AssistantStateMachine
     @ObservationIgnored private let registry: ProjectRegistry
@@ -236,27 +238,33 @@ public final class Secretary {
         case "model":
             guard let argument else {
                 let list = ChatModel.known.map(\.id).joined(separator: ", ")
-                say(.secretary, "Model: \(model.id)\nAvailable: \(list)")
+                say(.secretary, "Model: \(modelDescription)\nAvailable: \(list)\nShort names: opus, sonnet, fable, haiku — or `default` to use your Claude Code setting.")
                 return
             }
-            if let resolved = ChatModel.named(argument) {
+            if ChatModel.meansInherit(argument) {
+                model = nil
+                say(.secretary, "Model: using your Claude Code setting.")
+            } else if let resolved = ChatModel.named(argument) {
                 model = resolved
                 say(.secretary, "Model set to \(resolved.id).")
             } else {
-                say(.secretary, "Unknown model “\(argument)”. Available: \(ChatModel.known.map(\.id).joined(separator: ", "))")
+                say(.secretary, "Unknown model “\(argument)”. Available: \(ChatModel.known.map(\.id).joined(separator: ", ")), or `default`.")
             }
 
         case "effort":
             guard let argument else {
                 let list = Effort.allCases.map(\.rawValue).joined(separator: ", ")
-                say(.secretary, "Effort: \(effort.rawValue)\nAvailable: \(list)")
+                say(.secretary, "Effort: \(effortDescription)\nAvailable: \(list) — or `default` to use your Claude Code setting.")
                 return
             }
-            if let resolved = Effort.named(argument) {
+            if ChatModel.meansInherit(argument) {
+                effort = nil
+                say(.secretary, "Effort: using your Claude Code setting.")
+            } else if let resolved = Effort.named(argument) {
                 effort = resolved
                 say(.secretary, "Effort set to \(resolved.rawValue).")
             } else {
-                say(.secretary, "Unknown effort “\(argument)”. Available: \(Effort.allCases.map(\.rawValue).joined(separator: ", "))")
+                say(.secretary, "Unknown effort “\(argument)”. Available: \(Effort.allCases.map(\.rawValue).joined(separator: ", ")), or `default`.")
             }
 
         default:
@@ -465,7 +473,7 @@ public final class Secretary {
         transcript.append(replyEntry)
         let replyID = replyEntry.id
 
-        audit.record(AuditEntry(taskID: taskID, kind: .executionStarted, detail: "chat model=\(model.id) effort=\(effort.rawValue)"))
+        audit.record(AuditEntry(taskID: taskID, kind: .executionStarted, detail: "chat model=\(modelDescription) effort=\(effortDescription)"))
 
         let stream = chatProvider.stream(
             messages: messages,
@@ -813,7 +821,7 @@ public final class Secretary {
         audit.record(AuditEntry(
             taskID: taskID,
             kind: .executionStarted,
-            detail: "sending \(byteCount) bytes of \(request.relativePath) to \(model.id)"
+            detail: "sending \(byteCount) bytes of \(request.relativePath) to \(modelDescription)"
         ))
 
         let prompt = """
@@ -858,7 +866,7 @@ public final class Secretary {
         case .git(let op): return adapter.summary(for: op)
         case .file(let op): return fileAdapter.summary(for: op)
         case .understand(let op):
-            return "read \(op.relativePath) and send it to \(model.id) to \(op.task.rawValue)"
+            return "read \(op.relativePath) and send it to Claude (\(modelDescription)) to \(op.task.rawValue)"
         case .startAgent: return "run Claude Code here"
         case .widenAgentTools(let rules, _): return rules.joined(separator: ", ")
         }
@@ -972,6 +980,15 @@ public final class Secretary {
         """
     }
 
+    /// What to show the user for a setting they may never have touched.
+    public var modelDescription: String {
+        model?.id ?? "your Claude Code default"
+    }
+
+    public var effortDescription: String {
+        effort?.rawValue ?? "your Claude Code default"
+    }
+
     private var chatOnlyPrompt: String {
         let names = registry.projects.map(\.name)
         guard !names.isEmpty else {
@@ -1025,8 +1042,8 @@ public final class Secretary {
         Anything else I treat as a conversation.
 
         Slash commands:
-        • /model <id> — switch the chat model
-        • /effort <low|medium|high|xhigh|max> — adjust reasoning depth
+        • /model <id|opus|sonnet|default> — switch the model
+        • /effort <low|medium|high|xhigh|max|default> — adjust reasoning depth
         """
     }
 }

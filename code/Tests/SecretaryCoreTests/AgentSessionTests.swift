@@ -31,8 +31,8 @@ final class SpyWorkspaceProvider: ChatProvider, WorkspaceScopedProvider, @unchec
 
     func stream(
         messages: [ChatMessage],
-        model: ChatModel,
-        effort: Effort,
+        model: ChatModel?,
+        effort: Effort?,
         maxTokens: Int,
         system: String?
     ) -> AsyncThrowingStream<ChatStreamEvent, Error> {

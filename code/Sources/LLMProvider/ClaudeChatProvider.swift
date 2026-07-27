@@ -23,12 +23,16 @@ public final class ClaudeChatProvider: ChatProvider {
 
     public func stream(
         messages: [ChatMessage],
-        model: ChatModel,
-        effort: Effort,
+        model: ChatModel?,
+        effort: Effort?,
         maxTokens: Int,
         system: String?
     ) -> AsyncThrowingStream<ChatStreamEvent, Error> {
         AsyncThrowingStream { continuation in
+            // The API has no "use your default" — a concrete model and effort
+            // must go on the wire, so nil resolves to ours here.
+            let model = model ?? .sonnet5
+            let effort = effort ?? .medium
             let task = Task { [apiKeyProvider, session, endpoint, logger] in
                 do {
                     guard let key = apiKeyProvider(), !key.isEmpty else {

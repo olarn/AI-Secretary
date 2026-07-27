@@ -24,18 +24,38 @@ public struct ChatModel: Equatable, Sendable {
         self.displayName = displayName
     }
 
+    public static let opus5 = ChatModel(id: "claude-opus-5", displayName: "Claude Opus 5")
     public static let sonnet5 = ChatModel(id: "claude-sonnet-5", displayName: "Claude Sonnet 5")
+    public static let fable5 = ChatModel(id: "claude-fable-5", displayName: "Claude Fable 5")
     public static let opus48 = ChatModel(id: "claude-opus-4-8", displayName: "Claude Opus 4.8")
     public static let opus47 = ChatModel(id: "claude-opus-4-7", displayName: "Claude Opus 4.7")
     public static let haiku45 = ChatModel(id: "claude-haiku-4-5", displayName: "Claude Haiku 4.5")
-    public static let fable5 = ChatModel(id: "claude-fable-5", displayName: "Claude Fable 5")
 
-    public static let known: [ChatModel] = [sonnet5, opus48, opus47, haiku45, fable5]
+    public static let known: [ChatModel] = [opus5, sonnet5, fable5, opus48, opus47, haiku45]
+
+    /// Short names Claude Code itself accepts, so what works in the terminal
+    /// works here. Each points at the current model of that family.
+    static let aliases: [String: ChatModel] = [
+        "opus": opus5,
+        "sonnet": sonnet5,
+        "fable": fable5,
+        "haiku": haiku45
+    ]
+
+    /// Words that mean "don't choose for me" — the backend's own default wins.
+    static let inheritWords: Set<String> = ["default", "auto", "inherit"]
 
     /// Resolves a user-supplied model identifier against the allowlist.
+    /// Returns nil for an unknown name *and* for "default"; callers that need to
+    /// tell those apart should check `inheritWords` first.
     public static func named(_ raw: String) -> ChatModel? {
         let needle = raw.trimmingCharacters(in: .whitespaces).lowercased()
+        if let alias = aliases[needle] { return alias }
         return known.first { $0.id.lowercased() == needle }
+    }
+
+    public static func meansInherit(_ raw: String) -> Bool {
+        inheritWords.contains(raw.trimmingCharacters(in: .whitespaces).lowercased())
     }
 }
 
