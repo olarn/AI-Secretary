@@ -13,7 +13,9 @@ final class SpyWorkspaceProvider: ChatProvider, WorkspaceScopedProvider, @unchec
     private(set) var preparedTools: [[String]?] = []
     private(set) var callCount = 0
     private(set) var lastMessages: [ChatMessage] = []
+    private(set) var lastSystem: String?
     private(set) var resetCount = 0
+    var hasWorkspaceTools = true
 
     func prepare(workingDirectory: URL?, allowedTools: [String]?) {
         preparedDirectories.append(workingDirectory)
@@ -31,6 +33,7 @@ final class SpyWorkspaceProvider: ChatProvider, WorkspaceScopedProvider, @unchec
     ) -> AsyncThrowingStream<ChatStreamEvent, Error> {
         callCount += 1
         lastMessages = messages
+        lastSystem = system
         return AsyncThrowingStream { continuation in
             continuation.yield(.textDelta("ok"))
             continuation.yield(.completed(stopReason: nil, usage: nil))
@@ -158,6 +161,45 @@ final class AgentSessionTests: XCTestCase {
 
         XCTAssertNil(secretary.pendingDecision, "The second message must not ask again")
         XCTAssertEqual(provider.callCount, 2)
+    }
+
+    // MARK: - Telling the backend what it can do
+
+    /// Reported from real use: asked to summarise a project, the assistant said
+    /// it couldn't see the contents and asked the user to paste them, then told
+    /// them to type `list files in <project>`. The system prompt was the
+    /// chat-only one, which says the model cannot run commands itself.
+    func testAnAgentBackendIsNeverToldItCannotAct() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        secretary.submit("สรุปเนื้อหาให้ฟังหน่อย")
+        await waitUntilIdle()
+
+        let prompt = try? XCTUnwrap(provider.lastSystem)
+        XCTAssertFalse(prompt?.contains("cannot run commands") == true,
+                       "Got: \(prompt ?? "-")")
+        XCTAssertFalse(prompt?.contains("tell the \nuser the exact command") == true)
+        XCTAssertTrue(prompt?.contains("look for yourself") == true,
+                      "It should be told to open files itself. Got: \(prompt ?? "-")")
+    }
+
+    func testTheAgentPromptNamesTheProjectItIsStandingIn() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        secretary.submit("hello")
+        await waitUntilIdle()
+
+        XCTAssertTrue(provider.lastSystem?.contains("Fixture") == true,
+                      "Got: \(provider.lastSystem ?? "-")")
+    }
+
+    /// The old prompt is still right for a plain chat model with no tools.
+    func testAChatOnlyBackendKeepsTheAdviceToTypeCommands() async {
+        provider.hasWorkspaceTools = false
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        secretary.submit("hello")
+        await waitUntilIdle()
+
+        XCTAssertTrue(provider.lastSystem?.contains("cannot run commands") == true,
+                      "Got: \(provider.lastSystem ?? "-")")
     }
 
     // MARK: - Working with no project

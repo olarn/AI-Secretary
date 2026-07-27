@@ -11,6 +11,12 @@ public protocol WorkspaceScopedProvider: AnyObject, Sendable {
     func prepare(workingDirectory: URL?, allowedTools: [String]?)
     /// Drops any resumed session so the next turn starts a fresh conversation.
     func resetConversation()
+    /// Whether the backend can actually look at the directory on its own.
+    ///
+    /// The caller needs this to write the right system prompt. Telling a model
+    /// with file tools that it "cannot run commands" makes it ask the user to
+    /// paste files it could simply have opened.
+    var hasWorkspaceTools: Bool { get }
 }
 
 extension ClaudeCodeProvider: WorkspaceScopedProvider {
@@ -33,6 +39,8 @@ extension ClaudeCodeProvider: WorkspaceScopedProvider {
     }
 
     public func resetConversation() { resetSession() }
+
+    public var hasWorkspaceTools: Bool { true }
 }
 
 /// Picks where a turn runs: the user's own Claude Code if it's installed,
@@ -137,5 +145,11 @@ public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, @unchecke
 
     public func resetConversation() {
         lock.withLock { _claudeCode }?.resetConversation()
+    }
+
+    /// False until detection finishes, and false when falling back to the API
+    /// provider — that one really can't look at anything itself.
+    public var hasWorkspaceTools: Bool {
+        lock.withLock { _claudeCode } != nil
     }
 }

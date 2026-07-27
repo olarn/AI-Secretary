@@ -284,6 +284,9 @@ public final class Secretary {
                 requestAgentAccess(to: project, prompt: text, taskID: taskID)
                 return
             }
+            // Remembered before streaming so the system prompt can name the
+            // folder the backend is actually standing in.
+            lastProject = project
             scoped.prepare(
                 workingDirectory: project?.url ?? Self.scratchDirectory,
                 allowedTools: nil
@@ -767,6 +770,44 @@ public final class Secretary {
     /// user can plainly see in the UI. Names only — paths, tool allowlists and
     /// approval state stay out of chat history.
     private var systemPrompt: String {
+        if (chatProvider as? WorkspaceScopedProvider)?.hasWorkspaceTools == true {
+            return agentPrompt
+        }
+        return chatOnlyPrompt
+    }
+
+    /// For a backend that has its own file tools and is already running inside
+    /// the project directory.
+    ///
+    /// The chat-only prompt below must never be used here. It tells the model it
+    /// "cannot run commands yourself" and should tell the user what to type —
+    /// true of a bare API call, catastrophic for an agent holding Read and Grep.
+    /// It produced exactly that: asked to summarise a project, the assistant
+    /// asked the user to paste the contents and to type `list files in <name>`.
+    private var agentPrompt: String {
+        let location = lastProject.map { "the project “\($0.name)”" } ?? "a scratch folder"
+        return """
+        You are the AI Secretary, a friendly macOS desktop companion. The person \
+        talking to you is not necessarily a developer, and may not be working on \
+        code at all — treat this as their assistant, not a coding tool.
+
+        You are already running inside \(location): the current working directory \
+        is that folder. You have your own tools. When the user asks about their \
+        files, look for yourself — list the folder, read what's there, and answer. \
+        Never ask them to paste file contents you could open, and never tell them \
+        to type a command; you are the one who acts.
+
+        Reply in the language the user writes in. Keep answers short and lead with \
+        the answer; add detail after. Don't narrate every step — say what you found.
+
+        Right now your tools are read-only: you can read, search and browse, but \
+        writing or changing files will be refused. If a request needs that, say so \
+        plainly instead of pretending it worked. Never claim to have done something \
+        you didn't do.
+        """
+    }
+
+    private var chatOnlyPrompt: String {
         let names = registry.projects.map(\.name)
         guard !names.isEmpty else {
             return Self.basePrompt + "\n\nThe user has not registered any projects yet."
