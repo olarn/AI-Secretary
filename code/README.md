@@ -82,6 +82,18 @@ raw chain of thought is never returned for those models, and no CLI flag
 changes it. So the thought itself cannot be shown — which tool it reached for,
 and with what, can.
 
+### Tables in replies
+
+Pipe tables are laid out as a grid rather than shown as raw pipes, with
+`**bold**` and `` `code` `` rendered inside the cells. A table wider than the
+bubble **scrolls sideways on its own** — the conversation doesn't move with it,
+so a wide answer can't drag the whole thread off-screen.
+
+Detection requires a separator row (`|---|---|`), so ordinary prose containing a
+pipe — `ls | grep foo` — is left as prose. Rows that don't match the header are
+padded or trimmed rather than dropped: generated markdown is often ragged and
+losing a cell is worse than an empty one.
+
 ### Scrolling while it types
 
 The transcript follows new output only while you're already at the bottom.

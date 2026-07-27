@@ -263,17 +263,67 @@ struct ChatPanelView: View {
         switch entry.kind {
         case .activity: activityBubble(entry)
         case .message:
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(entry.speaker == .user ? "You" : "Secretary")
                     .font(.caption2.bold())
                     .foregroundStyle(entry.speaker == .user ? Color.accentColor : .secondary)
-                Text(entry.text)
-                    .font(.caption.monospaced())
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
+                ForEach(
+                    Array(MarkdownTableParser.segments(of: entry.text).enumerated()),
+                    id: \.offset
+                ) { _, segment in
+                    switch segment {
+                    case .text(let body):
+                        Text(body)
+                            .font(.caption.monospaced())
+                            .textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                    case .table(let table):
+                        tableView(table)
+                    }
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    /// A table laid out as a grid, scrolling sideways on its own when it's
+    /// wider than the bubble. Only the table scrolls — the conversation itself
+    /// must not, or every wide answer would drag the whole thread off-screen.
+    private func tableView(_ table: MarkdownTable) -> some View {
+        ScrollView(.horizontal, showsIndicators: true) {
+            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 4) {
+                GridRow {
+                    ForEach(Array(table.header.enumerated()), id: \.offset) { _, cell in
+                        Text(inlineMarkdown(cell))
+                            .font(.caption2.bold())
+                    }
+                }
+                Divider().gridCellUnsizedAxes(.horizontal)
+                ForEach(Array(table.rows.enumerated()), id: \.offset) { _, row in
+                    GridRow {
+                        ForEach(Array(row.enumerated()), id: \.offset) { _, cell in
+                            Text(inlineMarkdown(cell))
+                                .font(.caption2)
+                        }
+                    }
+                }
+            }
+            // Cells size to their content; the scroll view provides the room.
+            .fixedSize(horizontal: true, vertical: false)
+            .padding(8)
+            .textSelection(.enabled)
+        }
+        .background(Color.secondary.opacity(0.07), in: RoundedRectangle(cornerRadius: 6))
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Cells routinely contain `**bold**` and `` `code` ``. Inline-only so a
+    /// stray character can't restructure the cell.
+    private func inlineMarkdown(_ text: String) -> AttributedString {
+        (try? AttributedString(
+            markdown: text,
+            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        )) ?? AttributedString(text)
     }
 
     /// Sits in the conversation in order, but deliberately doesn't look like
