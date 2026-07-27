@@ -81,6 +81,14 @@ raw chain of thought is never returned for those models, and no CLI flag
 changes it. So the thought itself cannot be shown — which tool it reached for,
 and with what, can.
 
+### Scrolling while it types
+
+The transcript follows new output only while you're already at the bottom.
+Scroll up to read something and it stops following, so a streaming reply can't
+yank the view out from under you; scroll back down and it picks up again.
+Sending a message always brings you back to the bottom. It follows streamed
+text, not just new messages, so a long answer stays in view as it arrives.
+
 ### Continuity between commands and chat
 
 Commands and conversation share one thread. Running `list files in X` and then

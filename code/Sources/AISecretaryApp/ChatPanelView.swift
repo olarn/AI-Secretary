@@ -25,6 +25,7 @@ struct ChatPanelView: View {
     @State private var addProjectNote: String?
     @State private var apiKeyDraft: String = ""
     @State private var settingsNote: String?
+    @State private var scrollPin = TranscriptScrollPin()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -202,27 +203,54 @@ struct ChatPanelView: View {
     }
 
     private var transcript: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 8) {
-                    if secretary.transcript.isEmpty {
-                        Text(emptyTranscriptHint)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+        // The outer geometry gives the viewport height; the one behind the
+        // content reports where the content's bottom currently sits in the same
+        // space. The difference is how far from the bottom the reader is.
+        GeometryReader { viewport in
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 8) {
+                        if secretary.transcript.isEmpty {
+                            Text(emptyTranscriptHint)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        ForEach(secretary.transcript) { entry in
+                            messageBubble(entry).id(entry.id)
+                        }
                     }
-                    ForEach(secretary.transcript) { entry in
-                        messageBubble(entry).id(entry.id)
-                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        GeometryReader { content in
+                            Color.clear.preference(
+                                key: TranscriptBottomKey.self,
+                                value: content.frame(in: .named(Self.scrollSpace)).maxY
+                            )
+                        }
+                    )
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .frame(maxHeight: .infinity)
-            .onChange(of: secretary.transcript.count) {
-                if let last = secretary.transcript.last {
+                .coordinateSpace(name: Self.scrollSpace)
+                .onPreferenceChange(TranscriptBottomKey.self) { contentBottom in
+                    scrollPin.update(distanceFromBottom: contentBottom - viewport.size.height)
+                }
+                // Fires on streamed text too, not just new entries: a reply
+                // grows inside one entry, and following only new entries would
+                // leave the answer scrolling out of view as it arrives.
+                .onChange(of: transcriptSignature) {
+                    guard scrollPin.isFollowing, let last = secretary.transcript.last else { return }
                     withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
                 }
             }
         }
+        .frame(maxHeight: .infinity)
+    }
+
+    private static let scrollSpace = "transcript"
+
+    /// Changes whenever anything visible changes — a new entry, or more text in
+    /// the last one.
+    private var transcriptSignature: String {
+        "\(secretary.transcript.count):\(secretary.transcript.last?.text.count ?? 0)"
     }
 
     @ViewBuilder
@@ -478,6 +506,7 @@ struct ChatPanelView: View {
     private func send() {
         let text = draft
         draft = ""
+        scrollPin.follow()
         secretary.submit(text)
     }
 
