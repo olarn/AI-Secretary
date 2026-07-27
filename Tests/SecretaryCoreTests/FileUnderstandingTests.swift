@@ -275,6 +275,35 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
         XCTAssertEqual(chat.callCount, 1, "The second file must not be sent yet")
     }
 
+    /// The mirror of `testApprovingReadOnlyDoesNotAuthoriseSending`: approving a
+    /// send must not quietly grant unattended local reads either. The two share a
+    /// tool ID, so this only holds because the grant is not recorded.
+    func testApprovingASendDoesNotAuthoriseUnattendedReads() async {
+        let chat = reply("ok")
+        let secretary = makeSecretary(chat: chat)
+
+        secretary.submit("summarize README.md in Fixture")
+        secretary.resolvePendingApproval(granted: true)
+        await waitUntilIdle()
+
+        secretary.submit("read Package.swift in Fixture")
+        guard case .approval = secretary.pendingDecision else {
+            return XCTFail("A plain read must still ask; the send approval is not a read grant")
+        }
+        XCTAssertEqual(fileAdapter.runCalls.count, 1, "Only the approved read has run")
+    }
+
+    func testForAndOnAlsoSelectTheProject() {
+        let classifier = RuleBasedIntentClassifier()
+        for text in ["review Sources/Main.swift for Fixture", "analyze report.md on Fixture"] {
+            guard case .understandFile(let request, let query) = classifier.classify(text) else {
+                return XCTFail("Expected understandFile for “\(text)”")
+            }
+            XCTAssertEqual(query, "Fixture", "for “\(text)”")
+            XCTAssertFalse(request.relativePath.contains(" "), "Path leaked the project phrase: \(request.relativePath)")
+        }
+    }
+
     func testOversizedFileIsRefusedBeforeAnythingIsSent() async {
         fileAdapter.stubbedContents = String(repeating: "x", count: 70_000)
         let chat = reply("ok")

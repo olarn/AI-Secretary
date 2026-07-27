@@ -168,7 +168,14 @@ public final class Secretary {
         }
 
         audit.record(AuditEntry(taskID: request.taskID, kind: .approvalGranted, detail: request.commandSummary))
-        policy.recordApproval(projectID: request.project.id, toolID: request.toolID)
+        // Only read-only approvals are remembered. Understanding a file shares
+        // the file adapter's tool ID, so recording it would silently grant
+        // unattended local reads off the back of a one-off "send this to Claude"
+        // — a grant the user never asked for. Non-read-only classes re-prompt
+        // anyway, so there is nothing to record.
+        if request.actionClass == .readOnly {
+            policy.recordApproval(projectID: request.project.id, toolID: request.toolID)
+        }
         execute(operation, in: request.project)
     }
 
