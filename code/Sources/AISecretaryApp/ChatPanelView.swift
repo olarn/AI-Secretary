@@ -14,6 +14,7 @@ struct ChatPanelView: View {
     let registry: ProjectRegistry
     let credentials: any CredentialStore
     let backendStatus: BackendStatus
+    let appearance: Appearance
     let layout: ChatBubbleLayout
     let onClose: () -> Void
 
@@ -62,7 +63,7 @@ struct ChatPanelView: View {
         }
         .onExitCommand(perform: onClose)
         .padding(layout.isFlippedVertically ? .top : .bottom, SpeechBubbleShape.defaultTailLength)
-        .frame(width: 360, height: 520)
+        .frame(width: 360, height: appearance.settings.chatHeight)
     }
 
     // MARK: - Sections
@@ -212,7 +213,7 @@ struct ChatPanelView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         if secretary.transcript.isEmpty {
                             Text(emptyTranscriptHint)
-                                .font(.caption)
+                                .font(.system(size: appearance.settings.fontSize))
                                 .foregroundStyle(.secondary)
                         }
                         ForEach(secretary.transcript) { entry in
@@ -265,7 +266,7 @@ struct ChatPanelView: View {
         case .message:
             VStack(alignment: .leading, spacing: 4) {
                 Text(entry.speaker == .user ? "You" : secretary.persona.name)
-                    .font(.caption2.bold())
+                    .font(.system(size: appearance.settings.secondaryFontSize, weight: .bold))
                     .foregroundStyle(entry.speaker == .user ? Color.accentColor : .secondary)
                 ForEach(
                     Array(MarkdownTableParser.segments(of: entry.text).enumerated()),
@@ -274,7 +275,7 @@ struct ChatPanelView: View {
                     switch segment {
                     case .text(let body):
                         Text(body)
-                            .font(.caption.monospaced())
+                            .font(.system(size: appearance.settings.fontSize, design: .monospaced))
                             .textSelection(.enabled)
                             .fixedSize(horizontal: false, vertical: true)
                     case .table(let table):
@@ -283,6 +284,35 @@ struct ChatPanelView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    /// One setting, two buttons. A button that can't do anything is disabled
+    /// rather than silently ignored, so reaching a limit reads as a limit.
+    private func stepperRow(
+        label: String,
+        value: String,
+        canDecrease: Bool,
+        canIncrease: Bool,
+        onDecrease: @escaping () -> Void,
+        onIncrease: @escaping () -> Void
+    ) -> some View {
+        HStack(spacing: 6) {
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 4)
+            Text(value)
+                .font(.caption2.monospaced())
+                .frame(minWidth: 38, alignment: .trailing)
+            Button("−", action: onDecrease)
+                .buttonStyle(.bordered)
+                .font(.caption2)
+                .disabled(!canDecrease)
+            Button("+", action: onIncrease)
+                .buttonStyle(.bordered)
+                .font(.caption2)
+                .disabled(!canIncrease)
         }
     }
 
@@ -295,7 +325,7 @@ struct ChatPanelView: View {
                 GridRow {
                     ForEach(Array(table.header.enumerated()), id: \.offset) { _, cell in
                         Text(inlineMarkdown(cell))
-                            .font(.caption2.bold())
+                            .font(.system(size: appearance.settings.secondaryFontSize, weight: .bold))
                     }
                 }
                 Divider().gridCellUnsizedAxes(.horizontal)
@@ -303,7 +333,7 @@ struct ChatPanelView: View {
                     GridRow {
                         ForEach(Array(row.enumerated()), id: \.offset) { _, cell in
                             Text(inlineMarkdown(cell))
-                                .font(.caption2)
+                                .font(.system(size: appearance.settings.secondaryFontSize))
                         }
                     }
                 }
@@ -450,6 +480,28 @@ struct ChatPanelView: View {
             }
             .font(.caption2)
             Text("Change with /model <id> or /effort <level> in the chat.")
+                .font(.system(size: 9))
+                .foregroundStyle(.secondary)
+
+            Divider()
+
+            stepperRow(
+                label: "Text size",
+                value: "\(Int(appearance.settings.fontSize))pt",
+                canDecrease: appearance.settings.canDecreaseFontSize,
+                canIncrease: appearance.settings.canIncreaseFontSize,
+                onDecrease: appearance.decreaseFontSize,
+                onIncrease: appearance.increaseFontSize
+            )
+            stepperRow(
+                label: "Chat height",
+                value: "\(Int(appearance.settings.chatHeight))pt",
+                canDecrease: appearance.settings.canDecreaseHeight,
+                canIncrease: appearance.settings.canIncreaseHeight,
+                onDecrease: appearance.decreaseHeight,
+                onIncrease: appearance.increaseHeight
+            )
+            Text("Height only — the bubble's width is fixed so its tail stays on \(secretary.persona.name).")
                 .font(.system(size: 9))
                 .foregroundStyle(.secondary)
 

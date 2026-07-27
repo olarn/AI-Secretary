@@ -19,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Prefers the user's own Claude Code and falls back to the API key.
     private lazy var backend = ChatBackend(fallback: apiProvider)
     private let backendStatus = BackendStatus()
+    private let appearance = Appearance()
     private lazy var secretary = Secretary(
         stateMachine: stateMachine,
         registry: registry,
@@ -31,7 +32,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var isCharacterVisible = true
 
     private let characterSize: CGFloat = 120
-    private let chatSize = CGSize(width: 360, height: 520)
+    /// Width is fixed: the bubble's tail is positioned against it, so letting
+    /// the width change would pull the tail away from the character. Height is
+    /// the user's, from Appearance.
+    private let chatWidth: CGFloat = 360
+    private var chatSize: CGSize {
+        CGSize(width: chatWidth, height: appearance.settings.chatHeight)
+    }
     /// Where the tail tip sits across the bubble's width, taken from the shape
     /// itself so the two can't drift apart.
     private var tailFraction: CGFloat {
@@ -67,6 +74,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 registry: registry,
                 credentials: credentials,
                 backendStatus: backendStatus,
+                appearance: appearance,
                 layout: chatLayout,
                 onClose: { [weak self] in self?.hideChatPanel() }
             )
@@ -82,6 +90,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         positionInitialWindows()
         observeWindowMovement()
         detectBackend()
+
+        // Resizing an NSPanel is imperative work, so the model calls back here
+        // rather than the delegate re-deriving it during a view update.
+        appearance.onChange = { [weak self] in self?.applyChatHeight() }
 
         statusBar = StatusBarController(
             onOpenChat: { [weak self] in self?.openChatFromMenu() },
@@ -100,6 +112,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         let backend = self.backend
         Task.detached(priority: .utility) { backend.resolve() }
+    }
+
+    /// Resizes the bubble to the chosen height and re-anchors it, keeping the
+    /// tail on the character and the whole panel on screen.
+    private func applyChatHeight() {
+        var frame = chatPanel.frame
+        frame.size = chatSize
+        chatPanel.setFrame(frame, display: true)
+        if let screen = characterPanel.screen ?? NSScreen.main {
+            applyChatLayout(in: screen.visibleFrame)
+        }
     }
 
     /// Opens the chat, making the character visible first if it was hidden so the
@@ -191,6 +214,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showChatPanel() {
         isChatVisible = true
+        // The display may have changed since launch; re-clamp before showing.
+        appearance.refreshScreenLimit()
         NSApp.activate(ignoringOtherApps: true)
         chatPanel.makeKeyAndOrderFront(nil)
         chatPanel.animator().alphaValue = 1
