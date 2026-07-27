@@ -35,9 +35,7 @@ struct ChatPanelView: View {
             transcript
             pendingDecisionView
             inputRow
-            if showSettings { settingsSection }
-            if showProfile { ProfileSettingsView(profiles: profiles, appearance: appearance) }
-            if showProjects { projectsSection }
+            openSections
             footer
         }
         .padding(18)
@@ -68,6 +66,31 @@ struct ChatPanelView: View {
     }
 
     // MARK: - Sections
+
+    /// The collapsible sections, scrolled only when they don't fit.
+    ///
+    /// At the default text size they never do need to — `ViewThatFits` takes the
+    /// plain stack and the panel looks exactly as it always has. Turn the text up
+    /// and the profile form alone is taller than the bubble, so the fallback
+    /// gives it its own scroller rather than letting it push the composer and
+    /// the footer off the bottom edge.
+    @ViewBuilder
+    private var openSections: some View {
+        if showSettings || showProfile || showProjects {
+            ViewThatFits(in: .vertical) {
+                sectionStack
+                ScrollView(.vertical) { sectionStack }
+            }
+        }
+    }
+
+    private var sectionStack: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if showSettings { settingsSection }
+            if showProfile { ProfileSettingsView(profiles: profiles, appearance: appearance) }
+            if showProjects { projectsSection }
+        }
+    }
 
     private var emptyTranscriptHint: String {
         if backendStatus.needsOnboarding {
@@ -302,10 +325,34 @@ struct ChatPanelView: View {
         onDecrease: @escaping () -> Void,
         onIncrease: @escaping () -> Void
     ) -> some View {
+        ViewThatFits(in: .horizontal) {
+            stepperLine(label: label, value: value, canDecrease: canDecrease,
+                        canIncrease: canIncrease, onDecrease: onDecrease, onIncrease: onIncrease)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(appearance.settings.labelFont)
+                    .foregroundStyle(.secondary)
+                stepperLine(label: nil, value: value, canDecrease: canDecrease,
+                            canIncrease: canIncrease, onDecrease: onDecrease, onIncrease: onIncrease)
+            }
+        }
+    }
+
+    private func stepperLine(
+        label: String?,
+        value: String,
+        canDecrease: Bool,
+        canIncrease: Bool,
+        onDecrease: @escaping () -> Void,
+        onIncrease: @escaping () -> Void
+    ) -> some View {
         HStack(spacing: 6) {
-            Text(label)
-                .font(appearance.settings.labelFont)
-                .foregroundStyle(.secondary)
+            if let label {
+                Text(label)
+                    .font(appearance.settings.labelFont)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
             Spacer(minLength: 4)
             Text(value)
                 .font(appearance.settings.labelFont.monospaced())
@@ -480,15 +527,27 @@ struct ChatPanelView: View {
             Text("Stored only in your macOS Keychain — never logged or committed.")
                 .font(appearance.settings.hintFont)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
-            HStack(spacing: 10) {
-                modelPicker
-                effortPicker
+            // Side by side while they fit, stacked once they don't: both
+            // pickers are .fixedSize(), so at large text they would otherwise
+            // push the settings box wider than the bubble and truncate every
+            // label in it down to "Text s…".
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) {
+                    modelPicker
+                    effortPicker
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    modelPicker
+                    effortPicker
+                }
             }
             .font(appearance.settings.labelFont)
             Text("Change with /model <id> or /effort <level> in the chat.")
                 .font(appearance.settings.hintFont)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
             Divider()
 
@@ -511,11 +570,13 @@ struct ChatPanelView: View {
             Text("Height only — the bubble's width is fixed so its tail stays on \(secretary.profile.displayName).")
                 .font(appearance.settings.hintFont)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
             if let settingsNote {
                 Text(settingsNote)
                     .font(appearance.settings.hintFont)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(10)
@@ -570,6 +631,7 @@ struct ChatPanelView: View {
                 Text(addProjectNote)
                     .font(appearance.settings.hintFont)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(10)

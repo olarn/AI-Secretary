@@ -154,9 +154,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// is exactly the scope wanted here.
     ///
     /// Shift is accepted rather than required: the physical key is `=`, so ⌘+
-    /// and ⌘= are the same keystroke to most people and both should work. The
-    /// numeric keypad sends `+`/`-` directly. Returning `nil` consumes the
-    /// event so it can't also reach the text field.
+    /// and ⌘= are the same keystroke to most people and both should work.
+    /// Returning `nil` consumes the event so it can't also reach the text field.
+    ///
+    /// Matched on `keyCode` — the physical key — rather than on the character it
+    /// produces. This app is used with a Thai input source as well as a Roman
+    /// one, and under a non-Roman layout `charactersIgnoringModifiers` reports
+    /// that layout's character, so a character-based match would leave the
+    /// shortcut silently dead exactly half the time. The character is still
+    /// checked as a fallback, for layouts that put `=`/`-` on other keys.
+    private enum FontKey {
+        /// `=` and `-` on the main block; `+` and `-` on the numeric keypad.
+        static let increase: Set<UInt16> = [24, 69]
+        static let decrease: Set<UInt16> = [27, 78]
+    }
+
     private func installFontShortcuts() {
         fontShortcutMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) {
             [weak self] event in
@@ -164,16 +176,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
             guard flags.subtracting(.shift) == .command else { return event }
 
-            switch event.charactersIgnoringModifiers {
-            case "+", "=":
+            let character = event.charactersIgnoringModifiers
+            if FontKey.increase.contains(event.keyCode) || character == "+" || character == "=" {
                 self.appearance.increaseFontSize()
                 return nil
-            case "-", "_":
+            }
+            if FontKey.decrease.contains(event.keyCode) || character == "-" || character == "_" {
                 self.appearance.decreaseFontSize()
                 return nil
-            default:
-                return event
             }
+            return event
         }
     }
 

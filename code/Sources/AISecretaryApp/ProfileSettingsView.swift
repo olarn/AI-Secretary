@@ -59,6 +59,7 @@ struct ProfileSettingsView: View {
                 Text(note)
                     .font(appearance.settings.hintFont)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(10)
@@ -100,8 +101,7 @@ struct ProfileSettingsView: View {
     }
 
     private var nameField: some View {
-        HStack(spacing: 6) {
-            fieldLabel("Name")
+        fieldRow("Name") {
             TextField("Miku", text: $draft.name)
                 .textFieldStyle(.roundedBorder)
                 .font(appearance.settings.labelFont)
@@ -109,8 +109,7 @@ struct ProfileSettingsView: View {
     }
 
     private var genderRow: some View {
-        HStack(spacing: 6) {
-            fieldLabel("Gender")
+        fieldRow("Gender") {
             Menu {
                 Button("Female") { draft.genderChoice = .female }
                 Button("Male") { draft.genderChoice = .male }
@@ -133,8 +132,7 @@ struct ProfileSettingsView: View {
     }
 
     private var ageRow: some View {
-        HStack(spacing: 6) {
-            fieldLabel("Age")
+        fieldRow("Age") {
             Menu {
                 Button("Child") { draft.ageChoice = .child }
                 Button("Teenager") { draft.ageChoice = .teenager }
@@ -158,8 +156,7 @@ struct ProfileSettingsView: View {
 
     private var styleField: some View {
         VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 6) {
-                fieldLabel("Style")
+            fieldRow("Style") {
                 TextField(SecretaryProfile.defaultStyle, text: $draft.style)
                     .textFieldStyle(.roundedBorder)
                     .font(appearance.settings.labelFont)
@@ -167,6 +164,7 @@ struct ProfileSettingsView: View {
             Text("Free text — how she should sound. Blank means \(SecretaryProfile.defaultStyle).")
                 .font(appearance.settings.hintFont)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -185,7 +183,7 @@ struct ProfileSettingsView: View {
             // Fixed rows rather than a LazyVGrid: a lazy container collapses to
             // nothing when the panel proposes it a squeezed height, which is
             // exactly what happens with a section open in a fixed-height bubble.
-            ForEach(Array(Self.chipRows.enumerated()), id: \.offset) { _, row in
+            ForEach(Array(chipRows.enumerated()), id: \.offset) { _, row in
                 HStack(spacing: 4) {
                     ForEach(row, id: \.label) { chip in
                         pictureChip(state: chip.state, label: chip.label)
@@ -196,6 +194,7 @@ struct ProfileSettingsView: View {
             Text("Only the default is needed — states without a picture use it.")
                 .font(appearance.settings.hintFont)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -206,15 +205,29 @@ struct ProfileSettingsView: View {
         let label: String
     }
 
-    private static let chipRows: [[Chip]] = {
-        let chips = [Chip(state: nil, label: "Default")]
-            + ProfileArtwork.artworkStates.map {
-                Chip(state: $0, label: $0.rawValue.capitalized)
-            }
-        return stride(from: 0, to: chips.count, by: 3).map {
-            Array(chips[$0..<min($0 + 3, chips.count)])
+    private static let chips: [Chip] = [Chip(state: nil, label: "Default")]
+        + ProfileArtwork.artworkStates.map {
+            Chip(state: $0, label: $0.rawValue.capitalized)
         }
-    }()
+
+    /// How many chips share a row. Three fits the bubble at the default text
+    /// size; at 32pt a single "Listening" chip is most of the width, so the row
+    /// has to thin out or the last chips are simply drawn off the edge.
+    private var chipsPerRow: Int {
+        switch appearance.settings.fontSize {
+        case ..<16: return 3
+        case ..<24: return 2
+        default: return 1
+        }
+    }
+
+    private var chipRows: [[Chip]] {
+        let chips = Self.chips
+        let perRow = chipsPerRow
+        return stride(from: 0, to: chips.count, by: perRow).map {
+            Array(chips[$0..<min($0 + perRow, chips.count)])
+        }
+    }
 
     private func pictureChip(state: AssistantState?, label: String) -> some View {
         let id = profiles.activeID
@@ -262,7 +275,40 @@ struct ProfileSettingsView: View {
         Text(text)
             .font(appearance.settings.labelFont)
             .foregroundStyle(.secondary)
-            .frame(width: 52, alignment: .leading)
+            .frame(
+                width: isStacked ? nil : appearance.settings.size(52),
+                alignment: .leading
+            )
+    }
+
+    /// Past this size a label and its control no longer share a line inside a
+    /// 360pt bubble: the label column alone would take a third of the width, and
+    /// "Gender" was truncating to "Ge…". Above it, the label sits on its own row.
+    ///
+    /// A threshold rather than `ViewThatFits`, which can't help here — a
+    /// `TextField` is happy at any width, so the horizontal layout always
+    /// "fits" and the fallback would never be chosen.
+    private var isStacked: Bool { appearance.settings.fontSize > 18 }
+
+    /// A form row: label beside its control while there's room, above it once
+    /// there isn't.
+    @ViewBuilder
+    private func fieldRow<Content: View>(
+        _ label: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        let control = content()
+        if isStacked {
+            VStack(alignment: .leading, spacing: 2) {
+                fieldLabel(label)
+                HStack(spacing: 6) { control }
+            }
+        } else {
+            HStack(spacing: 6) {
+                fieldLabel(label)
+                control
+            }
+        }
     }
 
     // MARK: - Actions

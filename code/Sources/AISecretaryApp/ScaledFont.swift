@@ -64,11 +64,15 @@ extension AppearanceSettings {
     /// project. Starts at `.regular`, which is what they have always been at the
     /// default text size, so turning the text up is the only thing that changes
     /// them.
+    ///
+    /// Capped at `.large` deliberately. The bubble is a fixed 360pt wide, and at
+    /// `.extraLarge` a row like "Text size  32pt  −  +" no longer fits it: the
+    /// buttons win the space and the label truncates to "Text s…". Past this
+    /// point the text keeps growing and the controls stop.
     var controlSize: ControlSize {
         switch fontSize {
         case ..<16: return .regular
-        case ..<24: return .large
-        default: return .extraLarge
+        default: return .large
         }
     }
 }
