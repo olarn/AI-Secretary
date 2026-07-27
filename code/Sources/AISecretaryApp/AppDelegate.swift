@@ -60,9 +60,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Gap kept between the bubble and the screen edge when clamping horizontally.
     private let screenMargin: CGFloat = 8
     /// How far the bubble is pushed sideways, away from the character, as a
-    /// fraction of its own width. Lining the tail's tip up with the character's
-    /// centre put most of the bubble across the character; this backs it off.
-    private let bubbleClearanceFraction: CGFloat = 0.1
+    /// fraction of **the character's** width — not the bubble's.
+    ///
+    /// It has to scale with the character or the same offset reads differently at
+    /// each size: a fixed 36pt put the tail tip outside a small character
+    /// altogether (S looked detached) and well inside a large one (L sat under
+    /// the bubble). As a share of the character's width, the tip lands on the
+    /// same spot at every size.
+    private let bubbleClearanceFraction: CGFloat = 0.28
     /// Gap between the character and the bubble window. The tail tip now ends
     /// exactly at the window edge, and the character's avatar sits ~12pt inside
     /// its own window, so a small negative gap makes the tail visually touch
@@ -83,13 +88,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             )
         )
         // Ask the view how big it wants to be at 1×, then give it exactly that
-        // (times the S/M/L factor) so nothing is cropped.
+        // times the S/M/L factor, so nothing is cropped.
         characterBaseSize = characterHost.fittingSize
-        characterHost.frame = NSRect(origin: .zero, size: characterSize)
 
+        // Wrapped in a plain container rather than used as the content view
+        // directly: an NSHostingView publishes its SwiftUI layout size as an
+        // intrinsic size, and Auto Layout then shrinks the window back to it.
+        // `scaleEffect` doesn't change that layout size, so at L the character
+        // was drawn 1.3x inside a 1x window and clipped on every side.
         characterPanel = FloatingPanel(
             contentRect: NSRect(origin: .zero, size: characterSize),
-            content: characterHost
+            content: Self.container(for: characterHost, size: characterSize)
         )
 
         let chatHost = NSHostingView(
@@ -131,6 +140,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
 
         characterPanel.orderFrontRegardless()
+    }
+
+    /// Lets the window own its size and the hosted view fill it.
+    private static func container(for host: NSView, size: CGSize) -> NSView {
+        let container = NSView(frame: NSRect(origin: .zero, size: size))
+        host.frame = container.bounds
+        host.autoresizingMask = [.width, .height]
+        container.addSubview(host)
+        return container
     }
 
     /// Finds Claude Code off the main thread. The fast path is a handful of
@@ -259,7 +277,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Pushed sideways away from the character, so the bubble sits beside it
         // rather than across it. Whichever side it's on, the shift is outward:
         // right when the bubble is to the character's right, left when mirrored.
-        let clearance = chatSize.width * bubbleClearanceFraction
+        let clearance = characterFrame.width * bubbleClearanceFraction
         let naturalX = characterCenterX - chatSize.width * tailFraction + clearance
         let mirrored = naturalX + chatSize.width > visibleFrame.maxX - screenMargin
         var originX = mirrored
