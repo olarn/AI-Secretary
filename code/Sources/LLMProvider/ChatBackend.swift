@@ -8,7 +8,7 @@ import Foundation
 public protocol WorkspaceScopedProvider: AnyObject, Sendable {
     /// Applies to the next turn. `allowedTools` of `nil` leaves the current
     /// allowlist alone.
-    func prepare(workingDirectory: URL?, allowedTools: [String]?)
+    func prepare(workingDirectory: URL?, additionalDirectories: [URL], allowedTools: [String]?)
     /// Drops any resumed session so the next turn starts a fresh conversation.
     func resetConversation()
     /// Whether the backend can actually look at the directory on its own.
@@ -28,11 +28,12 @@ extension ClaudeCodeProvider: WorkspaceScopedProvider {
     /// first message runs in the scratch directory, the user then approves a
     /// project, and the next turn would try to resume the scratch session from
     /// inside the project.
-    public func prepare(workingDirectory: URL?, allowedTools: [String]?) {
+    public func prepare(workingDirectory: URL?, additionalDirectories: [URL], allowedTools: [String]?) {
         var updated = configuration
         let moved = updated.workingDirectory?.standardizedFileURL
             != workingDirectory?.standardizedFileURL
         updated.workingDirectory = workingDirectory
+        updated.additionalDirectories = additionalDirectories
         if let allowedTools { updated.allowedTools = allowedTools }
         configuration = updated
         if moved { resetSession() }
@@ -61,7 +62,7 @@ public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, @unchecke
     private let lock = NSLock()
     private var _availability: ClaudeCodeAvailability?
     private var _claudeCode: ClaudeCodeProvider?
-    private var _pending: (workingDirectory: URL?, allowedTools: [String]?)?
+    private var _pending: (workingDirectory: URL?, additionalDirectories: [URL], allowedTools: [String]?)?
     private var _observer: (@Sendable (ClaudeCodeAvailability) -> Void)?
 
     public init(locator: ClaudeCodeLocator = ClaudeCodeLocator(), fallback: ChatProvider) {
@@ -100,7 +101,11 @@ public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, @unchecke
         if case .available(let installation) = found {
             let provider = ClaudeCodeProvider(installation: installation)
             if let pending = _pending {
-                provider.prepare(workingDirectory: pending.workingDirectory, allowedTools: pending.allowedTools)
+                provider.prepare(
+                    workingDirectory: pending.workingDirectory,
+                    additionalDirectories: pending.additionalDirectories,
+                    allowedTools: pending.allowedTools
+                )
             }
             _claudeCode = provider
         }
@@ -135,12 +140,16 @@ public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, @unchecke
 
     /// Stored even before detection finishes, so a directory chosen at startup
     /// still applies to the first turn.
-    public func prepare(workingDirectory: URL?, allowedTools: [String]?) {
+    public func prepare(workingDirectory: URL?, additionalDirectories: [URL], allowedTools: [String]?) {
         let provider: ClaudeCodeProvider? = lock.withLock {
-            _pending = (workingDirectory, allowedTools)
+            _pending = (workingDirectory, additionalDirectories, allowedTools)
             return _claudeCode
         }
-        provider?.prepare(workingDirectory: workingDirectory, allowedTools: allowedTools)
+        provider?.prepare(
+            workingDirectory: workingDirectory,
+            additionalDirectories: additionalDirectories,
+            allowedTools: allowedTools
+        )
     }
 
     public func resetConversation() {

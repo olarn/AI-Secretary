@@ -277,24 +277,57 @@ public final class Secretary {
         // turn starts. Working in a registered project is a real capability
         // grant, so the first time in each project we ask.
         if let scoped = chatProvider as? WorkspaceScopedProvider {
-            let project = lastProject.flatMap { registry.project(id: $0.id) }
+            let approved = approvedProjects
+
+            // Prefer where we were last, then anything already approved. A
+            // single unapproved project is worth asking about; with several,
+            // guessing which one the user meant would be wrong.
+            let primary = lastProject
+                .flatMap { remembered in approved.first { $0.id == remembered.id } }
+                ?? approved.first
                 ?? (registry.projects.count == 1 ? registry.projects.first : nil)
 
-            if let project, !project.allows(tool: Self.claudeCodeToolID) {
-                requestAgentAccess(to: project, prompt: text, taskID: taskID)
+            if let primary, !primary.allows(tool: Self.claudeCodeToolID) {
+                requestAgentAccess(to: primary, prompt: text, taskID: taskID)
                 return
             }
-            // Remembered before streaming so the system prompt can name the
-            // folder the backend is actually standing in.
-            lastProject = project
-            scoped.prepare(
-                workingDirectory: project?.url ?? Self.scratchDirectory,
-                allowedTools: nil
-            )
+            if primary == nil, registry.projects.count > 1 {
+                say(.secretary, "Which project should I start in? I'll be able to see the others once you've approved them too.")
+                pendingDecision = .projectChoice(
+                    candidates: registry.projects,
+                    operation: .startAgent(prompt: text)
+                )
+                return
+            }
+
+            prepareWorkspace(primary: primary, on: scoped)
         }
 
         conversation.append(ChatMessage(role: .user, content: text))
         streamReply(messages: conversation, taskID: taskID)
+    }
+
+    /// Every project the user has approved for Claude Code.
+    private var approvedProjects: [Project] {
+        registry.projects.filter { $0.allows(tool: Self.claudeCodeToolID) }
+    }
+
+    /// Points the backend at one project and opens the other approved ones
+    /// alongside it, so a question spanning projects can be answered without
+    /// making the user switch. Only approved folders are ever passed — the
+    /// per-project grant is what widens this set.
+    private func prepareWorkspace(primary: Project?, on scoped: WorkspaceScopedProvider) {
+        // Remembered before streaming so the system prompt can name the folder
+        // the backend is actually standing in.
+        lastProject = primary
+        let others = approvedProjects
+            .filter { $0.id != primary?.id }
+            .map(\.url)
+        scoped.prepare(
+            workingDirectory: primary?.url ?? Self.scratchDirectory,
+            additionalDirectories: others,
+            allowedTools: nil
+        )
     }
 
     private func requestAgentAccess(to project: Project, prompt: String, taskID: String) {
@@ -331,8 +364,9 @@ public final class Secretary {
             return
         }
         audit.record(AuditEntry(taskID: taskID, kind: .executionStarted, detail: "claude code in \(project.name)"))
-        (chatProvider as? WorkspaceScopedProvider)?
-            .prepare(workingDirectory: project.url, allowedTools: nil)
+        if let scoped = chatProvider as? WorkspaceScopedProvider {
+            prepareWorkspace(primary: project, on: scoped)
+        }
 
         conversation.append(ChatMessage(role: .user, content: prompt))
         streamReply(messages: conversation, taskID: taskID)
@@ -479,6 +513,18 @@ public final class Secretary {
 
     private func proceed(operation: PlannedOperation, project: Project) {
         let taskID = activeTaskID ?? "-"
+
+        // Starting the agent in a project is what *creates* the grant, so it
+        // can't be gated on the project already holding it.
+        if case .startAgent(let prompt) = operation {
+            if project.allows(tool: Self.claudeCodeToolID) {
+                lastProject = project
+                beginAgentSession(prompt: prompt, in: project)
+            } else {
+                requestAgentAccess(to: project, prompt: prompt, taskID: taskID)
+            }
+            return
+        }
 
         let request = ApprovalRequest(
             taskID: taskID,
@@ -786,6 +832,12 @@ public final class Secretary {
     /// asked the user to paste the contents and to type `list files in <name>`.
     private var agentPrompt: String {
         let location = lastProject.map { "the project “\($0.name)”" } ?? "a scratch folder"
+        let others = approvedProjects.filter { $0.id != lastProject?.id }.map(\.name)
+        let alsoOpen = others.isEmpty ? "" : """
+
+
+        You can also read these other folders the user has approved, at the paths         listed by your tools: \(others.map { "“\($0)”" }.joined(separator: ", ")).         If a question spans more than one of them, look at each — don't ask the         user to switch projects.
+        """
         return """
         You are the AI Secretary, a friendly macOS desktop companion. The person \
         talking to you is not necessarily a developer, and may not be working on \
@@ -804,7 +856,7 @@ public final class Secretary {
         writing or changing files will be refused. If a request needs that, say so \
         plainly instead of pretending it worked. Never claim to have done something \
         you didn't do.
-        """
+        """ + alsoOpen
     }
 
     private var chatOnlyPrompt: String {

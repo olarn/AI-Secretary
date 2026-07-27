@@ -29,6 +29,10 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
         /// session. Nil means the process default, which we never want in
         /// production; the orchestrator sets a registered project path.
         public var workingDirectory: URL?
+        /// Other folders the user has approved. Claude Code can read these too,
+        /// so a question spanning several projects can be answered without
+        /// making the user switch between them.
+        public var additionalDirectories: [URL]
         /// Tools pre-approved for this turn, in Claude Code permission-rule
         /// syntax (e.g. `Read`, `Bash(git status *)`). Anything outside this
         /// list is refused by the CLI and reported back to the user.
@@ -37,10 +41,12 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
 
         public init(
             workingDirectory: URL? = nil,
+            additionalDirectories: [URL] = [],
             allowedTools: [String] = ClaudeCodeProvider.readOnlyTools,
             permissionMode: String = "manual"
         ) {
             self.workingDirectory = workingDirectory
+            self.additionalDirectories = additionalDirectories
             self.allowedTools = allowedTools
             self.permissionMode = permissionMode
         }
@@ -270,6 +276,9 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
         ]
         if !configuration.allowedTools.isEmpty {
             arguments += ["--allowedTools", configuration.allowedTools.joined(separator: ",")]
+        }
+        for directory in configuration.additionalDirectories {
+            arguments += ["--add-dir", directory.path]
         }
         if let resume { arguments += ["--resume", resume] }
         if let system, !system.isEmpty { arguments += ["--append-system-prompt", system] }

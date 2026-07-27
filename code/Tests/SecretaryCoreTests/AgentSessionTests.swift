@@ -17,8 +17,11 @@ final class SpyWorkspaceProvider: ChatProvider, WorkspaceScopedProvider, @unchec
     private(set) var resetCount = 0
     var hasWorkspaceTools = true
 
-    func prepare(workingDirectory: URL?, allowedTools: [String]?) {
+    private(set) var preparedExtras: [[URL]] = []
+
+    func prepare(workingDirectory: URL?, additionalDirectories: [URL], allowedTools: [String]?) {
         preparedDirectories.append(workingDirectory)
+        preparedExtras.append(additionalDirectories)
         preparedTools.append(allowedTools)
     }
 
@@ -217,17 +220,75 @@ final class AgentSessionTests: XCTestCase {
         XCTAssertEqual(provider.callCount, 1)
     }
 
-    /// With several projects and none chosen yet, we can't guess which one the
-    /// user meant — so we don't hand any of them over.
-    func testWithSeveralProjectsAndNoneChosenItStaysInTheScratchDirectory() async {
-        let secretary = makeSecretary(projects: [
-            project(grantingAgent: true),
-            Project(name: "Other", path: "/tmp/other", allowedTools: [Secretary.claudeCodeToolID])
-        ])
+    // MARK: - More than one project
+
+    /// The point of the feature: with two approved projects, both are reachable
+    /// in one turn so a question spanning them doesn't need the user to switch.
+    func testEveryApprovedProjectIsOpenAlongsideThePrimaryOne() async {
+        let other = Project(name: "Other", path: "/tmp/other",
+                            allowedTools: [Secretary.claudeCodeToolID])
+        let secretary = makeSecretary(projects: [project(grantingAgent: true), other])
+        secretary.submit("compare the two projects")
+        await waitUntilIdle()
+
+        XCTAssertEqual(provider.preparedDirectories.last??.path, projectPath)
+        XCTAssertEqual(provider.preparedExtras.last?.map(\.path), ["/tmp/other"])
+    }
+
+    /// Only approved folders may be opened — the per-project grant is the gate.
+    func testAnUnapprovedProjectIsNotOpened() async {
+        let secret = Project(name: "Secret", path: "/tmp/secret", allowedTools: [])
+        let secretary = makeSecretary(projects: [project(grantingAgent: true), secret])
         secretary.submit("hello")
         await waitUntilIdle()
 
-        XCTAssertEqual(provider.preparedDirectories.last??.lastPathComponent, "scratch")
+        XCTAssertEqual(provider.preparedExtras.last, [], "An unapproved folder must stay closed")
+    }
+
+    func testTheAgentPromptMentionsTheOtherOpenProjects() async {
+        let other = Project(name: "Other", path: "/tmp/other",
+                            allowedTools: [Secretary.claudeCodeToolID])
+        let secretary = makeSecretary(projects: [project(grantingAgent: true), other])
+        secretary.submit("hello")
+        await waitUntilIdle()
+
+        XCTAssertTrue(provider.lastSystem?.contains("Other") == true,
+                      "Got: \(provider.lastSystem ?? "-")")
+    }
+
+    /// Several projects, none approved yet: guessing would be wrong, so ask.
+    func testSeveralUnapprovedProjectsAskWhichToStartIn() {
+        let secretary = makeSecretary(projects: [
+            project(grantingAgent: false),
+            Project(name: "Other", path: "/tmp/other", allowedTools: [])
+        ])
+        secretary.submit("hello")
+
+        guard case .projectChoice(let candidates, let operation) = secretary.pendingDecision else {
+            return XCTFail("Expected a project choice, got: \(String(describing: secretary.pendingDecision))")
+        }
+        XCTAssertEqual(candidates.count, 2)
+        XCTAssertEqual(operation, .startAgent(prompt: "hello"))
+        XCTAssertEqual(provider.callCount, 0)
+    }
+
+    /// Choosing an unapproved project still has to ask before running.
+    func testChoosingAProjectThenAsksToApproveIt() {
+        let secretary = makeSecretary(projects: [
+            project(grantingAgent: false),
+            Project(name: "Other", path: "/tmp/other", allowedTools: [])
+        ])
+        secretary.submit("hello")
+        guard case .projectChoice(let candidates, _) = secretary.pendingDecision else {
+            return XCTFail("Expected a project choice")
+        }
+        secretary.choose(project: candidates[0])
+
+        guard case .approval(let request, _) = secretary.pendingDecision else {
+            return XCTFail("Expected an approval request after choosing")
+        }
+        XCTAssertEqual(request.toolID, Secretary.claudeCodeToolID)
+        XCTAssertEqual(provider.callCount, 0)
     }
 }
 

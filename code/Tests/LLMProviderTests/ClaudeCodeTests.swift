@@ -120,6 +120,24 @@ final class ClaudeCodeProviderLaunchTests: XCTestCase {
         XCTAssertEqual(args[index + 1], "abc-123")
     }
 
+    /// Every approved project is opened for the turn, so a question spanning
+    /// two of them can be answered without the user switching.
+    func testOpensTheOtherApprovedFoldersWithAddDir() {
+        let config = ClaudeCodeProvider.Configuration(
+            additionalDirectories: [
+                URL(fileURLWithPath: "/tmp/other"),
+                URL(fileURLWithPath: "/tmp/third")
+            ]
+        )
+        let args = arguments(configuration: config)
+        let paths = args.indices.filter { args[$0] == "--add-dir" }.map { args[$0 + 1] }
+        XCTAssertEqual(paths, ["/tmp/other", "/tmp/third"])
+    }
+
+    func testPassesNoExtraFoldersByDefault() {
+        XCTAssertFalse(arguments().contains("--add-dir"))
+    }
+
     func testPassesTheAllowlistAsCommaSeparatedRules() {
         let config = ClaudeCodeProvider.Configuration(allowedTools: ["Read", "Bash(git log *)"])
         let args = arguments(configuration: config)
@@ -238,11 +256,11 @@ final class ClaudeCodeProviderStreamTests: XCTestCase {
     /// session ID" on the first message after approving a project.
     func testMovingToAnotherDirectoryDropsTheSession() {
         let provider = makeProvider()
-        provider.prepare(workingDirectory: URL(fileURLWithPath: "/tmp/scratch"), allowedTools: nil)
+        provider.prepare(workingDirectory: URL(fileURLWithPath: "/tmp/scratch"), additionalDirectories: [], allowedTools: nil)
         _ = provider.handle(line: #"{"type":"system","subtype":"init","session_id":"scratch-session"}"#)
         XCTAssertEqual(provider.sessionID, "scratch-session")
 
-        provider.prepare(workingDirectory: URL(fileURLWithPath: "/tmp/project"), allowedTools: nil)
+        provider.prepare(workingDirectory: URL(fileURLWithPath: "/tmp/project"), additionalDirectories: [], allowedTools: nil)
 
         XCTAssertNil(provider.sessionID, "A session from another directory can't be resumed")
     }
@@ -250,11 +268,11 @@ final class ClaudeCodeProviderStreamTests: XCTestCase {
     func testStayingInTheSameDirectoryKeepsTheSession() {
         let provider = makeProvider()
         let directory = URL(fileURLWithPath: "/tmp/project")
-        provider.prepare(workingDirectory: directory, allowedTools: nil)
+        provider.prepare(workingDirectory: directory, additionalDirectories: [], allowedTools: nil)
         _ = provider.handle(line: #"{"type":"system","subtype":"init","session_id":"keep-me"}"#)
 
         // Same directory, different allowlist — continuity must survive.
-        provider.prepare(workingDirectory: directory, allowedTools: ["Read", "Write"])
+        provider.prepare(workingDirectory: directory, additionalDirectories: [], allowedTools: ["Read", "Write"])
 
         XCTAssertEqual(provider.sessionID, "keep-me")
     }
@@ -263,10 +281,10 @@ final class ClaudeCodeProviderStreamTests: XCTestCase {
     /// directory; they must not look like a move.
     func testEquivalentPathSpellingsAreNotTreatedAsAMove() {
         let provider = makeProvider()
-        provider.prepare(workingDirectory: URL(fileURLWithPath: "/tmp/project"), allowedTools: nil)
+        provider.prepare(workingDirectory: URL(fileURLWithPath: "/tmp/project"), additionalDirectories: [], allowedTools: nil)
         _ = provider.handle(line: #"{"type":"system","subtype":"init","session_id":"keep-me"}"#)
 
-        provider.prepare(workingDirectory: URL(fileURLWithPath: "/tmp/other/../project"), allowedTools: nil)
+        provider.prepare(workingDirectory: URL(fileURLWithPath: "/tmp/other/../project"), additionalDirectories: [], allowedTools: nil)
 
         XCTAssertEqual(provider.sessionID, "keep-me")
     }
