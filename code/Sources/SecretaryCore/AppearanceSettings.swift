@@ -99,10 +99,27 @@ public struct AppearanceSettings: Equatable, Sendable {
 
     // MARK: - Derived sizes
 
+    /// Nothing illegible, however far down the text size is turned. Applies to
+    /// the derived sizes only — the body itself has its own floor.
+    public static let minDerivedFontSize: Double = 8
+
+    /// Scales a size that was chosen against the default body text.
+    ///
+    /// Every piece of text in the panel goes through here rather than carrying a
+    /// literal like `.caption2`: the whole point of +/- is that the panel grows
+    /// as one piece, and a hard-coded caption simply ignores it. Ratio rather
+    /// than a fixed offset, so a label that is 3/4 the body size at 12pt is
+    /// still 3/4 of it at 32pt instead of creeping up to near-parity.
+    ///
+    /// - Parameter base: the size this text should be at `defaultFontSize`.
+    public func scaled(_ base: Double) -> Double {
+        max(Self.minDerivedFontSize, base * fontSize / Self.defaultFontSize)
+    }
+
     /// Secondary text tracks the body size so the panel scales as one piece
     /// instead of leaving captions tiny beside 32pt text.
-    public var secondaryFontSize: Double { max(9, fontSize - 2) }
-    public var footnoteFontSize: Double { max(8, fontSize - 3) }
+    public var secondaryFontSize: Double { scaled(10) }
+    public var footnoteFontSize: Double { scaled(9) }
 }
 
 /// Remembers the choice across launches.

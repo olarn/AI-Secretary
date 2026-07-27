@@ -41,6 +41,7 @@ struct ChatPanelView: View {
             footer
         }
         .padding(18)
+        .controlSize(appearance.settings.controlSize)
         .frame(width: 360)
         .frame(maxHeight: .infinity, alignment: .top)
         .background(
@@ -87,14 +88,14 @@ struct ChatPanelView: View {
     private var onboardingCard: some View {
         VStack(alignment: .leading, spacing: 6) {
             Label("Claude Code isn't set up", systemImage: "exclamationmark.triangle")
-                .font(.caption.bold())
+                .font(appearance.settings.headingFont)
             Text("I work by driving your own copy of Claude Code, so it stays on your account. Two steps:")
-                .font(.caption2)
+                .font(appearance.settings.labelFont)
             Text("1. Install it — see claude.com/claude-code\n2. Run `claude` in Terminal once and sign in")
-                .font(.caption2.monospaced())
+                .font(appearance.settings.labelFont.monospaced())
                 .textSelection(.enabled)
             Text("Then reopen this panel. If it's installed somewhere unusual, I also check your login shell's PATH.")
-                .font(.caption2)
+                .font(appearance.settings.labelFont)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -178,11 +179,11 @@ struct ChatPanelView: View {
             Text(value).foregroundStyle(.primary)
             if inherited {
                 Image(systemName: "circle.dashed")
-                    .font(.system(size: 7))
+                    .font(appearance.settings.glyphFont)
                     .foregroundStyle(.secondary)
             }
         }
-        .font(.caption2)
+        .font(appearance.settings.labelFont)
     }
 
     /// What the assistant is doing right now.
@@ -194,9 +195,9 @@ struct ChatPanelView: View {
     private var header: some View {
         HStack(spacing: 6) {
             Text(secretary.profile.displayName)
-                .font(.headline)
+                .font(appearance.settings.titleFont)
             Text(machine.state.description.uppercased())
-                .font(.caption2.bold())
+                .font(appearance.settings.labelFont.bold())
                 .foregroundStyle(.secondary)
             Spacer()
         }
@@ -213,7 +214,7 @@ struct ChatPanelView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         if secretary.transcript.isEmpty {
                             Text(emptyTranscriptHint)
-                                .font(.system(size: appearance.settings.fontSize))
+                                .font(appearance.settings.bodyFont)
                                 .foregroundStyle(.secondary)
                         }
                         ForEach(secretary.transcript) { entry in
@@ -303,35 +304,38 @@ struct ChatPanelView: View {
     ) -> some View {
         HStack(spacing: 6) {
             Text(label)
-                .font(.caption2)
+                .font(appearance.settings.labelFont)
                 .foregroundStyle(.secondary)
             Spacer(minLength: 4)
             Text(value)
-                .font(.caption2.monospaced())
-                .frame(minWidth: 38, alignment: .trailing)
+                .font(appearance.settings.labelFont.monospaced())
+                .frame(minWidth: appearance.settings.size(38), alignment: .trailing)
             Button("−", action: onDecrease)
                 .buttonStyle(.bordered)
-                .font(.caption2)
+                .font(appearance.settings.labelFont)
                 .disabled(!canDecrease)
             Button("+", action: onIncrease)
                 .buttonStyle(.bordered)
-                .font(.caption2)
+                .font(appearance.settings.labelFont)
                 .disabled(!canIncrease)
         }
     }
 
     /// A table laid out as a grid, scrolling sideways on its own when it's
-    /// wider than the bubble. Cells use the body text size, not a smaller
-    /// caption: a table is content, so it has to grow with +/- like the rest of
-    /// the answer. Only the table scrolls — the conversation itself
-    /// must not, or every wide answer would drag the whole thread off-screen.
+    /// wider than the bubble. Cells use the body text's size *and* its
+    /// monospaced face: a table is content, so it has to grow with +/- like the
+    /// rest of the answer, and at equal point sizes a proportional font reads
+    /// smaller than the monospaced text around it — which made a table that was
+    /// in fact scaling look as though it wasn't. Only the table scrolls — the
+    /// conversation itself must not, or every wide answer would drag the whole
+    /// thread off-screen.
     private func tableView(_ table: MarkdownTable) -> some View {
         ScrollView(.horizontal, showsIndicators: true) {
             Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 4) {
                 GridRow {
                     ForEach(Array(table.header.enumerated()), id: \.offset) { _, cell in
                         Text(inlineMarkdown(cell))
-                            .font(.system(size: appearance.settings.fontSize, weight: .bold))
+                            .font(appearance.settings.tableFont(bold: true))
                     }
                 }
                 Divider().gridCellUnsizedAxes(.horizontal)
@@ -339,7 +343,7 @@ struct ChatPanelView: View {
                     GridRow {
                         ForEach(Array(row.enumerated()), id: \.offset) { _, cell in
                             Text(inlineMarkdown(cell))
-                                .font(.system(size: appearance.settings.fontSize))
+                                .font(appearance.settings.tableFont(bold: false))
                         }
                     }
                 }
@@ -395,11 +399,11 @@ struct ChatPanelView: View {
                     leavesTheMachine ? "Send to Claude?" : "Approval required",
                     systemImage: leavesTheMachine ? "paperplane.circle" : "lock.shield"
                 )
-                .font(.caption.bold())
+                .font(appearance.settings.headingFont)
                 Text(request.commandSummary)
-                    .font(.caption.monospaced())
+                    .font(appearance.settings.labelFont.monospaced())
                 Text("in \(request.project.name) · \(request.actionClass.humanDescription)")
-                    .font(.caption2)
+                    .font(appearance.settings.labelFont)
                     .foregroundStyle(.secondary)
                 HStack(spacing: 8) {
                     Button("Approve") { secretary.resolvePendingApproval(granted: true) }
@@ -407,7 +411,7 @@ struct ChatPanelView: View {
                     Button("Deny") { secretary.resolvePendingApproval(granted: false) }
                         .buttonStyle(.bordered)
                 }
-                .font(.caption)
+                .font(appearance.settings.labelFont)
             }
             .padding(10)
             .background(
@@ -418,15 +422,15 @@ struct ChatPanelView: View {
         case .projectChoice(let candidates, _):
             VStack(alignment: .leading, spacing: 6) {
                 Label("Choose a project", systemImage: "folder")
-                    .font(.caption.bold())
+                    .font(appearance.settings.headingFont)
                 ForEach(candidates) { candidate in
                     Button(candidate.name) { secretary.choose(project: candidate) }
                         .buttonStyle(.bordered)
-                        .font(.caption)
+                        .font(appearance.settings.labelFont)
                 }
                 Button("Cancel") { secretary.cancelPendingDecision() }
                     .buttonStyle(.plain)
-                    .font(.caption2)
+                    .font(appearance.settings.labelFont)
             }
             .padding(10)
             .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
@@ -440,7 +444,7 @@ struct ChatPanelView: View {
         HStack(spacing: 6) {
             TextField("Ask the Secretary…", text: $draft)
                 .textFieldStyle(.roundedBorder)
-                .font(.caption)
+                .font(appearance.settings.labelFont)
                 .onSubmit(send)
             Button(action: send) {
                 Image(systemName: "arrow.up.circle.fill")
@@ -453,37 +457,37 @@ struct ChatPanelView: View {
     private var settingsSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Settings")
-                .font(.caption.bold())
+                .font(appearance.settings.headingFont)
 
             Text("Claude API key")
-                .font(.caption2)
+                .font(appearance.settings.labelFont)
                 .foregroundStyle(.secondary)
             HStack(spacing: 6) {
                 SecureField(credentials.hasAPIKey ? "•••• stored in Keychain" : "sk-ant-…", text: $apiKeyDraft)
                     .textFieldStyle(.roundedBorder)
-                    .font(.caption)
+                    .font(appearance.settings.labelFont)
                 Button("Save") { saveAPIKey() }
                     .buttonStyle(.bordered)
-                    .font(.caption2)
+                    .font(appearance.settings.labelFont)
                     .disabled(apiKeyDraft.trimmingCharacters(in: .whitespaces).isEmpty)
                 if credentials.hasAPIKey {
                     Button("Clear") { clearAPIKey() }
                         .buttonStyle(.plain)
-                        .font(.caption2)
+                        .font(appearance.settings.labelFont)
                         .foregroundStyle(.secondary)
                 }
             }
             Text("Stored only in your macOS Keychain — never logged or committed.")
-                .font(.system(size: 9))
+                .font(appearance.settings.hintFont)
                 .foregroundStyle(.secondary)
 
             HStack(spacing: 10) {
                 modelPicker
                 effortPicker
             }
-            .font(.caption2)
+            .font(appearance.settings.labelFont)
             Text("Change with /model <id> or /effort <level> in the chat.")
-                .font(.system(size: 9))
+                .font(appearance.settings.hintFont)
                 .foregroundStyle(.secondary)
 
             Divider()
@@ -505,12 +509,12 @@ struct ChatPanelView: View {
                 onIncrease: appearance.increaseHeight
             )
             Text("Height only — the bubble's width is fixed so its tail stays on \(secretary.profile.displayName).")
-                .font(.system(size: 9))
+                .font(appearance.settings.hintFont)
                 .foregroundStyle(.secondary)
 
             if let settingsNote {
                 Text(settingsNote)
-                    .font(.system(size: 9))
+                    .font(appearance.settings.hintFont)
                     .foregroundStyle(.secondary)
             }
         }
@@ -521,20 +525,20 @@ struct ChatPanelView: View {
     private var projectsSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Projects")
-                .font(.caption.bold())
+                .font(appearance.settings.headingFont)
 
             if registry.projects.isEmpty {
                 Text("None registered. Add one to let me work in it.")
-                    .font(.caption2)
+                    .font(appearance.settings.labelFont)
                     .foregroundStyle(.secondary)
             }
 
             ForEach(registry.projects) { project in
                 HStack(spacing: 6) {
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(project.name).font(.caption2.bold())
+                        Text(project.name).font(appearance.settings.labelFont.bold())
                         Text(project.path)
-                            .font(.system(size: 9).monospaced())
+                            .font(appearance.settings.hintFont.monospaced())
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                             .truncationMode(.head)
@@ -560,11 +564,11 @@ struct ChatPanelView: View {
                 }
             }
             .buttonStyle(.bordered)
-            .font(.caption2)
+            .font(appearance.settings.labelFont)
 
             if let addProjectNote {
                 Text(addProjectNote)
-                    .font(.system(size: 9))
+                    .font(appearance.settings.hintFont)
                     .foregroundStyle(.secondary)
             }
         }
@@ -580,8 +584,8 @@ struct ChatPanelView: View {
             Spacer()
         }
         .toggleStyle(.button)
-        .controlSize(.mini)
-        .font(.caption2)
+        .controlSize(appearance.settings.chromeControlSize)
+        .font(appearance.settings.labelFont)
     }
 
     // MARK: - Actions

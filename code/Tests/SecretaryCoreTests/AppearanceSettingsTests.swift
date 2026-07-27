@@ -115,6 +115,44 @@ final class AppearanceSettingsTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(small.footnoteFontSize, 8, "Never illegible")
     }
 
+    /// At the default body size a caption keeps the size it was designed at, so
+    /// turning the text up is the only thing that ever changes the panel.
+    func testScaledSizesAreUnchangedAtTheDefaultBodySize() {
+        let settings = AppearanceSettings(fontSize: AppearanceSettings.defaultFontSize)
+        XCTAssertEqual(settings.scaled(10), 10, accuracy: 0.0001)
+        XCTAssertEqual(settings.scaled(13), 13, accuracy: 0.0001)
+    }
+
+    /// The reported bug: +/- grew the replies but left the labels, the composer
+    /// and the settings box at their original size.
+    func testEveryDerivedSizeGrowsWithTheBodyText() {
+        let small = AppearanceSettings(fontSize: 12)
+        let large = AppearanceSettings(fontSize: 32)
+        for base in [9.0, 10.0, 11.0, 13.0] {
+            XCTAssertGreaterThan(
+                large.scaled(base),
+                small.scaled(base),
+                "\(base)pt text must grow with the body"
+            )
+        }
+    }
+
+    /// Proportional, not a fixed offset: a label that is 3/4 of the body at the
+    /// default has to still be 3/4 of it at the cap, or the hierarchy collapses.
+    func testScalingKeepsTheProportionBetweenSizes() {
+        let large = AppearanceSettings(fontSize: 24)
+        XCTAssertEqual(large.scaled(10), 20, accuracy: 0.0001)
+        XCTAssertEqual(large.scaled(9) / large.scaled(12), 9.0 / 12.0, accuracy: 0.0001)
+    }
+
+    /// The floor applies to derived text only — it must not drag small print up
+    /// to the body size when the user turns everything down.
+    func testDerivedSizesHaveALegibilityFloor() {
+        let smallest = AppearanceSettings(fontSize: AppearanceSettings.minFontSize)
+        XCTAssertGreaterThanOrEqual(smallest.scaled(1), AppearanceSettings.minDerivedFontSize)
+        XCTAssertLessThan(smallest.scaled(9), smallest.fontSize, "Still smaller than the body")
+    }
+
     // MARK: - App size
 
     /// Asked for: three steps, S and L being ±30% — both measured from M, so

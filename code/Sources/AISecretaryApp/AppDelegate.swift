@@ -32,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusBar: StatusBarController!
     private var isChatVisible = false
     private var isCharacterVisible = true
+    private var fontShortcutMonitor: Any?
 
     /// What the character view asks for at 1×, measured from the view itself
     /// rather than written down here — a hard-coded window that was a few points
@@ -139,7 +140,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onToggleCharacter: { [weak self] in self?.toggleCharacterVisibility() ?? true }
         )
 
+        installFontShortcuts()
         characterPanel.orderFrontRegardless()
+    }
+
+    /// ⌘+ and ⌘− step the text size, matching the +/− buttons in Settings.
+    ///
+    /// A local event monitor rather than a menu item: the app runs as
+    /// `.accessory`, so `AppMenu`'s menu is never drawn, and both panels are
+    /// non-activating — a key equivalent is only matched once the app itself is
+    /// active, which typing into the floating bubble doesn't reliably make it.
+    /// A local monitor sees every key event delivered to our own windows, which
+    /// is exactly the scope wanted here.
+    ///
+    /// Shift is accepted rather than required: the physical key is `=`, so ⌘+
+    /// and ⌘= are the same keystroke to most people and both should work. The
+    /// numeric keypad sends `+`/`-` directly. Returning `nil` consumes the
+    /// event so it can't also reach the text field.
+    private func installFontShortcuts() {
+        fontShortcutMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) {
+            [weak self] event in
+            guard let self else { return event }
+            let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            guard flags.subtracting(.shift) == .command else { return event }
+
+            switch event.charactersIgnoringModifiers {
+            case "+", "=":
+                self.appearance.increaseFontSize()
+                return nil
+            case "-", "_":
+                self.appearance.decreaseFontSize()
+                return nil
+            default:
+                return event
+            }
+        }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        if let fontShortcutMonitor {
+            NSEvent.removeMonitor(fontShortcutMonitor)
+        }
     }
 
     /// Lets the window own its size and the hosted view fill it.

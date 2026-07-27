@@ -27,7 +27,7 @@ struct ProfileSettingsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Profile")
-                .font(.caption.bold())
+                .font(appearance.settings.headingFont)
 
             profilePicker
             nameField
@@ -44,12 +44,12 @@ struct ProfileSettingsView: View {
             HStack(spacing: 6) {
                 Button("Save") { save() }
                     .buttonStyle(.bordered)
-                    .font(.caption2)
+                    .font(appearance.settings.labelFont)
                     .disabled(!draft.hasChanges(from: profiles.active))
                 if profiles.canDelete {
                     Button("Delete") { delete() }
                         .buttonStyle(.plain)
-                        .font(.caption2)
+                        .font(appearance.settings.labelFont)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -57,7 +57,7 @@ struct ProfileSettingsView: View {
 
             if let note {
                 Text(note)
-                    .font(.system(size: 9))
+                    .font(appearance.settings.hintFont)
                     .foregroundStyle(.secondary)
             }
         }
@@ -96,7 +96,7 @@ struct ProfileSettingsView: View {
             .fixedSize()
             Spacer()
         }
-        .font(.caption2)
+        .font(appearance.settings.labelFont)
     }
 
     private var nameField: some View {
@@ -104,7 +104,7 @@ struct ProfileSettingsView: View {
             fieldLabel("Name")
             TextField("Miku", text: $draft.name)
                 .textFieldStyle(.roundedBorder)
-                .font(.caption2)
+                .font(appearance.settings.labelFont)
         }
     }
 
@@ -125,11 +125,11 @@ struct ProfileSettingsView: View {
                 // the user's own words rather than a list they have to fit into.
                 TextField("e.g. non-binary", text: $draft.genderText)
                     .textFieldStyle(.roundedBorder)
-                    .font(.caption2)
+                    .font(appearance.settings.labelFont)
             }
             Spacer(minLength: 0)
         }
-        .font(.caption2)
+        .font(appearance.settings.labelFont)
     }
 
     private var ageRow: some View {
@@ -148,12 +148,12 @@ struct ProfileSettingsView: View {
             if draft.ageChoice == .exact {
                 TextField("17", text: $draft.ageText)
                     .textFieldStyle(.roundedBorder)
-                    .font(.caption2)
+                    .font(appearance.settings.labelFont)
                     .frame(width: 44)
             }
             Spacer(minLength: 0)
         }
-        .font(.caption2)
+        .font(appearance.settings.labelFont)
     }
 
     private var styleField: some View {
@@ -162,10 +162,10 @@ struct ProfileSettingsView: View {
                 fieldLabel("Style")
                 TextField(SecretaryProfile.defaultStyle, text: $draft.style)
                     .textFieldStyle(.roundedBorder)
-                    .font(.caption2)
+                    .font(appearance.settings.labelFont)
             }
             Text("Free text — how she should sound. Blank means \(SecretaryProfile.defaultStyle).")
-                .font(.system(size: 9))
+                .font(appearance.settings.hintFont)
                 .foregroundStyle(.secondary)
         }
     }
@@ -180,7 +180,7 @@ struct ProfileSettingsView: View {
     private var picturesSection: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("Pictures")
-                .font(.caption2)
+                .font(appearance.settings.labelFont)
                 .foregroundStyle(.secondary)
             // Fixed rows rather than a LazyVGrid: a lazy container collapses to
             // nothing when the panel proposes it a squeezed height, which is
@@ -194,7 +194,7 @@ struct ProfileSettingsView: View {
                 }
             }
             Text("Only the default is needed — states without a picture use it.")
-                .font(.system(size: 9))
+                .font(appearance.settings.hintFont)
                 .foregroundStyle(.secondary)
         }
     }
@@ -231,10 +231,10 @@ struct ProfileSettingsView: View {
         } label: {
             HStack(spacing: 3) {
                 Image(systemName: hasPicture ? "checkmark.circle.fill" : "circle.dashed")
-                    .font(.system(size: 8))
+                    .font(appearance.settings.hintFont)
                     .foregroundStyle(hasPicture ? Color.green : .secondary)
                 Text(label)
-                    .font(.system(size: 10))
+                    .font(appearance.settings.labelFont)
                     .lineLimit(1)
             }
         }
@@ -252,7 +252,7 @@ struct ProfileSettingsView: View {
             ForEach(AppScale.allCases, id: \.rawValue) { scale in
                 Button(scale.label) { appearance.selectAppScale(scale) }
                     .buttonStyle(.bordered)
-                    .font(.caption2)
+                    .font(appearance.settings.labelFont)
                     .disabled(appearance.settings.appScale == scale)
             }
         }
@@ -260,7 +260,7 @@ struct ProfileSettingsView: View {
 
     private func fieldLabel(_ text: String) -> some View {
         Text(text)
-            .font(.caption2)
+            .font(appearance.settings.labelFont)
             .foregroundStyle(.secondary)
             .frame(width: 52, alignment: .leading)
     }
