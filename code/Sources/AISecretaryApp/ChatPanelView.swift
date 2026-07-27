@@ -81,6 +81,11 @@ struct ChatPanelView: View {
                 sectionStack
                 ScrollView(.vertical) { sectionStack }
             }
+            // On the container as well as the stack inside it: `ViewThatFits`
+            // sizes itself to whichever child it picked, so without this an
+            // empty Projects box shrinks the whole thing to the width of
+            // "None registered." instead of filling the bubble.
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -90,6 +95,12 @@ struct ChatPanelView: View {
             if showProfile { ProfileSettingsView(profiles: profiles, appearance: appearance) }
             if showProjects { projectsSection }
         }
+        // The sections used to sit directly in the panel's own stack, which is a
+        // fixed width, so they filled it for free. Inside a scroll view they are
+        // offered their ideal width instead — which for an empty Projects box is
+        // just the width of "None registered.", leaving a box narrower than the
+        // bubble. Ask for the full width back explicitly.
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var emptyTranscriptHint: String {
@@ -634,6 +645,11 @@ struct ChatPanelView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+        // Settings and Profile fill the bubble for free because each holds a
+        // text field, which is greedy horizontally. Projects holds none, so with
+        // nothing registered the box shrank to the width of "None registered."
+        // and sat visibly narrower than the two beside it.
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(10)
         .background(Color.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
     }
