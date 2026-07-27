@@ -389,18 +389,27 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
         return arguments
     }
 
-    /// A deliberately small environment. `HOME` is required — that is where the
-    /// user's Claude Code credentials and settings live. `PATH` includes the
-    /// binary's own directory so Claude Code can find tools shipped beside it.
-    static func childEnvironment(for installation: ClaudeCodeInstallation) -> [String: String] {
+    /// A deliberately small environment, with one important exception.
+    ///
+    /// `HOME` is required — that is where the user's Claude Code credentials and
+    /// settings live. `PATH` has to carry the user's real one, not launchd's:
+    /// Claude Code launches other programs (an MCP server started with `node`,
+    /// a Bash command calling a Homebrew or nvm tool), and those aren't on the
+    /// bare system path a Finder-launched app inherits.
+    static func childEnvironment(
+        for installation: ClaudeCodeInstallation,
+        loginPath: String? = LoginShellPath.resolve()
+    ) -> [String: String] {
         let parent = ProcessInfo.processInfo.environment
         var environment: [String: String] = [:]
         for key in ["HOME", "USER", "LOGNAME", "LANG", "TMPDIR", "SHELL"] {
             if let value = parent[key] { environment[key] = value }
         }
-        let binDirectory = installation.executableURL.deletingLastPathComponent().path
-        let base = parent["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin"
-        environment["PATH"] = base.contains(binDirectory) ? base : "\(binDirectory):\(base)"
+        environment["PATH"] = LoginShellPath.merged(
+            binaryDirectory: installation.executableURL.deletingLastPathComponent().path,
+            loginPath: loginPath,
+            inherited: parent["PATH"]
+        )
         // Never inherited: an exported key would silently bill the user's API
         // credit for a session they asked to run on their subscription.
         environment.removeValue(forKey: "ANTHROPIC_API_KEY")

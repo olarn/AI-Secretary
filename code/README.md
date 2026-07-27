@@ -209,6 +209,29 @@ Add `in <project>` to choose a project, e.g. `status in AI-Secretary`. Type
 `help` for the same summary in-app. Anything not clearly matching an operation
 is reported as not understood — the assistant never invents a command.
 
+### MCP servers
+
+Nothing to configure here. MCP servers are read from your own Claude Code
+configuration, and that configuration is per directory — a server set up for a
+folder is available whenever the app is working in that folder, because the
+registered project *is* the session's working directory.
+
+Local and localhost servers work: the child process isn't sandboxed, so a stdio
+server or one listening on `127.0.0.1` behaves exactly as it does in your
+terminal. The app passes neither `--bare` nor `--strict-mcp-config`, so
+discovery is left alone.
+
+Two things worth knowing:
+
+- The child gets your **login shell's `PATH`**, resolved once in the background.
+  Without it a stdio server configured as `node …/index.js` fails to start from
+  a Finder-launched app, because launchd's environment has no `PATH` and nvm,
+  Homebrew and friends are invisible.
+- **MCP tools are not gated by the read-only allowlist.** Observed: an
+  `mcp__…` tool ran without prompting. Configuring a server in Claude Code is
+  itself the grant; if you want a confirmation step for those, they'd have to be
+  denied by default and routed through the same widen prompt as `Write`.
+
 ### Projects and approval
 
 Work only ever runs inside a project you registered, via **Projects → Add

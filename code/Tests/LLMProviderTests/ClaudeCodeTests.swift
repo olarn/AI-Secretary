@@ -525,3 +525,66 @@ final class AgentActivityTests: XCTestCase {
         XCTAssertEqual(ClaudeCodeProvider.activityDetail(tool: "Glob", input: [:]), "Glob")
     }
 }
+
+// MARK: - The PATH handed to Claude Code
+
+/// A Finder-launched app inherits launchd's environment, where PATH is unset.
+/// Claude Code itself is found by absolute path, but the programs *it* launches
+/// are not: a stdio MCP server configured as `node …/index.js` reported
+/// `status: "failed"` from the packaged app and `connected` from a terminal.
+final class LoginShellPathTests: XCTestCase {
+    private let binary = "/Users/someone/.local/bin"
+
+    func testTheUsersOwnPathIsIncluded() {
+        let merged = LoginShellPath.merged(
+            binaryDirectory: binary,
+            loginPath: "/Users/someone/.nvm/versions/node/v22.16.0/bin:/opt/homebrew/bin",
+            inherited: "/usr/bin:/bin"
+        )
+        XCTAssertTrue(merged.contains("/Users/someone/.nvm/versions/node/v22.16.0/bin"),
+                      "node has to be reachable or stdio MCP servers can't start: \(merged)")
+        XCTAssertTrue(merged.contains("/opt/homebrew/bin"))
+    }
+
+    func testTheBinaryDirectoryComesFirst() {
+        let merged = LoginShellPath.merged(
+            binaryDirectory: binary, loginPath: "/opt/homebrew/bin", inherited: nil
+        )
+        XCTAssertTrue(merged.hasPrefix(binary + ":"), "Got: \(merged)")
+    }
+
+    func testTheSystemMinimumIsAlwaysThere() {
+        let merged = LoginShellPath.merged(binaryDirectory: binary, loginPath: nil, inherited: nil)
+        for directory in ["/usr/bin", "/bin", "/usr/sbin", "/sbin"] {
+            XCTAssertTrue(merged.contains(directory), "Missing \(directory) in \(merged)")
+        }
+    }
+
+    /// A shell that won't answer must not leave the child with nothing usable.
+    func testAnUnavailableLoginShellStillLeavesAWorkingPath() {
+        let merged = LoginShellPath.merged(
+            binaryDirectory: binary, loginPath: nil, inherited: "/usr/bin:/bin"
+        )
+        XCTAssertTrue(merged.contains(binary))
+        XCTAssertTrue(merged.contains("/usr/bin"))
+    }
+
+    func testDirectoriesAreNotRepeated() {
+        let merged = LoginShellPath.merged(
+            binaryDirectory: "/usr/bin",
+            loginPath: "/usr/bin:/opt/homebrew/bin",
+            inherited: "/usr/bin:/bin"
+        )
+        let occurrences = merged.split(separator: ":").filter { $0 == "/usr/bin" }
+        XCTAssertEqual(occurrences.count, 1, "Got: \(merged)")
+    }
+
+    func testTheChildEnvironmentCarriesIt() {
+        let environment = ClaudeCodeProvider.childEnvironment(
+            for: ClaudeCodeInstallation(executableURL: URL(fileURLWithPath: "\(binary)/claude")),
+            loginPath: "/Users/someone/.nvm/versions/node/v22.16.0/bin"
+        )
+        XCTAssertTrue(environment["PATH"]?.contains(".nvm") == true, "Got: \(environment["PATH"] ?? "-")")
+        XCTAssertNil(environment["ANTHROPIC_API_KEY"], "Still stripped")
+    }
+}

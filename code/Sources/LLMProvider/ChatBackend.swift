@@ -95,6 +95,9 @@ public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, @unchecke
         if let cached = availability { return cached }
 
         let found = locator.locate()
+        // Same background pass: resolving the login shell is slow and the first
+        // turn shouldn't pay for it.
+        _ = LoginShellPath.resolve()
 
         let observer: (@Sendable (ClaudeCodeAvailability) -> Void)?
         lock.lock()
