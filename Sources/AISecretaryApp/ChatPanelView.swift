@@ -116,9 +116,16 @@ struct ChatPanelView: View {
     private var pendingDecisionView: some View {
         switch secretary.pendingDecision {
         case .approval(let request, _):
+            // Anything that isn't read-only leaves a mark somewhere — currently
+            // that means sending a file off this Mac. Give it a louder colour so
+            // it never looks like the routine local approval.
+            let leavesTheMachine = request.actionClass != .readOnly
             VStack(alignment: .leading, spacing: 6) {
-                Label("Approval required", systemImage: "lock.shield")
-                    .font(.caption.bold())
+                Label(
+                    leavesTheMachine ? "Send to Claude?" : "Approval required",
+                    systemImage: leavesTheMachine ? "paperplane.circle" : "lock.shield"
+                )
+                .font(.caption.bold())
                 Text(request.commandSummary)
                     .font(.caption.monospaced())
                 Text("in \(request.project.name) · \(request.actionClass.humanDescription)")
@@ -133,7 +140,10 @@ struct ChatPanelView: View {
                 .font(.caption)
             }
             .padding(10)
-            .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+            .background(
+                (leavesTheMachine ? Color.red : Color.orange).opacity(0.12),
+                in: RoundedRectangle(cornerRadius: 8)
+            )
 
         case .projectChoice(let candidates, _):
             VStack(alignment: .leading, spacing: 6) {

@@ -8,6 +8,9 @@ public enum Intent: Equatable, Sendable {
     case codeTool(operation: CodeToolOperation, projectQuery: String?)
     /// Read a directory listing or a text file inside a named project.
     case fileTool(operation: FileOperation, projectQuery: String?)
+    /// Read a file *and send it to the model* to summarise, explain, analyse,
+    /// review or describe. Separate from `fileTool` because it leaves the machine.
+    case understandFile(request: FileUnderstanding, projectQuery: String?)
     /// Understood, but nothing to execute.
     case help
     /// Not understood; the Secretary will say so rather than guess.
@@ -48,6 +51,21 @@ public final class RuleBasedIntentClassifier: IntentClassifying {
     private let weakListPrefixes = ["list ", "files ", "ls ", "dir "]
     private let listExact: Set<String> = ["list", "ls", "dir", "files", "list files", "show files"]
 
+    /// Verbs that mean "tell me about this file". Every one of them is a common
+    /// conversational opener too ("explain how actors work", "review my plan"),
+    /// so unlike the read/list verbs these *always* require a path-like argument
+    /// — a project scope alone is not enough to make them a file operation.
+    private let understandPrefixes: [(String, FileUnderstanding.Task)] = [
+        ("summarize ", .summarize),
+        ("summarise ", .summarize),
+        ("summary of ", .summarize),
+        ("explain ", .explain),
+        ("analyze ", .analyze),
+        ("analyse ", .analyze),
+        ("review ", .review),
+        ("describe ", .describe)
+    ]
+
     public func classify(_ text: String) -> Intent {
         let original = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalized = original.lowercased()
@@ -78,6 +96,12 @@ public final class RuleBasedIntentClassifier: IntentClassifying {
         let (head, project) = splitProject(original)
         let headLower = head.lowercased()
 
+        // Understand: checked first so "summarize README.md" doesn't fall into
+        // the read path and merely dump the file.
+        if let understanding = understandIntent(head: head, headLower: headLower) {
+            return .understandFile(request: understanding, projectQuery: project)
+        }
+
         // Read: explicit phrasing always counts; weak verbs need a scope or a
         // path-like argument so they don't capture ordinary chat.
         for prefix in strongReadPrefixes where headLower.hasPrefix(prefix) {
@@ -107,6 +131,38 @@ public final class RuleBasedIntentClassifier: IntentClassifying {
             guard project != nil || looksLikePath(path) else { return nil }
             return .fileTool(operation: .listDirectory(relativePath: path.isEmpty ? "." : path),
                              projectQuery: project)
+        }
+
+        return nil
+    }
+
+    /// Parses "summarize <path>", "explain <path>", "what does <path> do".
+    /// Returns nil unless the argument actually looks like a path, so ordinary
+    /// requests ("explain how actors work") stay conversation.
+    private func understandIntent(head: String, headLower: String) -> FileUnderstanding? {
+        // "what does <path> do?" — the one non-prefix phrasing worth supporting.
+        if headLower.hasPrefix("what does ") {
+            // Trailing punctuation comes off first so the "… do?" suffix matches.
+            var body = cleanPath(String(head.dropFirst("what does ".count)))
+            for suffix in [" do", " contain", " say"] where body.lowercased().hasSuffix(suffix) {
+                body = String(body.dropLast(suffix.count))
+                break
+            }
+            let path = cleanPath(body)
+            return looksLikePath(path) ? FileUnderstanding(relativePath: path, task: .explain) : nil
+        }
+
+        for (prefix, task) in understandPrefixes where headLower.hasPrefix(prefix) {
+            var body = String(head.dropFirst(prefix.count))
+            // "summarize the file src/Main.swift" — drop a leading article so the
+            // path heuristic sees the path itself.
+            for article in ["the file ", "the ", "this ", "my "] where body.lowercased().hasPrefix(article) {
+                body = String(body.dropFirst(article.count))
+                break
+            }
+            let path = cleanPath(body)
+            guard looksLikePath(path) else { return nil }
+            return FileUnderstanding(relativePath: path, task: task)
         }
 
         return nil

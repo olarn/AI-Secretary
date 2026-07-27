@@ -118,17 +118,36 @@ Build in phases.
 - Claude Code adapter for approved coding tasks.
 - Basic Git status/diff and test-result reporting.
 
-### Phase 3: Voice
+### Phase 3: Chat with me.
 
-- Push-to-talk or explicit voice activation.
-- Speech-to-text, text-to-speech, interruption behavior, and privacy controls.
-- Voice must follow the same approval and auditing model as chat.
+- Integration with Claude as a mask app.
 
-### Phase 4: External tools and proactive assistance
+### Phase 4: Access files/ folder. Read files content and understand it
+
+- MCP-based integrations such as read folders / files content. 
+- Understand files content. Be able to summerize, analytic, suggestion, and more.
+- Only work with folders/files that I add in the project.
+- Pull data from the internet that can work with local folders and files.
+
+### Phase 5: Setings
+
+- เพิ่มหน้า setting (ใช้ window chat เดิมได้)
+- เพิ่ม increase / decrease font size.
+- เพิ่ม increase / decrease ขนาดหน้าต่าง chat
+### add more features 
+- เวลา AI ตอบ chat ถ้า position อยู่ที่ bottom position ให้ auto scroll เวลา message จาก AI response กลับมา แต่ถ้า user scroll ขึ้นไปอ่าน message เก่าๆ ไม่ต้อง auto scroll จนหว่า user จะ scroll ลงมาล่างสุด
+
+### Phase 6: External tools and proactive assistance
 
 - MCP-based integrations such as calendar, Slack, email, and knowledge sources.
 - Notifications only with user-configured rules.
 - Proactive behaviors must be transparent, rate-limited, and easy to disable.
+
+### Phase 6: Voice
+
+- Push-to-talk or explicit voice activation.
+- Speech-to-text, text-to-speech, interruption behavior, and privacy controls.
+- Voice must follow the same approval and auditing model as chat.
 
 ## Security and privacy
 

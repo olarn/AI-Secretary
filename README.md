@@ -19,15 +19,26 @@ model is `claude-sonnet-5` at `medium` effort, switchable in-chat with `/model`
 and `/effort`. Chat is a conversation only — the model is not given tool access
 to the Git adapter.
 
-**Phase 4 — File & folder access (read-only, done).** The Secretary can now
+**Phase 4 — Access files and understand them (in progress).** The Secretary can
 list a directory or read a text file inside a registered project, through the
 same approval-gated pipeline as Git. Paths are always project-relative and
 verified to stay inside the project root — `..`, absolute paths, and symlinks
 that point outside are refused before anything is read.
 
-Not built yet: giving Claude tool-use access to run project tools, web search,
-voice, MCP integrations, and any action that writes, deletes, installs, or
-changes Git history.
+It can also *understand* a file: `summarize`, `explain`, `analyze`, `review` or
+`describe` a path, and the file's contents are sent to Claude for an answer.
+Because that takes data off the machine it is classed `externalNetwork`, not
+read-only: it asks every single time and names the destination model in the
+prompt. Approving "read files here" never becomes permission to upload them.
+
+Still open in Phase 4: pulling data from the internet to work alongside local
+files. The file access is a native adapter rather than an MCP server — MCP would
+add a process and protocol boundary around a capability the app already has, so
+it is deferred until there is an integration that actually needs it.
+
+Not built yet: giving Claude tool-use access to run project tools by itself, web
+search, settings/appearance (Phase 5), voice, MCP integrations, and any action
+that writes, deletes, installs, or changes Git history.
 
 ### Chatting
 
@@ -114,6 +125,25 @@ It also reads files in a registered project (read-only):
 Paths are project-relative and bound-checked: anything resolving outside the
 project root (via `..`, an absolute path, or a symlink) is refused, binary
 files are declined rather than dumped, and reads are size-capped.
+
+And it can read a file and tell you about it. These **send the file's contents
+to Claude**, so they ask permission every time — the prompt turns red and names
+the model:
+
+| Say | Does |
+|---|---|
+| `summarize <path>` | What the file is for and its main parts |
+| `explain <path>` / `what does <path> do` | How it works, for someone new to it |
+| `analyze <path>` | Structure, risks, anything surprising |
+| `review <path>` | Concrete suggested improvements |
+| `describe <path>` | A brief description of the contents |
+
+These verbs only trigger on something that looks like a path, so "explain how
+actors work" stays an ordinary conversation. Files are capped at 60 KB on this
+path (lower than the local read cap — bytes on the wire cost money), the
+contents are wrapped in `<file>` tags and declared untrusted data to the model,
+and the bytes are sent once rather than being kept in the conversation history
+and re-sent on every later turn.
 
 Add `in <project>` to choose a project, e.g. `status in AI-Secretary`. Type
 `help` for the same summary in-app. Anything not clearly matching an operation
@@ -217,10 +247,12 @@ read without re-prompting — the same approve-once model as Git, applied to a
 higher-stakes capability.
 
 Read-only work is the only class that can run without re-prompting, and only
-after the project has been approved once. Every other action class
-(local-write, destructive, Git-history-changing, dependency-installing,
-external-network) is defined to require approval each time; none is implemented
-yet.
+after the project has been approved once. Understanding a file is deliberately
+*not* read-only — it is `externalNetwork`, so it asks every time, and a prior
+read-only approval for the same project and tool does not authorise it. The
+remaining classes (local-write, destructive, Git-history-changing,
+dependency-installing) are defined to require approval each time; none is
+implemented yet.
 
 ## Known limitations
 
@@ -234,7 +266,8 @@ yet.
 
 ## Suggested next step
 
-Extend the same approval-gated pipeline to a `ClaudeCodeAdapter` for genuine
-coding tasks, starting read-only (inspect and summarise a codebase) before any
-operation that writes files, so the permission model is exercised end-to-end
-before anything can modify a project.
+Finish Phase 4 by adding the internet half: a fetch/search adapter in the same
+`externalNetwork` class, so a page can be pulled and reasoned about alongside a
+local file. After that, either Phase 5 (settings, font and window size, sticky
+autoscroll) or giving Claude tool-use access so it can choose these operations
+itself instead of relying on the keyword grammar.
