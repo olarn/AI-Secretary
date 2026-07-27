@@ -440,6 +440,9 @@ final class AgentSessionTests: XCTestCase {
         XCTAssertTrue(entries[0].text.contains("a.md") && entries[0].text.contains("b.md"))
     }
 
+    /// The change is announced in the same dashed-box style as activity itself
+    /// — it's a status change, not something she's saying — and turning off
+    /// clears the boxes from earlier in the turn, leaving only the announcement.
     func testTurningItOffRemovesWhatWasShownAndSaysSo() async {
         let secretary = makeSecretary(projects: [project(grantingAgent: true)])
         provider.activityForNextTurn = [AgentActivity(kind: .tool, detail: "Read: a.md")]
@@ -450,9 +453,10 @@ final class AgentSessionTests: XCTestCase {
         secretary.toggleActivityVisibility()
 
         XCTAssertFalse(secretary.showsActivity)
-        XCTAssertFalse(secretary.transcript.contains { $0.kind == .activity })
-        XCTAssertTrue(secretary.transcript.last?.text.contains("to myself") == true,
-                      "The change should be announced: \(secretary.transcript.last?.text ?? "-")")
+        let boxes = secretary.transcript.filter { $0.kind == .activity }
+        XCTAssertEqual(boxes.count, 1, "Only the announcement itself should remain")
+        XCTAssertTrue(boxes.last?.text.contains("Hiding") == true,
+                      "The change should be announced: \(boxes.last?.text ?? "-")")
     }
 
     /// A first run is quiet; the choice is remembered after that.
@@ -479,18 +483,24 @@ final class AgentSessionTests: XCTestCase {
         secretary.toggleActivityVisibility()
 
         XCTAssertTrue(secretary.showsActivity)
-        XCTAssertTrue(secretary.transcript.last?.text.contains("show what I'm doing") == true,
-                      "Got: \(secretary.transcript.last?.text ?? "-")")
+        let last = secretary.transcript.last
+        XCTAssertEqual(last?.kind, .activity)
+        XCTAssertTrue(last?.text.contains("Showing") == true, "Got: \(last?.text ?? "-")")
     }
 
     func testWithItOffNoActivityEntryIsAdded() async {
         let secretary = makeSecretary(projects: [project(grantingAgent: true)])
         secretary.toggleActivityVisibility()
+        // The toggle-off announcement itself is the one .activity entry so far;
+        // what must NOT happen is a second one for this turn's steps.
+        let countAfterToggle = secretary.transcript.filter { $0.kind == .activity }.count
+
         provider.activityForNextTurn = [AgentActivity(kind: .tool, detail: "Read: a.md")]
         secretary.submit("hello")
         await waitUntilIdle()
 
-        XCTAssertFalse(secretary.transcript.contains { $0.kind == .activity })
+        XCTAssertEqual(secretary.transcript.filter { $0.kind == .activity }.count, countAfterToggle,
+                       "No box should be added for this turn's steps while hidden")
         XCTAssertFalse(secretary.activity.isEmpty, "Still collected, just not shown")
     }
 

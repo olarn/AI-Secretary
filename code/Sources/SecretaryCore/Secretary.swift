@@ -615,13 +615,15 @@ public final class Secretary {
     public func toggleActivityVisibility() {
         showsActivity.toggle()
         activityPreference.showsActivity = showsActivity
+        // Announced in the same dashed-box style as activity itself, not as a
+        // spoken reply — this is a status change, not something she's saying.
         if showsActivity {
-            say(.secretary, "I'll show what I'm doing as I work.")
+            transcript.append(TranscriptEntry(speaker: .secretary, kind: .activity, text: "▸ Showing what I'm doing"))
             // Nothing to back-fill mid-turn: the entry appears on the next step.
         } else {
             transcript.removeAll { $0.kind == .activity }
             activityEntryID = nil
-            say(.secretary, "I'll keep the details to myself.")
+            transcript.append(TranscriptEntry(speaker: .secretary, kind: .activity, text: "▸ Hiding what I'm doing"))
         }
     }
 
