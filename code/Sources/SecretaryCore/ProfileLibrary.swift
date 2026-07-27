@@ -34,11 +34,17 @@ public final class ProfileLibrary {
         let saved = (try? store.load()) ?? ProfileSelection()
         // First launch, or a file that somehow lost its contents: the built-in
         // character is seeded so the app always has someone to be.
-        let profiles = saved.profiles.isEmpty ? [.miku] : saved.profiles
+        let seeded = saved.profiles.isEmpty
+        let profiles = seeded ? [.miku] : saved.profiles
         self.profiles = profiles
         self.activeID = saved.activeID.flatMap { id in
             profiles.contains(where: { $0.id == id }) ? id : nil
         } ?? profiles[0].id
+
+        // Written out immediately rather than on the first edit, so a fresh
+        // install has a real default profile on disk — Miku, active — instead of
+        // one that only exists in memory until something changes.
+        if seeded || saved.activeID != activeID { persist() }
     }
 
     public var active: SecretaryProfile {

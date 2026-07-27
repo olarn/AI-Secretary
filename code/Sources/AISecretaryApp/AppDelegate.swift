@@ -226,6 +226,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Clamps a coordinate into a range, tolerating an inverted one: a window
+    /// taller than the screen has no valid origin, and the top edge is the less
+    /// bad end to lose.
+    private func clamped(_ value: CGFloat, min lower: CGFloat, max upper: CGFloat) -> CGFloat {
+        min(max(value, lower), max(lower, upper))
+    }
+
     /// Repositions the bubble relative to the character's current frame.
     /// Flips horizontally (mirroring the tail) if the natural placement
     /// would run off the left/right screen edge, and flips vertically
@@ -247,9 +254,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let aboveY = characterFrame.minY + characterFrame.height + characterGap
         let flippedVertically = aboveY + chatSize.height > visibleFrame.maxY - screenMargin
-        let originY = flippedVertically
-            ? characterFrame.minY - chatSize.height - characterGap
-            : aboveY
+        // Clamped like the horizontal axis, and for the same reason. A tall
+        // panel — one with a settings section open — doesn't fit above the
+        // character, and flipping it below a character that sits near the Dock
+        // put the whole window off the bottom of the screen: the app looked like
+        // it had vanished. Staying on screen wins over the tail's ideal side.
+        let originY = clamped(
+            flippedVertically ? characterFrame.minY - chatSize.height - characterGap : aboveY,
+            min: visibleFrame.minY + screenMargin,
+            max: visibleFrame.maxY - chatSize.height - screenMargin
+        )
 
         chatLayout.isMirrored = mirrored
         chatLayout.isFlippedVertically = flippedVertically

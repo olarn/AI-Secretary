@@ -173,11 +173,25 @@ struct ProfileSettingsView: View {
     /// One required picture, plus optional ones per state. Anything missing
     /// falls back to the default picture, and a profile with no pictures at all
     /// keeps the built-in avatar.
+    ///
+    /// Laid out as chips flowing left-to-right and wrapping, each opening a menu
+    /// on click — the same shape as the Model and Effort pickers. Seven full-width
+    /// rows of buttons made the section taller than the panel; this fits in two.
     private var picturesSection: some View {
         VStack(alignment: .leading, spacing: 4) {
-            pictureRow(state: nil, label: "Default")
-            ForEach(ProfileArtwork.artworkStates, id: \.rawValue) { state in
-                pictureRow(state: state, label: state.rawValue.capitalized)
+            Text("Pictures")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            // Fixed rows rather than a LazyVGrid: a lazy container collapses to
+            // nothing when the panel proposes it a squeezed height, which is
+            // exactly what happens with a section open in a fixed-height bubble.
+            ForEach(Array(Self.chipRows.enumerated()), id: \.offset) { _, row in
+                HStack(spacing: 4) {
+                    ForEach(row, id: \.label) { chip in
+                        pictureChip(state: chip.state, label: chip.label)
+                    }
+                    Spacer(minLength: 0)
+                }
             }
             Text("Only the default is needed — states without a picture use it.")
                 .font(.system(size: 9))
@@ -185,29 +199,48 @@ struct ProfileSettingsView: View {
         }
     }
 
-    private func pictureRow(state: AssistantState?, label: String) -> some View {
+    /// One chip per picture slot, wrapped into rows: the default first, then the
+    /// states in lifecycle order, left to right and top to bottom.
+    private struct Chip {
+        let state: AssistantState?
+        let label: String
+    }
+
+    private static let chipRows: [[Chip]] = {
+        let chips = [Chip(state: nil, label: "Default")]
+            + ProfileArtwork.artworkStates.map {
+                Chip(state: $0, label: $0.rawValue.capitalized)
+            }
+        return stride(from: 0, to: chips.count, by: 3).map {
+            Array(chips[$0..<min($0 + 3, chips.count)])
+        }
+    }()
+
+    private func pictureChip(state: AssistantState?, label: String) -> some View {
         let id = profiles.activeID
         let hasPicture = state.map { profiles.statesWithArtwork(for: id).contains($0) }
             ?? profiles.hasDefaultArtwork(for: id)
 
-        return HStack(spacing: 6) {
-            Image(systemName: hasPicture ? "checkmark.circle.fill" : "circle.dashed")
-                .font(.system(size: 9))
-                .foregroundStyle(hasPicture ? Color.green : .secondary)
-            Text(label)
-                .font(.caption2)
-                .foregroundStyle(state == nil ? .primary : .secondary)
-            Spacer(minLength: 4)
-            Button(hasPicture ? "Replace" : "Choose…") { choosePicture(for: state) }
-                .buttonStyle(.bordered)
-                .font(.system(size: 9))
+        return Menu {
+            Button(hasPicture ? "Replace picture…" : "Choose picture…") {
+                choosePicture(for: state)
+            }
             if hasPicture {
                 Button("Clear") { profiles.clearArtwork(state: state, for: id) }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 9))
-                    .foregroundStyle(.secondary)
+            }
+        } label: {
+            HStack(spacing: 3) {
+                Image(systemName: hasPicture ? "checkmark.circle.fill" : "circle.dashed")
+                    .font(.system(size: 8))
+                    .foregroundStyle(hasPicture ? Color.green : .secondary)
+                Text(label)
+                    .font(.system(size: 10))
+                    .lineLimit(1)
             }
         }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
         // The checkmarks are read from disk, so a change has to invalidate them.
         .id("\(label)-\(profiles.artworkRevision)-\(id)")
     }

@@ -103,6 +103,24 @@ final class ProfileLibraryTests: XCTestCase {
         XCTAssertEqual(library.active.name, "Miku")
     }
 
+    /// A fresh install must have a real default profile on disk, not one that
+    /// exists only in memory until the user changes something.
+    func testTheSeededDefaultIsWrittenOutOnAFirstRun() throws {
+        let (_, store) = makeLibrary()
+        let saved = try store.load()
+        XCTAssertEqual(saved.profiles.map(\.name), ["Miku"])
+        XCTAssertEqual(saved.activeID, SecretaryProfile.miku.id, "and it's the active one")
+    }
+
+    /// Seeding twice would multiply the built-in character, so its id is fixed.
+    func testRelaunchingDoesNotSeedASecondMiku() throws {
+        let (first, store) = makeLibrary()
+        _ = first
+        let reopened = ProfileLibrary(store: store, artwork: ProfileArtwork(root: URL(fileURLWithPath: "/tmp/none")))
+        XCTAssertEqual(reopened.profiles.count, 1)
+        XCTAssertEqual(reopened.active.id, SecretaryProfile.miku.id)
+    }
+
     func testTheActiveProfileIsRemembered() {
         let kai = SecretaryProfile(name: "Kai")
         let (library, _) = makeLibrary(

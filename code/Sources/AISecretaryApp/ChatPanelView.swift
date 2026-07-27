@@ -7,7 +7,7 @@ import LLMProvider
 
 /// The conversation panel, rendered as a manga-style speech bubble anchored to
 /// the character. Shows the transcript, the input field, whatever decision the
-/// Secretary is waiting on, and collapsible Settings/Projects/Debug sections.
+/// Secretary is waiting on, and collapsible Settings/Profile/Projects sections.
 struct ChatPanelView: View {
     let machine: AssistantStateMachine
     let secretary: Secretary
@@ -20,11 +20,9 @@ struct ChatPanelView: View {
     let onClose: () -> Void
 
     @State private var draft: String = ""
-    @State private var showDebug = false
     @State private var showProjects = false
     @State private var showSettings = false
     @State private var showProfile = false
-    @State private var lastRejection: String?
     @State private var addProjectNote: String?
     @State private var apiKeyDraft: String = ""
     @State private var settingsNote: String?
@@ -40,7 +38,6 @@ struct ChatPanelView: View {
             if showSettings { settingsSection }
             if showProfile { ProfileSettingsView(profiles: profiles, appearance: appearance) }
             if showProjects { projectsSection }
-            if showDebug { debugSection }
             footer
         }
         .padding(18)
@@ -320,7 +317,9 @@ struct ChatPanelView: View {
     }
 
     /// A table laid out as a grid, scrolling sideways on its own when it's
-    /// wider than the bubble. Only the table scrolls — the conversation itself
+    /// wider than the bubble. Cells use the body text size, not a smaller
+    /// caption: a table is content, so it has to grow with +/- like the rest of
+    /// the answer. Only the table scrolls — the conversation itself
     /// must not, or every wide answer would drag the whole thread off-screen.
     private func tableView(_ table: MarkdownTable) -> some View {
         ScrollView(.horizontal, showsIndicators: true) {
@@ -328,7 +327,7 @@ struct ChatPanelView: View {
                 GridRow {
                     ForEach(Array(table.header.enumerated()), id: \.offset) { _, cell in
                         Text(inlineMarkdown(cell))
-                            .font(.system(size: appearance.settings.secondaryFontSize, weight: .bold))
+                            .font(.system(size: appearance.settings.fontSize, weight: .bold))
                     }
                 }
                 Divider().gridCellUnsizedAxes(.horizontal)
@@ -336,7 +335,7 @@ struct ChatPanelView: View {
                     GridRow {
                         ForEach(Array(row.enumerated()), id: \.offset) { _, cell in
                             Text(inlineMarkdown(cell))
-                                .font(.system(size: appearance.settings.secondaryFontSize))
+                                .font(.system(size: appearance.settings.fontSize))
                         }
                     }
                 }
@@ -365,10 +364,10 @@ struct ChatPanelView: View {
     private func activityBubble(_ entry: TranscriptEntry) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Label("Working", systemImage: "gearshape.2")
-                .font(.system(size: 9, weight: .semibold))
+                .font(.system(size: appearance.settings.footnoteFontSize, weight: .semibold))
                 .foregroundStyle(.secondary)
             Text(entry.text)
-                .font(.system(size: 10, design: .monospaced))
+                .font(.system(size: appearance.settings.secondaryFontSize, design: .monospaced))
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
@@ -572,39 +571,11 @@ struct ChatPanelView: View {
         .background(Color.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
     }
 
-    private var debugSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Debug — drive the state machine directly")
-                .font(.caption2.bold())
-                .foregroundStyle(.secondary)
-
-            HStack(spacing: 6) {
-                debugButton("Listen") { send(.userBeganInput, "debug") }
-                debugButton("Think") { send(.beginInterpreting, "debug") }
-                debugButton("Work") { send(.beginExecuting, "debug") }
-            }
-            HStack(spacing: 6) {
-                debugButton("Succeed") { send(.succeeded, "debug") }
-                debugButton("Fail") { send(.failed, "debug") }
-                debugButton("Ack") { send(.acknowledge, "debug") }
-            }
-
-            if let lastRejection {
-                Text(lastRejection)
-                    .font(.system(size: 9))
-                    .foregroundStyle(.red)
-            }
-        }
-        .padding(10)
-        .background(Color.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
-    }
-
     private var footer: some View {
         HStack(spacing: 10) {
             Toggle("Settings", isOn: $showSettings)
             Toggle("Profile", isOn: $showProfile)
             Toggle("Projects", isOn: $showProjects)
-            Toggle("Debug", isOn: $showDebug)
             Spacer()
         }
         .toggleStyle(.button)
@@ -636,18 +607,4 @@ struct ChatPanelView: View {
         settingsNote = "API key cleared."
     }
 
-    private func debugButton(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(title) {
-            lastRejection = nil
-            action()
-        }
-        .buttonStyle(.bordered)
-        .font(.caption2)
-    }
-
-    private func send(_ event: AssistantEvent, _ reason: String) {
-        if case .failure(let error) = machine.send(event, reason: reason) {
-            lastRejection = "Rejected: \(error)"
-        }
-    }
 }
