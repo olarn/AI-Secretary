@@ -138,23 +138,31 @@ Build in phases.
 - เพิ่ม increase / decrease ขนาดหน้าต่าง chat (มีปุ่มแค่ + -) แล้วหน้าต่างจะยืดหดได้ (แนวตั้งเท่านั้น) โดย minimum เท่าขนาด default และ max ไม่เกินขนาดหน้าจอ
 - เลือก model และ effort ได้จากหน้า setting (คลิกที่ชื่อแล้วมี popup ให้เลือก) โดย default ใช้ค่าเดียวกับ Claude Code ของ user และบอกการเปลี่ยนแปลงใน chat
 
-### Phase 5: External tools and proactive assistance
+### Phase 5: Secretary Profiles
+
+- ขยาย/ย่อ app size ได้ 3 ระดับ (S,M,L - เล็กลง/ใหญ่ขึ้น 30%) - ขนาดปัจจุบันคือ M
+- สร้าง profile ใหม่ได้
+   - ตั้งชื่อได้ ชื่อจะแสดงใน chat (เช่น ตอนนี้คือ Miku)
+   - upload รูป profile ใหม่ได้ (save ใน local storage)
+   - รูป profile จะแสดงใน bubble ของ app 
+   - upload รูป แยกตาม activity ได้ เช่น Idle, Thinking, ... ซึ่งจะ require แค่รูปเดียวเป็น defail ของ profile
+   - กำหนดเพศได้ เช่น เพศ หญิง/ชาย/LBGTQ+ (นอกจากชายหญิง กรอก free text ได้) 
+   - กำหนดวัยได้ เด็ก/วัยรุ่น/ผู้ใหญ่ หรือกำหนดอายุเลย
+   - กำหนดสไตล์ได้ เช่น มืออาชีพ เพื่อน เป็น free text ถ้าไม่เข้าใจ ใช้ default คือ มืออาชีพ (ไม่อนุญาติให้สื่อไปทางความสัมพันธ์ทางเพศ)
+- เปลี่ยน profile ได้ App จะ refresh ทันที
+- App จะแสดงรูปที่แตกต่างกันตาม activity ที่กำลังทำ (เปลี่ยนเมื่อ thinking หรือ idle) 
+- เมื่อ activity แต่ไม่มีรูป ให้ใช้รูป default รูปเดียว
+
+### Phase 6: External tools and proactive assistance
 
 - MCP-based integrations such as calendar, Slack, email, and knowledge sources.
-- Notifications only with user-configured rules.
 - Proactive behaviors must be transparent, rate-limited, and easy to disable.
 
-### Phase 6: Voice
+### Phase 7: Voice
 
 - Push-to-talk or explicit voice activation.
 - Speech-to-text, text-to-speech, interruption behavior, and privacy controls.
 - Voice must follow the same approval and auditing model as chat.
-
-### Phase 7: Personality
-
-- upload รูปเลขา ได้ AI จะจัดรูปให้อยู่ใน bubble ให้แล้ว save ใน local storage
-- เมื่อ upload รูป AI จะช่วยกำหนดเพศและเสนอ user ว่า "อยากให้ตอบด้วย personality ไหม เช่น เพศ หญิง/ชาย เด็ก/วัยรุ่น/ผู้ใหญ่ มืออาชีพ" 
-- ตั้งชื่อได้ ชื่อจะแสดงใน chat
 
 ## Security and privacy
 

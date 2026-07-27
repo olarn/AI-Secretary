@@ -10,9 +10,27 @@ import SecretaryCore
 struct CharacterView: View {
     let machine: AssistantStateMachine
     let secretary: Secretary
+    let profiles: ProfileLibrary
+    let appearance: Appearance
     let onTap: () -> Void
 
+    /// S/M/L is a whole-character zoom rather than a re-layout: the badge, the
+    /// halo, and the bubble's tail are all positioned against these sizes, so
+    /// scaling the finished view keeps them in the same relationship. The frame
+    /// is then the scaled size, since `scaleEffect` alone doesn't change layout.
     var body: some View {
+        content
+            .scaleEffect(appearance.settings.appScale.factor)
+            .frame(
+                width: CharacterView.baseSize * appearance.settings.appScale.factor,
+                height: CharacterView.baseSize * appearance.settings.appScale.factor
+            )
+    }
+
+    /// The size the character has always been drawn at — `AppScale.medium`.
+    static let baseSize: CGFloat = 120
+
+    private var content: some View {
         VStack(spacing: 6) {
             ZStack(alignment: .bottomTrailing) {
                 Circle()
@@ -43,9 +61,13 @@ struct CharacterView: View {
         .onTapGesture(perform: onTap)
     }
 
+    /// The active profile's picture for the state the assistant is in, falling
+    /// back to that profile's default picture, then to the legacy drop-in file,
+    /// then to the built-in avatar. A profile with no pictures at all is normal,
+    /// so the last fallback has to hold up on its own.
     @ViewBuilder
     private var characterArt: some View {
-        if let nsImage = NSImage(contentsOf: CharacterAsset.url) {
+        if let nsImage = artworkImage {
             Image(nsImage: nsImage)
                 .resizable()
                 .scaledToFit()
@@ -53,6 +75,16 @@ struct CharacterView: View {
         } else {
             MikuAvatarView()
         }
+    }
+
+    private var artworkImage: NSImage? {
+        // Read the revision so an upload or a profile switch invalidates this.
+        _ = profiles.artworkRevision
+        if let url = profiles.artworkURL(for: machine.state),
+           let image = NSImage(contentsOf: url) {
+            return image
+        }
+        return NSImage(contentsOf: CharacterAsset.url)
     }
 
     private func stateColor(for state: AssistantState) -> Color {

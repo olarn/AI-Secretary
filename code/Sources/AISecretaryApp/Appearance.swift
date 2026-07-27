@@ -23,7 +23,8 @@ final class Appearance {
         self.settings = AppearanceSettings(
             fontSize: saved.fontSize,
             chatHeight: saved.chatHeight,
-            maxHeight: Self.usableScreenHeight
+            maxHeight: Self.usableScreenHeight,
+            appScale: saved.appScale
         )
     }
 
@@ -45,6 +46,7 @@ final class Appearance {
     func decreaseFontSize() { mutate { $0.decreaseFontSize() } }
     func increaseHeight() { mutate { $0.increaseHeight() } }
     func decreaseHeight() { mutate { $0.decreaseHeight() } }
+    func selectAppScale(_ scale: AppScale) { mutate { $0.appScale = scale } }
 
     private func mutate(_ change: (inout AppearanceSettings) -> Void) {
         var updated = settings
@@ -54,9 +56,16 @@ final class Appearance {
 
     private func apply(_ updated: AppearanceSettings) {
         guard updated != settings else { return }
-        let heightChanged = updated.chatHeight != settings.chatHeight
+        // The character window is resized imperatively too, so a scale change
+        // has to reach the delegate the same way a height change does.
+        let needsRelayout = updated.chatHeight != settings.chatHeight
+            || updated.appScale != settings.appScale
         settings = updated
-        store.save(fontSize: updated.fontSize, chatHeight: updated.chatHeight)
-        if heightChanged { onChange?() }
+        store.save(
+            fontSize: updated.fontSize,
+            chatHeight: updated.chatHeight,
+            appScale: updated.appScale
+        )
+        if needsRelayout { onChange?() }
     }
 }

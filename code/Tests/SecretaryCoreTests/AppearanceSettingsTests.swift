@@ -115,6 +115,36 @@ final class AppearanceSettingsTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(small.footnoteFontSize, 8, "Never illegible")
     }
 
+    // MARK: - App size
+
+    /// Asked for: three steps, S and L being ±30% — both measured from M, so
+    /// they can't compound into a runaway size.
+    func testTheThreeAppSizesAreRelativeToMedium() {
+        XCTAssertEqual(AppScale.medium.factor, 1.0)
+        XCTAssertEqual(AppScale.small.factor, 0.7, accuracy: 0.0001)
+        XCTAssertEqual(AppScale.large.factor, 1.3, accuracy: 0.0001)
+        XCTAssertEqual(AppScale.allCases.count, 3)
+    }
+
+    func testTheCurrentSizeIsTheDefault() {
+        XCTAssertEqual(AppearanceSettings().appScale, .medium)
+    }
+
+    func testTheAppSizeIsRemembered() {
+        let store = InMemoryAppearanceStore()
+        store.save(fontSize: 12, chatHeight: 520, appScale: .large)
+        XCTAssertEqual(store.load().appScale, .large)
+    }
+
+    /// A scale written by a build with different steps must not break loading.
+    func testAnUnknownStoredScaleFallsBackToMedium() {
+        let defaults = UserDefaults(suiteName: "AppearanceScaleFallbackTests")!
+        defaults.removePersistentDomain(forName: "AppearanceScaleFallbackTests")
+        defaults.set("enormous", forKey: "appearance.appScale")
+
+        XCTAssertEqual(UserDefaultsAppearanceStore(defaults: defaults).load().appScale, .medium)
+    }
+
     // MARK: - Persistence
 
     func testTheChoiceIsSavedAndReloaded() {
@@ -122,7 +152,11 @@ final class AppearanceSettingsTests: XCTestCase {
         var settings = AppearanceSettings(maxHeight: 1200)
         settings.increaseFontSize()
         settings.increaseHeight()
-        store.save(fontSize: settings.fontSize, chatHeight: settings.chatHeight)
+        store.save(
+            fontSize: settings.fontSize,
+            chatHeight: settings.chatHeight,
+            appScale: settings.appScale
+        )
 
         let reloaded = store.load()
         XCTAssertEqual(reloaded.fontSize, 14)

@@ -20,9 +20,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var backend = ChatBackend(fallback: apiProvider)
     private let backendStatus = BackendStatus()
     private let appearance = Appearance()
+    private let profiles = ProfileLibrary()
     private lazy var secretary = Secretary(
         stateMachine: stateMachine,
         registry: registry,
+        profile: profiles.active,
         chatProvider: backend
     )
     private var characterPanel: FloatingPanel!
@@ -31,7 +33,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var isChatVisible = false
     private var isCharacterVisible = true
 
-    private let characterSize: CGFloat = 120
+    /// The character window follows the S/M/L choice, so this is derived rather
+    /// than fixed. `CharacterView` scales its content to match.
+    private var characterSize: CGFloat {
+        CharacterView.baseSize * appearance.settings.appScale.factor
+    }
     /// Width is fixed: the bubble's tail is positioned against it, so letting
     /// the width change would pull the tail away from the character. Height is
     /// the user's, from Appearance.
@@ -49,14 +55,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Gap between the character and the bubble window. The tail tip now ends
     /// exactly at the window edge, and the character's avatar sits ~12pt inside
     /// its own window, so a small negative gap makes the tail visually touch
-    /// the avatar.
-    private let characterGap: CGFloat = -14
+    /// the avatar. Scaled with the character, since the inset it compensates for
+    /// scales too.
+    private var characterGap: CGFloat {
+        -14 * appearance.settings.appScale.factor
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let characterHost = NSHostingView(
             rootView: CharacterView(
                 machine: stateMachine,
                 secretary: secretary,
+                profiles: profiles,
+                appearance: appearance,
                 onTap: { [weak self] in self?.toggleChatPanel() }
             )
         )
@@ -75,6 +86,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 credentials: credentials,
                 backendStatus: backendStatus,
                 appearance: appearance,
+                profiles: profiles,
                 layout: chatLayout,
                 onClose: { [weak self] in self?.hideChatPanel() }
             )
@@ -93,7 +105,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Resizing an NSPanel is imperative work, so the model calls back here
         // rather than the delegate re-deriving it during a view update.
-        appearance.onChange = { [weak self] in self?.applyChatHeight() }
+        appearance.onChange = { [weak self] in self?.applyWindowSizes() }
+        // Switching profile has to reach the prompt as well as the pictures.
+        profiles.onActiveChange = { [weak self] profile in
+            self?.secretary.apply(profile: profile)
+        }
 
         statusBar = StatusBarController(
             onOpenChat: { [weak self] in self?.openChatFromMenu() },
@@ -114,14 +130,50 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task.detached(priority: .utility) { backend.resolve() }
     }
 
-    /// Resizes the bubble to the chosen height and re-anchors it, keeping the
-    /// tail on the character and the whole panel on screen.
-    private func applyChatHeight() {
+    /// Resizes both windows to the current choices and re-anchors the bubble,
+    /// keeping the tail on the character and the whole panel on screen.
+    ///
+    /// The character grows from its bottom-centre: it usually sits near the Dock
+    /// with the bubble above it, and growing from the top-left corner instead
+    /// would walk it across the desktop each time the size changed.
+    private func applyWindowSizes() {
+        let old = characterPanel.frame
+        let size = characterSize
+        if old.width != size {
+            characterPanel.setFrame(
+                NSRect(
+                    x: old.midX - size / 2,
+                    y: old.minY,
+                    width: size,
+                    height: size
+                ),
+                display: true
+            )
+        }
+
         var frame = chatPanel.frame
         frame.size = chatSize
         chatPanel.setFrame(frame, display: true)
+
         if let screen = characterPanel.screen ?? NSScreen.main {
+            keepCharacterOnScreen(in: screen.visibleFrame)
             applyChatLayout(in: screen.visibleFrame)
+        }
+    }
+
+    /// A character that just grew near an edge would otherwise hang off it.
+    private func keepCharacterOnScreen(in visibleFrame: NSRect) {
+        let frame = characterPanel.frame
+        let x = min(
+            max(frame.minX, visibleFrame.minX),
+            visibleFrame.maxX - frame.width
+        )
+        let y = min(
+            max(frame.minY, visibleFrame.minY),
+            visibleFrame.maxY - frame.height
+        )
+        if x != frame.minX || y != frame.minY {
+            characterPanel.setFrameOrigin(NSPoint(x: x, y: y))
         }
     }
 

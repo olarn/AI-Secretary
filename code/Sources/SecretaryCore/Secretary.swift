@@ -106,8 +106,9 @@ public final class Secretary {
     public private(set) var model: ChatModel?
     public private(set) var effort: Effort?
 
-    /// Who the assistant is. Fixed for now; user-supplied later.
-    public let persona: SecretaryPersona
+    /// Who the assistant is. The user can switch profiles while a conversation
+    /// is open, so this changes at runtime — see `apply(profile:)`.
+    public private(set) var profile: SecretaryProfile
 
     @ObservationIgnored public let stateMachine: AssistantStateMachine
     @ObservationIgnored private let registry: ProjectRegistry
@@ -154,7 +155,7 @@ public final class Secretary {
     public init(
         stateMachine: AssistantStateMachine,
         registry: ProjectRegistry,
-        persona: SecretaryPersona = .miku,
+        profile: SecretaryProfile = .miku,
         policy: PermissionPolicy = DefaultPermissionPolicy(),
         adapter: CodeToolAdapter = GitReadOnlyAdapter(),
         fileAdapter: FileToolAdapter = FileReadOnlyAdapter(),
@@ -163,7 +164,7 @@ public final class Secretary {
         activityPreference: ActivityPreferenceStoring = UserDefaultsActivityPreference(),
         chatProvider: ChatProvider
     ) {
-        self.persona = persona
+        self.profile = profile
         self.stateMachine = stateMachine
         self.registry = registry
         self.policy = policy
@@ -1016,7 +1017,7 @@ public final class Secretary {
         You can also read these other folders the user has approved, at the paths         listed by your tools: \(others.map { "“\($0)”" }.joined(separator: ", ")).         If a question spans more than one of them, look at each — don't ask the         user to switch projects.
         """
         return """
-        \(persona.promptDescription)
+        \(profile.promptDescription)
 
         You live on the person's Mac as a desktop companion. They are not \
         necessarily a developer and may not be working on code at all — treat \
@@ -1136,7 +1137,27 @@ public final class Secretary {
     }
 
     private var basePrompt: String {
-        persona.promptDescription + "\n\n" + Self.capabilityPrompt
+        profile.promptDescription + "\n\n" + Self.capabilityPrompt
+    }
+
+    /// Switches who the assistant is, mid-conversation if need be.
+    ///
+    /// The change is immediate everywhere it can be: the UI observes `profile`,
+    /// and the system prompt is rebuilt from it and sent with every turn — even a
+    /// resumed one — so the next reply is already the new character. The
+    /// conversation itself is deliberately *not* reset: losing the context to
+    /// change a name would be a worse trade than one turn of overlap. Announced
+    /// in the transcript for the same reason a model change is: the conversation
+    /// is where it takes effect.
+    public func apply(profile updated: SecretaryProfile) {
+        let wasNamed = profile.displayName
+        guard updated != profile else { return }
+        profile = updated
+        if updated.displayName != wasNamed {
+            say(.secretary, "Profile: I'm \(updated.displayName) now (was \(wasNamed)).")
+        } else {
+            say(.secretary, "Profile updated — \(updated.displayName), \(updated.age.label), \(updated.effectiveStyle).")
+        }
     }
 
     private static let capabilityPrompt = """

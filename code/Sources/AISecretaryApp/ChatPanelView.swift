@@ -15,6 +15,7 @@ struct ChatPanelView: View {
     let credentials: any CredentialStore
     let backendStatus: BackendStatus
     let appearance: Appearance
+    let profiles: ProfileLibrary
     let layout: ChatBubbleLayout
     let onClose: () -> Void
 
@@ -22,6 +23,7 @@ struct ChatPanelView: View {
     @State private var showDebug = false
     @State private var showProjects = false
     @State private var showSettings = false
+    @State private var showProfile = false
     @State private var lastRejection: String?
     @State private var addProjectNote: String?
     @State private var apiKeyDraft: String = ""
@@ -36,6 +38,7 @@ struct ChatPanelView: View {
             pendingDecisionView
             inputRow
             if showSettings { settingsSection }
+            if showProfile { ProfileSettingsView(profiles: profiles, appearance: appearance) }
             if showProjects { projectsSection }
             if showDebug { debugSection }
             footer
@@ -193,7 +196,7 @@ struct ChatPanelView: View {
     /// Which tool it reached for, and with what, is the part that exists.
     private var header: some View {
         HStack(spacing: 6) {
-            Text(secretary.persona.name)
+            Text(secretary.profile.displayName)
                 .font(.headline)
             Text(machine.state.description.uppercased())
                 .font(.caption2.bold())
@@ -265,7 +268,7 @@ struct ChatPanelView: View {
         case .activity: activityBubble(entry)
         case .message:
             VStack(alignment: .leading, spacing: 4) {
-                Text(entry.speaker == .user ? "You" : secretary.persona.name)
+                Text(entry.speaker == .user ? "You" : secretary.profile.displayName)
                     .font(.system(size: appearance.settings.secondaryFontSize, weight: .bold))
                     .foregroundStyle(entry.speaker == .user ? Color.accentColor : .secondary)
                 ForEach(
@@ -501,7 +504,7 @@ struct ChatPanelView: View {
                 onDecrease: appearance.decreaseHeight,
                 onIncrease: appearance.increaseHeight
             )
-            Text("Height only — the bubble's width is fixed so its tail stays on \(secretary.persona.name).")
+            Text("Height only — the bubble's width is fixed so its tail stays on \(secretary.profile.displayName).")
                 .font(.system(size: 9))
                 .foregroundStyle(.secondary)
 
@@ -599,6 +602,7 @@ struct ChatPanelView: View {
     private var footer: some View {
         HStack(spacing: 10) {
             Toggle("Settings", isOn: $showSettings)
+            Toggle("Profile", isOn: $showProfile)
             Toggle("Projects", isOn: $showProjects)
             Toggle("Debug", isOn: $showDebug)
             Spacer()

@@ -1,6 +1,30 @@
 import Foundation
 
-/// Text size and chat-window height.
+/// How big the floating character is on the desktop: three fixed steps, both
+/// measured from the current size so they can't compound.
+public enum AppScale: String, CaseIterable, Sendable, Codable {
+    case small, medium, large
+
+    /// `medium` is what the app has always shipped as, so it's 1.0 and the
+    /// other two are ±30% of it.
+    public var factor: Double {
+        switch self {
+        case .small: return 0.7
+        case .medium: return 1.0
+        case .large: return 1.3
+        }
+    }
+
+    public var label: String {
+        switch self {
+        case .small: return "S"
+        case .medium: return "M"
+        case .large: return "L"
+        }
+    }
+}
+
+/// Text size, chat-window height, and character size.
 ///
 /// A value type with the limits built in, rather than two numbers nudged around
 /// inside a view, because the edges are the interesting part: the buttons have
@@ -22,6 +46,7 @@ public struct AppearanceSettings: Equatable, Sendable {
 
     public private(set) var fontSize: Double
     public private(set) var chatHeight: Double
+    public var appScale: AppScale
 
     /// Tallest the bubble may become: the usable height of the screen it's on.
     /// Deliberately not persisted — the display can change between launches, so
@@ -31,8 +56,10 @@ public struct AppearanceSettings: Equatable, Sendable {
     public init(
         fontSize: Double = Self.defaultFontSize,
         chatHeight: Double = Self.defaultHeight,
-        maxHeight: Double = Self.defaultHeight
+        maxHeight: Double = Self.defaultHeight,
+        appScale: AppScale = .medium
     ) {
+        self.appScale = appScale
         self.fontSize = min(max(fontSize, Self.minFontSize), Self.maxFontSize)
         self.maxHeight = max(maxHeight, Self.defaultHeight)
         self.chatHeight = min(max(chatHeight, Self.defaultHeight), self.maxHeight)
@@ -80,14 +107,15 @@ public struct AppearanceSettings: Equatable, Sendable {
 
 /// Remembers the choice across launches.
 public protocol AppearanceStoring: AnyObject, Sendable {
-    /// Only the two chosen numbers; the screen limit is applied separately.
-    func load() -> (fontSize: Double, chatHeight: Double)
-    func save(fontSize: Double, chatHeight: Double)
+    /// Only the chosen values; the screen limit is applied separately.
+    func load() -> (fontSize: Double, chatHeight: Double, appScale: AppScale)
+    func save(fontSize: Double, chatHeight: Double, appScale: AppScale)
 }
 
 public final class UserDefaultsAppearanceStore: AppearanceStoring, @unchecked Sendable {
     private let fontKey = "appearance.fontSize"
     private let heightKey = "appearance.chatHeight"
+    private let scaleKey = "appearance.appScale"
     private let defaults: UserDefaults
 
     public init(defaults: UserDefaults = .standard) {
@@ -95,36 +123,45 @@ public final class UserDefaultsAppearanceStore: AppearanceStoring, @unchecked Se
     }
 
     /// `object(forKey:)` rather than `double(forKey:)` so an unset key falls
-    /// back to the default instead of to zero.
-    public func load() -> (fontSize: Double, chatHeight: Double) {
+    /// back to the default instead of to zero. An unrecognised scale — written
+    /// by a build with different steps — also falls back rather than throwing.
+    public func load() -> (fontSize: Double, chatHeight: Double, appScale: AppScale) {
         (
             (defaults.object(forKey: fontKey) as? Double) ?? AppearanceSettings.defaultFontSize,
-            (defaults.object(forKey: heightKey) as? Double) ?? AppearanceSettings.defaultHeight
+            (defaults.object(forKey: heightKey) as? Double) ?? AppearanceSettings.defaultHeight,
+            (defaults.string(forKey: scaleKey).flatMap(AppScale.init(rawValue:))) ?? .medium
         )
     }
 
-    public func save(fontSize: Double, chatHeight: Double) {
+    public func save(fontSize: Double, chatHeight: Double, appScale: AppScale) {
         defaults.set(fontSize, forKey: fontKey)
         defaults.set(chatHeight, forKey: heightKey)
+        defaults.set(appScale.rawValue, forKey: scaleKey)
     }
 }
 
 public final class InMemoryAppearanceStore: AppearanceStoring, @unchecked Sendable {
     private var fontSize: Double
     private var chatHeight: Double
+    private var appScale: AppScale
 
     public init(
         fontSize: Double = AppearanceSettings.defaultFontSize,
-        chatHeight: Double = AppearanceSettings.defaultHeight
+        chatHeight: Double = AppearanceSettings.defaultHeight,
+        appScale: AppScale = .medium
     ) {
         self.fontSize = fontSize
         self.chatHeight = chatHeight
+        self.appScale = appScale
     }
 
-    public func load() -> (fontSize: Double, chatHeight: Double) { (fontSize, chatHeight) }
+    public func load() -> (fontSize: Double, chatHeight: Double, appScale: AppScale) {
+        (fontSize, chatHeight, appScale)
+    }
 
-    public func save(fontSize: Double, chatHeight: Double) {
+    public func save(fontSize: Double, chatHeight: Double, appScale: AppScale) {
         self.fontSize = fontSize
         self.chatHeight = chatHeight
+        self.appScale = appScale
     }
 }
