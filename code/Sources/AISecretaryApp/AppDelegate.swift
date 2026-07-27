@@ -52,6 +52,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     /// Gap kept between the bubble and the screen edge when clamping horizontally.
     private let screenMargin: CGFloat = 8
+    /// How far the bubble is pushed sideways, away from the character, as a
+    /// fraction of its own width. Lining the tail's tip up with the character's
+    /// centre put most of the bubble across the character; this backs it off.
+    private let bubbleClearanceFraction: CGFloat = 0.2
     /// Gap between the character and the bubble window. The tail tip now ends
     /// exactly at the window edge, and the character's avatar sits ~12pt inside
     /// its own window, so a small negative gap makes the tail visually touch
@@ -242,14 +246,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let characterFrame = characterPanel.frame
         let characterCenterX = characterFrame.midX
 
-        let naturalX = characterCenterX - chatSize.width * tailFraction
+        // Pushed sideways away from the character, so the bubble sits beside it
+        // rather than across it. Whichever side it's on, the shift is outward:
+        // right when the bubble is to the character's right, left when mirrored.
+        let clearance = chatSize.width * bubbleClearanceFraction
+        let naturalX = characterCenterX - chatSize.width * tailFraction + clearance
         let mirrored = naturalX + chatSize.width > visibleFrame.maxX - screenMargin
         var originX = mirrored
-            ? characterCenterX - chatSize.width * (1 - tailFraction)
+            ? characterCenterX - chatSize.width * (1 - tailFraction) - clearance
             : naturalX
-        originX = min(
-            max(originX, visibleFrame.minX + screenMargin),
-            visibleFrame.maxX - chatSize.width - screenMargin
+        originX = clamped(
+            originX,
+            min: visibleFrame.minX + screenMargin,
+            max: visibleFrame.maxX - chatSize.width - screenMargin
         )
 
         let aboveY = characterFrame.minY + characterFrame.height + characterGap
