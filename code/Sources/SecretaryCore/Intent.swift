@@ -183,9 +183,13 @@ public final class RuleBasedIntentClassifier: IntentClassifying {
     /// Splits a "… in/for/on <project>" suffix off the command, preserving the
     /// original case of both halves. Returns (command, projectQuery?).
     private func splitProject(_ text: String) -> (head: String, project: String?) {
-        let lower = text.lowercased()
         for marker in [" in ", " for ", " on "] {
-            guard let range = lower.range(of: marker) else { continue }
+            // Search `text` itself, case-insensitively. Searching a lowercased
+            // copy and then slicing the original is undefined — a String.Index
+            // belongs to the string it came from. It happened to work for ASCII
+            // and crashed on the first Thai message that contained " On ":
+            // "Range requires lowerBound <= upperBound".
+            guard let range = text.range(of: marker, options: [.caseInsensitive]) else { continue }
             let head = String(text[text.startIndex..<range.lowerBound])
             let tail = String(text[range.upperBound...])
                 .trimmingCharacters(in: .whitespacesAndNewlines)

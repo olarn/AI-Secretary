@@ -86,3 +86,52 @@ final class FileIntentTests: XCTestCase {
         )
     }
 }
+
+// MARK: - Non-ASCII input
+
+/// The app crashed on a real message: "หาราคาเฉลี่ย รองเท้า On Cloud ในไทย".
+/// `splitProject` searched a lowercased copy and sliced the original, which is
+/// undefined — the indices only lined up because every message so far had been
+/// ASCII. Thai text made them diverge and the slice trapped.
+final class NonASCIIIntentTests: XCTestCase {
+    private let classifier = RuleBasedIntentClassifier()
+
+    func testThaiMessageContainingAnEnglishMarkerDoesNotCrash() {
+        let intent = classifier.classify("หาราคาเฉลี่ย รองเท้า On Cloud ในไทย")
+        guard case .unknown = intent else {
+            return XCTFail("A question about shoe prices is conversation, got: \(intent)")
+        }
+    }
+
+    func testAssortedNonASCIIMessagesAreClassifiedWithoutCrashing() {
+        let messages = [
+            "สรุปโปรเจกต์นี้ให้หน่อย",
+            "ราคา On Cloud ในไทยเท่าไหร่",
+            "เปรียบเทียบ A กับ B for ฉันหน่อย",
+            "日本語のテキスト in プロジェクト",
+            "café on the corner",
+            "🎉 in 🎊",
+            " on ",
+            "on"
+        ]
+        for message in messages {
+            _ = classifier.classify(message)  // must not trap
+        }
+    }
+
+    /// Case-insensitive matching still has to work after the fix.
+    func testUppercaseMarkerStillSelectsTheProject() {
+        guard case .fileTool(_, let query) = classifier.classify("read notes.md IN Fixture") else {
+            return XCTFail("Expected a file operation")
+        }
+        XCTAssertEqual(query, "Fixture")
+    }
+
+    func testAThaiProjectNameSurvivesTheSplit() {
+        guard case .fileTool(let operation, let query) = classifier.classify("read about.md in โลหะเจริญ") else {
+            return XCTFail("Expected a file operation")
+        }
+        XCTAssertEqual(operation.relativePath, "about.md")
+        XCTAssertEqual(query, "โลหะเจริญ")
+    }
+}
