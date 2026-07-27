@@ -153,6 +153,19 @@ Build in phases.
 - App จะแสดงรูปที่แตกต่างกันตาม activity ที่กำลังทำ (เปลี่ยนเมื่อ thinking หรือ idle) 
 - เมื่อ activity แต่ไม่มีรูป ให้ใช้รูป default รูปเดียว
 
+### Phase 5.5: ปรับ UI/UX จากการใช้งานจริง
+
+- ครั้งแรกที่ run ต้องมี default profile คือ Miku เขียนลง local storage เลย ไม่ใช่มีแค่ใน memory
+- ปุ่มเลือกรูปแต่ละ activity เป็น chip เรียงซ้ายไปขวา บนลงล่าง คลิกแล้วมี popup (Choose / Clear) แบบเดียวกับ Model และ Effort
+- เอาปุ่ม Debug ออกจาก chat window
+- ตารางและกล่อง activity ต้องขยาย/ย่อตาม font size ที่ตั้งไว้
+- หน้าต่างตัวละครต้องขยายตาม S/M/L จริง และต้องไม่ถูกตัดขอบ (bubble ที่คลุมตัวละครต้องกลมครบวง)
+- ตำแหน่ง chat window ต้องห่างจากตัวละครตามสัดส่วนขนาด app (S ไม่ห่างเกิน L ไม่ทับกัน)
+- URL ใน chat ต้องคลิกเปิดเบราว์เซอร์ได้ ทั้ง URL ล้วนและ markdown link
+   - hover แล้ว cursor เปลี่ยนเป็นนิ้ว และขึ้น underline
+   - อนุญาตเฉพาะ http/https/mailto — scheme อื่น (เช่น file:, javascript:) แสดงเป็นข้อความธรรมดา คลิกไม่ได้ เพราะข้อความจาก model/เว็บ/tool ถือเป็น untrusted
+- คลิกที่ตัวละคร 1 ครั้ง = เปิด/ปิด chat 1 ครั้ง (คลิกแรกต้องไม่ถูกกินไปเป็นการ focus หน้าต่าง)
+
 ### Phase 6: External tools and proactive assistance
 
 - MCP-based integrations such as calendar, Slack, email, and knowledge sources.

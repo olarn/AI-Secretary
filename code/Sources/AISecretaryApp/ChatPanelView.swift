@@ -274,10 +274,14 @@ struct ChatPanelView: View {
                 ) { _, segment in
                     switch segment {
                     case .text(let body):
-                        Text(body)
-                            .font(.system(size: appearance.settings.fontSize, design: .monospaced))
-                            .textSelection(.enabled)
-                            .fixedSize(horizontal: false, vertical: true)
+                        // AppKit-backed: SwiftUI's Text draws links but doesn't
+                        // open them from a non-activating panel, and can't show
+                        // a pointer or a hover underline over them.
+                        MessageTextView(
+                            text: MessageMarkdown.attributed(body),
+                            fontSize: appearance.settings.fontSize
+                        )
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     case .table(let table):
                         tableView(table)
                     }
@@ -349,13 +353,10 @@ struct ChatPanelView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// Cells routinely contain `**bold**` and `` `code` ``. Inline-only so a
-    /// stray character can't restructure the cell.
+    /// Cells routinely contain `**bold**`, `` `code` `` and links. Shared with
+    /// the message body so a URL is clickable wherever it appears.
     private func inlineMarkdown(_ text: String) -> AttributedString {
-        (try? AttributedString(
-            markdown: text,
-            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-        )) ?? AttributedString(text)
+        MessageMarkdown.attributed(text)
     }
 
     /// Sits in the conversation in order, but deliberately doesn't look like

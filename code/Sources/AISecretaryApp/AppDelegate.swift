@@ -78,7 +78,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        let characterHost = NSHostingView(
+        let characterHost = FirstMouseHostingView(
             rootView: CharacterView(
                 machine: stateMachine,
                 secretary: secretary,
@@ -101,7 +101,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             content: Self.container(for: characterHost, size: characterSize)
         )
 
-        let chatHost = NSHostingView(
+        let chatHost = FirstMouseHostingView(
             rootView: ChatPanelView(
                 machine: stateMachine,
                 secretary: secretary,
@@ -144,7 +144,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Lets the window own its size and the hosted view fill it.
     private static func container(for host: NSView, size: CGSize) -> NSView {
-        let container = NSView(frame: NSRect(origin: .zero, size: size))
+        let container = FirstMouseContainerView(frame: NSRect(origin: .zero, size: size))
         host.frame = container.bounds
         host.autoresizingMask = [.width, .height]
         container.addSubview(host)
