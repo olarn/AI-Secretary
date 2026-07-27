@@ -129,13 +129,14 @@ Build in phases.
 - Only work with folders/files that I add in the project.
 - Pull data from the internet that can work with local folders and files.
 
+### Phase 4.1: improve 
+- เวลา AI ตอบ chat ถ้า position อยู่ที่ bottom position ให้ auto scroll เวลา message จาก AI response กลับมา แต่ถ้า user scroll ขึ้นไปอ่าน message เก่าๆ ไม่ต้อง auto scroll จนหว่า user จะ scroll ลงมาล่างสุด
+
 ### Phase 5: Setings
 
 - เพิ่มหน้า setting (ใช้ window chat เดิมได้)
 - เพิ่ม increase / decrease font size.
 - เพิ่ม increase / decrease ขนาดหน้าต่าง chat
-### add more features 
-- เวลา AI ตอบ chat ถ้า position อยู่ที่ bottom position ให้ auto scroll เวลา message จาก AI response กลับมา แต่ถ้า user scroll ขึ้นไปอ่าน message เก่าๆ ไม่ต้อง auto scroll จนหว่า user จะ scroll ลงมาล่างสุด
 
 ### Phase 6: External tools and proactive assistance
 
