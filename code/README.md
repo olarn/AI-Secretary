@@ -71,9 +71,10 @@ conversation**, in order, just before the answer it led to — `◇ Thinking`,
 dashed, dimmer box so it never reads as part of the reply, and each turn keeps
 its own box, so scrolling back shows how an earlier answer was reached.
 
-**Click the status badge on the character to turn it off** (and again to turn
-it back on). The change is announced in the conversation, and switching it off
-also clears the boxes already there. On by default.
+**Hidden until you ask for it.** Click the status badge on the character to
+show it, and again to hide it; the choice is remembered across launches. The
+change is announced in the conversation, and switching it off clears the boxes
+already there.
 
 This is activity, not reasoning. Claude Code streams thinking blocks whose text
 is **empty**: `thinking.display` defaults to `omitted` on the Opus 5 family, the
@@ -88,6 +89,11 @@ Scroll up to read something and it stops following, so a streaming reply can't
 yank the view out from under you; scroll back down and it picks up again.
 Sending a message always brings you back to the bottom. It follows streamed
 text, not just new messages, so a long answer stays in view as it arrives.
+
+Position measurements are ignored for a moment after the app scrolls itself. A
+scroll view can't tell who moved it, and an app-driven scroll reads as
+"at the bottom" the whole way down — without that pause, scrolling up during a
+reply would be undone by the next token.
 
 ### Continuity between commands and chat
 

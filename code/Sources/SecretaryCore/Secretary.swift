@@ -98,9 +98,9 @@ public final class Secretary {
     /// What the assistant is doing this turn, newest last. Collected whether or
     /// not it is being shown, so switching it on mid-turn isn't blank.
     public private(set) var activity: [AgentActivity] = []
-    /// Whether activity is woven into the conversation. On by default — seeing
-    /// the work is the point; the badge on the character turns it off.
-    public private(set) var showsActivity = true
+    /// Whether activity is woven into the conversation. Hidden on a first run
+    /// and remembered after that, so the choice survives quitting.
+    public private(set) var showsActivity: Bool
     /// nil means "whatever the backend is already set up to use" — for Claude
     /// Code that's the model and effort from the user's own settings.
     public private(set) var model: ChatModel?
@@ -114,6 +114,7 @@ public final class Secretary {
     @ObservationIgnored private let classifier: IntentClassifying
     @ObservationIgnored private let audit: AuditLogging
     @ObservationIgnored private let chatProvider: ChatProvider
+    @ObservationIgnored private let activityPreference: ActivityPreferenceStoring
 
     @ObservationIgnored private var activeTaskID: String?
     /// The user's own words for the request in flight, so a completed tool run
@@ -155,6 +156,7 @@ public final class Secretary {
         fileAdapter: FileToolAdapter = FileReadOnlyAdapter(),
         classifier: IntentClassifying = RuleBasedIntentClassifier(),
         audit: AuditLogging = AuditLog(),
+        activityPreference: ActivityPreferenceStoring = UserDefaultsActivityPreference(),
         chatProvider: ChatProvider
     ) {
         self.stateMachine = stateMachine
@@ -164,6 +166,8 @@ public final class Secretary {
         self.fileAdapter = fileAdapter
         self.classifier = classifier
         self.audit = audit
+        self.activityPreference = activityPreference
+        self.showsActivity = activityPreference.showsActivity
         self.chatProvider = chatProvider
     }
 
@@ -605,6 +609,7 @@ public final class Secretary {
     /// happens in the conversation and should be visible there.
     public func toggleActivityVisibility() {
         showsActivity.toggle()
+        activityPreference.showsActivity = showsActivity
         if showsActivity {
             say(.secretary, "I'll show what I'm doing as I work.")
             // Nothing to back-fill mid-turn: the entry appears on the next step.

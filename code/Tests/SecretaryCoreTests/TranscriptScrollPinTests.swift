@@ -62,4 +62,63 @@ final class TranscriptScrollPinTests: XCTestCase {
         pin.update(distanceFromBottom: 900)
         XCTAssertFalse(pin.isFollowing)
     }
+
+    // MARK: - Not mistaking our own scrolling for the reader's
+
+    /// The bug this was reported for: scrolling up during a streamed reply and
+    /// being dragged back down. An app-driven scroll passes through near-bottom
+    /// positions the whole way, and treating those as the reader's position
+    /// re-latches following on the next token.
+    func testMeasurementsDuringOurOwnScrollAreIgnored() {
+        var pin = TranscriptScrollPin()
+        let start = Date()
+        pin.update(distanceFromBottom: 800, now: start)
+        XCTAssertFalse(pin.isFollowing, "Reader scrolled away")
+
+        pin.beginProgrammaticScroll(now: start)
+        pin.update(distanceFromBottom: 0, now: start.addingTimeInterval(0.05))
+
+        XCTAssertFalse(pin.isFollowing, "Our own scroll must not re-latch following")
+    }
+
+    func testMeasurementsCountAgainOnceTheScrollHasSettled() {
+        var pin = TranscriptScrollPin()
+        let start = Date()
+        pin.update(distanceFromBottom: 800, now: start)
+        pin.beginProgrammaticScroll(now: start)
+
+        pin.update(
+            distanceFromBottom: 0,
+            now: start.addingTimeInterval(TranscriptScrollPin.settleWindow + 0.01)
+        )
+
+        XCTAssertTrue(pin.isFollowing, "A real return to the bottom must still register")
+    }
+
+    /// Scrolling away *during* the settle window shouldn't be lost either — the
+    /// next measurement after it expires decides.
+    func testScrollingAwayIsNoticedAfterTheWindow() {
+        var pin = TranscriptScrollPin()
+        let start = Date()
+        pin.beginProgrammaticScroll(now: start)
+        pin.update(distanceFromBottom: 900, now: start.addingTimeInterval(0.1))
+        XCTAssertTrue(pin.isFollowing, "Still settling")
+
+        pin.update(
+            distanceFromBottom: 900,
+            now: start.addingTimeInterval(TranscriptScrollPin.settleWindow + 0.01)
+        )
+        XCTAssertFalse(pin.isFollowing)
+    }
+
+    func testSendingAMessageClearsTheSettleWindowToo() {
+        var pin = TranscriptScrollPin()
+        let start = Date()
+        pin.update(distanceFromBottom: 800, now: start)
+        pin.beginProgrammaticScroll(now: start)
+        pin.follow()
+
+        pin.update(distanceFromBottom: 900, now: start.addingTimeInterval(0.05))
+        XCTAssertFalse(pin.isFollowing, "follow() shouldn't leave the window armed")
+    }
 }

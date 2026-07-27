@@ -61,6 +61,7 @@ final class AgentSessionTests: XCTestCase {
     private var machine: AssistantStateMachine!
     private var provider: SpyWorkspaceProvider!
     private var store: InMemoryProjectStore!
+    private var activityPreference: InMemoryActivityPreference!
     private var registry: ProjectRegistry!
 
     private let projectPath = "/tmp/agent-fixture"
@@ -69,6 +70,7 @@ final class AgentSessionTests: XCTestCase {
         super.setUp()
         machine = AssistantStateMachine()
         provider = SpyWorkspaceProvider()
+        activityPreference = InMemoryActivityPreference(showsActivity: true)
     }
 
     private func makeSecretary(projects: [Project]) -> Secretary {
@@ -82,6 +84,7 @@ final class AgentSessionTests: XCTestCase {
             fileAdapter: SpyFileAdapter(),
             classifier: RuleBasedIntentClassifier(),
             audit: AuditLog(),
+            activityPreference: activityPreference,
             chatProvider: provider
         )
     }
@@ -450,6 +453,24 @@ final class AgentSessionTests: XCTestCase {
         XCTAssertFalse(secretary.transcript.contains { $0.kind == .activity })
         XCTAssertTrue(secretary.transcript.last?.text.contains("to myself") == true,
                       "The change should be announced: \(secretary.transcript.last?.text ?? "-")")
+    }
+
+    /// A first run is quiet; the choice is remembered after that.
+    func testItIsHiddenOnAFirstRun() {
+        activityPreference = InMemoryActivityPreference()
+        let secretary = makeSecretary(projects: [])
+        XCTAssertFalse(secretary.showsActivity)
+    }
+
+    func testTheChoiceIsRememberedForNextTime() {
+        activityPreference = InMemoryActivityPreference()
+        let secretary = makeSecretary(projects: [])
+        secretary.toggleActivityVisibility()
+
+        XCTAssertTrue(activityPreference.showsActivity, "Should have been saved")
+        // A relaunch reads it back.
+        let relaunched = makeSecretary(projects: [])
+        XCTAssertTrue(relaunched.showsActivity)
     }
 
     func testTurningItBackOnSaysSoToo() async {

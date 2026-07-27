@@ -238,7 +238,12 @@ struct ChatPanelView: View {
                 // leave the answer scrolling out of view as it arrives.
                 .onChange(of: transcriptSignature) {
                     guard scrollPin.isFollowing, let last = secretary.transcript.last else { return }
-                    withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                    // Unanimated, and measurements are muted while it settles:
+                    // an animated scroll reports near-bottom positions all the
+                    // way down, which re-latches following and drags the reader
+                    // back even after they've scrolled away.
+                    scrollPin.beginProgrammaticScroll()
+                    proxy.scrollTo(last.id, anchor: .bottom)
                 }
             }
         }
