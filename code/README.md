@@ -56,6 +56,13 @@ neither `--model` nor `--effort`, so a turn runs on whatever your Claude Code is
 already configured to use — if your `~/.claude/settings.json` says `opus`, you
 get Opus. Pick one here only if you want to override it for this app.
 
+**Settings** shows the model and effort by name either way — the inherited value
+is read from your Claude Code settings and confirmed by what a live session
+reports, so it says "Claude Opus 5", not "your default". A dashed dot marks a
+value the app didn't choose. Click either one for a picker; choosing takes
+effect immediately and is announced in the conversation, the same as the slash
+commands.
+
 ### Continuity between commands and chat
 
 Commands and conversation share one thread. Running `list files in X` and then

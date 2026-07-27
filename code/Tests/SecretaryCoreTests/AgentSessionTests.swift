@@ -14,6 +14,7 @@ final class SpyWorkspaceProvider: ChatProvider, WorkspaceScopedProvider, @unchec
     private(set) var callCount = 0
     private(set) var lastMessages: [ChatMessage] = []
     private(set) var lastSystem: String?
+    private(set) var lastModel: ChatModel?
     private(set) var resetCount = 0
     var hasWorkspaceTools = true
     /// Refusals to emit on the next turn, then cleared — so a retry succeeds.
@@ -39,6 +40,7 @@ final class SpyWorkspaceProvider: ChatProvider, WorkspaceScopedProvider, @unchec
         callCount += 1
         lastMessages = messages
         lastSystem = system
+        lastModel = model
         let denials = denialsForNextTurn
         denialsForNextTurn = []
         return AsyncThrowingStream { continuation in
@@ -320,6 +322,58 @@ final class AgentSessionTests: XCTestCase {
         await waitUntilIdle()
 
         XCTAssertNil(secretary.pendingDecision)
+    }
+
+    // MARK: - Choosing a model from the settings panel
+
+    /// A change made in the panel takes effect in the conversation, so it is
+    /// announced there — the same path the slash command uses.
+    func testPickingAModelIsAnnouncedInTheTranscript() {
+        let secretary = makeSecretary(projects: [])
+        secretary.selectModel(.opus5)
+
+        XCTAssertEqual(secretary.model, .opus5)
+        XCTAssertTrue(secretary.transcript.last?.text.contains("Claude Opus 5") == true,
+                      "Got: \(secretary.transcript.last?.text ?? "-")")
+    }
+
+    func testGoingBackToTheInheritedDefaultIsAnnouncedToo() {
+        let secretary = makeSecretary(projects: [])
+        secretary.selectModel(.opus5)
+        secretary.selectModel(nil)
+
+        XCTAssertNil(secretary.model)
+        XCTAssertTrue(secretary.isModelInherited)
+        XCTAssertTrue(secretary.transcript.last?.text.contains("Claude Code default") == true,
+                      "Got: \(secretary.transcript.last?.text ?? "-")")
+    }
+
+    func testPickingTheSameValueSaysNothing() {
+        let secretary = makeSecretary(projects: [])
+        secretary.selectModel(.opus5)
+        let count = secretary.transcript.count
+        secretary.selectModel(.opus5)
+
+        XCTAssertEqual(secretary.transcript.count, count, "No change, nothing to announce")
+    }
+
+    func testPickingAnEffortIsAnnounced() {
+        let secretary = makeSecretary(projects: [])
+        secretary.selectEffort(.xhigh)
+
+        XCTAssertEqual(secretary.effort, .xhigh)
+        XCTAssertFalse(secretary.isEffortInherited)
+        XCTAssertTrue(secretary.transcript.last?.text.contains("xhigh") == true)
+    }
+
+    /// The chosen value must reach the backend, not just the label.
+    func testAPickedModelIsUsedForTheNextTurn() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        secretary.selectModel(.fable5)
+        secretary.submit("hello")
+        await waitUntilIdle()
+
+        XCTAssertEqual(provider.lastModel, .fable5)
     }
 
     // MARK: - Working with no project

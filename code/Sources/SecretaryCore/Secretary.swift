@@ -242,11 +242,9 @@ public final class Secretary {
                 return
             }
             if ChatModel.meansInherit(argument) {
-                model = nil
-                say(.secretary, "Model: using your Claude Code setting.")
+                selectModel(nil)
             } else if let resolved = ChatModel.named(argument) {
-                model = resolved
-                say(.secretary, "Model set to \(resolved.id).")
+                selectModel(resolved)
             } else {
                 say(.secretary, "Unknown model “\(argument)”. Available: \(ChatModel.known.map(\.id).joined(separator: ", ")), or `default`.")
             }
@@ -258,11 +256,9 @@ public final class Secretary {
                 return
             }
             if ChatModel.meansInherit(argument) {
-                effort = nil
-                say(.secretary, "Effort: using your Claude Code setting.")
+                selectEffort(nil)
             } else if let resolved = Effort.named(argument) {
-                effort = resolved
-                say(.secretary, "Effort set to \(resolved.rawValue).")
+                selectEffort(resolved)
             } else {
                 say(.secretary, "Unknown effort “\(argument)”. Available: \(Effort.allCases.map(\.rawValue).joined(separator: ", ")), or `default`.")
             }
@@ -978,6 +974,60 @@ public final class Secretary {
         session: \(sessionAgentTools.sorted().joined(separator: ", ")). Anything \
         beyond that is still refused.
         """
+    }
+
+    // MARK: - Model and effort
+
+    /// The model that will actually be used, named. Falls back to what the
+    /// backend is configured with so the settings panel can show a real name
+    /// rather than "your default".
+    public var effectiveModel: ChatModel? {
+        model ?? inheritedDefaults.model
+    }
+
+    public var effectiveEffort: Effort? {
+        effort ?? inheritedDefaults.effort
+    }
+
+    public var effectiveModelName: String {
+        effectiveModel?.displayName ?? "Unknown"
+    }
+
+    public var effectiveEffortName: String {
+        effectiveEffort?.rawValue ?? "Unknown"
+    }
+
+    /// True when the value comes from the user's own Claude Code rather than a
+    /// choice made in this app — worth showing, because it explains why it can
+    /// change out from under the app.
+    public var isModelInherited: Bool { model == nil }
+    public var isEffortInherited: Bool { effort == nil }
+
+    private var inheritedDefaults: ClaudeCodeDefaults {
+        (chatProvider as? ChatBackend)?.inheritedDefaults ?? .unknown
+    }
+
+    /// Picks a model, or `nil` to go back to inheriting. Announced in the
+    /// transcript so a change made in the settings panel is visible in the
+    /// conversation it affects.
+    public func selectModel(_ chosen: ChatModel?) {
+        guard chosen != model else { return }
+        model = chosen
+        if let chosen {
+            say(.secretary, "Model set to \(chosen.displayName).")
+        } else {
+            say(.secretary, "Model: back to your Claude Code default (\(effectiveModelName)).")
+        }
+    }
+
+    public func selectEffort(_ chosen: Effort?) {
+        guard chosen != effort else { return }
+        effort = chosen
+        if let chosen {
+            say(.secretary, "Effort set to \(chosen.rawValue).")
+        } else {
+            say(.secretary, "Effort: back to your Claude Code default (\(effectiveEffortName)).")
+        }
     }
 
     /// What to show the user for a setting they may never have touched.

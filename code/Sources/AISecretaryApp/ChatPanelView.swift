@@ -100,6 +100,89 @@ struct ChatPanelView: View {
         .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
     }
 
+    /// Clicking the name opens a real picker. The same entry point the slash
+    /// commands use, so a change here is announced in the transcript too — the
+    /// conversation is where the change takes effect, so that's where it should
+    /// be visible.
+    private var modelPicker: some View {
+        Menu {
+            Button {
+                secretary.selectModel(nil)
+            } label: {
+                Label(
+                    "Your Claude Code default",
+                    systemImage: secretary.isModelInherited ? "checkmark" : ""
+                )
+            }
+            Divider()
+            ForEach(ChatModel.known, id: \.id) { candidate in
+                Button {
+                    secretary.selectModel(candidate)
+                } label: {
+                    Label(
+                        candidate.displayName,
+                        systemImage: secretary.model == candidate ? "checkmark" : ""
+                    )
+                }
+            }
+        } label: {
+            settingLabel(
+                "Model",
+                value: secretary.effectiveModelName,
+                inherited: secretary.isModelInherited
+            )
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+    }
+
+    private var effortPicker: some View {
+        Menu {
+            Button {
+                secretary.selectEffort(nil)
+            } label: {
+                Label(
+                    "Your Claude Code default",
+                    systemImage: secretary.isEffortInherited ? "checkmark" : ""
+                )
+            }
+            Divider()
+            ForEach(Effort.allCases, id: \.rawValue) { candidate in
+                Button {
+                    secretary.selectEffort(candidate)
+                } label: {
+                    Label(
+                        candidate.rawValue,
+                        systemImage: secretary.effort == candidate ? "checkmark" : ""
+                    )
+                }
+            }
+        } label: {
+            settingLabel(
+                "Effort",
+                value: secretary.effectiveEffortName,
+                inherited: secretary.isEffortInherited
+            )
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+    }
+
+    /// Shows the real value either way; the dot marks one the app didn't pick,
+    /// which can change if the user reconfigures Claude Code.
+    private func settingLabel(_ title: String, value: String, inherited: Bool) -> some View {
+        HStack(spacing: 3) {
+            Text("\(title):").foregroundStyle(.secondary)
+            Text(value).foregroundStyle(.primary)
+            if inherited {
+                Image(systemName: "circle.dashed")
+                    .font(.system(size: 7))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .font(.caption2)
+    }
+
     private var header: some View {
         HStack(spacing: 6) {
             Text("AI Secretary")
@@ -245,11 +328,10 @@ struct ChatPanelView: View {
                 .foregroundStyle(.secondary)
 
             HStack(spacing: 10) {
-                Text("Model: \(secretary.model?.displayName ?? "your default")")
-                Text("Effort: \(secretary.effort?.rawValue ?? "your default")")
+                modelPicker
+                effortPicker
             }
-            .font(.caption2.monospaced())
-            .foregroundStyle(.secondary)
+            .font(.caption2)
             Text("Change with /model <id> or /effort <level> in the chat.")
                 .font(.system(size: 9))
                 .foregroundStyle(.secondary)

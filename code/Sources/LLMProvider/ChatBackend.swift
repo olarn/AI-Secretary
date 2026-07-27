@@ -64,6 +64,7 @@ public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, @unchecke
     private var _claudeCode: ClaudeCodeProvider?
     private var _pending: (workingDirectory: URL?, additionalDirectories: [URL], allowedTools: [String]?)?
     private var _observer: (@Sendable (ClaudeCodeAvailability) -> Void)?
+    private var _diskDefaults: ClaudeCodeDefaults?
 
     public init(locator: ClaudeCodeLocator = ClaudeCodeLocator(), fallback: ChatProvider) {
         self.locator = locator
@@ -154,6 +155,18 @@ public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, @unchecke
 
     public func resetConversation() {
         lock.withLock { _claudeCode }?.resetConversation()
+    }
+
+    /// What the user's own Claude Code is set up to use — read from their
+    /// settings, then replaced by whatever a live session reports.
+    public var inheritedDefaults: ClaudeCodeDefaults {
+        let live = lock.withLock { _claudeCode }?.reportedModel.flatMap(ChatModel.named)
+        let onDisk = lock.withLock { _diskDefaults } ?? {
+            let read = ClaudeCodeDefaults.read()
+            lock.withLock { _diskDefaults = read }
+            return read
+        }()
+        return ClaudeCodeDefaults(model: live ?? onDisk.model, effort: onDisk.effort)
     }
 
     /// False until detection finishes, and false when falling back to the API

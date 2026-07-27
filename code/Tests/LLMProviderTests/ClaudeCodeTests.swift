@@ -438,3 +438,44 @@ final class ChatModelChoiceTests: XCTestCase {
         XCTAssertFalse(ChatModel.meansInherit("gpt-4"))
     }
 }
+
+// MARK: - Reading the user's own configuration
+
+final class ClaudeCodeDefaultsTests: XCTestCase {
+    private func parse(_ json: String) -> ClaudeCodeDefaults {
+        ClaudeCodeDefaults.parse(Data(json.utf8))
+    }
+
+    /// The settings panel names a real model rather than "your default", so the
+    /// alias Claude Code stores has to resolve.
+    func testResolvesTheAliasClaudeCodeStores() {
+        let defaults = parse(#"{"model":"opus","effortLevel":"medium"}"#)
+        XCTAssertEqual(defaults.model, .opus5)
+        XCTAssertEqual(defaults.effort, .medium)
+    }
+
+    func testAcceptsAFullModelID() {
+        XCTAssertEqual(parse(#"{"model":"claude-sonnet-5"}"#).model, .sonnet5)
+    }
+
+    /// Not knowing is fine — it just means we can't name it yet.
+    func testMissingOrUnreadableSettingsAreNotAnError() {
+        XCTAssertEqual(parse(#"{"hooks":{}}"#), .unknown)
+        XCTAssertEqual(parse("not json"), .unknown)
+        XCTAssertEqual(ClaudeCodeDefaults.read(from: URL(fileURLWithPath: "/nope/settings.json")), .unknown)
+    }
+
+    func testAnUnrecognisedModelNameIsIgnoredRatherThanGuessed() {
+        XCTAssertNil(parse(#"{"model":"some-future-model"}"#).model)
+    }
+
+    /// The live session is authoritative — it reports what actually ran.
+    func testASessionReportsTheModelItResolvedTo() {
+        let provider = ClaudeCodeProvider(
+            installation: ClaudeCodeInstallation(executableURL: URL(fileURLWithPath: "/bin/echo"))
+        )
+        XCTAssertNil(provider.reportedModel)
+        _ = provider.handle(line: #"{"type":"system","subtype":"init","session_id":"s","model":"claude-opus-5"}"#)
+        XCTAssertEqual(provider.reportedModel, "claude-opus-5")
+    }
+}

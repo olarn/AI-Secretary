@@ -314,7 +314,10 @@ final class SecretaryTests: XCTestCase {
 
         XCTAssertEqual(secretary.model, .opus48)
         XCTAssertEqual(chat.callCount, 0)
-        XCTAssertTrue(secretary.transcript.last?.text.contains("claude-opus-4-8") ?? false)
+        // Confirmed by display name now — the settings panel and the slash
+        // command share one entry point, and a name reads better than an id.
+        XCTAssertTrue(secretary.transcript.last?.text.contains("Claude Opus 4.8") ?? false,
+                      "Got: \(secretary.transcript.last?.text ?? "-")")
     }
 
     func testSlashEffortRejectsUnknownLevel() {

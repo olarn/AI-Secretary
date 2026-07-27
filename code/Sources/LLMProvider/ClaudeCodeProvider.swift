@@ -66,6 +66,8 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
     private let stateLock = NSLock()
     private var _configuration: Configuration
     private var _sessionID: String?
+    /// Model id reported by the last session's init event.
+    private var _reportedModel: String?
     /// tool_use id -> (name, input), so a refusal (which carries only the id)
     /// can be reported with what it was trying to do.
     private var _pendingToolUses: [String: (name: String, input: [String: Any])] = [:]
@@ -83,6 +85,12 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
     /// Claude Code's session for this conversation, once one has started.
     public var sessionID: String? {
         stateLock.withLock { _sessionID }
+    }
+
+    /// The model the most recent session actually ran on, whether or not we
+    /// asked for one.
+    public var reportedModel: String? {
+        stateLock.withLock { _reportedModel }
     }
 
     /// Forgets the session so the next turn starts a fresh one.
@@ -268,9 +276,13 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
 
         switch type {
         case "system":
-            if object["subtype"] as? String == "init",
-               let id = object["session_id"] as? String {
-                stateLock.withLock { _sessionID = id }
+            if object["subtype"] as? String == "init" {
+                stateLock.withLock {
+                    if let id = object["session_id"] as? String { _sessionID = id }
+                    // Authoritative: what the session actually resolved to,
+                    // whichever way the model was (or wasn't) specified.
+                    if let model = object["model"] as? String { _reportedModel = model }
+                }
             }
             return []
 
