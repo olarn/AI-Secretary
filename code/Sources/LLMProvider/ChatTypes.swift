@@ -73,6 +73,10 @@ public enum ChatError: Error, Equatable, LocalizedError {
     case missingAPIKey
     case http(status: Int, message: String)
     case network(String)
+    /// Claude Code isn't installed, or we couldn't find it.
+    case claudeCodeNotFound
+    /// The Claude Code process failed to start or exited badly.
+    case claudeCodeFailed(String)
 
     public var errorDescription: String? {
         switch self {
@@ -82,6 +86,13 @@ public enum ChatError: Error, Equatable, LocalizedError {
             return "Claude API error (\(status)): \(message)"
         case .network(let detail):
             return "Network error: \(detail)"
+        case .claudeCodeNotFound:
+            return """
+            Claude Code isn't installed on this Mac — I work by driving your own \
+            copy of it. Install it and sign in, then try again.
+            """
+        case .claudeCodeFailed(let detail):
+            return "Claude Code failed: \(detail)"
         }
     }
 }
