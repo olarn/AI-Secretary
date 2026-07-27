@@ -479,3 +479,49 @@ final class ClaudeCodeDefaultsTests: XCTestCase {
         XCTAssertEqual(provider.reportedModel, "claude-opus-5")
     }
 }
+
+// MARK: - Showing what it's doing
+
+final class AgentActivityTests: XCTestCase {
+    private func makeProvider() -> ClaudeCodeProvider {
+        ClaudeCodeProvider(
+            installation: ClaudeCodeInstallation(executableURL: URL(fileURLWithPath: "/bin/echo"))
+        )
+    }
+
+    /// A thinking block opening is the only usable signal that reasoning is
+    /// happening — its deltas carry no text on this model family.
+    func testAThinkingBlockOpeningIsReportedAsActivity() {
+        let events = makeProvider().handle(
+            line: #"{"type":"stream_event","event":{"type":"content_block_start","content_block":{"type":"thinking","thinking":""}}}"#
+        )
+        XCTAssertEqual(events, [.activity(AgentActivity(kind: .thinking, detail: "Thinking"))])
+    }
+
+    func testAToolCallIsReportedWithWhatItIsActingOn() {
+        let events = makeProvider().handle(line: #"""
+        {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"/tmp/p/about.md"}}]}}
+        """#)
+        XCTAssertEqual(events, [.activity(AgentActivity(kind: .tool, detail: "Read: about.md"))])
+    }
+
+    func testAWebSearchShowsTheQuery() {
+        XCTAssertEqual(
+            ClaudeCodeProvider.activityDetail(tool: "WebSearch", input: ["query": "On Cloud ราคา"]),
+            "WebSearch: On Cloud ราคา"
+        )
+    }
+
+    func testALongArgumentIsTruncatedSoTheLineStaysReadable() {
+        let detail = ClaudeCodeProvider.activityDetail(
+            tool: "Bash",
+            input: ["command": String(repeating: "x", count: 200)]
+        )
+        XCTAssertTrue(detail.hasSuffix("…"))
+        XCTAssertLessThan(detail.count, 80)
+    }
+
+    func testAToolWithNothingWorthShowingIsJustItsName() {
+        XCTAssertEqual(ClaudeCodeProvider.activityDetail(tool: "Glob", input: [:]), "Glob")
+    }
+}

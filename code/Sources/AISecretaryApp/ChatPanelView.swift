@@ -31,6 +31,7 @@ struct ChatPanelView: View {
             header
             if backendStatus.needsOnboarding { onboardingCard }
             transcript
+            activityFeed
             pendingDecisionView
             inputRow
             if showSettings { settingsSection }
@@ -181,6 +182,37 @@ struct ChatPanelView: View {
             }
         }
         .font(.caption2)
+    }
+
+    /// What the assistant is doing right now.
+    ///
+    /// Note this is activity, not reasoning: Claude Code returns thinking
+    /// blocks with no text (the raw chain of thought isn't exposed on this
+    /// model family), so there is nothing to render for the thought itself.
+    /// Which tool it reached for, and with what, is the part that exists.
+    /// Always on, and self-hiding: it appears while there is something to
+    /// report and disappears when the turn is done, so an idle panel stays
+    /// uncluttered without anyone having to switch it off.
+    @ViewBuilder
+    private var activityFeed: some View {
+        if !secretary.activity.isEmpty {
+            VStack(alignment: .leading, spacing: 3) {
+                ForEach(secretary.activity.suffix(6)) { step in
+                    HStack(spacing: 5) {
+                        Image(systemName: step.kind == .thinking ? "brain" : "wrench.and.screwdriver")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.secondary)
+                        Text(step.detail)
+                            .font(.caption2.monospaced())
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(8)
+            .background(Color.secondary.opacity(0.10), in: RoundedRectangle(cornerRadius: 6))
+        }
     }
 
     private var header: some View {

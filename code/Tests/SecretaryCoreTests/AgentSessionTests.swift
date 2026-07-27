@@ -19,6 +19,7 @@ final class SpyWorkspaceProvider: ChatProvider, WorkspaceScopedProvider, @unchec
     var hasWorkspaceTools = true
     /// Refusals to emit on the next turn, then cleared — so a retry succeeds.
     var denialsForNextTurn: [DeniedTool] = []
+    var activityForNextTurn: [AgentActivity] = []
 
     private(set) var preparedExtras: [[URL]] = []
 
@@ -43,7 +44,10 @@ final class SpyWorkspaceProvider: ChatProvider, WorkspaceScopedProvider, @unchec
         lastModel = model
         let denials = denialsForNextTurn
         denialsForNextTurn = []
+        let steps = activityForNextTurn
+        activityForNextTurn = []
         return AsyncThrowingStream { continuation in
+            for step in steps { continuation.yield(.activity(step)) }
             for denial in denials { continuation.yield(.toolDenied(denial)) }
             continuation.yield(.textDelta("ok"))
             continuation.yield(.completed(stopReason: nil, usage: nil))
@@ -374,6 +378,44 @@ final class AgentSessionTests: XCTestCase {
         await waitUntilIdle()
 
         XCTAssertEqual(provider.lastModel, .fable5)
+    }
+
+    // MARK: - Showing what it's doing
+
+    func testActivityIsCollectedForTheTurn() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        provider.activityForNextTurn = [
+            AgentActivity(kind: .thinking, detail: "Thinking"),
+            AgentActivity(kind: .tool, detail: "Read: about.md")
+        ]
+        secretary.submit("what's in here?")
+        await waitUntilIdle()
+
+        XCTAssertEqual(secretary.activity.map(\.detail), ["Thinking", "Read: about.md"])
+    }
+
+    /// Several thinking blocks in a row are one thing happening, not five.
+    func testRepeatedIdenticalStepsCollapse() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        let thinking = AgentActivity(kind: .thinking, detail: "Thinking")
+        provider.activityForNextTurn = [thinking, thinking, thinking]
+        secretary.submit("hello")
+        await waitUntilIdle()
+
+        XCTAssertEqual(secretary.activity.count, 1)
+    }
+
+    /// A new question starts a fresh list — last turn's steps aren't current.
+    func testActivityIsClearedWhenANewTurnStarts() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        provider.activityForNextTurn = [AgentActivity(kind: .tool, detail: "Read: a.md")]
+        secretary.submit("first")
+        await waitUntilIdle()
+        XCTAssertFalse(secretary.activity.isEmpty)
+
+        secretary.submit("second")
+        await waitUntilIdle()
+        XCTAssertTrue(secretary.activity.isEmpty, "Got: \(secretary.activity.map(\.detail))")
     }
 
     // MARK: - Working with no project

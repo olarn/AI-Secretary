@@ -83,6 +83,10 @@ public enum PendingDecision: Equatable, Sendable {
 public final class Secretary {
     public private(set) var transcript: [TranscriptEntry] = []
     public private(set) var pendingDecision: PendingDecision?
+    /// What the assistant is doing this turn, newest last. Shown only when the
+    /// user asks to see it; collected either way so switching it on mid-turn
+    /// isn't blank.
+    public private(set) var activity: [AgentActivity] = []
     /// nil means "whatever the backend is already set up to use" — for Claude
     /// Code that's the model and effort from the user's own settings.
     public private(set) var model: ChatModel?
@@ -170,6 +174,7 @@ public final class Secretary {
         activeRequestText = trimmed
         audit.record(AuditEntry(taskID: taskID, kind: .requestReceived, detail: "message received"))
 
+        activity = []
         stateMachine.send(.userBeganInput, reason: "user submitted a message", taskID: taskID)
         stateMachine.send(.beginInterpreting, reason: "classifying intent", taskID: taskID)
 
@@ -503,6 +508,10 @@ public final class Secretary {
                     switch event {
                     case .thinking:
                         break // stay in THINKING until the first token
+                    case .activity(let step):
+                        // Kept even when the user has the panel closed: turning
+                        // it on mid-turn should show what already happened.
+                        self.recordActivity(step)
                     case .toolDenied(let tool):
                         // Collected rather than acted on immediately: the turn
                         // keeps going and may be refused several things, and one
@@ -549,6 +558,13 @@ public final class Secretary {
         stateMachine.send(success ? .succeeded : .failed, reason: success ? "chat reply delivered" : "chat failed", taskID: taskID)
         stateMachine.send(.acknowledge, reason: "result delivered", taskID: taskID)
         activeTaskID = nil
+    }
+
+    /// Appends a step, collapsing an immediate repeat — several thinking blocks
+    /// in a row are one "thinking", not five identical lines.
+    private func recordActivity(_ step: AgentActivity) {
+        guard activity.last != step else { return }
+        activity.append(step)
     }
 
     private func updateEntry(id: UUID, text: String) {

@@ -63,6 +63,18 @@ value the app didn't choose. Click either one for a picker; choosing takes
 effect immediately and is announced in the conversation, the same as the slash
 commands.
 
+### Seeing what it's doing
+
+While a turn is running the panel lists what the assistant is actually doing —
+`Thinking`, `Read: about.md`, `WebSearch: …`, `Bash: git status` — and clears
+when the turn ends, so an idle panel stays quiet. No setting; it's just there.
+
+This is activity, not reasoning. Claude Code streams thinking blocks whose text
+is **empty**: `thinking.display` defaults to `omitted` on the Opus 5 family, the
+raw chain of thought is never returned for those models, and no CLI flag
+changes it. So the thought itself cannot be shown — which tool it reached for,
+and with what, can.
+
 ### Continuity between commands and chat
 
 Commands and conversation share one thread. Running `list files in X` and then

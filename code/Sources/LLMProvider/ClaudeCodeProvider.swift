@@ -243,6 +243,20 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
         return phrases.contains { message.localizedCaseInsensitiveContains($0) }
     }
 
+    /// A short "what it's doing" line: the tool plus the thing it names.
+    static func activityDetail(tool name: String, input: [String: Any]) -> String {
+        let argument = (input["query"] as? String)
+            ?? (input["command"] as? String)
+            ?? (input["pattern"] as? String)
+            ?? (input["url"] as? String)
+            ?? (input["file_path"] as? String).map { URL(fileURLWithPath: $0).lastPathComponent }
+            ?? (input["path"] as? String)
+            ?? (input["prompt"] as? String)
+        guard let argument, !argument.isEmpty else { return name }
+        let trimmed = argument.count > 60 ? String(argument.prefix(60)) + "…" : argument
+        return "\(name): \(trimmed)"
+    }
+
     /// Turns a refused call into something a human can decide on, plus the rule
     /// that would allow it.
     ///
@@ -289,13 +303,14 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
         case "assistant":
             // Remember what each tool call was for; the refusal that may follow
             // carries only the id.
+            var events: [ChatStreamEvent] = []
             for block in Self.contentBlocks(of: object) where block["type"] as? String == "tool_use" {
                 guard let id = block["id"] as? String, let name = block["name"] as? String else { continue }
-                stateLock.withLock {
-                    _pendingToolUses[id] = (name, block["input"] as? [String: Any] ?? [:])
-                }
+                let input = block["input"] as? [String: Any] ?? [:]
+                stateLock.withLock { _pendingToolUses[id] = (name, input) }
+                events.append(.activity(AgentActivity(kind: .tool, detail: Self.activityDetail(tool: name, input: input))))
             }
-            return []
+            return events
 
         case "user":
             var denied: [ChatStreamEvent] = []
@@ -311,6 +326,14 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
             return denied
 
         case "stream_event":
+            // A thinking block opening is the only signal that reasoning is
+            // happening; its deltas carry no text to show.
+            if let event = object["event"] as? [String: Any],
+               event["type"] as? String == "content_block_start",
+               let block = event["content_block"] as? [String: Any],
+               block["type"] as? String == "thinking" {
+                return [.activity(AgentActivity(kind: .thinking, detail: "Thinking"))]
+            }
             guard let event = object["event"] as? [String: Any],
                   event["type"] as? String == "content_block_delta",
                   let delta = event["delta"] as? [String: Any],

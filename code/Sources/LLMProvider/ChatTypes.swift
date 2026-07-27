@@ -105,11 +105,38 @@ public struct DeniedTool: Equatable, Sendable {
     }
 }
 
+/// Something the assistant is doing right now.
+///
+/// Not the model's reasoning — Claude Code returns thinking blocks whose text
+/// is empty (`display: "omitted"` is the default on Opus 5 and there is no CLI
+/// flag to change it, and the raw chain of thought is never returned on that
+/// family at all). What can be shown is the activity itself: that it is
+/// thinking, and which tool it reached for with what argument. In practice
+/// that is what "what is it doing?" actually means.
+public struct AgentActivity: Equatable, Sendable, Identifiable {
+    public enum Kind: Equatable, Sendable { case thinking, tool }
+
+    public let id = UUID()
+    public let kind: Kind
+    public let detail: String
+
+    public init(kind: Kind, detail: String) {
+        self.kind = kind
+        self.detail = detail
+    }
+
+    public static func == (lhs: AgentActivity, rhs: AgentActivity) -> Bool {
+        lhs.kind == rhs.kind && lhs.detail == rhs.detail
+    }
+}
+
 /// Events surfaced from a streamed reply. The provider maps the raw Anthropic
 /// SSE event types onto this small, UI-agnostic set.
 public enum ChatStreamEvent: Equatable, Sendable {
     /// The backend was refused a tool. Only Claude Code emits this.
     case toolDenied(DeniedTool)
+    /// Progress worth showing while the user waits. Only Claude Code emits this.
+    case activity(AgentActivity)
     /// The model began thinking (adaptive thinking). No visible text yet.
     case thinking
     /// A chunk of assistant text.
