@@ -11,13 +11,25 @@ import LLMProvider
 public struct TranscriptEntry: Identifiable, Equatable, Sendable {
     public enum Speaker: Sendable { case user, secretary }
 
+    /// What this entry is. Activity sits in the conversation in order, so you
+    /// can see what happened before an answer, but it is not an answer and the
+    /// UI renders it differently.
+    public enum Kind: Sendable { case message, activity }
+
     public let id = UUID()
     public let speaker: Speaker
+    public let kind: Kind
     public var text: String
     public let timestamp: Date
 
-    public init(speaker: Speaker, text: String, timestamp: Date = Date()) {
+    public init(
+        speaker: Speaker,
+        kind: Kind = .message,
+        text: String,
+        timestamp: Date = Date()
+    ) {
         self.speaker = speaker
+        self.kind = kind
         self.text = text
         self.timestamp = timestamp
     }
@@ -83,10 +95,12 @@ public enum PendingDecision: Equatable, Sendable {
 public final class Secretary {
     public private(set) var transcript: [TranscriptEntry] = []
     public private(set) var pendingDecision: PendingDecision?
-    /// What the assistant is doing this turn, newest last. Shown only when the
-    /// user asks to see it; collected either way so switching it on mid-turn
-    /// isn't blank.
+    /// What the assistant is doing this turn, newest last. Collected whether or
+    /// not it is being shown, so switching it on mid-turn isn't blank.
     public private(set) var activity: [AgentActivity] = []
+    /// Whether activity is woven into the conversation. On by default — seeing
+    /// the work is the point; the badge on the character turns it off.
+    public private(set) var showsActivity = true
     /// nil means "whatever the backend is already set up to use" — for Claude
     /// Code that's the model and effort from the user's own settings.
     public private(set) var model: ChatModel?
@@ -109,6 +123,10 @@ public final class Secretary {
     /// "in <project>" repeated on every line.
     @ObservationIgnored private var lastProject: Project?
     @ObservationIgnored private var _sessionAgentTools: Set<String> = []
+    /// This turn's activity entry. Without it, a later turn would find the
+    /// previous turn's box by kind and overwrite that history instead of
+    /// starting its own.
+    @ObservationIgnored private var activityEntryID: UUID?
     @ObservationIgnored private var conversation: [ChatMessage] = []
     @ObservationIgnored private var streamingTask: Task<Void, Never>?
 
@@ -175,6 +193,7 @@ public final class Secretary {
         audit.record(AuditEntry(taskID: taskID, kind: .requestReceived, detail: "message received"))
 
         activity = []
+        activityEntryID = nil
         stateMachine.send(.userBeganInput, reason: "user submitted a message", taskID: taskID)
         stateMachine.send(.beginInterpreting, reason: "classifying intent", taskID: taskID)
 
@@ -511,7 +530,7 @@ public final class Secretary {
                     case .activity(let step):
                         // Kept even when the user has the panel closed: turning
                         // it on mid-turn should show what already happened.
-                        self.recordActivity(step)
+                        self.recordActivity(step, before: replyID)
                     case .toolDenied(let tool):
                         // Collected rather than acted on immediately: the turn
                         // keeps going and may be refused several things, and one
@@ -562,9 +581,38 @@ public final class Secretary {
 
     /// Appends a step, collapsing an immediate repeat — several thinking blocks
     /// in a row are one "thinking", not five identical lines.
-    private func recordActivity(_ step: AgentActivity) {
+    private func recordActivity(_ step: AgentActivity, before replyID: UUID) {
         guard activity.last != step else { return }
         activity.append(step)
+        guard showsActivity else { return }
+
+        let text = activity.map { "\($0.kind == .thinking ? "◇" : "▸") \($0.detail)" }
+            .joined(separator: "\n")
+
+        if let entryID = activityEntryID,
+           let index = transcript.firstIndex(where: { $0.id == entryID }) {
+            transcript[index].text = text
+        } else if let replyIndex = transcript.firstIndex(where: { $0.id == replyID }) {
+            // Inserted ahead of the reply: the work happened before the answer,
+            // and the transcript should read in that order.
+            let entry = TranscriptEntry(speaker: .secretary, kind: .activity, text: text)
+            activityEntryID = entry.id
+            transcript.insert(entry, at: replyIndex)
+        }
+    }
+
+    /// Flips the running commentary on or off and says so, because the change
+    /// happens in the conversation and should be visible there.
+    public func toggleActivityVisibility() {
+        showsActivity.toggle()
+        if showsActivity {
+            say(.secretary, "I'll show what I'm doing as I work.")
+            // Nothing to back-fill mid-turn: the entry appears on the next step.
+        } else {
+            transcript.removeAll { $0.kind == .activity }
+            activityEntryID = nil
+            say(.secretary, "I'll keep the details to myself.")
+        }
     }
 
     private func updateEntry(id: UUID, text: String) {

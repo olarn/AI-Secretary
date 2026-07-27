@@ -47,9 +47,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let characterHost = NSHostingView(
-            rootView: CharacterView(machine: stateMachine, onTap: { [weak self] in
-                self?.toggleChatPanel()
-            })
+            rootView: CharacterView(
+                machine: stateMachine,
+                secretary: secretary,
+                onTap: { [weak self] in self?.toggleChatPanel() }
+            )
         )
         characterHost.frame = NSRect(x: 0, y: 0, width: characterSize, height: characterSize)
 

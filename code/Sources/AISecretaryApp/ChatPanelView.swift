@@ -31,7 +31,6 @@ struct ChatPanelView: View {
             header
             if backendStatus.needsOnboarding { onboardingCard }
             transcript
-            activityFeed
             pendingDecisionView
             inputRow
             if showSettings { settingsSection }
@@ -190,31 +189,6 @@ struct ChatPanelView: View {
     /// blocks with no text (the raw chain of thought isn't exposed on this
     /// model family), so there is nothing to render for the thought itself.
     /// Which tool it reached for, and with what, is the part that exists.
-    /// Always on, and self-hiding: it appears while there is something to
-    /// report and disappears when the turn is done, so an idle panel stays
-    /// uncluttered without anyone having to switch it off.
-    @ViewBuilder
-    private var activityFeed: some View {
-        if !secretary.activity.isEmpty {
-            VStack(alignment: .leading, spacing: 3) {
-                ForEach(secretary.activity.suffix(6)) { step in
-                    HStack(spacing: 5) {
-                        Image(systemName: step.kind == .thinking ? "brain" : "wrench.and.screwdriver")
-                            .font(.system(size: 9))
-                            .foregroundStyle(.secondary)
-                        Text(step.detail)
-                            .font(.caption2.monospaced())
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(8)
-            .background(Color.secondary.opacity(0.10), in: RoundedRectangle(cornerRadius: 6))
-        }
-    }
-
     private var header: some View {
         HStack(spacing: 6) {
             Text("AI Secretary")
@@ -251,17 +225,45 @@ struct ChatPanelView: View {
         }
     }
 
+    @ViewBuilder
     private func messageBubble(_ entry: TranscriptEntry) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(entry.speaker == .user ? "You" : "Secretary")
-                .font(.caption2.bold())
-                .foregroundStyle(entry.speaker == .user ? Color.accentColor : .secondary)
+        switch entry.kind {
+        case .activity: activityBubble(entry)
+        case .message:
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.speaker == .user ? "You" : "Secretary")
+                    .font(.caption2.bold())
+                    .foregroundStyle(entry.speaker == .user ? Color.accentColor : .secondary)
+                Text(entry.text)
+                    .font(.caption.monospaced())
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    /// Sits in the conversation in order, but deliberately doesn't look like
+    /// one: a bordered, dimmer box so it reads as "here's what happened" rather
+    /// than as part of the answer.
+    private func activityBubble(_ entry: TranscriptEntry) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Label("Working", systemImage: "gearshape.2")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.secondary)
             Text(entry.text)
-                .font(.caption.monospaced())
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(.secondary)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(8)
+        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(Color.secondary.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
+        )
     }
 
     @ViewBuilder

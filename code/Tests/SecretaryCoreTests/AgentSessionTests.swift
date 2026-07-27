@@ -405,6 +405,92 @@ final class AgentSessionTests: XCTestCase {
         XCTAssertEqual(secretary.activity.count, 1)
     }
 
+    /// It belongs in the conversation, in order, ahead of the answer it
+    /// preceded — and marked as not being the answer.
+    func testActivityAppearsInTheTranscriptBeforeTheReply() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        provider.activityForNextTurn = [AgentActivity(kind: .tool, detail: "Read: about.md")]
+        secretary.submit("what's in here?")
+        await waitUntilIdle()
+
+        let kinds = secretary.transcript.map(\.kind)
+        guard let activityIndex = kinds.firstIndex(of: .activity) else {
+            return XCTFail("Expected an activity entry, got: \(kinds)")
+        }
+        XCTAssertTrue(secretary.transcript[activityIndex].text.contains("about.md"))
+        XCTAssertEqual(activityIndex, secretary.transcript.count - 2,
+                       "It should sit just before the reply it preceded")
+    }
+
+    func testAllStepsOfATurnShareOneEntryRatherThanFlooding() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        provider.activityForNextTurn = [
+            AgentActivity(kind: .thinking, detail: "Thinking"),
+            AgentActivity(kind: .tool, detail: "Read: a.md"),
+            AgentActivity(kind: .tool, detail: "Read: b.md")
+        ]
+        secretary.submit("hello")
+        await waitUntilIdle()
+
+        let entries = secretary.transcript.filter { $0.kind == .activity }
+        XCTAssertEqual(entries.count, 1)
+        XCTAssertTrue(entries[0].text.contains("a.md") && entries[0].text.contains("b.md"))
+    }
+
+    func testTurningItOffRemovesWhatWasShownAndSaysSo() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        provider.activityForNextTurn = [AgentActivity(kind: .tool, detail: "Read: a.md")]
+        secretary.submit("hello")
+        await waitUntilIdle()
+        XCTAssertTrue(secretary.transcript.contains { $0.kind == .activity })
+
+        secretary.toggleActivityVisibility()
+
+        XCTAssertFalse(secretary.showsActivity)
+        XCTAssertFalse(secretary.transcript.contains { $0.kind == .activity })
+        XCTAssertTrue(secretary.transcript.last?.text.contains("to myself") == true,
+                      "The change should be announced: \(secretary.transcript.last?.text ?? "-")")
+    }
+
+    func testTurningItBackOnSaysSoToo() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        secretary.toggleActivityVisibility()
+        secretary.toggleActivityVisibility()
+
+        XCTAssertTrue(secretary.showsActivity)
+        XCTAssertTrue(secretary.transcript.last?.text.contains("show what I'm doing") == true,
+                      "Got: \(secretary.transcript.last?.text ?? "-")")
+    }
+
+    func testWithItOffNoActivityEntryIsAdded() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        secretary.toggleActivityVisibility()
+        provider.activityForNextTurn = [AgentActivity(kind: .tool, detail: "Read: a.md")]
+        secretary.submit("hello")
+        await waitUntilIdle()
+
+        XCTAssertFalse(secretary.transcript.contains { $0.kind == .activity })
+        XCTAssertFalse(secretary.activity.isEmpty, "Still collected, just not shown")
+    }
+
+    /// Each turn gets its own box. Matching by kind alone would find the
+    /// previous turn's and rewrite that history with the current steps.
+    func testASecondTurnGetsItsOwnActivityEntry() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        provider.activityForNextTurn = [AgentActivity(kind: .tool, detail: "Read: first.md")]
+        secretary.submit("one")
+        await waitUntilIdle()
+
+        provider.activityForNextTurn = [AgentActivity(kind: .tool, detail: "Read: second.md")]
+        secretary.submit("two")
+        await waitUntilIdle()
+
+        let boxes = secretary.transcript.filter { $0.kind == .activity }
+        XCTAssertEqual(boxes.count, 2)
+        XCTAssertTrue(boxes[0].text.contains("first.md"), "History must survive: \(boxes[0].text)")
+        XCTAssertTrue(boxes[1].text.contains("second.md"))
+    }
+
     /// A new question starts a fresh list — last turn's steps aren't current.
     func testActivityIsClearedWhenANewTurnStarts() async {
         let secretary = makeSecretary(projects: [project(grantingAgent: true)])

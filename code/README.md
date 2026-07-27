@@ -65,9 +65,15 @@ commands.
 
 ### Seeing what it's doing
 
-While a turn is running the panel lists what the assistant is actually doing —
-`Thinking`, `Read: about.md`, `WebSearch: …`, `Bash: git status` — and clears
-when the turn ends, so an idle panel stays quiet. No setting; it's just there.
+While a turn is running, what the assistant is doing appears **in the
+conversation**, in order, just before the answer it led to — `◇ Thinking`,
+`▸ Read: about.md`, `▸ WebSearch: …`, `▸ Bash: git status`. It's drawn as a
+dashed, dimmer box so it never reads as part of the reply, and each turn keeps
+its own box, so scrolling back shows how an earlier answer was reached.
+
+**Click the status badge on the character to turn it off** (and again to turn
+it back on). The change is announced in the conversation, and switching it off
+also clears the boxes already there. On by default.
 
 This is activity, not reasoning. Claude Code streams thinking blocks whose text
 is **empty**: `thinking.display` defaults to `omitted` on the Opus 5 family, the

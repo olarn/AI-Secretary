@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import AssistantState
+import SecretaryCore
 
 /// Desktop companion character. Displays a locally-provided character image
 /// if the user has placed one (see `CharacterAsset`), otherwise falls back
@@ -8,6 +9,7 @@ import AssistantState
 /// remain the same either way.
 struct CharacterView: View {
     let machine: AssistantStateMachine
+    let secretary: Secretary
     let onTap: () -> Void
 
     var body: some View {
@@ -19,8 +21,16 @@ struct CharacterView: View {
 
                 characterArt
 
-                StatusBadge(state: machine.state)
-                    .offset(x: 2, y: 2)
+                // The status badge doubles as the switch for the running
+                // commentary: it already shows what the assistant is doing, so
+                // it's the natural place to ask for more or less of it.
+                Button(action: secretary.toggleActivityVisibility) {
+                    StatusBadge(state: machine.state)
+                        .opacity(secretary.showsActivity ? 1 : 0.45)
+                }
+                .buttonStyle(.plain)
+                .help(secretary.showsActivity ? "Hide what I'm doing" : "Show what I'm doing")
+                .offset(x: 2, y: 2)
             }
             .shadow(radius: 6)
 
