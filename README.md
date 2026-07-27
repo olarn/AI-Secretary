@@ -29,7 +29,7 @@ It can also *understand* a file: `summarize`, `explain`, `analyze`, `review` or
 `describe` a path, and the file's contents are sent to Claude for an answer.
 Because that takes data off the machine it is classed `externalNetwork`, not
 read-only: it asks every single time and names the destination model in the
-prompt. Approving "read files here" never becomes permission to upload them.
+prompt.
 
 Still open in Phase 4: pulling data from the internet to work alongside local
 files. The file access is a native adapter rather than an MCP server — MCP would
@@ -58,13 +58,18 @@ in **Settings** first. Slash commands, handled locally with no network call:
 Commands and conversation share one thread. Running `list files in X` and then
 asking "how many .md files?" works: the request and its output are written into
 the conversation the model sees, so it can answer instead of asking again. Git
-output and directory listings are carried in full (capped at 4 KB each, and the
-whole conversation is trimmed oldest-first past 200 KB).
+output and listings are capped at 4 KB each, file contents at 16 KB, and the
+whole conversation is trimmed oldest-first past 200 KB.
 
-File **contents** are the exception. `read <path>` shows the file on screen and
-leaves only a marker in the model's context — approving a local read must never
-become an upload one turn later. To let the model reason about a file, use
-`summarize <path>`, which asks first.
+**This includes file contents.** A file you `read` stays in the conversation and
+travels with every later message in the session, which is what makes "what does
+this mean?" work. The approval prompt for a read says so explicitly. If you want
+a file analysed without it joining the history, use `summarize <path>` — that
+sends it once, for that answer only.
+
+The Secretary also remembers the last project it worked in, so follow-up
+commands don't need `in <project>` repeated. An explicit name that matches
+nothing is still an error, never silently redirected to the remembered project.
 
 ## Requirements
 
@@ -254,14 +259,26 @@ constrained by construction:
 
 The file adapter runs no external process at all: it resolves the requested
 path against the project root, resolves symlinks, and refuses anything landing
-outside the root before reading. Note that once `file.readOnly` is approved for
-a project, any text file in it (including `.env` or checked-in secrets) can be
-read without re-prompting — the same approve-once model as Git, applied to a
-higher-stakes capability.
+outside the root before reading.
+
+Two consequences of the approve-once model are worth stating plainly, because
+they are chosen rather than accidental:
+
+- Once `file.readOnly` is approved for a project, any text file in it can be
+  read without re-prompting — the same model as Git, applied to a
+  higher-stakes capability.
+- A file you read joins the conversation, so it is sent to Claude with your
+  next chat message. That is what makes follow-up questions work, and the read
+  approval prompt discloses it. Don't `read` a file you wouldn't send; use
+  `list` to look around, and `summarize` when you want an answer about a file
+  without keeping it in history.
+
+The model is told which projects are registered — names only. Paths, tool
+allowlists and approval state never enter chat history.
 
 Read-only work is the only class that can run without re-prompting, and only
-after the project has been approved once. Understanding a file is deliberately
-*not* read-only — it is `externalNetwork`, so it asks every time, and a prior
+after the project has been approved once. `summarize`/`explain`/`analyze` are
+deliberately *not* read-only — it is `externalNetwork`, so it asks every time, and a prior
 read-only approval for the same project and tool does not authorise it. The
 remaining classes (local-write, destructive, Git-history-changing,
 dependency-installing) are defined to require approval each time; none is

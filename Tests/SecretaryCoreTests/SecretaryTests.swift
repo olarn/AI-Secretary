@@ -35,6 +35,7 @@ final class FakeChatProvider: ChatProvider, @unchecked Sendable {
     private(set) var lastMessages: [ChatMessage] = []
     private(set) var lastModel: ChatModel?
     private(set) var lastEffort: Effort?
+    private(set) var lastSystem: String?
 
     init(_ script: Script) { self.script = script }
 
@@ -49,6 +50,7 @@ final class FakeChatProvider: ChatProvider, @unchecked Sendable {
         lastMessages = messages
         lastModel = model
         lastEffort = effort
+        lastSystem = system
         return AsyncThrowingStream { continuation in
             switch script {
             case .events(let events):

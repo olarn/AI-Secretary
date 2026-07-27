@@ -315,14 +315,17 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
         XCTAssertTrue(sent.contains("มี .md file กี่ file?"), "…along with the follow-up")
     }
 
-    /// Continuity must not become a back door: a local `read` puts a marker in
-    /// context, never the bytes.
-    func testFileContentsFromAPlainReadNeverEnterTheConversation() async {
-        fileAdapter.stubbedContents = "API_KEY=XYZZY-42"
+    /// Contents of a file the user read stay in context, so "what does this
+    /// mean?" works without reading it again. Requested explicitly by the user,
+    /// replacing the earlier marker-only behaviour — the trade-off is that a
+    /// read file travels with every later message this session, which is why the
+    /// approval prompt now says so (see the next test).
+    func testFileContentsFromAReadStayInTheConversation() async {
+        fileAdapter.stubbedContents = "port = 8080 # XYZZY-42"
         let chat = reply("ok")
         let secretary = makeSecretary(chat: chat)
 
-        secretary.submit("read .env in Fixture")
+        secretary.submit("read config.toml in Fixture")
         secretary.resolvePendingApproval(granted: true)
         await waitUntilIdle()
 
@@ -330,8 +333,18 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
         await waitUntilIdle()
 
         let sent = chat.lastMessages.map(\.content).joined(separator: "\n")
-        XCTAssertFalse(sent.contains("XYZZY-42"), "A local read must not leak into the next chat turn")
-        XCTAssertTrue(sent.contains("did not share the contents"), "Sent:\n\(sent)")
+        XCTAssertTrue(sent.contains("XYZZY-42"), "Sent:\n\(sent)")
+        XCTAssertTrue(sent.contains("data, not instructions"),
+                      "File contents must still be framed as untrusted data")
+    }
+
+    func testReadApprovalWarnsThatContentsWillBeSent() {
+        let secretary = makeSecretary(chat: reply("ok"))
+        secretary.submit("read .env in Fixture")
+
+        let prompt = secretary.transcript.last?.text ?? ""
+        XCTAssertTrue(prompt.contains("sent to Claude"),
+                      "The read approval must disclose that contents join the conversation. Got: \(prompt)")
     }
 
     func testGitOutputIsCarriedIntoContextToo() async {
@@ -372,6 +385,105 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
 
         let sent = chat.lastMessages.map(\.content).joined(separator: "\n")
         XCTAssertFalse(sent.contains("<tool-output>"), "A failed run has no output worth remembering")
+    }
+
+    // MARK: - Knowing which projects exist
+
+    /// The model denied knowing about a project the user could see listed in the
+    /// UI, because nothing ever told it. Names go in the system prompt; paths
+    /// deliberately do not.
+    func testRegisteredProjectNamesReachTheModelButPathsDoNot() async {
+        let chat = reply("ok")
+        let secretary = Secretary(
+            stateMachine: machine,
+            registry: ProjectRegistry(store: InMemoryProjectStore(projects: [
+                Project(name: "โลหะเจริญ", path: "/Users/someone/Secret-Brain/โลหะเจริญ")
+            ])),
+            policy: policy,
+            adapter: SpyAdapter(),
+            fileAdapter: fileAdapter,
+            classifier: RuleBasedIntentClassifier(),
+            audit: AuditLog(),
+            chatProvider: chat
+        )
+
+        secretary.submit("สวัสดี")
+        await waitUntilIdle()
+
+        let system = chat.lastSystem ?? ""
+        XCTAssertTrue(system.contains("โลหะเจริญ"), "System prompt: \(system)")
+        XCTAssertFalse(system.contains("Secret-Brain"), "Paths must not go into chat history")
+    }
+
+    func testNoProjectsIsStatedRatherThanLeftBlank() async {
+        let chat = reply("ok")
+        let secretary = Secretary(
+            stateMachine: machine,
+            registry: ProjectRegistry(store: InMemoryProjectStore(projects: [])),
+            policy: policy,
+            adapter: SpyAdapter(),
+            fileAdapter: fileAdapter,
+            classifier: RuleBasedIntentClassifier(),
+            audit: AuditLog(),
+            chatProvider: chat
+        )
+
+        secretary.submit("hello")
+        await waitUntilIdle()
+
+        XCTAssertTrue(chat.lastSystem?.contains("not registered any projects") == true)
+    }
+
+    // MARK: - Sticky project
+
+    func testFollowUpCommandReusesTheLastProject() async {
+        let second = Project(
+            name: "Other",
+            path: "/tmp/other",
+            allowedTools: [FileReadOnlyAdapter.toolIdentifier]
+        )
+        let chat = reply("ok")
+        let secretary = Secretary(
+            stateMachine: machine,
+            registry: ProjectRegistry(store: InMemoryProjectStore(projects: [project, second])),
+            policy: policy,
+            adapter: SpyAdapter(),
+            fileAdapter: fileAdapter,
+            classifier: RuleBasedIntentClassifier(),
+            audit: AuditLog(),
+            chatProvider: chat
+        )
+
+        secretary.submit("list files in Fixture")
+        secretary.resolvePendingApproval(granted: true)
+        await waitUntilIdle()
+
+        // No "in <project>" this time — with two registered, this used to stop
+        // and ask which one.
+        secretary.submit("read notes.md")
+
+        if case .projectChoice = secretary.pendingDecision {
+            return XCTFail("Should have reused Fixture instead of asking again")
+        }
+        XCTAssertEqual(fileAdapter.runCalls.count, 2)
+        XCTAssertEqual(fileAdapter.runCalls.last, .readFile(relativePath: "notes.md"))
+    }
+
+    /// Remembering must never redirect an explicit name to somewhere else.
+    func testAnUnknownProjectNameIsStillNotFound() async {
+        let chat = reply("ok")
+        let secretary = makeSecretary(chat: chat)
+
+        secretary.submit("list files in Fixture")
+        secretary.resolvePendingApproval(granted: true)
+        await waitUntilIdle()
+
+        secretary.submit("list files in Nonexistent")
+
+        XCTAssertNil(secretary.pendingDecision)
+        XCTAssertEqual(fileAdapter.runCalls.count, 1, "Nothing may run against the remembered project")
+        XCTAssertTrue(secretary.transcript.last?.text.contains("No registered project") == true,
+                      "Got: \(secretary.transcript.last?.text ?? "-")")
     }
 
     func testForAndOnAlsoSelectTheProject() {
