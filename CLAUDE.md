@@ -122,23 +122,10 @@ Build in phases.
 
 - Integration with Claude as a mask app.
 
-### Phase 4: Access files/ folder. Read files content and understand it
+### Phase 4: Setings
 
-- MCP-based integrations such as read folders / files content. 
-- Understand files content. Be able to summerize, analytic, suggestion, and more.
-- Only work with folders/files that I add in the project.
-- Pull data from the internet that can work with local folders and files.
 
-### Phase 4.1: improve 
-- เวลา AI ตอบ chat ถ้า position อยู่ที่ bottom position ให้ auto scroll เวลา message จาก AI response กลับมา แต่ถ้า user scroll ขึ้นไปอ่าน message เก่าๆ ไม่ต้อง auto scroll จนหว่า user จะ scroll ลงมาล่างสุด
-
-### Phase 5: Setings
-
-- เพิ่มหน้า setting (ใช้ window chat เดิมได้)
-- เพิ่ม increase / decrease font size.
-- เพิ่ม increase / decrease ขนาดหน้าต่าง chat
-
-### Phase 6: External tools and proactive assistance
+### Phase 5: External tools and proactive assistance
 
 - MCP-based integrations such as calendar, Slack, email, and knowledge sources.
 - Notifications only with user-configured rules.
@@ -149,6 +136,12 @@ Build in phases.
 - Push-to-talk or explicit voice activation.
 - Speech-to-text, text-to-speech, interruption behavior, and privacy controls.
 - Voice must follow the same approval and auditing model as chat.
+
+### Phase 7: Personality
+
+- upload รูปเลขา ได้ AI จะจัดรูปให้อยู่ใน bubble ให้แล้ว save ใน local storage
+- เมื่อ upload รูป AI จะช่วยกำหนดเพศและเสนอ user ว่า "อยากให้ตอบด้วย personality ไหม เช่น เพศ หญิง/ชาย เด็ก/วัยรุ่น/ผู้ใหญ่ มืออาชีพ" 
+- ตั้งชื่อได้ ชื่อจะแสดงใน chat
 
 ## Security and privacy
 
