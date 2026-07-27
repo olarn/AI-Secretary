@@ -15,41 +15,34 @@ request now drives real work: the Secretary classifies the intent, resolves an
 explicitly registered project, asks for approval, and runs a fixed set of
 read-only Git commands, reporting the result back in the transcript.
 
-**Phase 3 — Chat with me (done).** Any message that isn't a Git command or a
-slash command streams a real reply from the Claude API through the character.
-The API key lives only in the macOS Keychain (set it in Settings); the default
-model is `claude-sonnet-5` at `medium` effort, switchable in-chat with `/model`
-and `/effort`. Chat is a conversation only — the model is not given tool access
-to the Git adapter.
+**Phase 3 — Chat with me (done).** Typing anything that isn't a command
+streams a real reply through the character.
 
-**Phase 4 — Access files and understand them (in progress).** The Secretary can
-list a directory or read a text file inside a registered project, through the
-same approval-gated pipeline as Git. Paths are always project-relative and
-verified to stay inside the project root — `..`, absolute paths, and symlinks
-that point outside are refused before anything is read.
+**Backend — your own Claude Code.** The app is a face over the Claude Code you
+already have. On launch it looks for the `claude` binary; if it's there, work
+runs through it on your own account and subscription, and no API key is
+involved. That also means the assistant has Claude Code's real abilities —
+editing files, running commands, web search, subagents, skills, MCP — instead
+of the handful of tools this app could implement itself. If Claude Code isn't
+installed, the panel explains how to set it up, and an Anthropic API key set in
+Settings is used as a fallback.
 
-It can also *understand* a file: `summarize`, `explain`, `analyze`, `review` or
-`describe` a path, and the file's contents are sent to Claude for an answer.
-Because that takes data off the machine it is classed `externalNetwork`, not
-read-only: it asks every single time and names the destination model in the
-prompt.
-
-Still open in Phase 4: pulling data from the internet to work alongside local
-files. The file access is a native adapter rather than an MCP server — MCP would
-add a process and protocol boundary around a capability the app already has, so
-it is deferred until there is an integration that actually needs it.
-
-Not built yet: giving Claude tool-use access to run project tools by itself, web
-search, settings/appearance (Phase 5), voice, MCP integrations, and any action
-that writes, deletes, installs, or changes Git history.
+**Phase 4 — File & folder access (superseded).** The bundled Git and file
+adapters still exist and still back the typed commands below, but Claude Code's
+own tools now do this work in normal conversation.
 
 ### Chatting
 
-Type anything that isn't a Git command. The reply streams token-by-token, and
-the character walks IDLE → THINKING (while the model reasons) → WORKING (as text
-arrives) → SUCCESS/ERROR. Set your Anthropic **API** key (billed separately from
-any Claude subscription, at [console.anthropic.com](https://console.anthropic.com))
-in **Settings** first. Slash commands, handled locally with no network call:
+Type anything that isn't a Git command, in your own words. The reply streams
+token-by-token, and the character walks IDLE → THINKING (while the model
+reasons) → WORKING (as text arrives) → SUCCESS/ERROR.
+
+With Claude Code installed there is nothing to configure — it runs on the
+account you already signed in to. Without it, set an Anthropic **API** key
+(billed separately from any Claude subscription, at
+[console.anthropic.com](https://console.anthropic.com)) in **Settings**.
+
+Slash commands, handled locally with no network call:
 
 | Command | Effect |
 |---|---|
@@ -177,9 +170,44 @@ project…**, which opens a folder picker. A path is never inferred from typed
 text: an unregistered name is reported as not found, and an ambiguous one asks
 you to pick.
 
-The first time a project is used, the assistant asks before running anything
-and shows the exact command. Approving remembers that project/tool pair for the
-session; anything that is not read-only would ask every time.
+The registered folder is the Claude Code process's working directory, which is
+what actually bounds what it can reach. The first message in each project asks
+before anything runs, naming the project and saying that work happens on your
+own Claude Code account. Approving is **remembered for that project** and
+persisted — asking before every message would make the assistant unusable — so
+the prompt is explicit about what the grant covers.
+
+With no project registered (or several registered and none chosen yet), work
+runs in a neutral scratch directory under Application Support rather than
+wherever the app happened to launch from.
+
+The first time a project is used for the built-in Git/file commands, the
+assistant still asks and shows the exact command.
+
+#### What Claude Code is allowed to do
+
+Tools are pre-approved per turn with `--allowedTools`. The default set is
+read-only: `Read`, `Glob`, `Grep`, `WebSearch`, `WebFetch`, and `Bash` limited
+to `git status`/`diff`/`log`/`branch`. Anything outside that — writing a file,
+running an arbitrary command — is refused by Claude Code, which reports the
+refusal rather than doing it.
+
+Two honest caveats:
+
+- **There is no mid-turn approval.** Claude Code's `--permission-mode manual`
+  does not ask the host app; an un-granted tool is simply denied. Widening
+  permissions therefore has to be a deny → ask → resume-with-more loop, and
+  that loop isn't built yet. Until it is, the assistant can look at things and
+  answer, not change them.
+- **`WebSearch`/`WebFetch` are in the read-only default.** They don't touch
+  your disk, but they do reach the network with whatever context the model
+  includes. Remove them from `ClaudeCodeProvider.readOnlyTools` if that's not
+  the trade you want.
+
+Observed on this machine, a `permissions.allow` rule in the user's own
+`~/.claude/settings.local.json` did **not** grant a tool we left out of
+`--allowedTools` — the launch-time allowlist governed. That was one test with
+one configuration, not a guarantee about every Claude Code setup.
 
 The registry lives outside the repo, next to the character image:
 
@@ -236,7 +264,9 @@ Sources/
   Permissions/       Action classes, approval requests, policy decisions
   ToolAdapters/      CodeToolAdapter + GitReadOnlyAdapter,
                      FileToolAdapter + FileReadOnlyAdapter (bound-checked)
-  LLMProvider/       ChatProvider protocol, ClaudeChatProvider (SSE),
+  LLMProvider/       ChatProvider protocol; ChatBackend (picks a backend),
+                     ClaudeCodeLocator + ClaudeCodeProvider (drives the user's
+                     own Claude Code), ClaudeChatProvider (API-key fallback),
                      AnthropicStreamDecoder (pure, testable)
   Credentials/       CredentialStore + Keychain-backed API-key storage
   SecretaryCore/     Intent classification, chat routing, orchestration, audit

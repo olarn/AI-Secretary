@@ -135,10 +135,12 @@ final class ClaudeCodeProviderLaunchTests: XCTestCase {
         for forbidden in ["Write", "Edit", "NotebookEdit"] {
             XCTAssertFalse(defaults.contains(forbidden), "\(forbidden) must not be pre-approved")
         }
-        XCTAssertFalse(
-            defaults.contains(where: { $0 == "Bash" || $0.hasPrefix("Bash(") == false && $0.contains("Bash") }),
-            "Bash must only appear as narrow read-only git rules: \(defaults)"
-        )
+        for rule in defaults where rule.contains("Bash") {
+            XCTAssertTrue(
+                rule.hasPrefix("Bash(git "),
+                "Only read-only git rules may be pre-approved, got: \(rule)"
+            )
+        }
     }
 
     func testAppendsTheSystemPromptWithoutReplacingClaudeCodesOwn() {

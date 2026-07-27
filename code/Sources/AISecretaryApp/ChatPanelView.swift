@@ -3,6 +3,7 @@ import AssistantState
 import ProjectRegistry
 import SecretaryCore
 import Credentials
+import LLMProvider
 
 /// The conversation panel, rendered as a manga-style speech bubble anchored to
 /// the character. Shows the transcript, the input field, whatever decision the
@@ -12,6 +13,7 @@ struct ChatPanelView: View {
     let secretary: Secretary
     let registry: ProjectRegistry
     let credentials: any CredentialStore
+    let backendStatus: BackendStatus
     let layout: ChatBubbleLayout
     let onClose: () -> Void
 
@@ -27,6 +29,7 @@ struct ChatPanelView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             header
+            if backendStatus.needsOnboarding { onboardingCard }
             transcript
             pendingDecisionView
             inputRow
@@ -63,6 +66,40 @@ struct ChatPanelView: View {
 
     // MARK: - Sections
 
+    private var emptyTranscriptHint: String {
+        if backendStatus.needsOnboarding {
+            return "Install Claude Code and sign in, and I'll be able to work for you."
+        }
+        if let installation = backendStatus.installation {
+            let version = installation.version.map { " (\($0))" } ?? ""
+            return """
+            Ready — I'll work through your own Claude Code\(version).             Add a project, then just tell me what you need in your own words.
+            """
+        }
+        return "Checking for Claude Code…"
+    }
+
+    /// Shown only once detection has finished and found nothing. The two steps
+    /// are both required: a user can have the binary installed but not signed
+    /// in, and that failure would otherwise only surface on the first turn.
+    private var onboardingCard: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label("Claude Code isn't set up", systemImage: "exclamationmark.triangle")
+                .font(.caption.bold())
+            Text("I work by driving your own copy of Claude Code, so it stays on your account. Two steps:")
+                .font(.caption2)
+            Text("1. Install it — see claude.com/claude-code\n2. Run `claude` in Terminal once and sign in")
+                .font(.caption2.monospaced())
+                .textSelection(.enabled)
+            Text("Then reopen this panel. If it's installed somewhere unusual, I also check your login shell's PATH.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+    }
+
     private var header: some View {
         HStack(spacing: 6) {
             Text("AI Secretary")
@@ -80,7 +117,7 @@ struct ChatPanelView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 8) {
                     if secretary.transcript.isEmpty {
-                        Text("Chat with me, or run read-only Git commands like `status in <project>`. Type `help`, or set your API key in Settings to start chatting.")
+                        Text(emptyTranscriptHint)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

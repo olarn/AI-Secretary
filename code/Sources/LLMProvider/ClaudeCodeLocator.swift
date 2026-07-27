@@ -59,32 +59,44 @@ public struct ClaudeCodeLocator: Sendable {
         self.probe = probe ?? { url in ClaudeCodeLocator.readVersion(of: url) }
     }
 
-    public func locate() -> ClaudeCodeAvailability {
+    /// Checks only the known locations. Pure `stat` calls — microseconds — so
+    /// this is safe to call on the main thread during launch. On a normal
+    /// install it already finds the CLI and the slow path never runs.
+    public func locateInKnownPaths() -> ClaudeCodeAvailability {
         var searched: [String] = []
-
         for path in Self.knownPaths {
             let expanded = (path as NSString).expandingTildeInPath
             searched.append(expanded)
-            let url = URL(fileURLWithPath: expanded)
             guard isExecutable(expanded) else { continue }
+            let url = URL(fileURLWithPath: expanded)
             return .available(ClaudeCodeInstallation(executableURL: url, version: probe(url)))
         }
+        return .notFound(searched: searched)
+    }
 
-        // Nothing in the usual places — ask the user's login shell, which sources
-        // their profile and therefore knows about custom installs.
+    /// Known locations, then the user's login shell.
+    ///
+    /// **Not for the main thread.** The shell fallback sources the user's
+    /// profile (nvm, mise, rbenv…), which routinely takes hundreds of
+    /// milliseconds and occasionally seconds. Blocking launch on it would keep
+    /// the character window off screen.
+    public func locate() -> ClaudeCodeAvailability {
+        let fast = locateInKnownPaths()
+        if case .available = fast { return fast }
+        guard case .notFound(var searched) = fast else { return fast }
+
         if let url = loginShellLookup() {
             searched.append("login shell PATH")
             if isExecutable(url.path) {
                 return .available(ClaudeCodeInstallation(executableURL: url, version: probe(url)))
             }
         }
-
         return .notFound(searched: searched)
     }
 
     /// `$SHELL -l -c 'command -v claude'`. A login shell is required: a
     /// non-interactive shell skips the profile that sets up most version
-    /// managers.
+    /// managers. Capped so a wedged dotfile can't hang us forever.
     private func loginShellLookup() -> URL? {
         let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
         guard isExecutable(shell) else { return nil }
@@ -102,14 +114,23 @@ public struct ClaudeCodeLocator: Sendable {
             return nil
         }
 
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
+        let deadline = Date().addingTimeInterval(Self.shellProbeTimeout)
+        while process.isRunning && Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.02)
+        }
+        if process.isRunning {
+            process.terminate()
+            return nil
+        }
 
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
         let path = String(decoding: data, as: UTF8.self)
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !path.isEmpty, path.hasPrefix("/") else { return nil }
         return URL(fileURLWithPath: path)
     }
+
+    static let shellProbeTimeout: TimeInterval = 5
 
     /// Runs `claude --version` and returns the reported version. A failure here
     /// is not fatal — an executable that won't report its version is still worth

@@ -12,13 +12,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let chatLayout = ChatBubbleLayout()
     private let registry = ProjectRegistry()
     private let credentials = KeychainCredentialStore()
-    private lazy var chatProvider = ClaudeChatProvider(
+    /// The API-key path, kept as the fallback for anyone without Claude Code.
+    private lazy var apiProvider = ClaudeChatProvider(
         apiKeyProvider: { [credentials] in credentials.apiKey() }
     )
+    /// Prefers the user's own Claude Code and falls back to the API key.
+    private lazy var backend = ChatBackend(fallback: apiProvider)
+    private let backendStatus = BackendStatus()
     private lazy var secretary = Secretary(
         stateMachine: stateMachine,
         registry: registry,
-        chatProvider: chatProvider
+        chatProvider: backend
     )
     private var characterPanel: FloatingPanel!
     private var chatPanel: FloatingPanel!
@@ -60,6 +64,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 secretary: secretary,
                 registry: registry,
                 credentials: credentials,
+                backendStatus: backendStatus,
                 layout: chatLayout,
                 onClose: { [weak self] in self?.hideChatPanel() }
             )
@@ -74,6 +79,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         positionInitialWindows()
         observeWindowMovement()
+        detectBackend()
 
         statusBar = StatusBarController(
             onOpenChat: { [weak self] in self?.openChatFromMenu() },
@@ -81,6 +87,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
 
         characterPanel.orderFrontRegardless()
+    }
+
+    /// Finds Claude Code off the main thread. The fast path is a handful of
+    /// `stat` calls, but the fallback launches the user's login shell, which can
+    /// take seconds — doing that here would delay the character appearing.
+    private func detectBackend() {
+        backend.observeAvailability { [weak self] availability in
+            Task { @MainActor in self?.backendStatus.availability = availability }
+        }
+        let backend = self.backend
+        Task.detached(priority: .utility) { backend.resolve() }
     }
 
     /// Opens the chat, making the character visible first if it was hidden so the

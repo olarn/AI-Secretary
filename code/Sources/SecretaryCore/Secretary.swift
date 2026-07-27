@@ -32,12 +32,18 @@ public enum PlannedOperation: Equatable, Sendable {
     /// Read a file and send it to the model. `.externalNetwork`, so unlike the
     /// other two this always stops for approval.
     case understand(FileUnderstanding)
+    /// Let Claude Code work inside a project, then answer this prompt. Approved
+    /// once per project — asking before every message would make the assistant
+    /// unusable, so the prompt has to be explicit about what the grant covers.
+    case startAgent(prompt: String)
 
     public var actionClass: ActionClass {
         switch self {
         case .git(let op): return op.actionClass
         case .file(let op): return op.actionClass
         case .understand(let op): return op.actionClass
+        // Approve-once: the grant is per project, and the prompt says so.
+        case .startAgent: return .readOnly
         }
     }
 
@@ -46,6 +52,7 @@ public enum PlannedOperation: Equatable, Sendable {
         case .git(let op): return op.humanDescription
         case .file(let op): return op.humanDescription
         case .understand(let op): return op.humanDescription
+        case .startAgent: return "Let Claude Code read and work in this project"
         }
     }
 }
@@ -251,8 +258,80 @@ public final class Secretary {
 
     // MARK: - Chat
 
+    /// Tool identifier for "may Claude Code work in this project".
+    public static let claudeCodeToolID = "claude.code"
+
+    /// Neutral directory used when no project is in play. Claude Code always
+    /// runs *somewhere*; without this it would inherit whatever directory the
+    /// app happened to launch from, which could be the user's home.
+    static var scratchDirectory: URL {
+        let url = FileManager.default
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("AISecretary/scratch", isDirectory: true)
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
     private func startChat(_ text: String, taskID: String) {
+        // A directory-scoped backend needs to be told where to run before the
+        // turn starts. Working in a registered project is a real capability
+        // grant, so the first time in each project we ask.
+        if let scoped = chatProvider as? WorkspaceScopedProvider {
+            let project = lastProject.flatMap { registry.project(id: $0.id) }
+                ?? (registry.projects.count == 1 ? registry.projects.first : nil)
+
+            if let project, !project.allows(tool: Self.claudeCodeToolID) {
+                requestAgentAccess(to: project, prompt: text, taskID: taskID)
+                return
+            }
+            scoped.prepare(
+                workingDirectory: project?.url ?? Self.scratchDirectory,
+                allowedTools: nil
+            )
+        }
+
         conversation.append(ChatMessage(role: .user, content: text))
+        streamReply(messages: conversation, taskID: taskID)
+    }
+
+    private func requestAgentAccess(to project: Project, prompt: String, taskID: String) {
+        let request = ApprovalRequest(
+            taskID: taskID,
+            toolID: Self.claudeCodeToolID,
+            actionClass: .readOnly,
+            project: project,
+            commandSummary: "run Claude Code in \(project.name)",
+            rationale: "Let Claude Code read and work in this project"
+        )
+        audit.record(AuditEntry(taskID: taskID, kind: .approvalRequested, detail: request.commandSummary))
+        say(.secretary, """
+            May I work in \(project.name) using your Claude Code? It runs on your \
+            own Claude Code account, reads files in that folder, and can search the \
+            web. I'll ask again before anything that writes or changes files. \
+            Approving covers this project from now on.
+            """)
+        pendingDecision = .approval(request, operation: .startAgent(prompt: prompt))
+    }
+
+    /// Persists the grant, points the backend at the project, and runs the turn
+    /// the user was trying to send when we interrupted them.
+    private func beginAgentSession(prompt: String, in project: Project) {
+        let taskID = activeTaskID ?? "-"
+        do {
+            try registry.grant(tool: Self.claudeCodeToolID, to: project.id)
+        } catch {
+            finish(
+                success: false,
+                message: "Couldn't save that permission: \(error.localizedDescription)",
+                reason: "grant failed"
+            )
+            return
+        }
+        audit.record(AuditEntry(taskID: taskID, kind: .executionStarted, detail: "claude code in \(project.name)"))
+        (chatProvider as? WorkspaceScopedProvider)?
+            .prepare(workingDirectory: project.url, allowedTools: nil)
+
+        conversation.append(ChatMessage(role: .user, content: prompt))
         streamReply(messages: conversation, taskID: taskID)
     }
 
@@ -435,6 +514,11 @@ public final class Secretary {
             executeUnderstanding(request, in: project)
             return
         }
+        if case .startAgent(let prompt) = operation {
+            lastProject = project
+            beginAgentSession(prompt: prompt, in: project)
+            return
+        }
 
         let taskID = activeTaskID ?? "-"
         let summary = summary(for: operation)
@@ -512,8 +596,8 @@ public final class Secretary {
             </file>
             """ + (wasTruncated ? "\n(Only the first \(readContextMaxBytes / 1024) KB is shown here.)" : "")
 
-        case .understand:
-            // executeUnderstanding already writes its own history entry.
+        case .understand, .startAgent:
+            // Both write their own history: the model's reply is the record.
             return
         }
 
@@ -615,6 +699,7 @@ public final class Secretary {
 
     private func toolID(for operation: PlannedOperation) -> String {
         switch operation {
+        case .startAgent: return Self.claudeCodeToolID
         case .git: return adapter.toolID
         // Understanding reads through the same adapter, so it is gated by the
         // same project allowlist entry. What makes it stricter is its action
@@ -629,6 +714,7 @@ public final class Secretary {
         case .file(let op): return fileAdapter.summary(for: op)
         case .understand(let op):
             return "read \(op.relativePath) and send it to \(model.id) to \(op.task.rawValue)"
+        case .startAgent: return "run Claude Code here"
         }
     }
 
@@ -638,6 +724,8 @@ public final class Secretary {
         case .file(let op): return try fileAdapter.run(op, in: project)
         case .understand(let op):
             return try fileAdapter.run(.readFile(relativePath: op.relativePath), in: project)
+        case .startAgent:
+            preconditionFailure("startAgent is handled by execute(_:in:) before dispatch")
         }
     }
 

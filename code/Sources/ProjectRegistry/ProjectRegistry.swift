@@ -31,6 +31,20 @@ public final class ProjectRegistry {
         return true
     }
 
+    /// Adds a tool to a project's allowlist and persists it.
+    ///
+    /// Called at the moment a human approves the capability, never on load — a
+    /// project registered before a tool existed must not silently gain it.
+    @discardableResult
+    public func grant(tool: String, to projectID: UUID) throws -> Bool {
+        guard let index = projects.firstIndex(where: { $0.id == projectID }),
+              !projects[index].allowedTools.contains(tool)
+        else { return false }
+        projects[index].allowedTools.append(tool)
+        try store.save(projects)
+        return true
+    }
+
     private static func normalize(_ path: String) -> String {
         URL(fileURLWithPath: path).standardizedFileURL.path
     }
