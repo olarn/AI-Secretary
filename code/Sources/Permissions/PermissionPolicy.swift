@@ -48,7 +48,7 @@ public final class DefaultPermissionPolicy: PermissionPolicy {
     public init() {}
 
     public func evaluate(_ request: ApprovalRequest) -> PolicyDecision {
-        decide(grants)(request).toPolicyDecision()
+        decidePermission(grants)(request).toPolicyDecision()
     }
 
     public func recordApproval(projectID: UUID, toolID: String) {

@@ -97,7 +97,7 @@ final class PermissionDecisionTests: XCTestCase {
         _ req: ApprovalRequest,
         grants: PermissionGrants = PermissionGrants()
     ) -> PermissionDecision {
-        decide(grants)(req)
+        decidePermission(grants)(req)
     }
 
     func testToolMissingFromProjectAllowlistIsDeniedNotPrompted() {
@@ -148,7 +148,7 @@ final class PermissionDecisionTests: XCTestCase {
 
     func testDecideIsPureSoTheSameInputsGiveTheSameAnswer() {
         let grants = PermissionGrants().granting(projectID: allowed.id, toolID: "git.readOnly")
-        let evaluate = decide(grants)
+        let evaluate = decidePermission(grants)
         let req = request(project: allowed)
 
         XCTAssertEqual(evaluate(req), evaluate(req))

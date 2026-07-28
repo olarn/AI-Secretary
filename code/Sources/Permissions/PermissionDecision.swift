@@ -56,6 +56,6 @@ public func requireApproval(
 ///
 /// Curried so the grants can be bound once and the resulting
 /// `(ApprovalRequest) -> PermissionDecision` passed around point-free.
-public func decide(_ grants: PermissionGrants) -> (ApprovalRequest) -> PermissionDecision {
+public func decidePermission(_ grants: PermissionGrants) -> (ApprovalRequest) -> PermissionDecision {
     requireAllowlistedTool >>> { $0.flatMap(requireApproval(grants))^ }
 }

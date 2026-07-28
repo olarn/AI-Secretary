@@ -31,7 +31,7 @@ Verified by compiling against 0.8.0 in this repo. Getting this wrong is the most
 |---|---|---|
 | pipe value into function | ✅ `x \|> f` | same operator also partially applies: `3 \|> add` → `(Int) -> Int` |
 | compose functions | ✅ `f >>> g`, `g <<< f`, `andThen(f, g)` | |
-| curry | ✅ `curry(f)` | `curry(map)(double)([1,2,3])` |
+| curry | ✅ `curry(f)` | over *your own* 2-ary function: `curry(clamp)(10)`. Bow exports **no free `map`** — `curry(map)` is `cannot find 'map' in scope` |
 | Optional → Option | ✅ `Option.fromOptional(x)` | reverse: `opt.toOptional()` |
 | Result → Either | ✅ `result.toEither()` | |
 | accumulate many errors | ✅ `Validated`, `ValidatedNEA` | use for multi-field validation, not first-failure |
@@ -70,12 +70,19 @@ public func requireApproval(
 ) -> (ApprovalRequest) -> Either<PermissionError, PermissionOutcome> { ... }
 
 // 4. The chain is one expression, point-free.
-public func decide(_ grants: PermissionGrants) -> (ApprovalRequest) -> PermissionDecision {
+public func decidePermission(_ grants: PermissionGrants) -> (ApprovalRequest) -> PermissionDecision {
     requireAllowlistedTool >>> { $0.flatMap(requireApproval(grants))^ }
 }
 ```
 
-Live version: `code/Sources/Permissions/`.
+Live version: `code/Sources/Permissions/`. Every snippet in this file is compiled
+by `code/Tests/PermissionsTests/SkillExampleTests.swift` — change one, change both.
+
+**Name public free functions so they stay unambiguous across modules.**
+`SecretaryCore` imports all seven domain targets into one file scope, so a bare
+`decide` or `validate` collides. Qualify with the domain noun:
+`decidePermission`, not `decide`. Rails whose names are already specific
+(`requireAllowlistedTool`) need no prefix.
 
 For a chain longer than three rails, `binding` reads better than nested `flatMap`. It needs `BoundVar`s and a `yield:` label — closures do not work:
 
@@ -121,6 +128,7 @@ Reach for point-free on `Option`/`Either` and on functions you want to pass arou
 | `cannot find operator '>=>' in scope` | Bow has no Kleisli operator | `.flatMap(f)^` or `binding` |
 | `value of type 'Option<A>' has no member 'toEither'` | wrong API name | `fold({ .left(e) }, { .right($0) })` |
 | `closure passed to parameter of type 'BindingExpression'` | `binding` called with closures | use `n <- expr` and `yield:` |
+| `cannot find 'map' in scope` | Bow has no free `map` over `Array` | use `list.map(f)`; `curry` only your own functions |
 | new `throws` in a domain function | Foundation call not wrapped | wrap in the adapter, return `Either` |
 
 ## Checklist before committing domain code
