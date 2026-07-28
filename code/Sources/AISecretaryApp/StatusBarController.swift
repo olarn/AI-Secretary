@@ -1,9 +1,10 @@
 import AppKit
+import SecretaryCore
 
 /// Gives the accessory app a real, native presence: a menu bar icon whose menu
-/// lets the user open the chat, show/hide the character, and — crucially — quit
-/// the app normally. Without a Dock icon or main menu, this is the standard
-/// macOS control surface for a floating companion.
+/// lets the user open the chat, show/hide the character, see which version this
+/// is, and — crucially — quit the app normally. Without a Dock icon or main
+/// menu, this is the standard macOS control surface for a floating companion.
 @MainActor
 final class StatusBarController {
     private let statusItem: NSStatusItem
@@ -36,7 +37,10 @@ final class StatusBarController {
 
         let menu = NSMenu()
 
-        let header = NSMenuItem(title: "AI Secretary", action: nil, keyEquivalent: "")
+        // The version rides in the disabled header rather than being a row of
+        // its own: it's a label, not something to click, and it answers "which
+        // build am I running" without opening anything.
+        let header = NSMenuItem(title: AppInfo.summary, action: nil, keyEquivalent: "")
         header.isEnabled = false
         menu.addItem(header)
         menu.addItem(.separator())
@@ -45,8 +49,22 @@ final class StatusBarController {
         openItem.target = target
         menu.addItem(openItem)
 
+        // ⌘H matches the shortcut in the (undrawn) main menu, and showing it here
+        // is how the user finds out the shortcut exists at all.
         characterMenuItem.target = target
+        characterMenuItem.keyEquivalent = "h"
+        characterMenuItem.keyEquivalentModifierMask = [.command]
         menu.addItem(characterMenuItem)
+
+        menu.addItem(.separator())
+
+        let aboutItem = NSMenuItem(
+            title: "About \(AppInfo.name)",
+            action: #selector(Target.showAbout(_:)),
+            keyEquivalent: ""
+        )
+        aboutItem.target = target
+        menu.addItem(aboutItem)
 
         menu.addItem(.separator())
 
@@ -63,9 +81,18 @@ final class StatusBarController {
     fileprivate func handleOpenChat() { onOpenChat() }
 
     fileprivate func handleToggleCharacter() {
-        let isVisible = onToggleCharacter()
+        setCharacterVisible(onToggleCharacter())
+    }
+
+    /// Keeps the item's wording honest when the character is toggled from
+    /// somewhere else — ⌘H reaches the app delegate directly, and a menu still
+    /// offering to "Hide Character" after it's already hidden is a bug the user
+    /// only finds by opening the menu.
+    func setCharacterVisible(_ isVisible: Bool) {
         characterMenuItem.title = isVisible ? "Hide Character" : "Show Character"
     }
+
+    fileprivate func handleShowAbout() { AboutPanel.show() }
 
     fileprivate func handleQuit() { NSApp.terminate(nil) }
 
@@ -78,6 +105,7 @@ final class StatusBarController {
 
         @objc func openChat(_ sender: Any?) { controller.handleOpenChat() }
         @objc func toggleCharacter(_ sender: Any?) { controller.handleToggleCharacter() }
+        @objc func showAbout(_ sender: Any?) { controller.handleShowAbout() }
         @objc func quit(_ sender: Any?) { controller.handleQuit() }
     }
 }

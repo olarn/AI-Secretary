@@ -1,0 +1,46 @@
+import Foundation
+
+/// Which build of the app this is.
+///
+/// The number lives here, in code, rather than only in the packaging script's
+/// `Info.plist`: the app has to be able to answer the question itself — in the
+/// About window, and in a bug report where the `.plist` isn't to hand. The
+/// script reads this declaration when it assembles the bundle, so the two can't
+/// drift apart. Bump it here and the bundle follows.
+public struct AppVersion: Equatable, Comparable, Sendable, CustomStringConvertible {
+    /// The current version. Keep the literal on one line and in this shape —
+    /// `scripts/package-app.sh` parses it to fill in `CFBundleShortVersionString`.
+    public static let current = AppVersion(major: 0, minor: 5, patch: 0)
+
+    public let major: Int
+    public let minor: Int
+    public let patch: Int
+
+    public init(major: Int, minor: Int, patch: Int) {
+        self.major = major
+        self.minor = minor
+        self.patch = patch
+    }
+
+    public var description: String { "\(major).\(minor).\(patch)" }
+
+    /// Ordered the way versions are meant to be: major first, then minor, then
+    /// patch — so `0.10.0` is newer than `0.9.9` rather than sorting as text.
+    public static func < (lhs: AppVersion, rhs: AppVersion) -> Bool {
+        (lhs.major, lhs.minor, lhs.patch) < (rhs.major, rhs.minor, rhs.patch)
+    }
+}
+
+/// The app's own identity, in one place. The name is used by the status bar
+/// menu, the About window, and the bundle, and a second spelling of it would
+/// show up as two different apps to the user.
+public enum AppInfo: Sendable {
+    public static let name = "AI Secretary"
+    public static let version = AppVersion.current
+
+    /// What the app says when asked what it is — the About window's subtitle,
+    /// and the answer to "which version are you running?".
+    public static var summary: String { "\(name) \(version)" }
+
+    public static let tagline = "A desktop companion that works through your own Claude Code."
+}

@@ -1,4 +1,5 @@
 import AppKit
+import SecretaryCore
 
 /// Builds the application's main menu.
 ///
@@ -14,11 +15,11 @@ import AppKit
 /// responder inside the chat panel.
 @MainActor
 enum AppMenu {
-    static func make(appName: String = "AI Secretary", textSizeTarget: AnyObject? = nil) -> NSMenu {
+    static func make(appName: String = AppInfo.name, commandTarget: AnyObject? = nil) -> NSMenu {
         let mainMenu = NSMenu()
 
         let appItem = NSMenuItem()
-        appItem.submenu = applicationMenu(appName: appName)
+        appItem.submenu = applicationMenu(appName: appName, target: commandTarget)
         mainMenu.addItem(appItem)
 
         let editItem = NSMenuItem()
@@ -26,7 +27,7 @@ enum AppMenu {
         mainMenu.addItem(editItem)
 
         let viewItem = NSMenuItem()
-        viewItem.submenu = viewMenu(target: textSizeTarget)
+        viewItem.submenu = viewMenu(target: commandTarget)
         mainMenu.addItem(viewItem)
 
         return mainMenu
@@ -41,8 +42,8 @@ enum AppMenu {
     /// ⌘⇧=, and people press it with and without the shift.
     private static func viewMenu(target: AnyObject?) -> NSMenu {
         let menu = NSMenu(title: "View")
-        let bigger = #selector(TextSizeCommands.increaseTextSize(_:))
-        let smaller = #selector(TextSizeCommands.decreaseTextSize(_:))
+        let bigger = #selector(AppCommands.increaseTextSize(_:))
+        let smaller = #selector(AppCommands.decreaseTextSize(_:))
 
         for key in ["+", "="] {
             let item = menu.addItem(withTitle: "Bigger Text", action: bigger, keyEquivalent: key)
@@ -54,13 +55,27 @@ enum AppMenu {
         return menu
     }
 
-    private static func applicationMenu(appName: String) -> NSMenu {
+    private static func applicationMenu(appName: String, target: AnyObject?) -> NSMenu {
         let menu = NSMenu(title: appName)
-        menu.addItem(
-            withTitle: "Hide \(appName)",
-            action: #selector(NSApplication.hide(_:)),
+
+        let about = menu.addItem(
+            withTitle: "About \(appName)",
+            action: #selector(AppCommands.showAbout(_:)),
+            keyEquivalent: ""
+        )
+        about.target = target
+        menu.addItem(.separator())
+
+        // ⌘H hides the character, not the application. An accessory app has no
+        // windows in the Dock to come back from, so `NSApplication.hide` mostly
+        // just made the companion vanish with no obvious way to return it — and
+        // hiding the character is the thing people actually want that key for.
+        let hide = menu.addItem(
+            withTitle: "Hide Character",
+            action: #selector(AppCommands.toggleCharacter(_:)),
             keyEquivalent: "h"
         )
+        hide.target = target
         menu.addItem(.separator())
         menu.addItem(
             withTitle: "Quit \(appName)",
@@ -94,10 +109,16 @@ enum AppMenu {
     }
 }
 
-/// What the ⌘+/⌘− items call. Declared as a protocol so `AppMenu` can name the
-/// selectors without depending on the delegate that implements them.
+/// What the shortcut items call. Declared as a protocol so `AppMenu` can name
+/// the selectors without depending on the delegate that implements them.
+///
+/// These can't travel the responder chain the way the editing items do —
+/// nothing in it knows about the appearance or the character window — so each is
+/// aimed at an explicit target, which must outlive the menu.
 @MainActor
-@objc protocol TextSizeCommands {
+@objc protocol AppCommands {
     @objc func increaseTextSize(_ sender: Any?)
     @objc func decreaseTextSize(_ sender: Any?)
+    @objc func toggleCharacter(_ sender: Any?)
+    @objc func showAbout(_ sender: Any?)
 }

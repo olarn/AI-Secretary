@@ -181,6 +181,13 @@ Build in phases.
    - ตัวอักษรในช่องพิมพ์ต้องอยู่กลางกล่องตามแนวตั้ง ไม่ลอยติดขอบบน
 - เวลาขยาย/ย่อ chat window ปลายแหลมของกล่องคำพูดต้องอยู่ตำแหน่งเดิม (ยึดขอบด้านหาง แล้วขยายออกด้านตรงข้าม) ทั้งกรณีหางอยู่ซ้ายและหางอยู่ขวา (mirrored)
 
+### Phase 5.6: Version and About
+
+- เลข version อยู่ใน code (`SecretaryCore/AppVersion.swift`) เป็นแหล่งเดียว — `package-app.sh` อ่านค่านี้ไปใส่ `CFBundleShortVersionString` ไม่ให้เลขสองที่ไม่ตรงกัน
+- แอปต้องบอก version ตัวเองได้ แม้รันแบบไม่มี bundle
+- มีหน้าต่าง About เปิดจากเมนู status bar แสดงชื่อ, version, และคำอธิบายสั้นๆ
+- ⌘H = Hide/Show Character (ไม่ใช่ hide ทั้งแอป เพราะ accessory app ไม่มีหน้าต่างใน Dock ให้เรียกกลับ)
+
 ### Phase 6: External tools and proactive assistance
 
 - MCP-based integrations such as calendar, Slack, email, and knowledge sources.

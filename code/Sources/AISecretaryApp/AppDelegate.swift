@@ -7,7 +7,7 @@ import LLMProvider
 import Credentials
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, TextSizeCommands {
+final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     private let stateMachine = AssistantStateMachine()
     private let chatLayout = ChatBubbleLayout()
     private let registry = ProjectRegistry()
@@ -143,7 +143,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, TextSizeCommands {
         characterPanel.orderFrontRegardless()
     }
 
-    // MARK: - Text size shortcuts
+    // MARK: - Menu commands
 
     /// ⌘+ / ⌘−, doing exactly what the +/− buttons in Settings do. Wired here
     /// rather than in the panel because the shortcut has to work whenever the
@@ -151,6 +151,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, TextSizeCommands {
     func increaseTextSize(_ sender: Any?) { appearance.increaseFontSize() }
 
     func decreaseTextSize(_ sender: Any?) { appearance.decreaseFontSize() }
+
+    /// ⌘H. Goes through the same toggle the status bar item uses, then tells the
+    /// menu what happened so its wording doesn't go stale.
+    func toggleCharacter(_ sender: Any?) {
+        statusBar.setCharacterVisible(toggleCharacterVisibility())
+    }
+
+    func showAbout(_ sender: Any?) { AboutPanel.show() }
 
     /// Lets the window own its size and the hosted view fill it.
     private static func container(for host: NSView, size: CGSize) -> NSView {

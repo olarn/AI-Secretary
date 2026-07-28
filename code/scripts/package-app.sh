@@ -24,7 +24,18 @@ EXECUTABLE="AISecretaryApp"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-echo "▸ Building ($CONFIG)…"
+# The version lives in the code (SecretaryCore/AppVersion.swift) so the app can
+# report it with or without a bundle; the plist below is generated from it
+# rather than carrying a second copy that goes stale.
+VERSION_SOURCE="$ROOT/Sources/SecretaryCore/AppVersion.swift"
+VERSION="$(sed -n 's/.*AppVersion(major: *\([0-9][0-9]*\), *minor: *\([0-9][0-9]*\), *patch: *\([0-9][0-9]*\)).*/\1.\2.\3/p' "$VERSION_SOURCE" | head -1)"
+if [[ -z "$VERSION" ]]; then
+    echo "✗ Could not read the version from $VERSION_SOURCE" >&2
+    echo "  Expected a line like: AppVersion(major: 0, minor: 5, patch: 0)" >&2
+    exit 1
+fi
+
+echo "▸ Building ($CONFIG) — version ${VERSION}…"
 swift build -c "$CONFIG"
 
 BIN_PATH="$(swift build -c "$CONFIG" --show-bin-path)/$EXECUTABLE"
@@ -78,7 +89,7 @@ $ICON_LINE
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.4.0</string>
+    <string>$VERSION</string>
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>LSMinimumSystemVersion</key>
@@ -87,8 +98,10 @@ $ICON_LINE
     <true/>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <!-- Left empty on purpose: the About window prints this under the credits,
+         and the app's own name there just read as a duplicate. -->
     <key>NSHumanReadableCopyright</key>
-    <string>AI Secretary</string>
+    <string></string>
 </dict>
 </plist>
 PLIST
