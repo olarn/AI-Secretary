@@ -20,9 +20,26 @@ struct ChatPanelView: View {
     let onClose: () -> Void
 
     @State private var draft: String = ""
-    @State private var showProjects = false
-    @State private var showSettings = false
-    @State private var showProfile = false
+    /// Which configuration section is open, if any.
+    ///
+    /// One selection rather than three independent flags, because three
+    /// independent flags allow all three sections open at once — which is how
+    /// the panel came to be taller than the window it lives in, pushing the
+    /// transcript off the top and the Save button off the bottom. The state
+    /// simply isn't representable now.
+    enum Panel: String, Identifiable {
+        case settings, profile, projects
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .settings: return "Settings"
+            case .profile: return "Profile"
+            case .projects: return "Projects"
+            }
+        }
+    }
+
+    @State private var openPanel: Panel?
     @State private var addProjectNote: String?
     @State private var apiKeyDraft: String = ""
     @State private var settingsNote: String?
@@ -39,9 +56,7 @@ struct ChatPanelView: View {
             transcript
             pendingDecisionView
             inputRow
-            if showSettings { settingsSection }
-            if showProfile { ProfileSettingsView(profiles: profiles, appearance: appearance) }
-            if showProjects { projectsSection }
+            openPanelSection
             footer
         }
         .padding(18)
@@ -769,7 +784,7 @@ struct ChatPanelView: View {
                 onDecrease: appearance.decreaseHeight,
                 onIncrease: appearance.increaseHeight
             )
-            Text("Height only — the bubble's width is fixed so its tail stays on \(secretary.profile.displayName).")
+            Text("Or drag the grip in the top corner to size it freely — the tail stays on \(secretary.profile.displayName) either way.")
                 .font(.system(size: 9))
                 .foregroundStyle(.secondary)
 
@@ -834,15 +849,56 @@ struct ChatPanelView: View {
         .background(Color.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
     }
 
+    /// The open configuration section, held to a share of the window and given
+    /// its own scroll.
+    ///
+    /// This is what makes the panel structurally incapable of overflowing. The
+    /// surrounding `VStack` has exactly one flexible child — the transcript —
+    /// and once that has shrunk to nothing, any further content simply spills
+    /// past the bubble: the header goes off the top, the buttons off the
+    /// bottom. Adding a row used to be enough to cross that line, so the fix
+    /// cannot be a re-tuned constant. A section that can never be taller than
+    /// its share, and scrolls when it wants to be, can never cross it at all.
+    ///
+    /// The share is a fraction of the real window height rather than "window
+    /// minus the header, input and footer": those three grow with the text
+    /// size, so any subtraction of them is a constant that goes stale the next
+    /// time ⌘+ is pressed.
+    @ViewBuilder
+    private var openPanelSection: some View {
+        if let panel = openPanel {
+            ScrollView(.vertical) {
+                switch panel {
+                case .settings: settingsSection
+                case .profile: ProfileSettingsView(profiles: profiles, appearance: appearance)
+                case .projects: projectsSection
+                }
+            }
+            .frame(maxHeight: appearance.settings.chatHeight * Self.panelHeightShare)
+        }
+    }
+
+    /// Leaves the rest of the window — header, transcript, input row and the
+    /// section buttons — the larger share at every text size.
+    private static let panelHeightShare: Double = 0.55
+
     /// The section toggles grow with the text size like everything else in the
     /// panel: left at a fixed caption size they became unreadable specks next to
     /// 32pt replies. `controlSize` follows suit, or the button's own padding
     /// stays mini around text that isn't.
     private var footer: some View {
         HStack(spacing: 10) {
-            Toggle("Settings", isOn: $showSettings)
-            Toggle("Profile", isOn: $showProfile)
-            Toggle("Projects", isOn: $showProjects)
+            // Still a toggle each, and clicking the open one still closes it —
+            // only now opening one closes whichever was open.
+            ForEach([Panel.settings, .profile, .projects]) { panel in
+                Toggle(
+                    panel.title,
+                    isOn: Binding(
+                        get: { openPanel == panel },
+                        set: { openPanel = $0 ? panel : nil }
+                    )
+                )
+            }
             Spacer()
         }
         .toggleStyle(.button)

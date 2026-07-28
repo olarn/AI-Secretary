@@ -267,6 +267,14 @@ Build in phases.
   message box shipped with eight passing tests over its height arithmetic while
   the box itself never grew past one line, because the measurement it fed was
   always zero. Open the app, do the thing a user would do, and look at it.
+- **แผง Settings/Profile/Projects ต้องล้นหน้าต่างไม่ได้ "โดยโครงสร้าง"** — เปิดได้ทีละแผง
+  (`openPanel: Panel?` ไม่ใช่ bool สามตัว) และแผงที่เปิดถูกจำกัดที่สัดส่วนของความสูงหน้าต่างแล้ว
+  scroll ในตัวเอง เคยล้นมาแล้วสองรอบเพราะแก้ด้วยการจูนตัวเลข ซึ่งตัวเลขถูกทำให้เกินได้เสมอ —
+  การเพิ่มแถวใหม่ในแผงจึงต้องไม่ทำให้ต้องคำนวณอะไรใหม่อีก
+  - ห้ามใช้ค่าคงที่แบบ "ความสูงหน้าต่าง ลบ header/input/footer" เพราะสามอย่างนั้นโตตาม font size
+  - เวลาตรวจ ต้อง capture ตามขอบเขตหน้าต่างจริงจาก `win.swift` (เคย capture 720pt ของหน้าต่าง
+    สูง 643 แล้วอ่านว่า "พอดี" ทั้งที่ล้น) และต้องเห็นแถว header ในภาพ
+  - สถานะที่ต้องขับจริงอย่างน้อย: Profile เดี่ยวที่ font เล็กสุดและใหญ่สุด, สลับแผงขณะเปิดอยู่
 - **One `.app`, always.** `scripts/package-app.sh` deletes every other
   `AISecretary.app` in the repo — worktrees otherwise leave several bundles with
   the same id and version but different code inside, and launching an old one is
