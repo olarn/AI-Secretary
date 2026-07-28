@@ -168,12 +168,19 @@ struct ChatPanelView: View {
     /// and up in the usual position, left when mirrored, down when it has been
     /// flipped below the character.
     ///
-    /// The alternative reading — pull the grip *away* from the bubble — is what a
-    /// corner handle usually means, but the grip now sits on the pinned corner,
-    /// and when mirrored that corner is hard against the right of the screen:
-    /// "away" would have been a drag with nowhere to go. Growing vertically the
-    /// two readings agree anyway, since the top edge is the one that moves and
-    /// the grip rides along with it.
+    /// Note this is keyed to the layout, not to the corner the grip happens to
+    /// be in — the two have been on both sides of each other, and only the
+    /// layout says which edges are free to move.
+    ///
+    /// Horizontally they agree in any case: the grip sits opposite the tail, on
+    /// the corner the bubble grows into, so dragging it "the way the bubble
+    /// extends" and the usual corner-handle reading of "away from the bubble"
+    /// are the same drag. Vertically they agree in the usual position too, where
+    /// the top edge is the one that moves and the grip rides along with it. They
+    /// part only when the bubble has been flipped below the character: the tail
+    /// is then on top, so the top edge is pinned and the bubble grows downward
+    /// while the grip stays where it is. The drag follows the growth, which
+    /// means dragging down through a grip that doesn't follow the cursor.
     private func resize(to pointer: CGPoint) {
         let settings = appearance.settings
         let origin = dragOrigin ?? DragOrigin(
