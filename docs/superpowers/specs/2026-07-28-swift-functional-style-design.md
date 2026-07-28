@@ -22,12 +22,14 @@ Before designing, each risky boundary was compiled rather than guessed.
 | Bow 0.8.0 against swift-tools 5.9 / macOS 14 | builds |
 | `Codable` struct with an `Option` field | **fails to compile** |
 | `@Observable` class holding `Option`/`Either` | works |
-| `async` returning `Either`, consumed on `@MainActor` | works, no Sendable warnings |
+| `async` returning `Either`, consumed on `@MainActor` | works |
 | `x \|> f` pipe-forward and partial application | both, built in |
-| `f >>> g`, `curry(map)(f)` | work |
+| `f >>> g`, `curry` over an own 2-ary function | work |
 | `binding(n <- …, yield: …)` | works; needs `BoundVar`, not closures |
 | `Result.toEither()`, `Validated` | available |
 | `>=>` Kleisli operator | **absent from Bow** |
+| free `map` over `Array` | **absent from Bow** — `curry(map)` does not resolve |
+| `Sendable` on any Bow type | **absent** — found later, in phase 2, not by the probes |
 
 Bow 0.8.0 is the newest release (May 2020) and the library is not actively
 maintained. It compiles cleanly here and is the library the project chose, so it
@@ -46,8 +48,9 @@ native types at three edges, each with an explicit conversion:
 - *Persistence* — `Codable` DTOs with Swift `Optional`, plus `toDomain`/`toDTO`.
   Forced by the probe, and it keeps the on-disk format stable so existing user
   profiles and project registries still load.
-- *View* — `@Observable` may hold `Option`/`Either`; anything feeding a
-  `Binding` or `TextField` exposes a computed Swift-native projection.
+- *View* — `@Observable` may hold `Option`/`Either`, but a SwiftUI view file
+  must not import Bow at all: Bow exports its own `State`, which shadows
+  `@State`. The conversion lives in a bridge file that contains no views.
 - *Foundation* — `FileManager` and `Process` keep `throws`; adapters convert to
   `Either` once, at the boundary.
 
@@ -113,27 +116,29 @@ recorded in the skill:
   keys, so existing installs load without migration.
 - `swift build` and `swift test` are clean — zero warnings, zero failures.
 
-## Pilot outcome: `Permissions`
+## The permission path, end to end
 
-`PermissionGrants` is an immutable value; `decide(grants)(request)` is a pure
-curried function; refusal moved onto the left rail as `PermissionError`. Two
+`PermissionGrants` is an immutable value; `decidePermission(grants)(request)` is
+a pure curried function; refusal sits on the left rail as `PermissionError`. Two
 named rails (`requireAllowlistedTool`, `requireApproval`) compose into one
 expression, each testable alone.
 
-`DefaultPermissionPolicy` survives as a clearly-labelled boundary adapter that
-holds the value and delegates every decision to `decide`, so `SecretaryCore`
-compiles unchanged. It is deleted in phase 5.
-
-Full suite green, no warnings.
+Phase 1 kept `DefaultPermissionPolicy` as a labelled adapter so `SecretaryCore`
+compiled unchanged. Phase 5 moved `Secretary` onto the pure core and deleted the
+adapter, the `PermissionPolicy` protocol and `PolicyDecision` with it. Grants now
+live in `Secretary`'s observable state, which is the Single-Source-of-Truth
+requirement met concretely: no second copy in a policy object.
 
 ## Known risks
 
 - **Bow is unmaintained.** No fix will arrive from upstream. If a future Swift
-  release breaks it, the exit is a small in-repo module providing the handful of
-  types actually used — `Option`, `Either`, `|>`, `>>>`, `curry` — which the
-  boundary rule already keeps contained.
-- **Swift 6 language mode** is untested. The package is on tools 5.9 / language
-  mode 5. Probes showed no Sendable warnings today, but a language-mode bump is
-  a separate exercise.
-- **`Secretary.swift` at 1210 lines** is the hardest phase and may need splitting
-  before converting.
+  release breaks it, the exit is `FunctionalCore` — it already isolates the
+  dependency, so it can supply the handful of types actually used (`Option`,
+  `Either`, `|>`, `>>>`, `curry`) without touching a domain file.
+- **Swift 6 language mode is untested.** The package is on tools 5.9 / language
+  mode 5. The `Sendable` conformances in `FunctionalCore` are what a bump would
+  need, but the bump itself is a separate exercise and may surface more.
+- **`@retroactive @unchecked Sendable`** is a promise the compiler cannot check.
+  It is sound for Bow's plain enums, and it would break loudly rather than
+  silently if upstream ever declared its own conformances — but upstream is
+  dormant, so that is theoretical.
