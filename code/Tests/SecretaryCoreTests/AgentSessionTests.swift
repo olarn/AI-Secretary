@@ -32,6 +32,10 @@ final class SpyWorkspaceProvider: ChatProvider, WorkspaceScopedProvider, @unchec
 
     func resetConversation() { resetCount += 1 }
 
+    var supportsBrowser = true
+    private(set) var browserEnabledCalls: [Bool] = []
+    func setBrowserEnabled(_ enabled: Bool) { browserEnabledCalls.append(enabled) }
+
     func stream(
         messages: [ChatMessage],
         model: Option<ChatModel>,

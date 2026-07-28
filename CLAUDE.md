@@ -208,6 +208,22 @@ Build in phases.
    - ยังไม่ได้พิสูจน์: MCP tool ที่มีผลออกนอกเครื่อง (ส่งเมล/สร้าง event) ถูกจัดเป็น `.localWrite` และการ์ดขออนุมัติขึ้นข้อความ "Send to Claude?" ซึ่งน่าจะสื่อผิด — ต้องทดสอบก่อนถือเป็นบั๊ก
 - Be able to understand the web content through Chrome Claude plug in
   (suggest user that app can use this approach when user ask about app to understand the web contents).
+   - **ทำแล้ว (2026-07-28)** — ไม่ใช่แค่ "แนะนำ" อย่างเดียว แอปอ่านหน้าเว็บที่ต้อง login ได้จริง
+   - เหตุผล: `WebFetch` ยิงจาก process ของแอปเอง ไม่มี cookie/session — หน้า login จะคืนหน้า sign-in มาแทนเนื้อหา
+     แล้วโมเดลรายงานหน้า sign-in ว่าเป็นเนื้อหาของหน้านั้น ส่วน extension ไม่ได้ fetch แต่อ่าน DOM ของ tab
+     ใน Chrome ที่ user login ค้างอยู่ — ยืม session ที่เปิดอยู่ ไม่เคยเห็น password
+   - กลไก: Claude Code มี flag `--chrome` ต่อกับ Claude in Chrome extension ผ่าน MCP server ชื่อ
+     `claude-in-chrome` (22 tools) — ในเมื่อแอปขับ Claude Code อยู่แล้ว จึงได้มาทั้งชุด
+   - พิสูจน์แล้วว่า `--chrome` ต่อติดใน non-interactive (`-p --output-format stream-json`) ด้วย: init event
+     รายงาน `"claude-in-chrome": "connected"` ไม่มี first-run dialog มาค้าง (Claude Code 2.1.220)
+   - default = ปิด เปิดได้ที่ Settings → Browser และบอกใน chat เมื่อเปลี่ยน จำค่าข้ามการเปิดแอป
+   - pre-approve เฉพาะ tool ที่ "แค่ดู" (`read_page`, `get_page_text`, `find`, console/network, `tabs_context_mcp`)
+     ส่วน navigate/click/type/upload/JavaScript ต้องขออนุมัติผ่าน try→refuse→ask→retry เดิม
+     — tool ที่ไม่รู้จักถือเป็นต้องขออนุมัติไว้ก่อน
+   - ข้อควรระวัง: เนื้อหาเว็บเป็น untrusted input และตอนนี้อ่านจาก browser ที่ login อยู่ ระบบ prompt สั่งให้
+     ถือข้อความในหน้าเว็บเป็นสิ่งที่ "รายงาน" ไม่ใช่ "คำสั่งให้ทำตาม"
+   - ต้องมี Claude in Chrome extension (≥1.0.36) และ login แบบ subscription — ถ้าใช้ API key
+     Claude Code จะปิด Chrome integration เอง แม้ส่ง `--chrome` ไป (แอป strip `ANTHROPIC_API_KEY` อยู่แล้ว)
 - Proactive behaviour ถูกตัดออกจาก phase นี้ (2026-07-28) — ถ้าจะกลับมาทำ ให้ตั้งเป็น phase ของตัวเอง และยังต้องโปร่งใส จำกัดความถี่ และปิดได้ง่ายตามเดิม
 
 ### Phase 7: Talk to each other

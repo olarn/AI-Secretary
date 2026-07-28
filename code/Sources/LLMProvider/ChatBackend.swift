@@ -18,6 +18,19 @@ public protocol WorkspaceScopedProvider: AnyObject, Sendable {
     /// with file tools that it "cannot run commands" makes it ask the user to
     /// paste files it could simply have opened.
     var hasWorkspaceTools: Bool { get }
+    /// Whether this backend can reach the user's browser at all. Only the
+    /// user's own Claude Code can: the extension authenticates against their
+    /// subscription, so an API-key backend has no way in.
+    var supportsBrowser: Bool { get }
+    /// Connects or disconnects the browser for subsequent turns.
+    func setBrowserEnabled(_ enabled: Bool)
+}
+
+/// Defaults for backends that have no browser to offer, so a provider only
+/// implements this when it means something.
+public extension WorkspaceScopedProvider {
+    var supportsBrowser: Bool { false }
+    func setBrowserEnabled(_ enabled: Bool) {}
 }
 
 extension ClaudeCodeProvider: WorkspaceScopedProvider {
@@ -43,6 +56,20 @@ extension ClaudeCodeProvider: WorkspaceScopedProvider {
     public func resetConversation() { resetSession() }
 
     public var hasWorkspaceTools: Bool { true }
+
+    public var supportsBrowser: Bool { true }
+
+    /// Turning the browser on or off changes which tools the next session is
+    /// started with, so the current session is dropped — a resumed one keeps
+    /// the tools it was created with, and the user would be told the browser
+    /// was connected while the model still couldn't see it.
+    public func setBrowserEnabled(_ enabled: Bool) {
+        var updated = configuration
+        guard updated.browserEnabled != enabled else { return }
+        updated.browserEnabled = enabled
+        configuration = updated
+        resetSession()
+    }
 }
 
 /// Picks where a turn runs: the user's own Claude Code if it's installed,
@@ -64,6 +91,7 @@ public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, @unchecke
     private var _availability: ClaudeCodeAvailability?
     private var _claudeCode: ClaudeCodeProvider?
     private var _pending: (workingDirectory: URL?, additionalDirectories: [URL], allowedTools: [String]?)?
+    private var _pendingBrowser = false
     private var _observer: (@Sendable (ClaudeCodeAvailability) -> Void)?
     private var _diskDefaults: ClaudeCodeDefaults?
 
@@ -112,6 +140,7 @@ public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, @unchecke
                     allowedTools: pending.allowedTools
                 )
             }
+            provider.setBrowserEnabled(_pendingBrowser)
             _claudeCode = provider
         }
         observer = _observer
@@ -159,6 +188,22 @@ public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, @unchecke
 
     public func resetConversation() {
         lock.withLock { _claudeCode }?.resetConversation()
+    }
+
+    /// Only the user's own Claude Code carries the browser connection, and
+    /// whether we have one isn't known until detection has run — so the
+    /// preference is remembered either way and applied when the provider
+    /// appears, exactly as the working directory is.
+    public var supportsBrowser: Bool {
+        lock.withLock { _claudeCode } != nil
+    }
+
+    public func setBrowserEnabled(_ enabled: Bool) {
+        let provider: ClaudeCodeProvider? = lock.withLock {
+            _pendingBrowser = enabled
+            return _claudeCode
+        }
+        provider?.setBrowserEnabled(enabled)
     }
 
     /// What the user's own Claude Code is set up to use — read from their

@@ -39,17 +39,27 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
         /// list is refused by the CLI and reported back to the user.
         public var allowedTools: [String]
         public var permissionMode: String
+        /// Whether to connect Claude Code to the user's Chrome, giving it the
+        /// browser tools described in `BrowserTools`.
+        ///
+        /// Off unless the user turns it on. The connection reaches every site
+        /// they are signed into, and Claude Code's own documentation warns that
+        /// always-loaded browser tools cost context on every turn — neither is
+        /// something to hand out by default.
+        public var browserEnabled: Bool
 
         public init(
             workingDirectory: URL? = nil,
             additionalDirectories: [URL] = [],
             allowedTools: [String] = ClaudeCodeProvider.readOnlyTools,
-            permissionMode: String = "manual"
+            permissionMode: String = "manual",
+            browserEnabled: Bool = false
         ) {
             self.workingDirectory = workingDirectory
             self.additionalDirectories = additionalDirectories
             self.allowedTools = allowedTools
             self.permissionMode = permissionMode
+            self.browserEnabled = browserEnabled
         }
     }
 
@@ -381,6 +391,12 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
             "--include-partial-messages",
             "--permission-mode", configuration.permissionMode
         ]
+        // Verified against Claude Code 2.1.220: the flag connects in this
+        // non-interactive shape too. The init event reports the
+        // `claude-in-chrome` server as connected and its tools become
+        // available, with none of the first-run dialogs the interactive CLI
+        // shows — those would have hung a `-p` run with no terminal to answer.
+        if configuration.browserEnabled { arguments += ["--chrome"] }
         // Only override what the user actually chose. Claude Code already has
         // their model and effort configured; forcing ours would hand them a
         // different assistant than the one they set up in the terminal.

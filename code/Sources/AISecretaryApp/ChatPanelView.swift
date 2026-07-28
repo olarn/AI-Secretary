@@ -373,6 +373,32 @@ struct ChatPanelView: View {
         .fixedSize()
     }
 
+    /// The same menu shape as Model and Effort rather than a toggle switch, so
+    /// the settings panel reads as one list of choices — and so this one is a
+    /// deliberate pick from a menu, not a switch brushed by accident.
+    private var browserPicker: some View {
+        Menu {
+            Button {
+                secretary.setBrowserEnabled(false)
+            } label: {
+                Label("Off", systemImage: secretary.browserEnabled ? "" : "checkmark")
+            }
+            Button {
+                secretary.setBrowserEnabled(true)
+            } label: {
+                Label("Read my browser", systemImage: secretary.browserEnabled ? "checkmark" : "")
+            }
+        } label: {
+            settingLabel(
+                "Browser",
+                value: secretary.browserEnabled ? "Connected" : "Off",
+                inherited: false
+            )
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+    }
+
     /// Shows the real value either way; the dot marks one the app didn't pick,
     /// which can change if the user reconfigures Claude Code.
     private func settingLabel(_ title: String, value: String, inherited: Bool) -> some View {
@@ -704,6 +730,14 @@ struct ChatPanelView: View {
             Text("Change with /model <id> or /effort <level> in the chat.")
                 .font(.system(size: 9))
                 .foregroundStyle(.secondary)
+
+            browserPicker
+            Text(
+                "Reads pages in your Chrome, including sites you're signed in to. "
+                + "Needs the Claude in Chrome extension. Clicking and typing still ask first."
+            )
+            .font(.system(size: 9))
+            .foregroundStyle(.secondary)
 
             Divider()
 
