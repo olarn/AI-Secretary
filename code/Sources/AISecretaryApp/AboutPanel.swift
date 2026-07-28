@@ -31,8 +31,15 @@ enum AboutPanel {
     private static var credits: NSAttributedString {
         let style = NSMutableParagraphStyle()
         style.alignment = .center
+        // The commit is here rather than in the version line so the version
+        // stays the thing people quote, while "which build is this?" — the
+        // question that comes up when a fixed thing looks broken again — is
+        // still answerable without a terminal.
+        let origin = AppInfo.build.map { build in
+            AppInfo.branch.map { "\n\nBuild \(build) on \($0)" } ?? "\n\nBuild \(build)"
+        } ?? ""
         return NSAttributedString(
-            string: AppInfo.tagline,
+            string: AppInfo.tagline + origin,
             attributes: [
                 .font: NSFont.systemFont(ofSize: 11),
                 .foregroundColor: NSColor.secondaryLabelColor,

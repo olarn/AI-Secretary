@@ -38,9 +38,26 @@ public enum AppInfo: Sendable {
     public static let name = "AI Secretary"
     public static let version = AppVersion.current
 
+    /// The commit this bundle was built from, stamped in by
+    /// `scripts/package-app.sh`. Absent when running straight from the SwiftPM
+    /// build directory, where there is no bundle to stamp.
+    public static var build: String? {
+        Bundle.main.infoDictionary?["AISecretaryBuild"] as? String
+    }
+
+    public static var branch: String? {
+        Bundle.main.infoDictionary?["AISecretaryBranch"] as? String
+    }
+
     /// What the app says when asked what it is — the About window's subtitle,
     /// and the answer to "which version are you running?".
-    public static var summary: String { "\(name) \(version)" }
+    ///
+    /// The build is part of the answer, not a footnote: two bundles can carry
+    /// the same version and different code, and telling them apart is the whole
+    /// point of showing it.
+    public static var summary: String {
+        build.map { "\(name) \(version) (\($0))" } ?? "\(name) \(version)"
+    }
 
     public static let tagline = "A desktop companion that works through your own Claude Code."
 }

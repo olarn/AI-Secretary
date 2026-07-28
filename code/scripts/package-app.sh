@@ -35,7 +35,16 @@ if [[ -z "$VERSION" ]]; then
     exit 1
 fi
 
-echo "▸ Building ($CONFIG) — version ${VERSION}…"
+# Which commit this bundle was actually built from. Two bundles can carry the
+# same version number and different code — that is exactly how a fixed feature
+# appears to come back broken — so the build is stamped and shown in the app.
+BUILD="$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+BRANCH="$(git -C "$ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
+if ! git -C "$ROOT" diff --quiet HEAD 2>/dev/null; then
+    BUILD="${BUILD}-dirty"
+fi
+
+echo "▸ Building ($CONFIG) — version ${VERSION} (${BUILD} on ${BRANCH})…"
 swift build -c "$CONFIG"
 
 BIN_PATH="$(swift build -c "$CONFIG" --show-bin-path)/$EXECUTABLE"
@@ -90,6 +99,12 @@ $ICON_LINE
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
     <string>$VERSION</string>
+    <!-- Which commit this was built from. A separate key rather than
+         CFBundleVersion, whose format the App Store constrains. -->
+    <key>AISecretaryBuild</key>
+    <string>$BUILD</string>
+    <key>AISecretaryBranch</key>
+    <string>$BRANCH</string>
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>LSMinimumSystemVersion</key>
@@ -113,6 +128,19 @@ if command -v codesign >/dev/null 2>&1; then
         echo "  (ad-hoc signing skipped — the app still runs)"
 fi
 
-echo "✓ Built $APP_DIR"
+# Exactly one bundle, always. Worktrees mean several checkouts of this repo can
+# each hold an AISecretary.app, all with the same bundle id and version and
+# different code inside; launching the wrong one looks exactly like a feature
+# that has stopped working. The one just built is the only one that survives.
+REPO_ROOT="$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null | sed 's|/\.git$||')"
+if [[ -n "$REPO_ROOT" && -d "$REPO_ROOT" ]]; then
+    while IFS= read -r other; do
+        [[ "$other" == "$APP_DIR" ]] && continue
+        echo "▸ Removing an older bundle: $other"
+        rm -rf "$other"
+    done < <(find "$REPO_ROOT" -name "AISecretary.app" -not -path "*/.build/*" 2>/dev/null)
+fi
+
+echo "✓ Built $APP_DIR  (version $VERSION, build $BUILD on $BRANCH)"
 echo "  Double-click it in Finder, or run:  open \"$APP_DIR\""
 echo "  To install:  cp -R \"$APP_DIR\" /Applications/"

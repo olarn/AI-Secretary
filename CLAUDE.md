@@ -239,6 +239,19 @@ Build in phases.
 - Prefer typed models, explicit protocols/interfaces, and small testable modules.
 - Add unit tests for state transitions, intent routing, project resolution, permission decisions, and tool invocation policies.
 - Add integration tests for approved tool execution using mocks or temporary fixtures.
+- **A UI feature is not done until it has been driven in the running app.** Unit
+  tests on the numbers behind a view are not evidence the view works: the
+  message box shipped with eight passing tests over its height arithmetic while
+  the box itself never grew past one line, because the measurement it fed was
+  always zero. Open the app, do the thing a user would do, and look at it.
+- **One `.app`, always.** `scripts/package-app.sh` deletes every other
+  `AISecretary.app` in the repo — worktrees otherwise leave several bundles with
+  the same id and version but different code inside, and launching an old one is
+  indistinguishable from a feature breaking. The bundle is stamped with the
+  commit and branch it was built from (`AISecretaryBuild`), shown in About and in
+  the status bar menu, so "which build is this?" never needs a terminal.
+- Delete a worktree once its branch is merged. A stale checkout is a stale build
+  waiting to be launched.
 - Avoid broad filesystem access and unbounded shell execution in tests.
 - Add structured logs and task correlation IDs.
 - Document setup, architecture decisions, permission model, and how to run tests.

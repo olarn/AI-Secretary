@@ -129,6 +129,10 @@ struct ChatPanelView: View {
     /// The filled circle behind the ✕ makes it read larger than its point size,
     /// so it's set 10% down from the 18pt the other controls were measured
     /// against.
+    /// Asked for: the message box grows to five lines and then scrolls. Past
+    /// five it starts eating the conversation it's replying to.
+    static let inputLineLimit = 5
+
     private static let closeButtonSize: Double = 18 * 0.9
     /// 30% smaller again than the close button's original 18pt.
     private static let widthButtonSize: Double = 18 * 0.7
@@ -598,19 +602,24 @@ struct ChatPanelView: View {
         // both the message and the text size, the button never lined up with
         // anything.
         HStack(alignment: .center, spacing: 6) {
-            ChatInputView(
-                text: $draft,
-                fontSize: appearance.settings.fontSize,
-                placeholder: "Ask the Secretary…",
-                onSubmit: send
-            )
-            .padding(.horizontal, 4)
-            .background(
-                RoundedRectangle(cornerRadius: 6).fill(Color(nsColor: .textBackgroundColor))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.4), lineWidth: 1)
-            )
+            TextField("Ask the Secretary…", text: $draft, axis: .vertical)
+                .textFieldStyle(.roundedBorder)
+                .font(.system(size: appearance.settings.fontSize))
+                // SwiftUI grows the field a line at a time to this limit and
+                // scrolls after it. An AppKit text view was tried instead and
+                // measured its own height wrongly — the box stayed one line and
+                // long messages spilled over the buttons below.
+                .lineLimit(1...ChatPanelView.inputLineLimit)
+                // Return sends. `onSubmit` alone doesn't fire for a vertical
+                // field in this panel — Return quietly drops first responder
+                // instead — which would leave no way to send from the keyboard.
+                // Shift/Option-Return is left alone so it still breaks the line.
+                .onKeyPress(.return, phases: .down) { press in
+                    let modifiers: EventModifiers = [.shift, .option]
+                    guard press.modifiers.isDisjoint(with: modifiers) else { return .ignored }
+                    send()
+                    return .handled
+                }
             Button(action: send) {
                 Image(systemName: "arrow.up.circle.fill")
             }
