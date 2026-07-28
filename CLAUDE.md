@@ -283,6 +283,16 @@ Build in phases.
   - เวลาตรวจ ต้อง capture ตามขอบเขตหน้าต่างจริงจาก `win.swift` (เคย capture 720pt ของหน้าต่าง
     สูง 643 แล้วอ่านว่า "พอดี" ทั้งที่ล้น) และต้องเห็นแถว header ในภาพ
   - สถานะที่ต้องขับจริงอย่างน้อย: Profile เดี่ยวที่ font เล็กสุดและใหญ่สุด, สลับแผงขณะเปิดอยู่
+- **ทุกครั้งที่แก้ code ต้อง bump version** ตามแพตเทิร์น `major.feature.fixBug`
+  - แก้บั๊ก → +1 ที่หลักสุดท้าย (0.6.0 → 0.6.1) · เพิ่ม/เปลี่ยนความสามารถ → +1 ที่หลักกลาง
+    แล้วรีเซ็ตหลักสุดท้าย (0.6.1 → 0.7.0) · หลักแรกสงวนไว้สำหรับการเปลี่ยนครั้งใหญ่
+  - แก้ที่เดียวคือ `SecretaryCore/AppVersion.swift` — About window กับ `package-app.sh`
+    อ่านค่านี้เอง ห้ามพิมพ์เลขซ้ำในโค้ด
+  - เอกสารที่เขียนเลข version เป็นข้อความ (ตอนนี้คือ root `README.md`) เป็นสำเนาที่สอง
+    ซึ่งเก่าได้ — `VersionInSyncTests` จะ fail ถ้าไม่ตรง **ห้ามแก้เทสให้ผ่านโดยลดการตรวจ**
+    ถ้ามีเอกสารใหม่ที่อ้างเลข version ให้เพิ่มแถวใน `versionMentions`
+  - เทสยังกันไม่ให้ประกาศ `AppVersion(...)` ถูกจัดรูปข้ามบรรทัด เพราะ `package-app.sh`
+    parse ด้วย `sed` บรรทัดเดียว ถ้าแตกบรรทัด bundle จะไม่มีเลข version เงียบๆ
 - **One `.app`, always.** `scripts/package-app.sh` deletes every other
   `AISecretary.app` in the repo — worktrees otherwise leave several bundles with
   the same id and version but different code inside, and launching an old one is
