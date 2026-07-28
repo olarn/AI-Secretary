@@ -191,6 +191,9 @@ Build in phases.
 ### Phase 6: External tools and proactive assistance
 
 - MCP-based integrations such as calendar, Slack, email, and knowledge sources.
+   - **ไม่ต้องเขียนโค้ดเพิ่ม — ทดสอบแล้วใช้ได้อยู่แล้ว (2026-07-28)** เพราะแอปขับ Claude Code ของ user ซึ่งโหลด MCP server จาก config ของเขาเองตามที่ Phase 3 ตั้งใจ
+   - หลักฐาน: ถาม "ตอนนี้กี่โมงแล้ว" ลอยๆ ใน session ใหม่ โมเดลหา tool เจอเองด้วย ToolSearch แล้วเรียก `mcp__my-tools__get_time` สำเร็จ ไม่ต้องผ่านรอบขออนุมัติ และลิสต์ MCP server ที่เข้าถึงได้เองได้ครบ (ทั้ง server ราย project และ global เช่น Figma)
+   - อย่าเพิ่ม `mcp__*` ลง allowlist หรือเขียน MCP client เอง — allowlist ปัจจุบันไม่ได้บล็อก MCP
 - Proactive behaviors must be transparent, rate-limited, and easy to disable.
 
 ### Phase 7: Voice
