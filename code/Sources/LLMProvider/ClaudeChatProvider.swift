@@ -86,7 +86,7 @@ public final class ClaudeChatProvider: ChatProvider {
                 } catch is CancellationError {
                     // Nothing to report: the caller asked us to stop.
                 } catch {
-                    continuation.yield(.left(asChatError(error)))
+                    continuation.yield(.left(asChatError(error, otherwise: ChatError.network)))
                 }
                 continuation.finish()
             }

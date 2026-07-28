@@ -138,7 +138,7 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
                 } catch is CancellationError {
                     // Nothing to report: the caller asked us to stop.
                 } catch {
-                    continuation.yield(.left(asChatError(error)))
+                    continuation.yield(.left(asChatError(error, otherwise: ChatError.claudeCodeFailed)))
                 }
                 continuation.finish()
             }
@@ -424,11 +424,4 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
         environment.removeValue(forKey: "ANTHROPIC_API_KEY")
         return environment
     }
-}
-
-/// Anything thrown inside a provider becomes a typed `ChatError` before it
-/// reaches the stream. Without this the left rail would carry an untyped
-/// `Error` and every consumer would be back to guessing.
-func asChatError(_ error: Error) -> ChatError {
-    (error as? ChatError) ?? .claudeCodeFailed(error.localizedDescription)
 }

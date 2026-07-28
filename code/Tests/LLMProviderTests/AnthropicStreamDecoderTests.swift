@@ -65,3 +65,31 @@ final class ChatTypeValidationTests: XCTestCase {
         XCTAssertEqual(Effort.named("turbo"), Option.none())
     }
 }
+
+/// The two providers share one error-normalising helper but must not share one
+/// fallback. Nothing else in the suite reaches this: the fakes yield scripted
+/// events and never throw a `URLError`, so a wrong fallback here reaches users
+/// as a wrong message with every test still green.
+final class ChatErrorMappingTests: XCTestCase {
+    private let offline = URLError(.notConnectedToInternet)
+
+    func testTheAPIPathReportsANetworkFailure() {
+        XCTAssertEqual(
+            asChatError(offline, otherwise: ChatError.network),
+            .network(offline.localizedDescription),
+            "An API-key turn never involves Claude Code, so it must not be blamed"
+        )
+    }
+
+    func testTheClaudeCodePathReportsAClaudeCodeFailure() {
+        XCTAssertEqual(
+            asChatError(offline, otherwise: ChatError.claudeCodeFailed),
+            .claudeCodeFailed(offline.localizedDescription)
+        )
+    }
+
+    /// An error that is already typed keeps its own case whichever caller maps it.
+    func testAnExistingChatErrorPassesThrough() {
+        XCTAssertEqual(asChatError(ChatError.missingAPIKey, otherwise: ChatError.network), .missingAPIKey)
+    }
+}

@@ -913,7 +913,7 @@ public final class Secretary {
                 // failed read, so it joins the same rail.
                 result.succeeded
                     ? .right(result.output)
-                    : .left(.notReadableText(result.output))
+                    : .left(.fileNotFound(request.relativePath))
             }^
 
         guard let contents = read.toOption().toOptional() else {

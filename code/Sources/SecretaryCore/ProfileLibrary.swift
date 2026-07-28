@@ -136,7 +136,13 @@ public final class ProfileLibrary {
         artwork.hasArtwork(for: id)
     }
 
-    private func persist() {
+    /// A failed write is deliberately not surfaced: profiles are cosmetic, every
+    /// caller is a UI action already committed in memory, and there is nothing
+    /// useful to say mid-gesture. Discarded explicitly so it reads as a decision
+    /// rather than an oversight — unlike the project registry, where a failed
+    /// write must not be silent and `add`/`grant` return their outcome.
+    @discardableResult
+    private func persist() -> Either<ProfileStoreError, Void> {
         store.save(ProfileSelection(profiles: profiles, activeID: .some(activeID)))
     }
 }
