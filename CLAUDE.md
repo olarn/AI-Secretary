@@ -191,10 +191,16 @@ Build in phases.
 ### Phase 6: External tools and proactive assistance
 
 - MCP-based integrations such as calendar, Slack, email, and knowledge sources.
-- Proactive behaviors must be transparent, rate-limited, and easy to disable.
+- Be able to understand the web content through Chrome Claude plug in 
+  (suggest user that app can use this approach when user ask about app to understand the wen contents). 
 
-### Phase 7: Voice
+### Phase 7: Talk to each other
 
+- Two or more app be able to talk to each other.
+- First, brainstorm about the feasible that can made 2 or more AI-Sevretary app can talk to each other.
+- Second, its can do the same project (or projects) with different role (configure with .md file in the project somehow)
+
+### Phase 8: Voice
 - Push-to-talk or explicit voice activation.
 - Speech-to-text, text-to-speech, interruption behavior, and privacy controls.
 - Voice must follow the same approval and auditing model as chat.
