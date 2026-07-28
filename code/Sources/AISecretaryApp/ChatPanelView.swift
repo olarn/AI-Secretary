@@ -27,6 +27,7 @@ struct ChatPanelView: View {
     @State private var apiKeyDraft: String = ""
     @State private var settingsNote: String?
     @State private var scrollPin = TranscriptScrollPin()
+    @State private var dragOrigin: DragOrigin?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -41,7 +42,7 @@ struct ChatPanelView: View {
             footer
         }
         .padding(18)
-        .frame(width: 360)
+        .frame(width: appearance.settings.chatWidth)
         .frame(maxHeight: .infinity, alignment: .top)
         .background(
             SpeechBubbleShape(isMirrored: layout.isMirrored, isFlippedVertically: layout.isFlippedVertically)
@@ -51,19 +52,104 @@ struct ChatPanelView: View {
             SpeechBubbleShape(isMirrored: layout.isMirrored, isFlippedVertically: layout.isFlippedVertically)
                 .stroke(Color.primary.opacity(0.85), lineWidth: 2)
         )
-        .overlay(alignment: .topTrailing) {
-            Button(action: onClose) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 18))
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
-            .padding(.top, 10)
-            .padding(.trailing, 10)
-        }
+        .overlay(alignment: .topTrailing) { windowButtons }
+        // Inside the body rather than on the outer frame: the outer frame
+        // includes the strip reserved for the tail, and the grip would sit in
+        // it — floating outside the bubble.
+        // On whichever side the bubble actually grows from, which is the side
+        // away from the tail.
+        .overlay(alignment: layout.isMirrored ? .bottomLeading : .bottomTrailing) { resizeGrip }
         .onExitCommand(perform: onClose)
         .padding(layout.isFlippedVertically ? .top : .bottom, SpeechBubbleShape.defaultTailLength)
-        .frame(width: 360, height: appearance.settings.chatHeight)
+        .frame(width: appearance.settings.chatWidth, height: appearance.settings.chatHeight)
+    }
+
+    /// Widen, restore, close, in that order. The two width buttons are drawn
+    /// smaller than the close button — closing is the one people reach for — and
+    /// are disabled rather than hidden when they'd do nothing, so the row never
+    /// changes shape and a greyed button reads as "already there".
+    private var windowButtons: some View {
+        HStack(spacing: 8) {
+            Button(action: appearance.widenChat) {
+                Image(systemName: "arrow.left.and.line.vertical.and.arrow.right")
+            }
+            .font(.system(size: Self.widthButtonSize))
+            .disabled(!appearance.settings.canWiden)
+            .help("Wider — one step at a time, up to three times")
+
+            Button(action: appearance.restoreChatWidth) {
+                Image(systemName: "arrow.right.and.line.vertical.and.arrow.left")
+            }
+            .font(.system(size: Self.widthButtonSize))
+            .disabled(!appearance.settings.canRestoreWidth)
+            .help("Narrower — one step back")
+
+            Button(action: onClose) {
+                Image(systemName: "xmark.circle.fill")
+            }
+            .font(.system(size: Self.closeButtonSize))
+            .help("Close")
+        }
+        .foregroundStyle(.secondary)
+        .buttonStyle(.plain)
+        .padding(.top, 10)
+        .padding(.trailing, 10)
+    }
+
+    private static let closeButtonSize: Double = 18
+    /// 30% smaller than the close button.
+    private static let widthButtonSize: Double = 18 * 0.7
+
+    /// Free resize, for when neither the steppers nor the widen button is the
+    /// size the user wants.
+    ///
+    /// Measured against the pointer's position on screen rather than the
+    /// gesture's own translation: the bubble is re-anchored to the character on
+    /// every size change, so it moves under the pointer mid-drag and a
+    /// translation reported in the window's own coordinates would drift.
+    private var resizeGrip: some View {
+        Image(systemName: "arrow.up.left.and.arrow.down.right")
+            .font(.system(size: 9, weight: .bold))
+            .foregroundStyle(.secondary)
+            .rotationEffect(.degrees(layout.isMirrored ? 0 : 90))
+            .padding(8)
+            .contentShape(Rectangle())
+            .help("Drag to resize")
+            .gesture(
+                DragGesture(minimumDistance: 1)
+                    .onChanged { _ in resize(to: NSEvent.mouseLocation) }
+                    .onEnded { _ in dragOrigin = nil }
+            )
+    }
+
+    /// The edge pinned to the character is the one on the tail's side, so the
+    /// bubble grows away from it: rightward normally, leftward when the tail is
+    /// on the right. The drag has to follow suit, or pulling outward would make
+    /// the bubble smaller on one of the two sides.
+    private func resize(to pointer: CGPoint) {
+        let settings = appearance.settings
+        let origin = dragOrigin ?? DragOrigin(
+            pointer: pointer,
+            width: settings.chatWidth,
+            height: settings.chatHeight
+        )
+        if dragOrigin == nil { dragOrigin = origin }
+
+        let outward: Double = layout.isMirrored ? -1 : 1
+        appearance.resizeChat(
+            width: origin.width + (pointer.x - origin.pointer.x) * outward,
+            // Screen coordinates point up; the grip is at the bottom, so
+            // dragging down is what makes the bubble taller.
+            height: origin.height - (pointer.y - origin.pointer.y)
+        )
+    }
+
+    /// Where the drag started, so every step is measured from one fixed point
+    /// rather than accumulated.
+    struct DragOrigin {
+        let pointer: CGPoint
+        let width: Double
+        let height: Double
     }
 
     // MARK: - Sections
@@ -200,7 +286,8 @@ struct ChatPanelView: View {
                 .foregroundStyle(.secondary)
             Spacer()
         }
-        .padding(.trailing, 26)
+        // Clears the widen/restore/close row above it.
+        .padding(.trailing, 72)
     }
 
     private var transcript: some View {
@@ -436,12 +523,24 @@ struct ChatPanelView: View {
         }
     }
 
+    /// Grows a line at a time as the message gets longer, then stops and
+    /// scrolls: five lines is about as much of the bubble as the input can take
+    /// before the conversation above it stops being readable.
     private var inputRow: some View {
-        HStack(spacing: 6) {
-            TextField("Ask the Secretary…", text: $draft)
-                .textFieldStyle(.roundedBorder)
-                .font(.caption)
-                .onSubmit(send)
+        HStack(alignment: .bottom, spacing: 6) {
+            ChatInputView(
+                text: $draft,
+                fontSize: appearance.settings.fontSize,
+                placeholder: "Ask the Secretary…",
+                onSubmit: send
+            )
+            .padding(.horizontal, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 6).fill(Color(nsColor: .textBackgroundColor))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.4), lineWidth: 1)
+            )
             Button(action: send) {
                 Image(systemName: "arrow.up.circle.fill")
             }
@@ -572,6 +671,10 @@ struct ChatPanelView: View {
         .background(Color.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
     }
 
+    /// The section toggles grow with the text size like everything else in the
+    /// panel: left at a fixed caption size they became unreadable specks next to
+    /// 32pt replies. `controlSize` follows suit, or the button's own padding
+    /// stays mini around text that isn't.
     private var footer: some View {
         HStack(spacing: 10) {
             Toggle("Settings", isOn: $showSettings)
@@ -580,8 +683,8 @@ struct ChatPanelView: View {
             Spacer()
         }
         .toggleStyle(.button)
-        .controlSize(.mini)
-        .font(.caption2)
+        .controlSize(appearance.settings.fontSize > 16 ? .regular : .small)
+        .font(.system(size: appearance.settings.secondaryFontSize))
     }
 
     // MARK: - Actions

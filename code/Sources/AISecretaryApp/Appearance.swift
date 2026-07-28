@@ -20,25 +20,40 @@ final class Appearance {
     init(store: AppearanceStoring = UserDefaultsAppearanceStore()) {
         self.store = store
         let saved = store.load()
+        // No screen to measure means no limit to apply, so the saved size stands
+        // as its own ceiling. Falling back to the default here would shrink a
+        // window the user had deliberately grown.
+        let screen = NSScreen.main?.visibleFrame
         self.settings = AppearanceSettings(
             fontSize: saved.fontSize,
+            chatWidth: saved.chatWidth,
             chatHeight: saved.chatHeight,
-            maxHeight: Self.usableScreenHeight,
+            maxWidth: screen.map(Self.usableWidth) ?? saved.chatWidth,
+            maxHeight: screen.map { Double($0.height) } ?? saved.chatHeight,
             appScale: saved.appScale
         )
     }
 
-    /// The height of the screen minus the menu bar and Dock — what a window can
-    /// actually occupy, rather than the raw display size.
-    static var usableScreenHeight: Double {
-        NSScreen.main.map { Double($0.visibleFrame.height) } ?? AppearanceSettings.defaultHeight
+    /// The margin the layout keeps at each screen edge, so the widest the bubble
+    /// may get is the widest it can be without being clamped anyway.
+    private static let screenMargin: Double = 16
+
+    private static func usableWidth(_ visibleFrame: CGRect) -> Double {
+        Double(visibleFrame.width) - screenMargin
     }
 
-    /// Re-applies the screen limit. Worth doing when the panel is about to be
-    /// shown, since the display may have changed since launch.
-    func refreshScreenLimit() {
+    /// Re-applies the limits of the screen the character is actually on. Worth
+    /// doing when the panel is about to be shown, since the display may have
+    /// changed since launch.
+    ///
+    /// A `nil` frame leaves the limits alone: an unknown screen is not the same
+    /// as a tiny one, and treating it as tiny would collapse the window and
+    /// leave the widen button dead with no way to explain why.
+    func applyScreenLimits(_ visibleFrame: CGRect?) {
+        guard let visibleFrame else { return }
         var updated = settings
-        updated.setMaxHeight(Self.usableScreenHeight)
+        updated.setMaxHeight(Double(visibleFrame.height))
+        updated.setMaxWidth(Self.usableWidth(visibleFrame))
         apply(updated)
     }
 
@@ -47,6 +62,11 @@ final class Appearance {
     func increaseHeight() { mutate { $0.increaseHeight() } }
     func decreaseHeight() { mutate { $0.decreaseHeight() } }
     func selectAppScale(_ scale: AppScale) { mutate { $0.appScale = scale } }
+    func widenChat() { mutate { $0.widenChat() } }
+    func restoreChatWidth() { mutate { $0.restoreChatWidth() } }
+    func resizeChat(width: Double, height: Double) {
+        mutate { $0.setChatSize(width: width, height: height) }
+    }
 
     private func mutate(_ change: (inout AppearanceSettings) -> Void) {
         var updated = settings
@@ -59,12 +79,16 @@ final class Appearance {
         // The character window is resized imperatively too, so a scale change
         // has to reach the delegate the same way a height change does.
         let needsRelayout = updated.chatHeight != settings.chatHeight
+            || updated.chatWidth != settings.chatWidth
             || updated.appScale != settings.appScale
         settings = updated
         store.save(
-            fontSize: updated.fontSize,
-            chatHeight: updated.chatHeight,
-            appScale: updated.appScale
+            StoredAppearance(
+                fontSize: updated.fontSize,
+                chatWidth: updated.chatWidth,
+                chatHeight: updated.chatHeight,
+                appScale: updated.appScale
+            )
         )
         if needsRelayout { onChange?() }
     }

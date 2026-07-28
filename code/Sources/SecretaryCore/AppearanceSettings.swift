@@ -44,25 +44,40 @@ public struct AppearanceSettings: Equatable, Sendable {
     public static let defaultHeight: Double = 520
     public static let heightStep: Double = 60
 
+    /// The width the bubble has always shipped as, and its floor: the tail is
+    /// drawn against the width, and much narrower than this the wrapped text
+    /// stops being readable.
+    public static let defaultWidth: Double = 360
+    /// The widths the widen/restore buttons step through, as multiples of the
+    /// default. One press is one step, so the jump to three times the width is
+    /// something the user arrives at rather than lands on by surprise.
+    public static let widthFactors: [Double] = [1, 2, 3]
+
     public private(set) var fontSize: Double
+    public private(set) var chatWidth: Double
     public private(set) var chatHeight: Double
     public var appScale: AppScale
 
-    /// Tallest the bubble may become: the usable height of the screen it's on.
+    /// The most the bubble may become: the usable area of the screen it's on.
     /// Deliberately not persisted — the display can change between launches, so
-    /// this is supplied each time rather than remembered.
+    /// these are supplied each time rather than remembered.
     public private(set) var maxHeight: Double
+    public private(set) var maxWidth: Double
 
     public init(
         fontSize: Double = Self.defaultFontSize,
+        chatWidth: Double = Self.defaultWidth,
         chatHeight: Double = Self.defaultHeight,
+        maxWidth: Double = Self.defaultWidth,
         maxHeight: Double = Self.defaultHeight,
         appScale: AppScale = .medium
     ) {
         self.appScale = appScale
         self.fontSize = min(max(fontSize, Self.minFontSize), Self.maxFontSize)
         self.maxHeight = max(maxHeight, Self.defaultHeight)
+        self.maxWidth = max(maxWidth, Self.defaultWidth)
         self.chatHeight = min(max(chatHeight, Self.defaultHeight), self.maxHeight)
+        self.chatWidth = min(max(chatWidth, Self.defaultWidth), self.maxWidth)
     }
 
     /// Called when the screen is known or changes. Re-clamps the current height,
@@ -70,6 +85,59 @@ public struct AppearanceSettings: Equatable, Sendable {
     public mutating func setMaxHeight(_ height: Double) {
         maxHeight = max(height, Self.defaultHeight)
         chatHeight = min(chatHeight, maxHeight)
+    }
+
+    public mutating func setMaxWidth(_ width: Double) {
+        maxWidth = max(width, Self.defaultWidth)
+        chatWidth = min(chatWidth, maxWidth)
+    }
+
+    // MARK: - Free resizing
+
+    /// A drag on the bubble's grip. Both axes at once, because a corner grip
+    /// moves both, and clamped rather than refused so the drag simply stops at
+    /// the limit instead of jumping.
+    public mutating func setChatSize(width: Double, height: Double) {
+        chatWidth = min(max(width, Self.defaultWidth), maxWidth)
+        chatHeight = min(max(height, Self.defaultHeight), maxHeight)
+    }
+
+    // MARK: - Stepping the width
+
+    /// The stops the two buttons move between, narrowest first. Each is capped
+    /// to the screen, and a stop that the screen has squeezed into another one
+    /// isn't a separate stop — otherwise a press would appear to do nothing.
+    public var widthStops: [Double] {
+        var stops: [Double] = []
+        for factor in Self.widthFactors {
+            let stop = min(Self.defaultWidth * factor, maxWidth)
+            if stops.last != stop { stops.append(stop) }
+        }
+        return stops
+    }
+
+    /// The next stop wider than the bubble is now. A hand-dragged width sits
+    /// between stops, and stepping from there goes to the next one up rather
+    /// than snapping backwards.
+    public var nextWiderWidth: Double? {
+        widthStops.first { $0 > chatWidth }
+    }
+
+    public var nextNarrowerWidth: Double? {
+        widthStops.last { $0 < chatWidth }
+    }
+
+    public var canWiden: Bool { nextWiderWidth != nil }
+    public var canRestoreWidth: Bool { nextNarrowerWidth != nil }
+
+    public mutating func widenChat() {
+        guard let next = nextWiderWidth else { return }
+        chatWidth = next
+    }
+
+    public mutating func restoreChatWidth() {
+        guard let previous = nextNarrowerWidth else { return }
+        chatWidth = previous
     }
 
     // MARK: - Stepping
@@ -105,15 +173,36 @@ public struct AppearanceSettings: Equatable, Sendable {
     public var footnoteFontSize: Double { max(8, fontSize - 3) }
 }
 
+/// The values worth remembering across launches. The screen limits aren't
+/// among them: the display can change between runs, so they're supplied fresh.
+public struct StoredAppearance: Equatable, Sendable {
+    public var fontSize: Double
+    public var chatWidth: Double
+    public var chatHeight: Double
+    public var appScale: AppScale
+
+    public init(
+        fontSize: Double = AppearanceSettings.defaultFontSize,
+        chatWidth: Double = AppearanceSettings.defaultWidth,
+        chatHeight: Double = AppearanceSettings.defaultHeight,
+        appScale: AppScale = .medium
+    ) {
+        self.fontSize = fontSize
+        self.chatWidth = chatWidth
+        self.chatHeight = chatHeight
+        self.appScale = appScale
+    }
+}
+
 /// Remembers the choice across launches.
 public protocol AppearanceStoring: AnyObject, Sendable {
-    /// Only the chosen values; the screen limit is applied separately.
-    func load() -> (fontSize: Double, chatHeight: Double, appScale: AppScale)
-    func save(fontSize: Double, chatHeight: Double, appScale: AppScale)
+    func load() -> StoredAppearance
+    func save(_ appearance: StoredAppearance)
 }
 
 public final class UserDefaultsAppearanceStore: AppearanceStoring, @unchecked Sendable {
     private let fontKey = "appearance.fontSize"
+    private let widthKey = "appearance.chatWidth"
     private let heightKey = "appearance.chatHeight"
     private let scaleKey = "appearance.appScale"
     private let defaults: UserDefaults
@@ -123,45 +212,35 @@ public final class UserDefaultsAppearanceStore: AppearanceStoring, @unchecked Se
     }
 
     /// `object(forKey:)` rather than `double(forKey:)` so an unset key falls
-    /// back to the default instead of to zero. An unrecognised scale — written
-    /// by a build with different steps — also falls back rather than throwing.
-    public func load() -> (fontSize: Double, chatHeight: Double, appScale: AppScale) {
-        (
-            (defaults.object(forKey: fontKey) as? Double) ?? AppearanceSettings.defaultFontSize,
-            (defaults.object(forKey: heightKey) as? Double) ?? AppearanceSettings.defaultHeight,
-            (defaults.string(forKey: scaleKey).flatMap(AppScale.init(rawValue:))) ?? .medium
+    /// back to the default instead of to zero — which matters for width, added
+    /// after the other two, and so absent for anyone upgrading. An unrecognised
+    /// scale — written by a build with different steps — also falls back rather
+    /// than throwing.
+    public func load() -> StoredAppearance {
+        StoredAppearance(
+            fontSize: (defaults.object(forKey: fontKey) as? Double) ?? AppearanceSettings.defaultFontSize,
+            chatWidth: (defaults.object(forKey: widthKey) as? Double) ?? AppearanceSettings.defaultWidth,
+            chatHeight: (defaults.object(forKey: heightKey) as? Double) ?? AppearanceSettings.defaultHeight,
+            appScale: (defaults.string(forKey: scaleKey).flatMap(AppScale.init(rawValue:))) ?? .medium
         )
     }
 
-    public func save(fontSize: Double, chatHeight: Double, appScale: AppScale) {
-        defaults.set(fontSize, forKey: fontKey)
-        defaults.set(chatHeight, forKey: heightKey)
-        defaults.set(appScale.rawValue, forKey: scaleKey)
+    public func save(_ appearance: StoredAppearance) {
+        defaults.set(appearance.fontSize, forKey: fontKey)
+        defaults.set(appearance.chatWidth, forKey: widthKey)
+        defaults.set(appearance.chatHeight, forKey: heightKey)
+        defaults.set(appearance.appScale.rawValue, forKey: scaleKey)
     }
 }
 
 public final class InMemoryAppearanceStore: AppearanceStoring, @unchecked Sendable {
-    private var fontSize: Double
-    private var chatHeight: Double
-    private var appScale: AppScale
+    private var stored: StoredAppearance
 
-    public init(
-        fontSize: Double = AppearanceSettings.defaultFontSize,
-        chatHeight: Double = AppearanceSettings.defaultHeight,
-        appScale: AppScale = .medium
-    ) {
-        self.fontSize = fontSize
-        self.chatHeight = chatHeight
-        self.appScale = appScale
+    public init(_ stored: StoredAppearance = StoredAppearance()) {
+        self.stored = stored
     }
 
-    public func load() -> (fontSize: Double, chatHeight: Double, appScale: AppScale) {
-        (fontSize, chatHeight, appScale)
-    }
+    public func load() -> StoredAppearance { stored }
 
-    public func save(fontSize: Double, chatHeight: Double, appScale: AppScale) {
-        self.fontSize = fontSize
-        self.chatHeight = chatHeight
-        self.appScale = appScale
-    }
+    public func save(_ appearance: StoredAppearance) { stored = appearance }
 }

@@ -10,6 +10,7 @@ MainActor.assumeIsolated {
     // An agent app draws no menu bar, but NSApplication still dispatches
     // command-key equivalents through mainMenu — this is what makes ⌘Q (and the
     // editing shortcuts in the chat field) work. See AppMenu.
-    app.mainMenu = AppMenu.make()
+    // The delegate is the target for ⌘+/⌘−, and is retained by the application.
+    app.mainMenu = AppMenu.make(textSizeTarget: delegate)
     app.run()
 }
