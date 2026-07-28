@@ -1,3 +1,4 @@
+import FunctionalCore
 import XCTest
 @testable import LLMProvider
 
@@ -5,26 +6,29 @@ final class AnthropicStreamDecoderTests: XCTestCase {
     func testWalksAThinkingThenTextThenStopSequence() {
         var decoder = AnthropicStreamDecoder()
 
-        XCTAssertNil(decoder.handle(dataLine: #"{"type":"message_start","message":{"usage":{"input_tokens":12}}}"#))
+        XCTAssertEqual(decoder.handle(dataLine: #"{"type":"message_start","message":{"usage":{"input_tokens":12}}}"#), Option.none())
         XCTAssertEqual(
             decoder.handle(dataLine: #"{"type":"content_block_start","index":0,"content_block":{"type":"thinking"}}"#),
-            .thinking
+            .some(.thinking)
         )
         // A thinking delta produces nothing visible.
-        XCTAssertNil(decoder.handle(dataLine: #"{"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"…"}}"#))
-        XCTAssertNil(decoder.handle(dataLine: #"{"type":"content_block_start","index":1,"content_block":{"type":"text","text":""}}"#))
+        XCTAssertEqual(decoder.handle(dataLine: #"{"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"…"}}"#), Option.none())
+        XCTAssertEqual(decoder.handle(dataLine: #"{"type":"content_block_start","index":1,"content_block":{"type":"text","text":""}}"#), Option.none())
         XCTAssertEqual(
             decoder.handle(dataLine: #"{"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"Hello"}}"#),
-            .textDelta("Hello")
+            .some(.textDelta("Hello"))
         )
         XCTAssertEqual(
             decoder.handle(dataLine: #"{"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":" there"}}"#),
-            .textDelta(" there")
+            .some(.textDelta(" there"))
         )
-        XCTAssertNil(decoder.handle(dataLine: #"{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":7}}"#))
+        XCTAssertEqual(decoder.handle(dataLine: #"{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":7}}"#), Option.none())
 
         let completion = decoder.handle(dataLine: #"{"type":"message_stop"}"#)
-        XCTAssertEqual(completion, .completed(stopReason: "end_turn", usage: ChatUsage(inputTokens: 12, outputTokens: 7)))
+        XCTAssertEqual(
+            completion,
+            .some(.completed(stopReason: .some("end_turn"), usage: .some(ChatUsage(inputTokens: 12, outputTokens: 7))))
+        )
     }
 
     func testRefusalStopReasonIsCarriedToCompletion() {
@@ -34,30 +38,30 @@ final class AnthropicStreamDecoderTests: XCTestCase {
 
         XCTAssertEqual(
             decoder.handle(dataLine: #"{"type":"message_stop"}"#),
-            .completed(stopReason: "refusal", usage: ChatUsage(inputTokens: 3, outputTokens: 0))
+            .some(.completed(stopReason: .some("refusal"), usage: .some(ChatUsage(inputTokens: 3, outputTokens: 0))))
         )
     }
 
     func testUnknownAndMalformedLinesAreIgnored() {
         var decoder = AnthropicStreamDecoder()
-        XCTAssertNil(decoder.handle(dataLine: #"{"type":"ping"}"#))
-        XCTAssertNil(decoder.handle(dataLine: #"{"type":"some_future_event","foo":1}"#))
-        XCTAssertNil(decoder.handle(dataLine: "not json at all"))
-        XCTAssertNil(decoder.handle(dataLine: ""))
+        XCTAssertEqual(decoder.handle(dataLine: #"{"type":"ping"}"#), Option.none())
+        XCTAssertEqual(decoder.handle(dataLine: #"{"type":"some_future_event","foo":1}"#), Option.none())
+        XCTAssertEqual(decoder.handle(dataLine: "not json at all"), Option.none())
+        XCTAssertEqual(decoder.handle(dataLine: ""), Option.none())
     }
 }
 
 final class ChatTypeValidationTests: XCTestCase {
     func testModelResolutionIsCaseInsensitiveAndAllowlisted() {
-        XCTAssertEqual(ChatModel.named("claude-sonnet-5"), .sonnet5)
-        XCTAssertEqual(ChatModel.named("  CLAUDE-OPUS-4-8 "), .opus48)
-        XCTAssertNil(ChatModel.named("gpt-4"))
-        XCTAssertNil(ChatModel.named("claude-made-up"))
+        XCTAssertEqual(ChatModel.named("claude-sonnet-5"), .some(.sonnet5))
+        XCTAssertEqual(ChatModel.named("  CLAUDE-OPUS-4-8 "), .some(.opus48))
+        XCTAssertEqual(ChatModel.named("gpt-4"), Option.none())
+        XCTAssertEqual(ChatModel.named("claude-made-up"), Option.none())
     }
 
     func testEffortResolution() {
-        XCTAssertEqual(Effort.named("HIGH"), .high)
-        XCTAssertEqual(Effort.named("xhigh"), .xhigh)
-        XCTAssertNil(Effort.named("turbo"))
+        XCTAssertEqual(Effort.named("HIGH"), .some(.high))
+        XCTAssertEqual(Effort.named("xhigh"), .some(.xhigh))
+        XCTAssertEqual(Effort.named("turbo"), Option.none())
     }
 }

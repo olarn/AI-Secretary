@@ -1,3 +1,4 @@
+import FunctionalCore
 import XCTest
 @testable import LLMProvider
 
@@ -89,9 +90,9 @@ final class ClaudeCodeProviderLaunchTests: XCTestCase {
     ) -> [String] {
         ClaudeCodeProvider.arguments(
             prompt: "hello",
-            model: model,
-            effort: effort,
-            system: system,
+            model: Option.fromOptional(model),
+            effort: Option.fromOptional(effort),
+            system: Option.fromOptional(system),
             resume: resume,
             configuration: configuration
         )
@@ -256,7 +257,10 @@ final class ClaudeCodeProviderStreamTests: XCTestCase {
         let events = makeProvider().handle(
             line: #"{"type":"result","subtype":"success","stop_reason":"end_turn","usage":{"input_tokens":4,"output_tokens":107}}"#
         )
-        XCTAssertEqual(events, [.completed(stopReason: "end_turn", usage: ChatUsage(inputTokens: 4, outputTokens: 107))])
+        XCTAssertEqual(
+            events,
+            [.completed(stopReason: .some("end_turn"), usage: .some(ChatUsage(inputTokens: 4, outputTokens: 107)))]
+        )
     }
 
     /// The stream carries event kinds we don't model, and Claude Code adds more
@@ -353,7 +357,7 @@ final class ClaudeCodeRefusalTests: XCTestCase {
         {"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_1","is_error":true,"content":"Claude requested permissions to write to /tmp/p/out.txt, but you haven't granted it yet."}]}}
         """#)
 
-        XCTAssertEqual(events, [.toolDenied(DeniedTool(name: "Write", target: "/tmp/p/out.txt", rule: "Write"))])
+        XCTAssertEqual(events, [.toolDenied(DeniedTool(name: "Write", target: .some("/tmp/p/out.txt"), rule: "Write"))])
     }
 
     /// An ordinary tool failure is not a permission problem — offering to widen
@@ -386,7 +390,7 @@ final class ClaudeCodeRefusalTests: XCTestCase {
     func testABashRefusalNarrowsToTheCommandThatWasTried() {
         let denied = ClaudeCodeProvider.describe(tool: "Bash", input: ["command": "npm test --watch=false"])
         XCTAssertEqual(denied.rule, "Bash(npm test *)")
-        XCTAssertEqual(denied.target, "npm test --watch=false")
+        XCTAssertEqual(denied.target, .some("npm test --watch=false"))
     }
 
     func testAFileToolRuleIsJustTheToolName() {
@@ -413,28 +417,28 @@ final class ChatModelChoiceTests: XCTestCase {
     /// Claude Opus 5 is the current flagship and a common Claude Code default;
     /// it was missing from the allowlist, so `/model claude-opus-5` was refused.
     func testOpus5IsSelectable() {
-        XCTAssertEqual(ChatModel.named("claude-opus-5"), .opus5)
+        XCTAssertEqual(ChatModel.named("claude-opus-5"), .some(.opus5))
         XCTAssertTrue(ChatModel.known.contains(.opus5))
     }
 
     /// The short names Claude Code accepts should work here too.
     func testShortNamesResolveToTheCurrentModelOfThatFamily() {
-        XCTAssertEqual(ChatModel.named("opus"), .opus5)
-        XCTAssertEqual(ChatModel.named("sonnet"), .sonnet5)
-        XCTAssertEqual(ChatModel.named("fable"), .fable5)
-        XCTAssertEqual(ChatModel.named("haiku"), .haiku45)
-        XCTAssertEqual(ChatModel.named("OPUS"), .opus5, "Case shouldn't matter")
+        XCTAssertEqual(ChatModel.named("opus"), .some(.opus5))
+        XCTAssertEqual(ChatModel.named("sonnet"), .some(.sonnet5))
+        XCTAssertEqual(ChatModel.named("fable"), .some(.fable5))
+        XCTAssertEqual(ChatModel.named("haiku"), .some(.haiku45))
+        XCTAssertEqual(ChatModel.named("OPUS"), .some(.opus5), "Case shouldn't matter")
     }
 
     func testDefaultMeansInheritRatherThanAModel() {
         XCTAssertTrue(ChatModel.meansInherit("default"))
         XCTAssertTrue(ChatModel.meansInherit("auto"))
         XCTAssertFalse(ChatModel.meansInherit("opus"))
-        XCTAssertNil(ChatModel.named("default"), "It isn't a model")
+        XCTAssertEqual(ChatModel.named("default"), Option.none(), "It isn't a model")
     }
 
     func testAnUnknownNameIsStillRejected() {
-        XCTAssertNil(ChatModel.named("gpt-4"))
+        XCTAssertEqual(ChatModel.named("gpt-4"), Option.none())
         XCTAssertFalse(ChatModel.meansInherit("gpt-4"))
     }
 }
@@ -450,12 +454,12 @@ final class ClaudeCodeDefaultsTests: XCTestCase {
     /// alias Claude Code stores has to resolve.
     func testResolvesTheAliasClaudeCodeStores() {
         let defaults = parse(#"{"model":"opus","effortLevel":"medium"}"#)
-        XCTAssertEqual(defaults.model, .opus5)
-        XCTAssertEqual(defaults.effort, .medium)
+        XCTAssertEqual(defaults.model, .some(.opus5))
+        XCTAssertEqual(defaults.effort, .some(.medium))
     }
 
     func testAcceptsAFullModelID() {
-        XCTAssertEqual(parse(#"{"model":"claude-sonnet-5"}"#).model, .sonnet5)
+        XCTAssertEqual(parse(#"{"model":"claude-sonnet-5"}"#).model, .some(.sonnet5))
     }
 
     /// Not knowing is fine — it just means we can't name it yet.
@@ -466,7 +470,7 @@ final class ClaudeCodeDefaultsTests: XCTestCase {
     }
 
     func testAnUnrecognisedModelNameIsIgnoredRatherThanGuessed() {
-        XCTAssertNil(parse(#"{"model":"some-future-model"}"#).model)
+        XCTAssertEqual(parse(#"{"model":"some-future-model"}"#).model, Option.none())
     }
 
     /// The live session is authoritative — it reports what actually ran.
@@ -538,8 +542,8 @@ final class LoginShellPathTests: XCTestCase {
     func testTheUsersOwnPathIsIncluded() {
         let merged = LoginShellPath.merged(
             binaryDirectory: binary,
-            loginPath: "/Users/someone/.nvm/versions/node/v22.16.0/bin:/opt/homebrew/bin",
-            inherited: "/usr/bin:/bin"
+            loginPath: .some("/Users/someone/.nvm/versions/node/v22.16.0/bin:/opt/homebrew/bin"),
+            inherited: .some("/usr/bin:/bin")
         )
         XCTAssertTrue(merged.contains("/Users/someone/.nvm/versions/node/v22.16.0/bin"),
                       "node has to be reachable or stdio MCP servers can't start: \(merged)")
@@ -548,13 +552,13 @@ final class LoginShellPathTests: XCTestCase {
 
     func testTheBinaryDirectoryComesFirst() {
         let merged = LoginShellPath.merged(
-            binaryDirectory: binary, loginPath: "/opt/homebrew/bin", inherited: nil
+            binaryDirectory: binary, loginPath: .some("/opt/homebrew/bin"), inherited: Option.none()
         )
         XCTAssertTrue(merged.hasPrefix(binary + ":"), "Got: \(merged)")
     }
 
     func testTheSystemMinimumIsAlwaysThere() {
-        let merged = LoginShellPath.merged(binaryDirectory: binary, loginPath: nil, inherited: nil)
+        let merged = LoginShellPath.merged(binaryDirectory: binary, loginPath: Option.none(), inherited: Option.none())
         for directory in ["/usr/bin", "/bin", "/usr/sbin", "/sbin"] {
             XCTAssertTrue(merged.contains(directory), "Missing \(directory) in \(merged)")
         }
@@ -563,7 +567,7 @@ final class LoginShellPathTests: XCTestCase {
     /// A shell that won't answer must not leave the child with nothing usable.
     func testAnUnavailableLoginShellStillLeavesAWorkingPath() {
         let merged = LoginShellPath.merged(
-            binaryDirectory: binary, loginPath: nil, inherited: "/usr/bin:/bin"
+            binaryDirectory: binary, loginPath: Option.none(), inherited: .some("/usr/bin:/bin")
         )
         XCTAssertTrue(merged.contains(binary))
         XCTAssertTrue(merged.contains("/usr/bin"))
@@ -572,8 +576,8 @@ final class LoginShellPathTests: XCTestCase {
     func testDirectoriesAreNotRepeated() {
         let merged = LoginShellPath.merged(
             binaryDirectory: "/usr/bin",
-            loginPath: "/usr/bin:/opt/homebrew/bin",
-            inherited: "/usr/bin:/bin"
+            loginPath: .some("/usr/bin:/opt/homebrew/bin"),
+            inherited: .some("/usr/bin:/bin")
         )
         let occurrences = merged.split(separator: ":").filter { $0 == "/usr/bin" }
         XCTAssertEqual(occurrences.count, 1, "Got: \(merged)")
@@ -582,7 +586,7 @@ final class LoginShellPathTests: XCTestCase {
     func testTheChildEnvironmentCarriesIt() {
         let environment = ClaudeCodeProvider.childEnvironment(
             for: ClaudeCodeInstallation(executableURL: URL(fileURLWithPath: "\(binary)/claude")),
-            loginPath: "/Users/someone/.nvm/versions/node/v22.16.0/bin"
+            loginPath: .some("/Users/someone/.nvm/versions/node/v22.16.0/bin")
         )
         XCTAssertTrue(environment["PATH"]?.contains(".nvm") == true, "Got: \(environment["PATH"] ?? "-")")
         XCTAssertNil(environment["ANTHROPIC_API_KEY"], "Still stripped")

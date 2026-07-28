@@ -1,3 +1,4 @@
+import FunctionalCore
 import Foundation
 
 /// What the user's own Claude Code is configured to use.
@@ -10,10 +11,10 @@ import Foundation
 /// Best effort by design: a missing or unreadable file just means we don't know
 /// yet, and the value reported by a live session takes precedence anyway.
 public struct ClaudeCodeDefaults: Equatable, Sendable {
-    public let model: ChatModel?
-    public let effort: Effort?
+    public let model: Option<ChatModel>
+    public let effort: Option<Effort>
 
-    public init(model: ChatModel? = nil, effort: Effort? = nil) {
+    public init(model: Option<ChatModel> = .none(), effort: Option<Effort> = .none()) {
         self.model = model
         self.effort = effort
     }
@@ -37,8 +38,8 @@ public struct ClaudeCodeDefaults: Equatable, Sendable {
             return .unknown
         }
         return ClaudeCodeDefaults(
-            model: (object["model"] as? String).flatMap(ChatModel.named),
-            effort: (object["effortLevel"] as? String).flatMap(Effort.named)
+            model: Option.fromOptional(object["model"] as? String).flatMap(ChatModel.named)^,
+            effort: Option.fromOptional(object["effortLevel"] as? String).flatMap(Effort.named)^
         )
     }
 }

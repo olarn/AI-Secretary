@@ -1,3 +1,4 @@
+import FunctionalCore
 import XCTest
 import AssistantState
 import ProjectRegistry
@@ -12,14 +13,13 @@ final class SpyAdapter: CodeToolAdapter {
     var toolID: String { GitReadOnlyAdapter.toolIdentifier }
     private(set) var runCalls: [(CodeToolOperation, Project)] = []
     var stubbedResult: ToolResult = ToolResult(output: "ok", exitCode: 0, commandSummary: "git status")
-    var stubbedError: Error?
+    var stubbedError: ToolError?
 
     func summary(for operation: CodeToolOperation) -> String { "git \(operation.rawValue)" }
 
-    func run(_ operation: CodeToolOperation, in project: Project) throws -> ToolResult {
+    func run(_ operation: CodeToolOperation, in project: Project) -> Either<ToolError, ToolResult> {
         runCalls.append((operation, project))
-        if let stubbedError { throw stubbedError }
-        return stubbedResult
+        return Option.fromOptional(stubbedError).fold({ .right(self.stubbedResult) }, { .left($0) })
     }
 }
 
@@ -27,7 +27,7 @@ final class SpyAdapter: CodeToolAdapter {
 final class FakeChatProvider: ChatProvider, @unchecked Sendable {
     enum Script {
         case events([ChatStreamEvent])
-        case failure(Error)
+        case failure(ChatError)
     }
 
     private let script: Script
@@ -41,24 +41,24 @@ final class FakeChatProvider: ChatProvider, @unchecked Sendable {
 
     func stream(
         messages: [ChatMessage],
-        model: ChatModel?,
-        effort: Effort?,
+        model: Option<ChatModel>,
+        effort: Option<Effort>,
         maxTokens: Int,
-        system: String?
-    ) -> AsyncThrowingStream<ChatStreamEvent, Error> {
+        system: Option<String>
+    ) -> ChatStream {
         callCount += 1
         lastMessages = messages
-        lastModel = model
-        lastEffort = effort
-        lastSystem = system
-        return AsyncThrowingStream { continuation in
+        lastModel = model.toOptional()
+        lastEffort = effort.toOptional()
+        lastSystem = system.toOptional()
+        return AsyncStream { continuation in
             switch script {
             case .events(let events):
-                for event in events { continuation.yield(event) }
-                continuation.finish()
+                for event in events { continuation.yield(.right(event)) }
             case .failure(let error):
-                continuation.finish(throwing: error)
+                continuation.yield(.left(error))
             }
+            continuation.finish()
         }
     }
 }
@@ -134,7 +134,7 @@ final class SecretaryTests: XCTestCase {
 
     private func makeSecretary(
         projects: [Project],
-        chat: FakeChatProvider = FakeChatProvider(.events([.completed(stopReason: nil, usage: nil)]))
+        chat: FakeChatProvider = FakeChatProvider(.events([.completed(stopReason: .none(), usage: .none())]))
     ) -> Secretary {
         Secretary(
             stateMachine: machine,
@@ -251,7 +251,7 @@ final class SecretaryTests: XCTestCase {
             .thinking,
             .textDelta("Hi"),
             .textDelta(" there!"),
-            .completed(stopReason: "end_turn", usage: ChatUsage(inputTokens: 5, outputTokens: 2))
+            .completed(stopReason: .some("end_turn"), usage: .some(ChatUsage(inputTokens: 5, outputTokens: 2)))
         ]))
         let secretary = makeSecretary(projects: [project], chat: chat)
 
@@ -269,7 +269,7 @@ final class SecretaryTests: XCTestCase {
         let chat = FakeChatProvider(.events([
             .thinking,
             .textDelta("ok"),
-            .completed(stopReason: nil, usage: nil)
+            .completed(stopReason: .none(), usage: .none())
         ]))
         let secretary = makeSecretary(projects: [project], chat: chat)
 
@@ -284,7 +284,7 @@ final class SecretaryTests: XCTestCase {
 
     func testChatRefusalEndsInError() async {
         let chat = FakeChatProvider(.events([
-            .completed(stopReason: "refusal", usage: nil)
+            .completed(stopReason: .some("refusal"), usage: .none())
         ]))
         let secretary = makeSecretary(projects: [project], chat: chat)
 

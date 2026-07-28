@@ -35,10 +35,11 @@ let package = Package(
         ),
         .target(
             name: "ToolAdapters",
-            dependencies: ["ProjectRegistry", "Permissions"]
+            dependencies: ["ProjectRegistry", "Permissions", "FunctionalCore"]
         ),
         .target(
-            name: "LLMProvider"
+            name: "LLMProvider",
+            dependencies: ["FunctionalCore"]
         ),
         .target(
             name: "Credentials",
@@ -69,11 +70,11 @@ let package = Package(
         ),
         .testTarget(
             name: "ToolAdaptersTests",
-            dependencies: ["ToolAdapters", "ProjectRegistry", "Permissions"]
+            dependencies: ["ToolAdapters", "ProjectRegistry", "Permissions", "FunctionalCore"]
         ),
         .testTarget(
             name: "LLMProviderTests",
-            dependencies: ["LLMProvider"]
+            dependencies: ["LLMProvider", "FunctionalCore"]
         ),
         .testTarget(
             name: "CredentialsTests",

@@ -1,3 +1,4 @@
+import FunctionalCore
 import Foundation
 
 /// The `PATH` the user actually has in their terminal.
@@ -17,24 +18,24 @@ import Foundation
 /// doesn't change while the app runs.
 public enum LoginShellPath {
     private static let lock = NSLock()
-    nonisolated(unsafe) private static var cached: String??
+    nonisolated(unsafe) private static var cached: Option<Option<String>> = .none()
 
     /// How long to wait for the shell. A wedged dotfile must not stall a turn.
     static let timeout: TimeInterval = 5
 
-    /// Cached across calls; the first one pays for the shell.
-    public static func resolve() -> String? {
+    /// Cached across calls; the first one pays for the shell. The doubled
+    /// `Option` distinguishes "not looked yet" from "looked, found nothing".
+    public static func resolve() -> Option<String> {
         lock.lock()
-        if let cached {
-            lock.unlock()
-            return cached
-        }
+        let memo = cached
         lock.unlock()
+
+        if let answer = memo.toOptional() { return answer }
 
         let found = query()
 
         lock.lock()
-        cached = found
+        cached = .some(found)
         lock.unlock()
         return found
     }
@@ -42,16 +43,19 @@ public enum LoginShellPath {
     /// Combines the directories that matter, most specific first, without
     /// duplicates: where Claude Code itself lives, then the user's own `PATH`,
     /// then the system minimum as a floor.
-    public static func merged(binaryDirectory: String, loginPath: String?, inherited: String?) -> String {
-        func directories(_ path: String?) -> [String] {
-            guard let path else { return [] }
-            return path.split(separator: ":").map(String.init)
+    public static func merged(
+        binaryDirectory: String,
+        loginPath: Option<String>,
+        inherited: Option<String>
+    ) -> String {
+        func directories(_ path: Option<String>) -> [String] {
+            path.fold({ [] }, { $0.split(separator: ":").map(String.init) })
         }
 
         var parts: [String] = [binaryDirectory]
         parts.append(contentsOf: directories(loginPath))
         parts.append(contentsOf: directories(inherited))
-        parts.append(contentsOf: directories("/usr/bin:/bin:/usr/sbin:/sbin"))
+        parts.append(contentsOf: directories(.some("/usr/bin:/bin:/usr/sbin:/sbin")))
 
         var seen = Set<String>()
         var ordered: [String] = []
@@ -63,9 +67,9 @@ public enum LoginShellPath {
 
     /// `$SHELL -l -c 'echo $PATH'`. A login shell is required: a
     /// non-interactive one skips the profile that sets up version managers.
-    private static func query() -> String? {
+    private static func query() -> Option<String> {
         let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
-        guard FileManager.default.isExecutableFile(atPath: shell) else { return nil }
+        guard FileManager.default.isExecutableFile(atPath: shell) else { return .none() }
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: shell)
@@ -77,7 +81,7 @@ public enum LoginShellPath {
         do {
             try process.run()
         } catch {
-            return nil
+            return .none()
         }
 
         let deadline = Date().addingTimeInterval(timeout)
@@ -86,13 +90,13 @@ public enum LoginShellPath {
         }
         if process.isRunning {
             process.terminate()
-            return nil
+            return .none()
         }
 
         let output = String(
             decoding: pipe.fileHandleForReading.readDataToEndOfFile(),
             as: UTF8.self
         ).trimmingCharacters(in: .whitespacesAndNewlines)
-        return output.isEmpty ? nil : output
+        return output.isEmpty ? .none() : .some(output)
     }
 }

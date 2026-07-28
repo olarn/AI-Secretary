@@ -1,3 +1,4 @@
+import FunctionalCore
 import XCTest
 import ProjectRegistry
 @testable import ToolAdapters
@@ -50,7 +51,7 @@ final class GitReadOnlyAdapterTests: XCTestCase {
 
     func testStatusRunsAndReportsCleanTree() throws {
         let project = try makeRepository()
-        let result = try adapter.run(.status, in: project)
+        let result = try expectSuccess(adapter.run(.status, in: project))
 
         XCTAssertTrue(result.succeeded)
         XCTAssertTrue(result.output.contains("main"), "Expected branch header, got: \(result.output)")
@@ -64,19 +65,19 @@ final class GitReadOnlyAdapterTests: XCTestCase {
             encoding: .utf8
         )
 
-        let result = try adapter.run(.status, in: project)
+        let result = try expectSuccess(adapter.run(.status, in: project))
         XCTAssertTrue(result.output.contains("new.txt"), "Expected untracked file, got: \(result.output)")
     }
 
     func testCurrentBranchReturnsTheBranchName() throws {
         let project = try makeRepository()
-        let result = try adapter.run(.currentBranch, in: project)
+        let result = try expectSuccess(adapter.run(.currentBranch, in: project))
         XCTAssertEqual(result.output.trimmingCharacters(in: .whitespacesAndNewlines), "main")
     }
 
     func testRecentLogListsTheCommit() throws {
         let project = try makeRepository()
-        let result = try adapter.run(.recentLog, in: project)
+        let result = try expectSuccess(adapter.run(.recentLog, in: project))
         XCTAssertTrue(result.output.contains("initial commit"))
     }
 
@@ -88,35 +89,33 @@ final class GitReadOnlyAdapterTests: XCTestCase {
             encoding: .utf8
         )
 
-        let result = try adapter.run(.diffStat, in: project)
+        let result = try expectSuccess(adapter.run(.diffStat, in: project))
         XCTAssertTrue(result.output.contains("README.md"), "Expected diff stat, got: \(result.output)")
     }
 
-    func testMissingDirectoryIsRejectedBeforeLaunching() {
+    func testMissingDirectoryIsRejectedBeforeLaunching() throws {
         let project = Project(
             name: "Ghost",
             path: fixtureRoot.appendingPathComponent("nope").path,
             allowedTools: [GitReadOnlyAdapter.toolIdentifier]
         )
 
-        XCTAssertThrowsError(try adapter.run(.status, in: project)) { error in
-            guard case ToolError.projectPathMissing = error else {
-                return XCTFail("Expected projectPathMissing, got \(error)")
-            }
+        let error = try expectRefusal(adapter.run(.status, in: project))
+        guard case ToolError.projectPathMissing = error else {
+            return XCTFail("Expected projectPathMissing, got \(error)")
         }
     }
 
-    func testNonRepositoryDirectoryIsRejected() {
+    func testNonRepositoryDirectoryIsRejected() throws {
         let project = Project(
             name: "Plain",
             path: fixtureRoot.path,
             allowedTools: [GitReadOnlyAdapter.toolIdentifier]
         )
 
-        XCTAssertThrowsError(try adapter.run(.status, in: project)) { error in
-            guard case ToolError.notAGitRepository = error else {
-                return XCTFail("Expected notAGitRepository, got \(error)")
-            }
+        let error = try expectRefusal(adapter.run(.status, in: project))
+        guard case ToolError.notAGitRepository = error else {
+            return XCTFail("Expected notAGitRepository, got \(error)")
         }
     }
 
@@ -124,10 +123,9 @@ final class GitReadOnlyAdapterTests: XCTestCase {
         let project = try makeRepository()
         let bogus = GitReadOnlyAdapter(gitExecutable: URL(fileURLWithPath: "/nonexistent/git"))
 
-        XCTAssertThrowsError(try bogus.run(.status, in: project)) { error in
-            guard case ToolError.executableMissing = error else {
-                return XCTFail("Expected executableMissing, got \(error)")
-            }
+        let error = try expectRefusal(bogus.run(.status, in: project))
+        guard case ToolError.executableMissing = error else {
+            return XCTFail("Expected executableMissing, got \(error)")
         }
     }
 

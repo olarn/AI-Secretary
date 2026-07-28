@@ -1,3 +1,4 @@
+import FunctionalCore
 import XCTest
 import AssistantState
 import ProjectRegistry
@@ -12,14 +13,24 @@ final class SpyFileAdapter: FileToolAdapter {
     var toolID: String { FileReadOnlyAdapter.toolIdentifier }
     private(set) var runCalls: [FileOperation] = []
     var stubbedContents = "let answer = 42\n"
-    var stubbedError: Error?
+    var stubbedError: ToolError?
 
     func summary(for operation: FileOperation) -> String { operation.humanDescription }
 
-    func run(_ operation: FileOperation, in project: Project) throws -> ToolResult {
+    func run(_ operation: FileOperation, in project: Project) -> Either<ToolError, ToolResult> {
         runCalls.append(operation)
-        if let stubbedError { throw stubbedError }
-        return ToolResult(output: stubbedContents, exitCode: 0, commandSummary: summary(for: operation))
+        return Option.fromOptional(stubbedError).fold(
+            {
+                .right(
+                    ToolResult(
+                        output: self.stubbedContents,
+                        exitCode: 0,
+                        commandSummary: self.summary(for: operation)
+                    )
+                )
+            },
+            { .left($0) }
+        )
     }
 }
 
@@ -188,7 +199,7 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
     }
 
     private func reply(_ text: String) -> FakeChatProvider {
-        FakeChatProvider(.events([.textDelta(text), .completed(stopReason: nil, usage: nil)]))
+        FakeChatProvider(.events([.textDelta(text), .completed(stopReason: .none(), usage: .none())]))
     }
 
     func testAsksBeforeSendingAndNamesTheDestination() {

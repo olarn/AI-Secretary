@@ -278,7 +278,7 @@ public final class Secretary {
             }
             if ChatModel.meansInherit(argument) {
                 selectModel(nil)
-            } else if let resolved = ChatModel.named(argument) {
+            } else if let resolved = ChatModel.named(argument).toOptional() {
                 selectModel(resolved)
             } else {
                 say(.secretary, "Unknown model “\(argument)”. Available: \(ChatModel.known.map(\.id).joined(separator: ", ")), or `default`.")
@@ -292,7 +292,7 @@ public final class Secretary {
             }
             if ChatModel.meansInherit(argument) {
                 selectEffort(nil)
-            } else if let resolved = Effort.named(argument) {
+            } else if let resolved = Effort.named(argument).toOptional() {
                 selectEffort(resolved)
             } else {
                 say(.secretary, "Unknown effort “\(argument)”. Available: \(Effort.allCases.map(\.rawValue).joined(separator: ", ")), or `default`.")
@@ -508,10 +508,10 @@ public final class Secretary {
 
         let stream = chatProvider.stream(
             messages: messages,
-            model: model,
-            effort: effort,
+            model: Option.fromOptional(model),
+            effort: Option.fromOptional(effort),
             maxTokens: chatMaxTokens,
-            system: systemPrompt
+            system: .some(systemPrompt)
         )
 
         streamingTask?.cancel()
@@ -532,10 +532,20 @@ public final class Secretary {
                 self.stateMachine.send(.beginExecuting, reason: "streaming reply", taskID: Option.fromOptional(taskID), toolStatus: .some("streaming"))
             }
 
-            do {
-                for try await event in stream {
-                    guard let self else { return }
-                    switch event {
+            for await outcome in stream {
+                guard let self else { return }
+
+                // The left rail ends the turn; anything else is an event to render.
+                guard let event = outcome.toOption().toOptional() else {
+                    ensureWorking()
+                    let message = outcome.swap().toOption().toOptional()
+                        .map { $0.errorDescription ?? "\($0)" } ?? "Chat failed."
+                    self.audit.record(AuditEntry(taskID: taskID, kind: .failed, detail: "chat error"))
+                    self.finishChat(entryID: replyID, taskID: taskID, success: false, finalText: message)
+                    break
+                }
+
+                switch event {
                     case .thinking:
                         break // stay in THINKING until the first token
                     case .activity(let step):
@@ -553,12 +563,13 @@ public final class Secretary {
                         self.updateEntry(id: replyID, text: reply)
                     case .completed(let stopReason, let usage):
                         ensureWorking()
+                        let reason = stopReason.getOrElse("end_turn")
                         self.audit.record(AuditEntry(
                             taskID: taskID,
                             kind: .executionFinished,
-                            detail: "stop=\(stopReason ?? "end_turn") in=\(usage?.inputTokens ?? 0) out=\(usage?.outputTokens ?? 0)"
+                            detail: "stop=\(reason) in=\(usage.map(\.inputTokens)^.getOrElse(0)) out=\(usage.map(\.outputTokens)^.getOrElse(0))"
                         ))
-                        if stopReason == "refusal" {
+                        if reason == "refusal" {
                             self.finishChat(entryID: replyID, taskID: taskID, success: false,
                                             finalText: reply.isEmpty ? "(The model declined to respond.)" : reply)
                         } else {
@@ -567,14 +578,7 @@ public final class Secretary {
                             self.finishChat(entryID: replyID, taskID: taskID, success: true, finalText: reply)
                             self.offerToWiden(denied, taskID: taskID)
                         }
-                    }
                 }
-            } catch {
-                guard let self else { return }
-                ensureWorking()
-                let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-                self.audit.record(AuditEntry(taskID: taskID, kind: .failed, detail: "chat error"))
-                self.finishChat(entryID: replyID, taskID: taskID, success: false, finalText: message)
             }
             self?.streamingTask = nil
         }
@@ -753,32 +757,38 @@ public final class Secretary {
         stateMachine.send(.beginExecuting, reason: summary, taskID: Option.fromOptional(taskID), toolStatus: .some("running"))
         audit.record(AuditEntry(taskID: taskID, kind: .executionStarted, detail: summary))
 
-        do {
-            let result = try run(operation, in: project)
-            audit.record(AuditEntry(taskID: taskID, kind: .executionFinished, detail: "exit \(result.exitCode)"))
+        run(operation, in: project).fold(
+            { error in
+                let message = error.errorDescription ?? "\(error)"
+                audit.record(AuditEntry(taskID: taskID, kind: .failed, detail: message))
+                finish(success: false, message: message, reason: "tool refused", toolStatus: "error")
+            },
+            { result in
+                audit.record(
+                    AuditEntry(taskID: taskID, kind: .executionFinished, detail: "exit \(result.exitCode)")
+                )
+                let body = result.output.trimmingCharacters(in: .whitespacesAndNewlines)
 
-            let body = result.output.trimmingCharacters(in: .whitespacesAndNewlines)
-            if result.succeeded {
-                rememberToolExchange(operation, output: body)
-                finish(
-                    success: true,
-                    message: body.isEmpty ? "`\(summary)` finished with no output." : "`\(summary)`\n\n\(body)",
-                    reason: "tool succeeded",
-                    toolStatus: "exit 0"
-                )
-            } else {
-                finish(
-                    success: false,
-                    message: "`\(summary)` exited with code \(result.exitCode).\n\n\(body)",
-                    reason: "tool reported failure",
-                    toolStatus: "exit \(result.exitCode)"
-                )
+                if result.succeeded {
+                    rememberToolExchange(operation, output: body)
+                    finish(
+                        success: true,
+                        message: body.isEmpty
+                            ? "`\(summary)` finished with no output."
+                            : "`\(summary)`\n\n\(body)",
+                        reason: "tool succeeded",
+                        toolStatus: "exit 0"
+                    )
+                } else {
+                    finish(
+                        success: false,
+                        message: "`\(summary)` exited with code \(result.exitCode).\n\n\(body)",
+                        reason: "tool reported failure",
+                        toolStatus: "exit \(result.exitCode)"
+                    )
+                }
             }
-        } catch {
-            let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-            audit.record(AuditEntry(taskID: taskID, kind: .failed, detail: message))
-            finish(success: false, message: message, reason: "tool threw", toolStatus: "error")
-        }
+        )
     }
 
     // MARK: - Conversation memory
@@ -859,16 +869,18 @@ public final class Secretary {
         stateMachine.send(.beginExecuting, reason: summary, taskID: Option.fromOptional(taskID), toolStatus: .some("reading"))
         audit.record(AuditEntry(taskID: taskID, kind: .executionStarted, detail: summary))
 
-        let contents: String
-        do {
-            let result = try fileAdapter.run(.readFile(relativePath: request.relativePath), in: project)
-            guard result.succeeded else {
-                finish(success: false, message: result.output, reason: "file read failed", toolStatus: "error")
-                return
-            }
-            contents = result.output
-        } catch {
-            let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        let read = fileAdapter.run(.readFile(relativePath: request.relativePath), in: project)
+            .flatMap { result -> Either<ToolError, String> in
+                // A non-zero exit is not an adapter error, but it is still a
+                // failed read, so it joins the same rail.
+                result.succeeded
+                    ? .right(result.output)
+                    : .left(.notReadableText(result.output))
+            }^
+
+        guard let contents = read.toOption().toOptional() else {
+            let message = read.swap().toOption().toOptional()
+                .map { $0.errorDescription ?? "\($0)" } ?? "Could not read that file."
             audit.record(AuditEntry(taskID: taskID, kind: .failed, detail: message))
             finish(success: false, message: message, reason: "file read failed", toolStatus: "error")
             return
@@ -946,12 +958,12 @@ public final class Secretary {
         }
     }
 
-    private func run(_ operation: PlannedOperation, in project: Project) throws -> ToolResult {
+    private func run(_ operation: PlannedOperation, in project: Project) -> Either<ToolError, ToolResult> {
         switch operation {
-        case .git(let op): return try adapter.run(op, in: project)
-        case .file(let op): return try fileAdapter.run(op, in: project)
+        case .git(let op): return adapter.run(op, in: project)
+        case .file(let op): return fileAdapter.run(op, in: project)
         case .understand(let op):
-            return try fileAdapter.run(.readFile(relativePath: op.relativePath), in: project)
+            return fileAdapter.run(.readFile(relativePath: op.relativePath), in: project)
         case .startAgent, .widenAgentTools:
             preconditionFailure("agent operations are handled before adapter dispatch")
         }
@@ -1062,11 +1074,11 @@ public final class Secretary {
     /// backend is configured with so the settings panel can show a real name
     /// rather than "your default".
     public var effectiveModel: ChatModel? {
-        model ?? inheritedDefaults.model
+        model ?? inheritedDefaults.model.toOptional()
     }
 
     public var effectiveEffort: Effort? {
-        effort ?? inheritedDefaults.effort
+        effort ?? inheritedDefaults.effort.toOptional()
     }
 
     public var effectiveModelName: String {

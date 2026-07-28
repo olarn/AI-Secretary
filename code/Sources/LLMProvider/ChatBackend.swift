@@ -1,3 +1,4 @@
+import FunctionalCore
 import Foundation
 
 /// A provider whose work is scoped to a directory on this Mac.
@@ -124,11 +125,11 @@ public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, @unchecke
 
     public func stream(
         messages: [ChatMessage],
-        model: ChatModel?,
-        effort: Effort?,
+        model: Option<ChatModel>,
+        effort: Option<Effort>,
         maxTokens: Int,
-        system: String?
-    ) -> AsyncThrowingStream<ChatStreamEvent, Error> {
+        system: Option<String>
+    ) -> ChatStream {
         resolve()
         let provider: ChatProvider = lock.withLock { _claudeCode } ?? fallback
         return provider.stream(
@@ -163,13 +164,15 @@ public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, @unchecke
     /// What the user's own Claude Code is set up to use — read from their
     /// settings, then replaced by whatever a live session reports.
     public var inheritedDefaults: ClaudeCodeDefaults {
-        let live = lock.withLock { _claudeCode }?.reportedModel.flatMap(ChatModel.named)
+        let live = Option.fromOptional(lock.withLock { _claudeCode }?.reportedModel)
+            .flatMap { Option.fromOptional($0) }^
+            .flatMap(ChatModel.named)^
         let onDisk = lock.withLock { _diskDefaults } ?? {
             let read = ClaudeCodeDefaults.read()
             lock.withLock { _diskDefaults = read }
             return read
         }()
-        return ClaudeCodeDefaults(model: live ?? onDisk.model, effort: onDisk.effort)
+        return ClaudeCodeDefaults(model: live.orElse(onDisk.model), effort: onDisk.effort)
     }
 
     /// False until detection finishes, and false when falling back to the API

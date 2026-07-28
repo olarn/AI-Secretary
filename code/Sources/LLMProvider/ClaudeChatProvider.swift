@@ -1,3 +1,4 @@
+import FunctionalCore
 import Foundation
 import os
 
@@ -23,16 +24,17 @@ public final class ClaudeChatProvider: ChatProvider {
 
     public func stream(
         messages: [ChatMessage],
-        model: ChatModel?,
-        effort: Effort?,
+        model: Option<ChatModel>,
+        effort: Option<Effort>,
         maxTokens: Int,
-        system: String?
-    ) -> AsyncThrowingStream<ChatStreamEvent, Error> {
-        AsyncThrowingStream { continuation in
+        system: Option<String>
+    ) -> ChatStream {
+        AsyncStream { continuation in
             // The API has no "use your default" — a concrete model and effort
-            // must go on the wire, so nil resolves to ours here.
-            let model = model ?? .sonnet5
-            let effort = effort ?? .medium
+            // must go on the wire, so absence resolves to ours here.
+            let model = model.getOrElse(.sonnet5)
+            let effort = effort.getOrElse(.medium)
+            let system = system.toOptional()
             let task = Task { [apiKeyProvider, session, endpoint, logger] in
                 do {
                     guard let key = apiKeyProvider(), !key.isEmpty else {
@@ -76,16 +78,17 @@ public final class ClaudeChatProvider: ChatProvider {
                         guard line.hasPrefix("data:") else { continue }
                         let payload = String(line.dropFirst("data:".count))
                             .trimmingCharacters(in: .whitespaces)
-                        if let event = decoder.handle(dataLine: payload) {
-                            continuation.yield(event)
-                        }
+                        decoder.handle(dataLine: payload).fold(
+                            {},
+                            { continuation.yield(.right($0)) }
+                        )
                     }
-                    continuation.finish()
                 } catch is CancellationError {
-                    continuation.finish()
+                    // Nothing to report: the caller asked us to stop.
                 } catch {
-                    continuation.finish(throwing: error)
+                    continuation.yield(.left(asChatError(error)))
                 }
+                continuation.finish()
             }
             continuation.onTermination = { _ in task.cancel() }
         }

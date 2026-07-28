@@ -139,6 +139,8 @@ Reach for point-free on `Option`/`Either` and on functions you want to pass arou
 | `stored property … has non-Sendable type 'Option<…>'` | imported `Bow` directly instead of `FunctionalCore` | import `FunctionalCore` |
 | `type 'Void' cannot conform to 'Equatable'` | `XCTAssertEqual(x, .right(()))` on `Either<E, Void>` | assert `x.isRight` |
 | `member '…' is a function that produces expected type` | pattern-matching a Bow `Either` case like a Swift enum | `fold`, or `getOrElse` |
+| a test asserts nothing and fails with `"None"` | `XCTAssertNil` on an `Option` — it wraps the `Option` in an `Optional`, which is never nil | `XCTAssertEqual(x, Option.none())` |
+| `value of type 'Option<A>' has no member 'forEach'` | Bow's `Option` is not a `Sequence` | `fold({ }, { … })`, or build a list: `opt.fold({ [] }, { [$0] })` |
 | new `throws` in a domain function | Foundation call not wrapped | wrap in the adapter, return `Either` |
 
 ## Checklist before committing domain code
@@ -147,4 +149,5 @@ Reach for point-free on `Option`/`Either` and on functions you want to pass arou
 - No `?` in a domain type; absence is `Option`. Swift `Optional` only in DTOs and view projections.
 - Error enum belongs to this module and is `Equatable, Sendable`.
 - State-holding types are values with `-ing` methods, not classes with `var`.
+- No `XCTAssertNil`/`XCTAssertNotNil` on an `Option` — they compile and assert nothing. Use `XCTAssertEqual(x, Option.none())`.
 - `swift test` passes. If an API changed, the test changed with it — a deleted assertion is not a passing test.

@@ -1,3 +1,4 @@
+import FunctionalCore
 import Foundation
 
 /// Turns Anthropic SSE `data:` payloads into `ChatStreamEvent`s. Deliberately
@@ -6,54 +7,56 @@ import Foundation
 public struct AnthropicStreamDecoder {
     private var inputTokens = 0
     private var outputTokens = 0
-    private var stopReason: String?
+    private var stopReason: Option<String> = .none()
 
     public init() {}
 
     /// Feed one `data:` JSON payload (already stripped of the `data:` prefix).
-    /// Returns an event to emit, or nil for events that only update state.
-    public mutating func handle(dataLine json: String) -> ChatStreamEvent? {
-        guard let data = json.data(using: .utf8) else { return nil }
+    /// Absent for events that only update state, or that we don't consume.
+    public mutating func handle(dataLine json: String) -> Option<ChatStreamEvent> {
+        guard let data = json.data(using: .utf8) else { return .none() }
         let decoder = JSONDecoder()
-        guard let envelope = try? decoder.decode(Envelope.self, from: data) else { return nil }
+        guard let envelope = try? decoder.decode(Envelope.self, from: data) else { return .none() }
 
         switch envelope.type {
         case "message_start":
             if let event = try? decoder.decode(MessageStart.self, from: data) {
                 inputTokens = event.message.usage?.input_tokens ?? 0
             }
-            return nil
+            return .none()
 
         case "content_block_start":
             if let event = try? decoder.decode(ContentBlockStart.self, from: data),
                event.content_block.type == "thinking" {
-                return .thinking
+                return .some(.thinking)
             }
-            return nil
+            return .none()
 
         case "content_block_delta":
             if let event = try? decoder.decode(ContentBlockDelta.self, from: data),
                event.delta.type == "text_delta",
                let text = event.delta.text {
-                return .textDelta(text)
+                return .some(.textDelta(text))
             }
-            return nil
+            return .none()
 
         case "message_delta":
             if let event = try? decoder.decode(MessageDelta.self, from: data) {
-                if let reason = event.delta.stop_reason { stopReason = reason }
+                if let reason = event.delta.stop_reason { stopReason = .some(reason) }
                 if let out = event.usage?.output_tokens { outputTokens = out }
             }
-            return nil
+            return .none()
 
         case "message_stop":
-            return .completed(
-                stopReason: stopReason,
-                usage: ChatUsage(inputTokens: inputTokens, outputTokens: outputTokens)
+            return .some(
+                .completed(
+                    stopReason: stopReason,
+                    usage: .some(ChatUsage(inputTokens: inputTokens, outputTokens: outputTokens))
+                )
             )
 
         default:
-            return nil
+            return .none()
         }
     }
 

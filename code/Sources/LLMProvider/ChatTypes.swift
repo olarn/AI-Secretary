@@ -1,3 +1,4 @@
+import FunctionalCore
 import Foundation
 
 /// A single conversational turn sent to or received from the model.
@@ -46,12 +47,12 @@ public struct ChatModel: Equatable, Sendable {
     static let inheritWords: Set<String> = ["default", "auto", "inherit"]
 
     /// Resolves a user-supplied model identifier against the allowlist.
-    /// Returns nil for an unknown name *and* for "default"; callers that need to
-    /// tell those apart should check `inheritWords` first.
-    public static func named(_ raw: String) -> ChatModel? {
+    /// Absent for an unknown name *and* for "default"; callers that need to
+    /// tell those apart should check `meansInherit` first.
+    public static func named(_ raw: String) -> Option<ChatModel> {
         let needle = raw.trimmingCharacters(in: .whitespaces).lowercased()
-        if let alias = aliases[needle] { return alias }
-        return known.first { $0.id.lowercased() == needle }
+        return Option.fromOptional(aliases[needle])
+            .orElse(Option.fromOptional(known.first { $0.id.lowercased() == needle }))
     }
 
     public static func meansInherit(_ raw: String) -> Bool {
@@ -63,8 +64,8 @@ public struct ChatModel: Equatable, Sendable {
 public enum Effort: String, CaseIterable, Sendable {
     case low, medium, high, xhigh, max
 
-    public static func named(_ raw: String) -> Effort? {
-        Effort(rawValue: raw.trimmingCharacters(in: .whitespaces).lowercased())
+    public static func named(_ raw: String) -> Option<Effort> {
+        Option.fromOptional(Effort(rawValue: raw.trimmingCharacters(in: .whitespaces).lowercased()))
     }
 }
 
@@ -88,11 +89,11 @@ public struct DeniedTool: Equatable, Sendable {
     /// Tool name as Claude Code reports it, e.g. `Write`, `Bash`.
     public let name: String
     /// What it was going to act on — a path, or the command — for display.
-    public let target: String?
+    public let target: Option<String>
     /// Permission rule that would allow this, in Claude Code's syntax.
     public let rule: String
 
-    public init(name: String, target: String?, rule: String) {
+    public init(name: String, target: Option<String>, rule: String) {
         self.name = name
         self.target = target
         self.rule = rule
@@ -100,8 +101,8 @@ public struct DeniedTool: Equatable, Sendable {
 
     /// One line a human can decide on.
     public var summary: String {
-        guard let target, !target.isEmpty else { return name }
-        return "\(name): \(target)"
+        target.filter { !$0.isEmpty }^
+            .fold({ self.name }, { "\(self.name): \($0)" })
     }
 }
 
@@ -142,10 +143,10 @@ public enum ChatStreamEvent: Equatable, Sendable {
     /// A chunk of assistant text.
     case textDelta(String)
     /// The turn finished. `stopReason == "refusal"` means the model declined.
-    case completed(stopReason: String?, usage: ChatUsage?)
+    case completed(stopReason: Option<String>, usage: Option<ChatUsage>)
 }
 
-public enum ChatError: Error, Equatable, LocalizedError {
+public enum ChatError: Error, Equatable, Sendable, LocalizedError {
     case missingAPIKey
     case http(status: Int, message: String)
     case network(String)
@@ -172,3 +173,10 @@ public enum ChatError: Error, Equatable, LocalizedError {
         }
     }
 }
+
+/// A streamed reply: events on the right rail, a typed failure on the left.
+///
+/// `AsyncStream` rather than `AsyncThrowingStream` — a thrown `Error` is
+/// untyped, so every consumer had to guess what it might be. Here the only
+/// thing that can arrive is a `ChatError`, and the stream simply ends after it.
+public typealias ChatStream = AsyncStream<Either<ChatError, ChatStreamEvent>>

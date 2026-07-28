@@ -1,3 +1,4 @@
+import FunctionalCore
 import XCTest
 import AssistantState
 import ProjectRegistry
@@ -33,24 +34,24 @@ final class SpyWorkspaceProvider: ChatProvider, WorkspaceScopedProvider, @unchec
 
     func stream(
         messages: [ChatMessage],
-        model: ChatModel?,
-        effort: Effort?,
+        model: Option<ChatModel>,
+        effort: Option<Effort>,
         maxTokens: Int,
-        system: String?
-    ) -> AsyncThrowingStream<ChatStreamEvent, Error> {
+        system: Option<String>
+    ) -> ChatStream {
         callCount += 1
         lastMessages = messages
-        lastSystem = system
-        lastModel = model
+        lastSystem = system.toOptional()
+        lastModel = model.toOptional()
         let denials = denialsForNextTurn
         denialsForNextTurn = []
         let steps = activityForNextTurn
         activityForNextTurn = []
-        return AsyncThrowingStream { continuation in
-            for step in steps { continuation.yield(.activity(step)) }
-            for denial in denials { continuation.yield(.toolDenied(denial)) }
-            continuation.yield(.textDelta("ok"))
-            continuation.yield(.completed(stopReason: nil, usage: nil))
+        return AsyncStream { continuation in
+            for step in steps { continuation.yield(.right(.activity(step))) }
+            for denial in denials { continuation.yield(.right(.toolDenied(denial))) }
+            continuation.yield(.right(.textDelta("ok")))
+            continuation.yield(.right(.completed(stopReason: .none(), usage: .none())))
             continuation.finish()
         }
     }
@@ -222,7 +223,7 @@ final class AgentSessionTests: XCTestCase {
     // MARK: - Widening permissions after a refusal
 
     private func denyWrite() -> DeniedTool {
-        DeniedTool(name: "Write", target: "/tmp/agent-fixture/out.txt", rule: "Write")
+        DeniedTool(name: "Write", target: .some("/tmp/agent-fixture/out.txt"), rule: "Write")
     }
 
     /// Claude Code refuses un-granted tools mid-turn rather than asking, so the
@@ -310,7 +311,7 @@ final class AgentSessionTests: XCTestCase {
         let secretary = makeSecretary(projects: [project(grantingAgent: true)])
         provider.denialsForNextTurn = [
             denyWrite(),
-            DeniedTool(name: "Bash", target: "npm test", rule: "Bash(npm test *)"),
+            DeniedTool(name: "Bash", target: .some("npm test"), rule: "Bash(npm test *)"),
             denyWrite()
         ]
         secretary.submit("set the project up")
