@@ -1,3 +1,4 @@
+import FunctionalCore
 import Foundation
 import ProjectRegistry
 import os
@@ -14,6 +15,9 @@ import os
 /// - The working directory comes only from a registered `Project`, and is
 ///   verified to exist and contain a `.git` entry before launching.
 /// - Output is capped and the process is killed if it exceeds a timeout.
+///
+/// The checks are rails: each returns the value the next one needs, so nothing
+/// launches unless every earlier check produced a right.
 public final class GitReadOnlyAdapter: CodeToolAdapter {
     public static let toolIdentifier = "git.readOnly"
 
@@ -48,19 +52,49 @@ public final class GitReadOnlyAdapter: CodeToolAdapter {
         "git " + arguments(for: operation).joined(separator: " ")
     }
 
-    public func run(_ operation: CodeToolOperation, in project: Project) throws -> ToolResult {
-        let args = arguments(for: operation)
+    public func run(
+        _ operation: CodeToolOperation,
+        in project: Project
+    ) -> Either<ToolError, ToolResult> {
         let summary = summary(for: operation)
 
-        try validate(project: project)
+        return requireGitRepository(project)
+            .flatMap { _ in self.requireGitExecutable() }^
+            .flatMap { _ in self.launch(arguments: self.arguments(for: operation), in: project) }^
+            .flatMap { process in self.collect(from: process, summary: summary) }^
+    }
 
-        guard FileManager.default.isExecutableFile(atPath: gitExecutable.path) else {
-            throw ToolError.executableMissing(gitExecutable.path)
+    // MARK: - Rails
+
+    private func requireGitRepository(_ project: Project) -> Either<ToolError, Project> {
+        var isDirectory: ObjCBool = false
+        let found = FileManager.default.fileExists(atPath: project.path, isDirectory: &isDirectory)
+        guard found, isDirectory.boolValue else {
+            return .left(.projectPathMissing(project.path))
         }
 
+        // A worktree stores .git as a file, so accept either kind of entry.
+        let gitEntry = project.url.appendingPathComponent(".git").path
+        return FileManager.default.fileExists(atPath: gitEntry)
+            ? .right(project)
+            : .left(.notAGitRepository(project.path))
+    }
+
+    private func requireGitExecutable() -> Either<ToolError, URL> {
+        FileManager.default.isExecutableFile(atPath: gitExecutable.path)
+            ? .right(gitExecutable)
+            : .left(.executableMissing(gitExecutable.path))
+    }
+
+    /// The Foundation edge: `Process.run` throws, and that is the only throw in
+    /// this type. Everything after it is a value.
+    private func launch(
+        arguments: [String],
+        in project: Project
+    ) -> Either<ToolError, RunningCommand> {
         let process = Process()
         process.executableURL = gitExecutable
-        process.arguments = args
+        process.arguments = arguments
         process.currentDirectoryURL = project.url
         // Minimal environment: no inherited config that could redirect git.
         process.environment = [
@@ -73,44 +107,42 @@ public final class GitReadOnlyAdapter: CodeToolAdapter {
         process.standardOutput = pipe
         process.standardError = pipe
 
-        do {
-            try process.run()
-        } catch {
-            throw ToolError.launchFailed(error.localizedDescription)
-        }
+        return attempt { try process.run() }
+            .mapLeft { ToolError.launchFailed($0.localizedDescription) }^
+            .map { _ in
+                self.logger.info(
+                    "Running git \(arguments.joined(separator: " "), privacy: .public) in \(project.name, privacy: .public)"
+                )
+                return RunningCommand(process: process, pipe: pipe)
+            }^
+    }
 
-        logger.info("Running \(summary, privacy: .public) in project \(project.name, privacy: .public)")
+    private func collect(
+        from command: RunningCommand,
+        summary: String
+    ) -> Either<ToolError, ToolResult> {
+        let data = readOutput(from: command.pipe, process: command.process)
 
-        let data = readOutput(from: pipe, process: process)
         let deadline = Date().addingTimeInterval(TimeInterval(timeoutSeconds))
-        while process.isRunning && Date() < deadline {
+        while command.process.isRunning && Date() < deadline {
             usleep(20_000)
         }
 
-        if process.isRunning {
-            process.terminate()
+        if command.process.isRunning {
+            command.process.terminate()
             logger.error("Timed out: \(summary, privacy: .public)")
-            throw ToolError.timedOut(seconds: timeoutSeconds)
+            return .left(.timedOut(seconds: timeoutSeconds))
         }
 
-        process.waitUntilExit()
+        command.process.waitUntilExit()
 
-        let output = String(data: data, encoding: .utf8) ?? ""
-        return ToolResult(output: output, exitCode: process.terminationStatus, commandSummary: summary)
-    }
-
-    private func validate(project: Project) throws {
-        var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: project.path, isDirectory: &isDirectory),
-              isDirectory.boolValue else {
-            throw ToolError.projectPathMissing(project.path)
-        }
-
-        // A worktree stores .git as a file, so accept either kind of entry.
-        let gitEntry = project.url.appendingPathComponent(".git").path
-        guard FileManager.default.fileExists(atPath: gitEntry) else {
-            throw ToolError.notAGitRepository(project.path)
-        }
+        return .right(
+            ToolResult(
+                output: String(data: data, encoding: .utf8) ?? "",
+                exitCode: command.process.terminationStatus,
+                commandSummary: summary
+            )
+        )
     }
 
     private func readOutput(from pipe: Pipe, process: Process) -> Data {
@@ -128,4 +160,11 @@ public final class GitReadOnlyAdapter: CodeToolAdapter {
         }
         return data
     }
+}
+
+/// A launched process and the pipe its output arrives on, so the launch rail can
+/// hand both to the collect rail as one value.
+private struct RunningCommand {
+    let process: Process
+    let pipe: Pipe
 }

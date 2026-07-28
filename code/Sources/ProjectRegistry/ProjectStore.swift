@@ -1,15 +1,43 @@
+import FunctionalCore
 import Foundation
+
+/// Why reading or writing the registry failed. Per-module, so nothing outside
+/// `ProjectRegistry` has to know about `Codable` or file paths.
+public enum ProjectStoreError: Error, Equatable, Sendable {
+    case readFailed(path: String, message: String)
+    case decodeFailed(path: String, message: String)
+    case writeFailed(path: String, message: String)
+}
+
+extension ProjectStoreError {
+    public var reason: String {
+        switch self {
+        case let .readFailed(path, message):
+            return "Couldn't read the project list at \(path): \(message)"
+        case let .decodeFailed(path, message):
+            return "The project list at \(path) is not readable: \(message)"
+        case let .writeFailed(path, message):
+            return "Couldn't save the project list to \(path): \(message)"
+        }
+    }
+}
 
 /// Persistence boundary for the registry, so tests can swap in an in-memory
 /// store instead of touching the user's real Application Support directory.
+///
+/// Failures come back as values rather than thrown errors: loading a registry
+/// at launch must not be able to unwind through an initialiser.
 public protocol ProjectStoring: AnyObject, Sendable {
-    func load() throws -> [Project]
-    func save(_ projects: [Project]) throws
+    func load() -> Either<ProjectStoreError, [Project]>
+    func save(_ projects: [Project]) -> Either<ProjectStoreError, Void>
 }
 
 /// Stores the registry as JSON under Application Support. Kept separate from
 /// chat history so project paths and permissions never mix with conversation
 /// content.
+///
+/// This is the Foundation edge: `FileManager` and `JSONDecoder` keep throwing,
+/// and every throw is converted to the left rail exactly once, here.
 public final class FileProjectStore: ProjectStoring, @unchecked Sendable {
     private let fileURL: URL
 
@@ -24,31 +52,55 @@ public final class FileProjectStore: ProjectStoring, @unchecked Sendable {
             .appendingPathComponent("projects.json")
     }
 
-    public func load() throws -> [Project] {
-        guard FileManager.default.fileExists(atPath: fileURL.path) else { return [] }
-        let data = try Data(contentsOf: fileURL)
-        return try JSONDecoder().decode([Project].self, from: data)
+    public func load() -> Either<ProjectStoreError, [Project]> {
+        guard FileManager.default.fileExists(atPath: fileURL.path) else { return .right([]) }
+
+        return readData()
+            .flatMap(decodeProjects)^
     }
 
-    public func save(_ projects: [Project]) throws {
-        try FileManager.default.createDirectory(
-            at: fileURL.deletingLastPathComponent(),
-            withIntermediateDirectories: true
-        )
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try encoder.encode(projects).write(to: fileURL, options: .atomic)
+    private func readData() -> Either<ProjectStoreError, Data> {
+        attempt { try Data(contentsOf: fileURL) }
+            .mapLeft { .readFailed(path: fileURL.path, message: $0.localizedDescription) }^
+    }
+
+    private func decodeProjects(_ data: Data) -> Either<ProjectStoreError, [Project]> {
+        attempt { try JSONDecoder().decode([ProjectDTO].self, from: data) }
+            .mapLeft { ProjectStoreError.decodeFailed(path: fileURL.path, message: $0.localizedDescription) }^
+            .map { $0.map(Project.init) }^
+    }
+
+    public func save(_ projects: [Project]) -> Either<ProjectStoreError, Void> {
+        attempt {
+            try FileManager.default.createDirectory(
+                at: fileURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            try encoder.encode(projects.map(\.dto)).write(to: fileURL, options: .atomic)
+        }
+        .mapLeft { .writeFailed(path: fileURL.path, message: $0.localizedDescription) }^
     }
 }
 
 /// In-memory store for tests.
 public final class InMemoryProjectStore: ProjectStoring, @unchecked Sendable {
+    private let lock = NSLock()
     private var projects: [Project]
 
     public init(projects: [Project] = []) {
         self.projects = projects
     }
 
-    public func load() throws -> [Project] { projects }
-    public func save(_ projects: [Project]) throws { self.projects = projects }
+    public func load() -> Either<ProjectStoreError, [Project]> {
+        lock.lock(); defer { lock.unlock() }
+        return .right(projects)
+    }
+
+    public func save(_ projects: [Project]) -> Either<ProjectStoreError, Void> {
+        lock.lock(); defer { lock.unlock() }
+        self.projects = projects
+        return .right(())
+    }
 }

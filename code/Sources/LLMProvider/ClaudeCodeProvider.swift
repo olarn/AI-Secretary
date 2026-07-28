@@ -1,3 +1,4 @@
+import FunctionalCore
 import Foundation
 import os
 
@@ -100,21 +101,21 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
 
     public func stream(
         messages: [ChatMessage],
-        model: ChatModel?,
-        effort: Effort?,
+        model: Option<ChatModel>,
+        effort: Option<Effort>,
         maxTokens: Int,
-        system: String?
-    ) -> AsyncThrowingStream<ChatStreamEvent, Error> {
+        system: Option<String>
+    ) -> ChatStream {
         let prompt = messages.last(where: { $0.role == .user })?.content ?? ""
         let configuration = self.configuration
         let resume = self.sessionID
 
-        return AsyncThrowingStream { continuation in
+        return AsyncStream { continuation in
             let task = Task { [weak self] in
                 guard let self else { return continuation.finish() }
                 // The model is working from the moment the process starts; no
                 // text arrives until it has decided what to do.
-                continuation.yield(.thinking)
+                continuation.yield(.right(.thinking))
 
                 do {
                     let outcome = try await self.runTurn(
@@ -134,12 +135,12 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
                             continuation: continuation
                         )
                     }
-                    continuation.finish()
                 } catch is CancellationError {
-                    continuation.finish()
+                    // Nothing to report: the caller asked us to stop.
                 } catch {
-                    continuation.finish(throwing: error)
+                    continuation.yield(.left(asChatError(error, otherwise: ChatError.claudeCodeFailed)))
                 }
+                continuation.finish()
             }
             continuation.onTermination = { _ in task.cancel() }
         }
@@ -153,12 +154,12 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
 
     private func runTurn(
         prompt: String,
-        model: ChatModel?,
-        effort: Effort?,
-        system: String?,
+        model: Option<ChatModel>,
+        effort: Option<Effort>,
+        system: Option<String>,
         resume: String?,
         configuration: Configuration,
-        continuation: AsyncThrowingStream<ChatStreamEvent, Error>.Continuation
+        continuation: ChatStream.Continuation
     ) async throws -> TurnOutcome {
         let process = Process()
         process.executableURL = installation.executableURL
@@ -189,7 +190,7 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
                 try Task.checkCancellation()
                 for event in handle(line: line) {
                     if case .textDelta = event { emittedText = true }
-                    continuation.yield(event)
+                    continuation.yield(.right(event))
                 }
             }
         } catch {
@@ -265,11 +266,13 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
     static func describe(tool name: String, input: [String: Any]) -> DeniedTool {
         if name == "Bash", let command = input["command"] as? String {
             let head = command.split(separator: " ").prefix(2).joined(separator: " ")
-            return DeniedTool(name: name, target: command, rule: "Bash(\(head) *)")
+            return DeniedTool(name: name, target: .some(command), rule: "Bash(\(head) *)")
         }
-        let target = (input["file_path"] as? String)
-            ?? (input["path"] as? String)
-            ?? (input["url"] as? String)
+        let target = Option.fromOptional(
+            (input["file_path"] as? String)
+                ?? (input["path"] as? String)
+                ?? (input["url"] as? String)
+        )
         return DeniedTool(name: name, target: target, rule: name)
     }
 
@@ -343,13 +346,18 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
             return [.textDelta(text)]
 
         case "result":
-            let usage = (object["usage"] as? [String: Any]).map {
+            let usage = Option.fromOptional(object["usage"] as? [String: Any]).map {
                 ChatUsage(
                     inputTokens: $0["input_tokens"] as? Int ?? 0,
                     outputTokens: $0["output_tokens"] as? Int ?? 0
                 )
-            }
-            return [.completed(stopReason: object["stop_reason"] as? String, usage: usage)]
+            }^
+            return [
+                .completed(
+                    stopReason: Option.fromOptional(object["stop_reason"] as? String),
+                    usage: usage
+                )
+            ]
 
         default:
             return []
@@ -360,9 +368,9 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
 
     static func arguments(
         prompt: String,
-        model: ChatModel?,
-        effort: Effort?,
-        system: String?,
+        model: Option<ChatModel>,
+        effort: Option<Effort>,
+        system: Option<String>,
         resume: String?,
         configuration: Configuration
     ) -> [String] {
@@ -376,8 +384,8 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
         // Only override what the user actually chose. Claude Code already has
         // their model and effort configured; forcing ours would hand them a
         // different assistant than the one they set up in the terminal.
-        if let model { arguments += ["--model", model.id] }
-        if let effort { arguments += ["--effort", effort.rawValue] }
+        arguments += model.fold({ [] }, { ["--model", $0.id] })
+        arguments += effort.fold({ [] }, { ["--effort", $0.rawValue] })
         if !configuration.allowedTools.isEmpty {
             arguments += ["--allowedTools", configuration.allowedTools.joined(separator: ",")]
         }
@@ -385,7 +393,8 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
             arguments += ["--add-dir", directory.path]
         }
         if let resume { arguments += ["--resume", resume] }
-        if let system, !system.isEmpty { arguments += ["--append-system-prompt", system] }
+        arguments += system.filter { !$0.isEmpty }^
+            .fold({ [] }, { ["--append-system-prompt", $0] })
         return arguments
     }
 
@@ -398,7 +407,7 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
     /// bare system path a Finder-launched app inherits.
     static func childEnvironment(
         for installation: ClaudeCodeInstallation,
-        loginPath: String? = LoginShellPath.resolve()
+        loginPath: Option<String> = LoginShellPath.resolve()
     ) -> [String: String] {
         let parent = ProcessInfo.processInfo.environment
         var environment: [String: String] = [:]
@@ -408,7 +417,7 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
         environment["PATH"] = LoginShellPath.merged(
             binaryDirectory: installation.executableURL.deletingLastPathComponent().path,
             loginPath: loginPath,
-            inherited: parent["PATH"]
+            inherited: Option.fromOptional(parent["PATH"])
         )
         // Never inherited: an exported key would silently bill the user's API
         // credit for a session they asked to run on their subscription.

@@ -22,7 +22,6 @@ enum ProjectPicker {
         return Project(
             name: url.lastPathComponent,
             path: url.path,
-            description: nil,
             allowedTools: [
                 GitReadOnlyAdapter.toolIdentifier,
                 FileReadOnlyAdapter.toolIdentifier,

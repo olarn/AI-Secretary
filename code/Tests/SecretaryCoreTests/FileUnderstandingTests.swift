@@ -1,3 +1,4 @@
+import FunctionalCore
 import XCTest
 import AssistantState
 import ProjectRegistry
@@ -12,14 +13,24 @@ final class SpyFileAdapter: FileToolAdapter {
     var toolID: String { FileReadOnlyAdapter.toolIdentifier }
     private(set) var runCalls: [FileOperation] = []
     var stubbedContents = "let answer = 42\n"
-    var stubbedError: Error?
+    var stubbedError: ToolError?
 
     func summary(for operation: FileOperation) -> String { operation.humanDescription }
 
-    func run(_ operation: FileOperation, in project: Project) throws -> ToolResult {
+    func run(_ operation: FileOperation, in project: Project) -> Either<ToolError, ToolResult> {
         runCalls.append(operation)
-        if let stubbedError { throw stubbedError }
-        return ToolResult(output: stubbedContents, exitCode: 0, commandSummary: summary(for: operation))
+        return Option.fromOptional(stubbedError).fold(
+            {
+                .right(
+                    ToolResult(
+                        output: self.stubbedContents,
+                        exitCode: 0,
+                        commandSummary: self.summary(for: operation)
+                    )
+                )
+            },
+            { .left($0) }
+        )
     }
 }
 
@@ -67,7 +78,7 @@ final class FileUnderstandingIntentTests: XCTestCase {
             return XCTFail("Expected understandFile")
         }
         XCTAssertEqual(request.relativePath, "Package.swift")
-        XCTAssertEqual(query, "AI-Secretary")
+        XCTAssertEqual(query, .some("AI-Secretary"))
     }
 
     func testWhatDoesXDoIsAnExplainRequest() {
@@ -123,13 +134,16 @@ final class FileUnderstandingPolicyTests: XCTestCase {
 
     /// Approving "read files here" must never become permission to upload them.
     func testApprovingReadOnlyDoesNotAuthoriseSending() {
-        let policy = DefaultPermissionPolicy()
         let project = Project(
             name: "Fixture",
             path: "/tmp/fixture",
             allowedTools: [FileReadOnlyAdapter.toolIdentifier]
         )
-        policy.recordApproval(projectID: project.id, toolID: FileReadOnlyAdapter.toolIdentifier)
+        let grants = PermissionGrants()
+            |> PermissionGrants.granting(
+                projectID: project.id,
+                toolID: FileReadOnlyAdapter.toolIdentifier
+            )
 
         let upload = ApprovalRequest(
             taskID: "t1",
@@ -140,9 +154,11 @@ final class FileUnderstandingPolicyTests: XCTestCase {
             rationale: "summarise"
         )
 
-        guard case .needsApproval = policy.evaluate(upload) else {
-            return XCTFail("Sending a file must still ask, even after a read-only approval")
-        }
+        XCTAssertEqual(
+            decidePermission(grants)(upload),
+            .right(.needsApproval(upload)),
+            "Sending a file must still ask, even after a read-only approval"
+        )
     }
 }
 
@@ -151,7 +167,6 @@ final class FileUnderstandingPolicyTests: XCTestCase {
 @MainActor
 final class FileUnderstandingSecretaryTests: XCTestCase {
     private var machine: AssistantStateMachine!
-    private var policy: DefaultPermissionPolicy!
     private var fileAdapter: SpyFileAdapter!
 
     private let project = Project(
@@ -163,7 +178,6 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
     override func setUp() {
         super.setUp()
         machine = AssistantStateMachine()
-        policy = DefaultPermissionPolicy()
         fileAdapter = SpyFileAdapter()
     }
 
@@ -171,7 +185,6 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
         Secretary(
             stateMachine: machine,
             registry: ProjectRegistry(store: InMemoryProjectStore(projects: [project])),
-            policy: policy,
             adapter: SpyAdapter(),
             fileAdapter: fileAdapter,
             classifier: RuleBasedIntentClassifier(),
@@ -188,7 +201,7 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
     }
 
     private func reply(_ text: String) -> FakeChatProvider {
-        FakeChatProvider(.events([.textDelta(text), .completed(stopReason: nil, usage: nil)]))
+        FakeChatProvider(.events([.textDelta(text), .completed(stopReason: .none(), usage: .none())]))
     }
 
     func testAsksBeforeSendingAndNamesTheDestination() {
@@ -354,7 +367,6 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
         let secretary = Secretary(
             stateMachine: machine,
             registry: ProjectRegistry(store: InMemoryProjectStore(projects: [project])),
-            policy: policy,
             adapter: adapter,
             fileAdapter: fileAdapter,
             classifier: RuleBasedIntentClassifier(),
@@ -399,7 +411,6 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
             registry: ProjectRegistry(store: InMemoryProjectStore(projects: [
                 Project(name: "โลหะเจริญ", path: "/Users/someone/Secret-Brain/โลหะเจริญ")
             ])),
-            policy: policy,
             adapter: SpyAdapter(),
             fileAdapter: fileAdapter,
             classifier: RuleBasedIntentClassifier(),
@@ -420,7 +431,6 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
         let secretary = Secretary(
             stateMachine: machine,
             registry: ProjectRegistry(store: InMemoryProjectStore(projects: [])),
-            policy: policy,
             adapter: SpyAdapter(),
             fileAdapter: fileAdapter,
             classifier: RuleBasedIntentClassifier(),
@@ -446,7 +456,6 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
         let secretary = Secretary(
             stateMachine: machine,
             registry: ProjectRegistry(store: InMemoryProjectStore(projects: [project, second])),
-            policy: policy,
             adapter: SpyAdapter(),
             fileAdapter: fileAdapter,
             classifier: RuleBasedIntentClassifier(),
@@ -492,7 +501,7 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
             guard case .understandFile(let request, let query) = classifier.classify(text) else {
                 return XCTFail("Expected understandFile for “\(text)”")
             }
-            XCTAssertEqual(query, "Fixture", "for “\(text)”")
+            XCTAssertEqual(query, .some("Fixture"), "for “\(text)”")
             XCTAssertFalse(request.relativePath.contains(" "), "Path leaked the project phrase: \(request.relativePath)")
         }
     }

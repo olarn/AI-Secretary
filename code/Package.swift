@@ -9,65 +9,80 @@ let package = Package(
     products: [
         .executable(name: "AISecretaryApp", targets: ["AISecretaryApp"])
     ],
+    dependencies: [
+        // Typed functional programming: Option instead of nil, Either instead of
+        // throws, plus |> >>> and curry for point-free composition.
+        .package(url: "https://github.com/bow-swift/bow.git", from: "0.8.0")
+    ],
     targets: [
+        // Bow plus the Sendable conformances it predates. Domain targets depend
+        // on this, never on Bow directly, so those are declared exactly once.
         .target(
-            name: "AssistantState"
+            name: "FunctionalCore",
+            dependencies: [.product(name: "Bow", package: "bow")]
         ),
         .target(
-            name: "ProjectRegistry"
+            name: "AssistantState",
+            dependencies: ["FunctionalCore"]
+        ),
+        .target(
+            name: "ProjectRegistry",
+            dependencies: ["FunctionalCore"]
         ),
         .target(
             name: "Permissions",
-            dependencies: ["ProjectRegistry"]
+            dependencies: ["ProjectRegistry", "FunctionalCore"]
         ),
         .target(
             name: "ToolAdapters",
-            dependencies: ["ProjectRegistry", "Permissions"]
+            dependencies: ["ProjectRegistry", "Permissions", "FunctionalCore"]
         ),
         .target(
-            name: "LLMProvider"
+            name: "LLMProvider",
+            dependencies: ["FunctionalCore"]
         ),
         .target(
-            name: "Credentials"
+            name: "Credentials",
+            dependencies: ["FunctionalCore"]
         ),
         .target(
             name: "SecretaryCore",
-            dependencies: ["AssistantState", "ProjectRegistry", "Permissions", "ToolAdapters", "LLMProvider"]
+            dependencies: ["FunctionalCore", "AssistantState", "ProjectRegistry", "Permissions", "ToolAdapters", "LLMProvider"]
         ),
         .executableTarget(
             name: "AISecretaryApp",
             dependencies: [
-                "AssistantState", "SecretaryCore", "ProjectRegistry",
+                "FunctionalCore", "AssistantState", "SecretaryCore", "ProjectRegistry",
                 "Permissions", "ToolAdapters", "LLMProvider", "Credentials"
             ]
         ),
         .testTarget(
             name: "AssistantStateTests",
-            dependencies: ["AssistantState"]
+            dependencies: ["AssistantState", "FunctionalCore"]
         ),
         .testTarget(
             name: "ProjectRegistryTests",
-            dependencies: ["ProjectRegistry"]
+            dependencies: ["ProjectRegistry", "FunctionalCore"]
         ),
         .testTarget(
             name: "PermissionsTests",
-            dependencies: ["Permissions", "ProjectRegistry"]
+            dependencies: ["Permissions", "ProjectRegistry", "FunctionalCore"]
         ),
         .testTarget(
             name: "ToolAdaptersTests",
-            dependencies: ["ToolAdapters", "ProjectRegistry", "Permissions"]
+            dependencies: ["ToolAdapters", "ProjectRegistry", "Permissions", "FunctionalCore"]
         ),
         .testTarget(
             name: "LLMProviderTests",
-            dependencies: ["LLMProvider"]
+            dependencies: ["LLMProvider", "FunctionalCore"]
         ),
         .testTarget(
             name: "CredentialsTests",
-            dependencies: ["Credentials"]
+            dependencies: ["Credentials", "FunctionalCore"]
         ),
         .testTarget(
             name: "SecretaryCoreTests",
-            dependencies: ["SecretaryCore", "AssistantState", "ProjectRegistry", "Permissions", "ToolAdapters", "LLMProvider"]
+            dependencies: ["SecretaryCore", "FunctionalCore", "AssistantState", "ProjectRegistry", "Permissions", "ToolAdapters", "LLMProvider"]
         )
     ]
 )

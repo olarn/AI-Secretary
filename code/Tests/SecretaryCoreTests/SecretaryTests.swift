@@ -1,3 +1,4 @@
+import FunctionalCore
 import XCTest
 import AssistantState
 import ProjectRegistry
@@ -12,14 +13,13 @@ final class SpyAdapter: CodeToolAdapter {
     var toolID: String { GitReadOnlyAdapter.toolIdentifier }
     private(set) var runCalls: [(CodeToolOperation, Project)] = []
     var stubbedResult: ToolResult = ToolResult(output: "ok", exitCode: 0, commandSummary: "git status")
-    var stubbedError: Error?
+    var stubbedError: ToolError?
 
     func summary(for operation: CodeToolOperation) -> String { "git \(operation.rawValue)" }
 
-    func run(_ operation: CodeToolOperation, in project: Project) throws -> ToolResult {
+    func run(_ operation: CodeToolOperation, in project: Project) -> Either<ToolError, ToolResult> {
         runCalls.append((operation, project))
-        if let stubbedError { throw stubbedError }
-        return stubbedResult
+        return Option.fromOptional(stubbedError).fold({ .right(self.stubbedResult) }, { .left($0) })
     }
 }
 
@@ -27,7 +27,7 @@ final class SpyAdapter: CodeToolAdapter {
 final class FakeChatProvider: ChatProvider, @unchecked Sendable {
     enum Script {
         case events([ChatStreamEvent])
-        case failure(Error)
+        case failure(ChatError)
     }
 
     private let script: Script
@@ -41,24 +41,24 @@ final class FakeChatProvider: ChatProvider, @unchecked Sendable {
 
     func stream(
         messages: [ChatMessage],
-        model: ChatModel?,
-        effort: Effort?,
+        model: Option<ChatModel>,
+        effort: Option<Effort>,
         maxTokens: Int,
-        system: String?
-    ) -> AsyncThrowingStream<ChatStreamEvent, Error> {
+        system: Option<String>
+    ) -> ChatStream {
         callCount += 1
         lastMessages = messages
-        lastModel = model
-        lastEffort = effort
-        lastSystem = system
-        return AsyncThrowingStream { continuation in
+        lastModel = model.toOptional()
+        lastEffort = effort.toOptional()
+        lastSystem = system.toOptional()
+        return AsyncStream { continuation in
             switch script {
             case .events(let events):
-                for event in events { continuation.yield(event) }
-                continuation.finish()
+                for event in events { continuation.yield(.right(event)) }
             case .failure(let error):
-                continuation.finish(throwing: error)
+                continuation.yield(.left(error))
             }
+            continuation.finish()
         }
     }
 }
@@ -88,14 +88,14 @@ final class RuleBasedIntentClassifierTests: XCTestCase {
         guard case .codeTool(_, let query) = classifier.classify("git status in AI-Secretary") else {
             return XCTFail("Expected codeTool")
         }
-        XCTAssertEqual(query, "ai-secretary")
+        XCTAssertEqual(query, .some("ai-secretary"))
     }
 
-    func testNoProjectPhraseYieldsNilQuery() {
+    func testNoProjectPhraseYieldsAnAbsentQuery() {
         guard case .codeTool(_, let query) = classifier.classify("git status") else {
             return XCTFail("Expected codeTool")
         }
-        XCTAssertNil(query)
+        XCTAssertEqual(query, Option.none())
     }
 
     func testUnrecognisedTextIsUnknownRatherThanAGuess() {
@@ -117,7 +117,6 @@ final class RuleBasedIntentClassifierTests: XCTestCase {
 final class SecretaryTests: XCTestCase {
     private var machine: AssistantStateMachine!
     private var adapter: SpyAdapter!
-    private var policy: DefaultPermissionPolicy!
 
     private let project = Project(
         name: "Fixture",
@@ -129,17 +128,15 @@ final class SecretaryTests: XCTestCase {
         super.setUp()
         machine = AssistantStateMachine()
         adapter = SpyAdapter()
-        policy = DefaultPermissionPolicy()
     }
 
     private func makeSecretary(
         projects: [Project],
-        chat: FakeChatProvider = FakeChatProvider(.events([.completed(stopReason: nil, usage: nil)]))
+        chat: FakeChatProvider = FakeChatProvider(.events([.completed(stopReason: .none(), usage: .none())]))
     ) -> Secretary {
         Secretary(
             stateMachine: machine,
             registry: ProjectRegistry(store: InMemoryProjectStore(projects: projects)),
-            policy: policy,
             adapter: adapter,
             classifier: RuleBasedIntentClassifier(),
             audit: AuditLog(),
@@ -251,7 +248,7 @@ final class SecretaryTests: XCTestCase {
             .thinking,
             .textDelta("Hi"),
             .textDelta(" there!"),
-            .completed(stopReason: "end_turn", usage: ChatUsage(inputTokens: 5, outputTokens: 2))
+            .completed(stopReason: .some("end_turn"), usage: .some(ChatUsage(inputTokens: 5, outputTokens: 2)))
         ]))
         let secretary = makeSecretary(projects: [project], chat: chat)
 
@@ -269,7 +266,7 @@ final class SecretaryTests: XCTestCase {
         let chat = FakeChatProvider(.events([
             .thinking,
             .textDelta("ok"),
-            .completed(stopReason: nil, usage: nil)
+            .completed(stopReason: .none(), usage: .none())
         ]))
         let secretary = makeSecretary(projects: [project], chat: chat)
 
@@ -284,7 +281,7 @@ final class SecretaryTests: XCTestCase {
 
     func testChatRefusalEndsInError() async {
         let chat = FakeChatProvider(.events([
-            .completed(stopReason: "refusal", usage: nil)
+            .completed(stopReason: .some("refusal"), usage: .none())
         ]))
         let secretary = makeSecretary(projects: [project], chat: chat)
 
@@ -312,7 +309,7 @@ final class SecretaryTests: XCTestCase {
 
         secretary.submit("/model claude-opus-4-8")
 
-        XCTAssertEqual(secretary.model, .opus48)
+        XCTAssertEqual(secretary.model, .some(.opus48))
         XCTAssertEqual(chat.callCount, 0)
         // Confirmed by display name now — the settings panel and the slash
         // command share one entry point, and a name reads better than an id.

@@ -84,7 +84,7 @@ struct CharacterView: View {
     private var artworkImage: NSImage? {
         // Read the revision so an upload or a profile switch invalidates this.
         _ = profiles.artworkRevision
-        if let url = profiles.artworkURL(), let image = NSImage(contentsOf: url) {
+        if let url = profiles.artworkFileURL, let image = NSImage(contentsOf: url) {
             return image
         }
         return NSImage(contentsOf: CharacterAsset.url)

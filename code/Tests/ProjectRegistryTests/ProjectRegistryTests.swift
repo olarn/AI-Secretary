@@ -1,88 +1,147 @@
+import FunctionalCore
 import XCTest
 @testable import ProjectRegistry
 
-final class ProjectRegistryTests: XCTestCase {
-    private func makeRegistry(_ projects: [Project]) -> ProjectRegistry {
-        ProjectRegistry(store: InMemoryProjectStore(projects: projects))
+private let alpha = Project(name: "Alpha", path: "/tmp/alpha", allowedTools: ["git.readOnly"])
+private let alphaBeta = Project(name: "AlphaBeta", path: "/tmp/alphabeta")
+private let gamma = Project(name: "Gamma", path: "/tmp/gamma")
+
+/// Resolution is a pure function, so these need no registry object at all.
+final class ResolveProjectTests: XCTestCase {
+    private func resolve(_ projects: [Project], _ query: Option<String>) -> ProjectResolution {
+        resolveProject(in: projects)(query)
     }
 
-    private let alpha = Project(name: "Alpha", path: "/tmp/alpha", allowedTools: ["git.readOnly"])
-    private let alphaBeta = Project(name: "AlphaBeta", path: "/tmp/alphabeta")
-    private let gamma = Project(name: "Gamma", path: "/tmp/gamma")
-
     func testExactNameResolvesEvenWhenAnotherNameContainsIt() {
-        let registry = makeRegistry([alpha, alphaBeta])
-        XCTAssertEqual(registry.resolve(query: "Alpha"), .resolved(alpha))
+        XCTAssertEqual(resolve([alpha, alphaBeta], .some("Alpha")), .resolved(alpha))
     }
 
     func testCaseInsensitiveAndTrimmedMatching() {
-        let registry = makeRegistry([alpha])
-        XCTAssertEqual(registry.resolve(query: "  aLpHa "), .resolved(alpha))
+        XCTAssertEqual(resolve([alpha], .some("  aLpHa ")), .resolved(alpha))
     }
 
     func testPartialMatchResolvesWhenUnique() {
-        let registry = makeRegistry([alpha, gamma])
-        XCTAssertEqual(registry.resolve(query: "gam"), .resolved(gamma))
+        XCTAssertEqual(resolve([alpha, gamma], .some("gam")), .resolved(gamma))
     }
 
     func testAmbiguousPartialMatchAsksUserToChoose() {
-        let registry = makeRegistry([alpha, alphaBeta])
-        guard case .ambiguous(_, let candidates) = registry.resolve(query: "alph") else {
+        guard case .ambiguous(_, let candidates) = resolve([alpha, alphaBeta], .some("alph")) else {
             return XCTFail("Expected ambiguous resolution")
         }
         XCTAssertEqual(Set(candidates.map(\.name)), ["Alpha", "AlphaBeta"])
     }
 
     func testUnknownNameIsNotFoundRatherThanAGuessedPath() {
-        let registry = makeRegistry([alpha])
-        XCTAssertEqual(registry.resolve(query: "does-not-exist"), .notFound(query: "does-not-exist"))
+        XCTAssertEqual(
+            resolve([alpha], .some("does-not-exist")),
+            .notFound(query: "does-not-exist")
+        )
     }
 
-    func testEmptyQueryWithSingleProjectResolvesToIt() {
-        let registry = makeRegistry([alpha])
-        XCTAssertEqual(registry.resolve(query: nil), .resolved(alpha))
-        XCTAssertEqual(registry.resolve(query: "   "), .resolved(alpha))
+    func testAbsentOrBlankQueryWithSingleProjectResolvesToIt() {
+        XCTAssertEqual(resolve([alpha], .none()), .resolved(alpha))
+        XCTAssertEqual(resolve([alpha], .some("   ")), .resolved(alpha))
     }
 
-    func testEmptyQueryWithMultipleProjectsNeedsSelection() {
-        let registry = makeRegistry([alpha, gamma])
-        guard case .needsSelection(let candidates) = registry.resolve(query: nil) else {
+    func testAbsentQueryWithMultipleProjectsNeedsSelection() {
+        guard case .needsSelection(let candidates) = resolve([alpha, gamma], .none()) else {
             return XCTFail("Expected needsSelection")
         }
         XCTAssertEqual(candidates.count, 2)
     }
 
     func testEmptyRegistryNeedsSelectionWithNoCandidates() {
-        let registry = makeRegistry([])
-        XCTAssertEqual(registry.resolve(query: nil), .needsSelection(candidates: []))
+        XCTAssertEqual(resolve([], .none()), .needsSelection(candidates: []))
+    }
+}
+
+/// The other list questions, also pure.
+final class ProjectListFunctionTests: XCTestCase {
+    func testProjectIDAtPathIgnoresATrailingSlash() {
+        XCTAssertEqual(projectID(atPath: "/tmp/alpha/")([alpha]), .some(alpha.id))
+        XCTAssertEqual(projectID(atPath: "/tmp/nowhere")([alpha]), Option.none())
     }
 
-    func testAddingTheSamePathTwiceIsDeduplicated() throws {
+    func testGrantingIsAbsentWhenItWouldChangeNothing() {
+        XCTAssertEqual(granting(tool: "git.readOnly", to: alpha.id)([alpha]), Option.none())
+        XCTAssertEqual(granting(tool: "anything", to: UUID())([alpha]), Option.none())
+    }
+
+    func testGrantingReturnsANewListLeavingTheOriginalAlone() {
+        let updated = granting(tool: "git.write", to: alpha.id)([alpha])
+
+        XCTAssertEqual(updated.map { $0[0].allowedTools }^, .some(["git.readOnly", "git.write"]))
+        XCTAssertEqual(alpha.allowedTools, ["git.readOnly"], "the input list must not be mutated")
+    }
+
+    func testProjectGrantingToolIsAbsentWhenAlreadyAllowed() {
+        XCTAssertEqual(alpha.granting(tool: "git.readOnly"), Option.none())
+        XCTAssertEqual(alpha.granting(tool: "git.write").map(\.allowedTools)^, .some(["git.readOnly", "git.write"]))
+    }
+}
+
+final class ProjectRegistryTests: XCTestCase {
+    func testAddingTheSamePathTwiceIsDeduplicated() {
         let registry = ProjectRegistry(store: InMemoryProjectStore())
-        XCTAssertTrue(try registry.add(alpha))
+        XCTAssertEqual(registry.add(alpha), .right(true))
 
         let duplicate = Project(name: "Alpha again", path: alpha.path)
-        XCTAssertFalse(try registry.add(duplicate), "A second add of the same path should be ignored")
+        XCTAssertEqual(
+            registry.add(duplicate),
+            .right(false),
+            "A second add of the same path should be ignored"
+        )
         XCTAssertEqual(registry.projects.count, 1)
     }
 
-    func testAddingPathWithTrailingSlashIsTreatedAsDuplicate() throws {
+    func testAddingPathWithTrailingSlashIsTreatedAsDuplicate() {
         let registry = ProjectRegistry(store: InMemoryProjectStore())
-        try registry.add(Project(name: "A", path: "/tmp/alpha"))
-        XCTAssertFalse(try registry.add(Project(name: "A2", path: "/tmp/alpha/")))
+        registry.add(Project(name: "A", path: "/tmp/alpha"))
+        XCTAssertEqual(registry.add(Project(name: "A2", path: "/tmp/alpha/")), .right(false))
         XCTAssertEqual(registry.projects.count, 1)
     }
 
-    func testAddAndRemovePersistThroughStore() throws {
+    func testAddAndRemovePersistThroughStore() {
         let store = InMemoryProjectStore()
         let registry = ProjectRegistry(store: store)
 
-        try registry.add(alpha)
-        XCTAssertEqual(try store.load(), [alpha])
+        registry.add(alpha)
+        XCTAssertEqual(store.load(), .right([alpha]))
 
-        try registry.remove(id: alpha.id)
-        XCTAssertEqual(try store.load(), [])
+        registry.remove(id: alpha.id)
+        XCTAssertEqual(store.load(), .right([]))
         XCTAssertTrue(registry.projects.isEmpty)
+    }
+
+    func testGrantAddsToolOnceAndPersists() {
+        let store = InMemoryProjectStore()
+        let registry = ProjectRegistry(store: store)
+        registry.add(gamma)
+
+        XCTAssertEqual(registry.grant(tool: "git.readOnly", to: gamma.id), .right(true))
+        XCTAssertEqual(registry.grant(tool: "git.readOnly", to: gamma.id), .right(false))
+        XCTAssertEqual(registry.grant(tool: "git.readOnly", to: UUID()), .right(false))
+        XCTAssertEqual(store.load().map { $0[0].allowedTools }^, .right(["git.readOnly"]))
+    }
+
+    func testProjectLookupIsAnOption() {
+        let registry = ProjectRegistry(store: InMemoryProjectStore(projects: [alpha]))
+        XCTAssertEqual(registry.project(id: alpha.id), .some(alpha))
+        XCTAssertEqual(registry.project(id: UUID()), Option.none())
+    }
+
+    /// A store that cannot be written must not leave the in-memory list ahead
+    /// of the file — that is exactly the drift the value-typed design prevents.
+    func testAFailedWriteLeavesTheListUnchanged() {
+        let registry = ProjectRegistry(store: FailingProjectStore())
+        let result = registry.add(alpha)
+
+        XCTAssertEqual(result, .left(.writeFailed(path: "/dev/null", message: "disk is on fire")))
+        XCTAssertTrue(registry.projects.isEmpty)
+    }
+
+    func testARegistryWhoseStoreFailsToLoadStartsEmpty() {
+        XCTAssertTrue(ProjectRegistry(store: FailingProjectStore()).projects.isEmpty)
     }
 
     func testAllowsToolReflectsAllowlist() {
@@ -90,13 +149,60 @@ final class ProjectRegistryTests: XCTestCase {
         XCTAssertFalse(alpha.allows(tool: "git.write"))
         XCTAssertFalse(gamma.allows(tool: "git.readOnly"))
     }
+}
 
-    func testProjectRoundTripsThroughJSON() throws {
+final class ProjectPersistenceTests: XCTestCase {
+    func testProjectRoundTripsThroughJSON() {
         let store = FileProjectStore(
             fileURL: URL(fileURLWithPath: NSTemporaryDirectory())
                 .appendingPathComponent("registry-test-\(UUID().uuidString).json")
         )
-        try store.save([alpha, gamma])
-        XCTAssertEqual(try store.load(), [alpha, gamma])
+        XCTAssertTrue(store.save([alpha, gamma]).isRight)
+        XCTAssertEqual(store.load(), .right([alpha, gamma]))
     }
+
+    /// The DTO keeps the `description` key, so files written before the domain
+    /// type split in two still load.
+    func testLegacyJSONWithDescriptionKeyStillLoads() throws {
+        let url = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("legacy-\(UUID().uuidString).json")
+        let id = UUID()
+        let json = """
+        [{"id":"\(id.uuidString)","name":"Legacy","path":"/tmp/legacy",\
+        "description":"an old note","allowedTools":[],"allowedActions":[]}]
+        """
+        try Data(json.utf8).write(to: url)
+
+        let loaded = FileProjectStore(fileURL: url).load()
+
+        XCTAssertEqual(loaded.map { $0.map(\.summary) }^, .right([.some("an old note")]))
+        XCTAssertEqual(loaded.map { $0.map(\.id) }^, .right([id]))
+    }
+
+    func testAbsentSummaryRoundTripsAsAMissingKey() {
+        let project = Project(name: "NoNote", path: "/tmp/nonote")
+        XCTAssertNil(project.dto.description)
+        XCTAssertEqual(Project(project.dto), project)
+    }
+
+    func testUnreadableJSONFailsOnTheLeftRailRatherThanThrowing() throws {
+        let url = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("broken-\(UUID().uuidString).json")
+        try Data("not json".utf8).write(to: url)
+
+        let decodeFailed = FileProjectStore(fileURL: url).load().fold(
+            { error in if case .decodeFailed = error { return true } else { return false } },
+            { _ in false }
+        )
+
+        XCTAssertTrue(decodeFailed, "Expected a decode failure on the left rail")
+    }
+}
+
+/// Always fails, to prove failures surface as values.
+private final class FailingProjectStore: ProjectStoring, @unchecked Sendable {
+    private let error = ProjectStoreError.writeFailed(path: "/dev/null", message: "disk is on fire")
+
+    func load() -> Either<ProjectStoreError, [Project]> { .left(error) }
+    func save(_ projects: [Project]) -> Either<ProjectStoreError, Void> { .left(error) }
 }

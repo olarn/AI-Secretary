@@ -1,3 +1,4 @@
+import FunctionalCore
 import Foundation
 import ProjectRegistry
 import Permissions
@@ -43,7 +44,7 @@ public enum FileOperation: Equatable, Sendable {
 public protocol FileToolAdapter: AnyObject {
     var toolID: String { get }
     func summary(for operation: FileOperation) -> String
-    func run(_ operation: FileOperation, in project: Project) throws -> ToolResult
+    func run(_ operation: FileOperation, in project: Project) -> Either<ToolError, ToolResult>
 }
 
 /// Reads directory listings and text files, constrained by construction:
@@ -54,6 +55,9 @@ public protocol FileToolAdapter: AnyObject {
 /// - Only regular files are read, only up to a byte cap, and only if they decode
 ///   as UTF-8 — binary files are refused rather than dumped.
 /// - No process is launched and nothing is ever written.
+///
+/// Each of those guarantees is one rail below. They run in order and the first
+/// refusal short-circuits, so a read cannot happen unless every check passed.
 public final class FileReadOnlyAdapter: FileToolAdapter {
     public static let toolIdentifier = "file.readOnly"
 
@@ -69,124 +73,176 @@ public final class FileReadOnlyAdapter: FileToolAdapter {
     }
 
     public func summary(for operation: FileOperation) -> String {
-        let path = cleaned(operation.relativePath)
+        let path = cleanedPath(operation.relativePath)
         switch operation {
         case .listDirectory: return "list \(path)"
         case .readFile: return "read \(path)"
         }
     }
 
-    public func run(_ operation: FileOperation, in project: Project) throws -> ToolResult {
+    public func run(_ operation: FileOperation, in project: Project) -> Either<ToolError, ToolResult> {
         let summary = summary(for: operation)
-        try validate(project: project)
-        let target = try resolveTarget(operation.relativePath, in: project)
 
-        logger.info("Reading \(summary, privacy: .public) in project \(project.name, privacy: .public)")
+        return requireProjectDirectory(project)
+            .flatMap { _ in self.resolveTarget(operation.relativePath, in: project) }^
+            .flatMap { target in
+                self.logger.info(
+                    "Reading \(summary, privacy: .public) in project \(project.name, privacy: .public)"
+                )
+                return self.perform(operation, at: target, summary: summary)
+            }^
+    }
 
+    private func perform(
+        _ operation: FileOperation,
+        at target: URL,
+        summary: String
+    ) -> Either<ToolError, ToolResult> {
         switch operation {
         case .listDirectory:
-            return try listDirectory(at: target, summary: summary)
+            return listDirectory(at: target, summary: summary)
         case .readFile:
-            return try readFile(at: target, summary: summary)
+            return readFile(at: target, summary: summary)
         }
     }
 
     // MARK: - Operations
 
-    private func listDirectory(at url: URL, summary: String) throws -> ToolResult {
-        var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) else {
-            throw ToolError.fileNotFound(url.path)
-        }
-        guard isDirectory.boolValue else {
-            throw ToolError.notADirectory(url.path)
-        }
+    private func listDirectory(at url: URL, summary: String) -> Either<ToolError, ToolResult> {
+        requireDirectory(at: url)
+            .flatMap { _ in
+                attempt {
+                    try FileManager.default.contentsOfDirectory(
+                        at: url,
+                        includingPropertiesForKeys: [.isDirectoryKey],
+                        options: [.skipsSubdirectoryDescendants]
+                    )
+                }
+                .mapLeft { ToolError.launchFailed($0.localizedDescription) }^
+            }^
+            .map { entries in
+                ToolResult(
+                    output: self.render(entries),
+                    exitCode: 0,
+                    commandSummary: summary
+                )
+            }^
+    }
 
-        let entries = try FileManager.default.contentsOfDirectory(
-            at: url,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsSubdirectoryDescendants]
-        )
-        let rendered = entries
+    private func render(_ entries: [URL]) -> String {
+        let names = entries
             .map { entry -> String in
                 let isDir = (try? entry.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
                 return isDir ? entry.lastPathComponent + "/" : entry.lastPathComponent
             }
             .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
 
-        let capped = rendered.prefix(maxDirectoryEntries)
-        var body = capped.joined(separator: "\n")
-        if rendered.count > capped.count {
-            body += "\n… \(rendered.count - capped.count) more (truncated)"
-        }
-        if rendered.isEmpty { body = "(empty directory)" }
-        return ToolResult(output: body, exitCode: 0, commandSummary: summary)
+        guard !names.isEmpty else { return "(empty directory)" }
+
+        let capped = names.prefix(maxDirectoryEntries)
+        let body = capped.joined(separator: "\n")
+        return names.count > capped.count
+            ? body + "\n… \(names.count - capped.count) more (truncated)"
+            : body
     }
 
-    private func readFile(at url: URL, summary: String) throws -> ToolResult {
-        var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) else {
-            throw ToolError.fileNotFound(url.path)
-        }
-        guard !isDirectory.boolValue else {
-            throw ToolError.notAFile(url.path)
-        }
+    private func readFile(at url: URL, summary: String) -> Either<ToolError, ToolResult> {
+        requireRegularFile(at: url)
+            .flatMap { _ in self.requireWithinSizeLimit(at: url) }^
+            .flatMap { _ in
+                attempt { try Data(contentsOf: url) }
+                    .mapLeft { _ in ToolError.fileNotFound(url.path) }^
+            }^
+            .flatMap { data in self.decodeText(data, at: url) }^
+            .map { ToolResult(output: $0, exitCode: 0, commandSummary: summary) }^
+    }
 
-        let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? nil
-        if let size, size > maxFileBytes {
-            throw ToolError.fileTooLarge(path: url.path, limit: maxFileBytes)
-        }
-
-        let data = try Data(contentsOf: url)
+    private func decodeText(_ data: Data, at url: URL) -> Either<ToolError, String> {
         let clipped = data.prefix(maxFileBytes)
-        guard let text = String(data: clipped, encoding: .utf8) else {
-            throw ToolError.notReadableText(url.path)
-        }
-        var body = text
-        if data.count > clipped.count {
-            body += "\n… (truncated at \(maxFileBytes) bytes)"
-        }
-        return ToolResult(output: body, exitCode: 0, commandSummary: summary)
+        return Option.fromOptional(String(data: clipped, encoding: .utf8))
+            .fold(
+                { .left(.notReadableText(url.path)) },
+                { text in
+                    .right(
+                        data.count > clipped.count
+                            ? text + "\n… (truncated at \(self.maxFileBytes) bytes)"
+                            : text
+                    )
+                }
+            )
     }
 
-    // MARK: - Safety
+    // MARK: - Safety rails
 
-    private func validate(project: Project) throws {
-        var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: project.path, isDirectory: &isDirectory),
-              isDirectory.boolValue else {
-            throw ToolError.projectPathMissing(project.path)
-        }
+    private func requireProjectDirectory(_ project: Project) -> Either<ToolError, Project> {
+        isDirectory(atPath: project.path)
+            ? .right(project)
+            : .left(.projectPathMissing(project.path))
+    }
+
+    private func requireDirectory(at url: URL) -> Either<ToolError, URL> {
+        guard exists(atPath: url.path) else { return .left(.fileNotFound(url.path)) }
+        return isDirectory(atPath: url.path) ? .right(url) : .left(.notADirectory(url.path))
+    }
+
+    private func requireRegularFile(at url: URL) -> Either<ToolError, URL> {
+        guard exists(atPath: url.path) else { return .left(.fileNotFound(url.path)) }
+        return isDirectory(atPath: url.path) ? .left(.notAFile(url.path)) : .right(url)
+    }
+
+    private func requireWithinSizeLimit(at url: URL) -> Either<ToolError, URL> {
+        let size = Option.fromOptional(
+            try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int
+        ).flatMap { Option.fromOptional($0) }^
+
+        let limit = maxFileBytes
+        return size.filter { $0 > limit }^.isDefined
+            ? .left(.fileTooLarge(path: url.path, limit: limit))
+            : .right(url)
     }
 
     /// Resolves a user-supplied relative path against the project root and refuses
     /// anything that escapes it, after resolving symlinks and `..` components.
-    private func resolveTarget(_ relativePath: String, in project: Project) throws -> URL {
+    private func resolveTarget(
+        _ relativePath: String,
+        in project: Project
+    ) -> Either<ToolError, URL> {
         let root = project.url.resolvingSymlinksInPath().standardizedFileURL
-        let trimmed = cleaned(relativePath)
+        let trimmed = cleanedPath(relativePath)
 
         // Reject absolute paths outright — the target must be inside the project.
-        if trimmed.hasPrefix("/") {
-            throw ToolError.pathEscapesProject(relativePath)
-        }
+        guard !trimmed.hasPrefix("/") else { return .left(.pathEscapesProject(relativePath)) }
 
-        let candidate = root.appendingPathComponent(trimmed).standardizedFileURL
         // Resolve symlinks so a link inside the project can't point outside it.
-        let resolved = candidate.resolvingSymlinksInPath().standardizedFileURL
+        let resolved = root
+            .appendingPathComponent(trimmed)
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
+            .standardizedFileURL
 
-        guard isContained(resolved, in: root) else {
-            throw ToolError.pathEscapesProject(relativePath)
-        }
-        return resolved
+        return isContained(resolved, in: root)
+            ? .right(resolved)
+            : .left(.pathEscapesProject(relativePath))
     }
 
     private func isContained(_ url: URL, in root: URL) -> Bool {
-        if url.path == root.path { return true }
-        return url.path.hasPrefix(root.path + "/")
+        url.path == root.path || url.path.hasPrefix(root.path + "/")
     }
 
-    private func cleaned(_ path: String) -> String {
-        let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? "." : trimmed
+    private func exists(atPath path: String) -> Bool {
+        FileManager.default.fileExists(atPath: path)
     }
+
+    private func isDirectory(atPath path: String) -> Bool {
+        var isDirectory: ObjCBool = false
+        let found = FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory)
+        return found && isDirectory.boolValue
+    }
+}
+
+/// Blank means "the project root". Free function because both the adapter and
+/// its summary need it and neither owns it.
+func cleanedPath(_ path: String) -> String {
+    let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmed.isEmpty ? "." : trimmed
 }

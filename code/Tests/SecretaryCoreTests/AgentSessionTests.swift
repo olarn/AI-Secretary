@@ -1,3 +1,4 @@
+import FunctionalCore
 import XCTest
 import AssistantState
 import ProjectRegistry
@@ -33,24 +34,24 @@ final class SpyWorkspaceProvider: ChatProvider, WorkspaceScopedProvider, @unchec
 
     func stream(
         messages: [ChatMessage],
-        model: ChatModel?,
-        effort: Effort?,
+        model: Option<ChatModel>,
+        effort: Option<Effort>,
         maxTokens: Int,
-        system: String?
-    ) -> AsyncThrowingStream<ChatStreamEvent, Error> {
+        system: Option<String>
+    ) -> ChatStream {
         callCount += 1
         lastMessages = messages
-        lastSystem = system
-        lastModel = model
+        lastSystem = system.toOptional()
+        lastModel = model.toOptional()
         let denials = denialsForNextTurn
         denialsForNextTurn = []
         let steps = activityForNextTurn
         activityForNextTurn = []
-        return AsyncThrowingStream { continuation in
-            for step in steps { continuation.yield(.activity(step)) }
-            for denial in denials { continuation.yield(.toolDenied(denial)) }
-            continuation.yield(.textDelta("ok"))
-            continuation.yield(.completed(stopReason: nil, usage: nil))
+        return AsyncStream { continuation in
+            for step in steps { continuation.yield(.right(.activity(step))) }
+            for denial in denials { continuation.yield(.right(.toolDenied(denial))) }
+            continuation.yield(.right(.textDelta("ok")))
+            continuation.yield(.right(.completed(stopReason: .none(), usage: .none())))
             continuation.finish()
         }
     }
@@ -79,7 +80,6 @@ final class AgentSessionTests: XCTestCase {
         return Secretary(
             stateMachine: machine,
             registry: registry,
-            policy: DefaultPermissionPolicy(),
             adapter: SpyAdapter(),
             fileAdapter: SpyFileAdapter(),
             classifier: RuleBasedIntentClassifier(),
@@ -142,7 +142,7 @@ final class AgentSessionTests: XCTestCase {
         XCTAssertEqual(provider.lastMessages.last?.content, "summarise this repo please")
         XCTAssertEqual(provider.preparedDirectories.last??.path, projectPath)
 
-        let saved = try XCTUnwrap(try store.load().first)
+        let saved = try XCTUnwrap(store.load().getOrElse([]).first)
         XCTAssertTrue(saved.allowedTools.contains(Secretary.claudeCodeToolID),
                       "The grant must survive a relaunch")
     }
@@ -153,7 +153,7 @@ final class AgentSessionTests: XCTestCase {
         secretary.resolvePendingApproval(granted: false)
 
         XCTAssertEqual(provider.callCount, 0)
-        let saved = try XCTUnwrap(try store.load().first)
+        let saved = try XCTUnwrap(store.load().getOrElse([]).first)
         XCTAssertFalse(saved.allowedTools.contains(Secretary.claudeCodeToolID))
     }
 
@@ -222,7 +222,7 @@ final class AgentSessionTests: XCTestCase {
     // MARK: - Widening permissions after a refusal
 
     private func denyWrite() -> DeniedTool {
-        DeniedTool(name: "Write", target: "/tmp/agent-fixture/out.txt", rule: "Write")
+        DeniedTool(name: "Write", target: .some("/tmp/agent-fixture/out.txt"), rule: "Write")
     }
 
     /// Claude Code refuses un-granted tools mid-turn rather than asking, so the
@@ -301,7 +301,7 @@ final class AgentSessionTests: XCTestCase {
         secretary.resolvePendingApproval(granted: true)
         await waitUntilIdle()
 
-        let saved = try XCTUnwrap(try store.load().first)
+        let saved = try XCTUnwrap(store.load().getOrElse([]).first)
         XCTAssertFalse(saved.allowedTools.contains("Write"),
                        "A write grant must not survive a relaunch: \(saved.allowedTools)")
     }
@@ -310,7 +310,7 @@ final class AgentSessionTests: XCTestCase {
         let secretary = makeSecretary(projects: [project(grantingAgent: true)])
         provider.denialsForNextTurn = [
             denyWrite(),
-            DeniedTool(name: "Bash", target: "npm test", rule: "Bash(npm test *)"),
+            DeniedTool(name: "Bash", target: .some("npm test"), rule: "Bash(npm test *)"),
             denyWrite()
         ]
         secretary.submit("set the project up")
@@ -337,19 +337,19 @@ final class AgentSessionTests: XCTestCase {
     /// announced there — the same path the slash command uses.
     func testPickingAModelIsAnnouncedInTheTranscript() {
         let secretary = makeSecretary(projects: [])
-        secretary.selectModel(.opus5)
+        secretary.selectModel(.some(.opus5))
 
-        XCTAssertEqual(secretary.model, .opus5)
+        XCTAssertEqual(secretary.model, .some(.opus5))
         XCTAssertTrue(secretary.transcript.last?.text.contains("Claude Opus 5") == true,
                       "Got: \(secretary.transcript.last?.text ?? "-")")
     }
 
     func testGoingBackToTheInheritedDefaultIsAnnouncedToo() {
         let secretary = makeSecretary(projects: [])
-        secretary.selectModel(.opus5)
-        secretary.selectModel(nil)
+        secretary.selectModel(.some(.opus5))
+        secretary.selectModel(.none())
 
-        XCTAssertNil(secretary.model)
+        XCTAssertEqual(secretary.model, Option.none())
         XCTAssertTrue(secretary.isModelInherited)
         XCTAssertTrue(secretary.transcript.last?.text.contains("Claude Code default") == true,
                       "Got: \(secretary.transcript.last?.text ?? "-")")
@@ -357,18 +357,18 @@ final class AgentSessionTests: XCTestCase {
 
     func testPickingTheSameValueSaysNothing() {
         let secretary = makeSecretary(projects: [])
-        secretary.selectModel(.opus5)
+        secretary.selectModel(.some(.opus5))
         let count = secretary.transcript.count
-        secretary.selectModel(.opus5)
+        secretary.selectModel(.some(.opus5))
 
         XCTAssertEqual(secretary.transcript.count, count, "No change, nothing to announce")
     }
 
     func testPickingAnEffortIsAnnounced() {
         let secretary = makeSecretary(projects: [])
-        secretary.selectEffort(.xhigh)
+        secretary.selectEffort(.some(.xhigh))
 
-        XCTAssertEqual(secretary.effort, .xhigh)
+        XCTAssertEqual(secretary.effort, .some(.xhigh))
         XCTAssertFalse(secretary.isEffortInherited)
         XCTAssertTrue(secretary.transcript.last?.text.contains("xhigh") == true)
     }
@@ -376,7 +376,7 @@ final class AgentSessionTests: XCTestCase {
     /// The chosen value must reach the backend, not just the label.
     func testAPickedModelIsUsedForTheNextTurn() async {
         let secretary = makeSecretary(projects: [project(grantingAgent: true)])
-        secretary.selectModel(.fable5)
+        secretary.selectModel(.some(.fable5))
         secretary.submit("hello")
         await waitUntilIdle()
 
@@ -630,8 +630,8 @@ final class ProjectGrantTests: XCTestCase {
         let store = InMemoryProjectStore(projects: [project])
         let registry = ProjectRegistry(store: store)
 
-        XCTAssertTrue(try registry.grant(tool: "b", to: project.id))
-        XCTAssertEqual(try store.load().first?.allowedTools, ["a", "b"])
+        XCTAssertTrue(registry.grant(tool: "b", to: project.id).getOrElse(false))
+        XCTAssertEqual(store.load().getOrElse([]).first?.allowedTools, ["a", "b"])
     }
 
     func testGrantingTwiceIsANoOp() throws {
@@ -639,13 +639,13 @@ final class ProjectGrantTests: XCTestCase {
         let store = InMemoryProjectStore(projects: [project])
         let registry = ProjectRegistry(store: store)
 
-        XCTAssertTrue(try registry.grant(tool: "b", to: project.id))
-        XCTAssertFalse(try registry.grant(tool: "b", to: project.id))
-        XCTAssertEqual(try store.load().first?.allowedTools, ["a", "b"])
+        XCTAssertTrue(registry.grant(tool: "b", to: project.id).getOrElse(false))
+        XCTAssertFalse(registry.grant(tool: "b", to: project.id).getOrElse(false))
+        XCTAssertEqual(store.load().getOrElse([]).first?.allowedTools, ["a", "b"])
     }
 
     func testGrantingToAnUnknownProjectDoesNothing() throws {
         let registry = ProjectRegistry(store: InMemoryProjectStore(projects: []))
-        XCTAssertFalse(try registry.grant(tool: "b", to: UUID()))
+        XCTAssertFalse(registry.grant(tool: "b", to: UUID()).getOrElse(false))
     }
 }

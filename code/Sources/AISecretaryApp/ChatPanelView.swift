@@ -168,12 +168,19 @@ struct ChatPanelView: View {
     /// and up in the usual position, left when mirrored, down when it has been
     /// flipped below the character.
     ///
-    /// The alternative reading — pull the grip *away* from the bubble — is what a
-    /// corner handle usually means, but the grip now sits on the pinned corner,
-    /// and when mirrored that corner is hard against the right of the screen:
-    /// "away" would have been a drag with nowhere to go. Growing vertically the
-    /// two readings agree anyway, since the top edge is the one that moves and
-    /// the grip rides along with it.
+    /// Note this is keyed to the layout, not to the corner the grip happens to
+    /// be in — the two have been on both sides of each other, and only the
+    /// layout says which edges are free to move.
+    ///
+    /// Horizontally they agree in any case: the grip sits opposite the tail, on
+    /// the corner the bubble grows into, so dragging it "the way the bubble
+    /// extends" and the usual corner-handle reading of "away from the bubble"
+    /// are the same drag. Vertically they agree in the usual position too, where
+    /// the top edge is the one that moves and the grip rides along with it. They
+    /// part only when the bubble has been flipped below the character: the tail
+    /// is then on top, so the top edge is pinned and the bubble grows downward
+    /// while the grip stays where it is. The drag follows the growth, which
+    /// means dragging down through a grip that doesn't follow the cursor.
     private func resize(to pointer: CGPoint) {
         let settings = appearance.settings
         let origin = dragOrigin ?? DragOrigin(
@@ -244,7 +251,7 @@ struct ChatPanelView: View {
     private var modelPicker: some View {
         Menu {
             Button {
-                secretary.selectModel(nil)
+                secretary.chooseModel(nil)
             } label: {
                 Label(
                     "Your Claude Code default",
@@ -254,11 +261,11 @@ struct ChatPanelView: View {
             Divider()
             ForEach(ChatModel.known, id: \.id) { candidate in
                 Button {
-                    secretary.selectModel(candidate)
+                    secretary.chooseModel(candidate)
                 } label: {
                     Label(
                         candidate.displayName,
-                        systemImage: secretary.model == candidate ? "checkmark" : ""
+                        systemImage: secretary.chosenModel == candidate ? "checkmark" : ""
                     )
                 }
             }
@@ -276,7 +283,7 @@ struct ChatPanelView: View {
     private var effortPicker: some View {
         Menu {
             Button {
-                secretary.selectEffort(nil)
+                secretary.chooseEffort(nil)
             } label: {
                 Label(
                     "Your Claude Code default",
@@ -286,11 +293,11 @@ struct ChatPanelView: View {
             Divider()
             ForEach(Effort.allCases, id: \.rawValue) { candidate in
                 Button {
-                    secretary.selectEffort(candidate)
+                    secretary.chooseEffort(candidate)
                 } label: {
                     Label(
                         candidate.rawValue,
-                        systemImage: secretary.effort == candidate ? "checkmark" : ""
+                        systemImage: secretary.chosenEffort == candidate ? "checkmark" : ""
                     )
                 }
             }
@@ -704,7 +711,7 @@ struct ChatPanelView: View {
                     }
                     Spacer()
                     Button {
-                        try? registry.remove(id: project.id)
+                        addProjectNote = registry.removeReportingProblem(id: project.id)
                     } label: {
                         Image(systemName: "minus.circle")
                     }
@@ -716,10 +723,7 @@ struct ChatPanelView: View {
             Button("Add project…") {
                 addProjectNote = nil
                 if let project = ProjectPicker.promptForProject() {
-                    let added = (try? registry.add(project)) ?? false
-                    if !added {
-                        addProjectNote = "“\(project.name)” is already registered."
-                    }
+                    addProjectNote = registry.addReportingProblem(project)
                 }
             }
             .buttonStyle(.bordered)
@@ -761,18 +765,16 @@ struct ChatPanelView: View {
     }
 
     private func saveAPIKey() {
-        do {
-            try credentials.setAPIKey(apiKeyDraft.trimmingCharacters(in: .whitespaces))
+        if let problem = credentials.saveAPIKeyReportingProblem(text: apiKeyDraft) {
+            settingsNote = problem
+        } else {
             apiKeyDraft = ""
             settingsNote = "API key saved."
-        } catch {
-            settingsNote = "Could not save: \(error.localizedDescription)"
         }
     }
 
     private func clearAPIKey() {
-        try? credentials.setAPIKey(nil)
-        settingsNote = "API key cleared."
+        settingsNote = credentials.clearAPIKeyReportingProblem() ?? "API key cleared."
     }
 
 }

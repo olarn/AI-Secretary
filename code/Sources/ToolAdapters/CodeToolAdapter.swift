@@ -1,3 +1,4 @@
+import FunctionalCore
 import Foundation
 import ProjectRegistry
 import Permissions
@@ -36,7 +37,7 @@ public struct ToolResult: Equatable, Sendable {
     public var succeeded: Bool { exitCode == 0 }
 }
 
-public enum ToolError: Error, Equatable, LocalizedError {
+public enum ToolError: Error, Equatable, Sendable, LocalizedError {
     case operationNotAllowed(CodeToolOperation)
     case projectPathMissing(String)
     case notAGitRepository(String)
@@ -83,8 +84,12 @@ public enum ToolError: Error, Equatable, LocalizedError {
 
 /// Boundary the Secretary talks to, so orchestration can be tested without
 /// running any real process.
+///
+/// A refusal is a value on the left rail rather than a thrown error: the
+/// Secretary has to render every outcome into the conversation either way, and
+/// a `do`/`catch` around each call buys nothing.
 public protocol CodeToolAdapter: AnyObject {
     var toolID: String { get }
     func summary(for operation: CodeToolOperation) -> String
-    func run(_ operation: CodeToolOperation, in project: Project) throws -> ToolResult
+    func run(_ operation: CodeToolOperation, in project: Project) -> Either<ToolError, ToolResult>
 }

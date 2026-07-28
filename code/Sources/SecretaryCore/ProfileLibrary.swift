@@ -1,3 +1,4 @@
+import FunctionalCore
 import Foundation
 import Observation
 import AssistantState
@@ -31,20 +32,23 @@ public final class ProfileLibrary {
         self.store = store
         self.artwork = artwork
 
-        let saved = (try? store.load()) ?? ProfileSelection()
+        // A profile file that cannot be read starts empty rather than blocking
+        // launch; the seeding below then gives the app someone to be.
+        let saved = store.load().getOrElse(ProfileSelection())
         // First launch, or a file that somehow lost its contents: the built-in
         // character is seeded so the app always has someone to be.
         let seeded = saved.profiles.isEmpty
-        let profiles = seeded ? [.miku] : saved.profiles
+        let profiles: [SecretaryProfile] = seeded ? [SecretaryProfile.miku] : saved.profiles
         self.profiles = profiles
-        self.activeID = saved.activeID.flatMap { id in
-            profiles.contains(where: { $0.id == id }) ? id : nil
-        } ?? profiles[0].id
+        // A saved id that no longer names a profile is treated as unset.
+        self.activeID = saved.activeID
+            .filter { id in profiles.contains { $0.id == id } }^
+            .getOrElse(profiles[0].id)
 
         // Written out immediately rather than on the first edit, so a fresh
         // install has a real default profile on disk — Miku, active — instead of
         // one that only exists in memory until something changes.
-        if seeded || saved.activeID != activeID { persist() }
+        if seeded || saved.activeID != Option.some(activeID) { persist() }
 
         // Pictures used to have a slot per state. Carry whichever one the user
         // had over to the single slot, so nobody loses their character.
@@ -91,7 +95,7 @@ public final class ProfileLibrary {
     public func delete(_ id: UUID) {
         guard canDelete, let index = profiles.firstIndex(where: { $0.id == id }) else { return }
         profiles.remove(at: index)
-        try? artwork.removeAll(for: id)
+        artwork.removeAll(for: id)
         artworkRevision += 1
         let switched = id == activeID
         if switched { activeID = profiles[0].id }
@@ -103,21 +107,28 @@ public final class ProfileLibrary {
 
     /// Copies a chosen image in and reports the change, so the character reloads
     /// without waiting for the next state transition.
-    public func setArtwork(pngData: Data, for id: UUID) throws {
-        try artwork.install(pngData: pngData, for: id)
-        artworkRevision += 1
-        if id == activeID { onActiveChange?(active) }
+    @discardableResult
+    public func setArtwork(pngData: Data, for id: UUID) -> Either<ArtworkError, URL> {
+        artwork.install(pngData: pngData, for: id)
+            .map { installed in
+                self.artworkRevision += 1
+                if id == self.activeID { self.onActiveChange?(self.active) }
+                return installed
+            }^
     }
 
-    public func clearArtwork(for id: UUID) {
-        try? artwork.remove(for: id)
-        artworkRevision += 1
-        if id == activeID { onActiveChange?(active) }
+    @discardableResult
+    public func clearArtwork(for id: UUID) -> Either<ArtworkError, Void> {
+        artwork.remove(for: id)
+            .map {
+                self.artworkRevision += 1
+                if id == self.activeID { self.onActiveChange?(self.active) }
+            }^
     }
 
-    /// The active profile's picture, or `nil` to fall back to the built-in
-    /// avatar.
-    public func artworkURL() -> URL? {
+    /// The active profile's picture, absent when the built-in avatar should be
+    /// used instead.
+    public func artworkURL() -> Option<URL> {
         artwork.resolve(profile: activeID)
     }
 
@@ -125,7 +136,13 @@ public final class ProfileLibrary {
         artwork.hasArtwork(for: id)
     }
 
-    private func persist() {
-        try? store.save(ProfileSelection(profiles: profiles, activeID: activeID))
+    /// A failed write is deliberately not surfaced: profiles are cosmetic, every
+    /// caller is a UI action already committed in memory, and there is nothing
+    /// useful to say mid-gesture. Discarded explicitly so it reads as a decision
+    /// rather than an oversight — unlike the project registry, where a failed
+    /// write must not be silent and `add`/`grant` return their outcome.
+    @discardableResult
+    private func persist() -> Either<ProfileStoreError, Void> {
+        store.save(ProfileSelection(profiles: profiles, activeID: .some(activeID)))
     }
 }

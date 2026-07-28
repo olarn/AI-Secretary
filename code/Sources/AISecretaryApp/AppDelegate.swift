@@ -14,7 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     private let credentials = KeychainCredentialStore()
     /// The API-key path, kept as the fallback for anyone without Claude Code.
     private lazy var apiProvider = ClaudeChatProvider(
-        apiKeyProvider: { [credentials] in credentials.apiKey() }
+        apiKeyProvider: { [credentials] in credentials.apiKeyText }
     )
     /// Prefers the user's own Claude Code and falls back to the API key.
     private lazy var backend = ChatBackend(fallback: apiProvider)

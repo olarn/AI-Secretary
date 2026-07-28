@@ -1,3 +1,4 @@
+import FunctionalCore
 import XCTest
 import AssistantState
 @testable import SecretaryCore
@@ -15,21 +16,21 @@ final class ProfileArtworkTests: XCTestCase {
     /// One picture per profile — there is nothing to resolve per state.
     func testTheProfilePictureIsUsedWhenPresent() {
         let resolved = artwork.resolve(profile: profile, exists: exists(["picture.png"]))
-        XCTAssertEqual(resolved?.lastPathComponent, "picture.png")
+        XCTAssertEqual(resolved.map(\.lastPathComponent)^, .some("picture.png"))
         XCTAssertTrue(artwork.hasArtwork(for: profile, exists: exists(["picture.png"])))
     }
 
     /// A profile is allowed to have no picture at all — the caller then keeps
     /// the built-in avatar, so this must be nil rather than a missing-file URL.
     func testNoPictureResolvesToNothing() {
-        XCTAssertNil(artwork.resolve(profile: profile, exists: exists([])))
+        XCTAssertEqual(artwork.resolve(profile: profile, exists: exists([])), Option.none())
         XCTAssertFalse(artwork.hasArtwork(for: profile, exists: exists([])))
     }
 
     /// A leftover file from the per-state scheme is not the picture; only the
     /// migration may promote one, and only into the single slot.
     func testALeftoverStateFileIsNotUsedDirectly() {
-        XCTAssertNil(artwork.resolve(profile: profile, exists: exists(["thinking.png"])))
+        XCTAssertEqual(artwork.resolve(profile: profile, exists: exists(["thinking.png"])), Option.none())
     }
 
     func testEachProfileGetsItsOwnDirectory() {
@@ -53,11 +54,11 @@ final class ProfileArtworkTests: XCTestCase {
         let artwork = ProfileArtwork(root: root)
         let data = Data("not really a png".utf8)
 
-        let written = try artwork.install(pngData: data, for: profile)
+        let written = try XCTUnwrap(artwork.install(pngData: data, for: profile).toOption().toOptional())
         XCTAssertEqual(try Data(contentsOf: written), data)
         XCTAssertTrue(artwork.hasArtwork(for: profile))
 
-        try artwork.remove(for: profile)
+        XCTAssertTrue(artwork.remove(for: profile).isRight)
         XCTAssertFalse(artwork.hasArtwork(for: profile))
 
         try artwork.install(pngData: data, for: profile)
@@ -156,9 +157,9 @@ final class ProfileLibraryTests: XCTestCase {
     /// exists only in memory until the user changes something.
     func testTheSeededDefaultIsWrittenOutOnAFirstRun() throws {
         let (_, store) = makeLibrary()
-        let saved = try store.load()
+        let saved = try XCTUnwrap(store.load().toOption().toOptional())
         XCTAssertEqual(saved.profiles.map(\.name), ["Miku"])
-        XCTAssertEqual(saved.activeID, SecretaryProfile.miku.id, "and it's the active one")
+        XCTAssertEqual(saved.activeID, .some(SecretaryProfile.miku.id), "and it's the active one")
     }
 
     /// Seeding twice would multiply the built-in character, so its id is fixed.
@@ -173,7 +174,7 @@ final class ProfileLibraryTests: XCTestCase {
     func testTheActiveProfileIsRemembered() {
         let kai = SecretaryProfile(name: "Kai")
         let (library, _) = makeLibrary(
-            ProfileSelection(profiles: [.miku, kai], activeID: kai.id)
+            ProfileSelection(profiles: [.miku, kai], activeID: .some(kai.id))
         )
         XCTAssertEqual(library.active.name, "Kai")
     }
@@ -182,14 +183,14 @@ final class ProfileLibraryTests: XCTestCase {
     /// or a hand-edited file — must not leave the app with nobody active.
     func testAnUnknownSavedIDFallsBackToTheFirstProfile() {
         let (library, _) = makeLibrary(
-            ProfileSelection(profiles: [.miku], activeID: UUID())
+            ProfileSelection(profiles: [.miku], activeID: .some(UUID()))
         )
         XCTAssertEqual(library.active.name, "Miku")
     }
 
     func testSwitchingReportsTheNewProfileAndPersists() {
         let kai = SecretaryProfile(name: "Kai")
-        let (library, store) = makeLibrary(ProfileSelection(profiles: [.miku, kai], activeID: SecretaryProfile.miku.id))
+        let (library, store) = makeLibrary(ProfileSelection(profiles: [.miku, kai], activeID: .some(SecretaryProfile.miku.id)))
 
         var announced: [String] = []
         library.onActiveChange = { announced.append($0.displayName) }
@@ -197,7 +198,7 @@ final class ProfileLibraryTests: XCTestCase {
         library.activate(kai.id)
 
         XCTAssertEqual(announced, ["Kai"])
-        XCTAssertEqual(try? store.load().activeID, kai.id)
+        XCTAssertEqual(store.load().map(\.activeID)^, .right(.some(kai.id)))
     }
 
     func testSwitchingToTheProfileAlreadyActiveDoesNothing() {
@@ -230,13 +231,13 @@ final class ProfileLibraryTests: XCTestCase {
         library.update(edited)
 
         XCTAssertEqual(announced, ["Mika"])
-        XCTAssertEqual(try? store.load().profiles.first?.name, "Mika")
+        XCTAssertEqual(store.load().map { $0.profiles.first?.name }^, .right("Mika"))
     }
 
     func testEditingAnInactiveProfileDoesNotReportAChange() {
         let kai = SecretaryProfile(name: "Kai")
         let (library, _) = makeLibrary(
-            ProfileSelection(profiles: [.miku, kai], activeID: SecretaryProfile.miku.id)
+            ProfileSelection(profiles: [.miku, kai], activeID: .some(SecretaryProfile.miku.id))
         )
         var changes = 0
         library.onActiveChange = { _ in changes += 1 }
@@ -261,7 +262,7 @@ final class ProfileLibraryTests: XCTestCase {
 
     func testDeletingTheActiveProfileFallsBackToAnother() {
         let kai = SecretaryProfile(name: "Kai")
-        let (library, _) = makeLibrary(ProfileSelection(profiles: [.miku, kai], activeID: kai.id))
+        let (library, _) = makeLibrary(ProfileSelection(profiles: [.miku, kai], activeID: .some(kai.id)))
         var announced: [String] = []
         library.onActiveChange = { announced.append($0.displayName) }
 
@@ -279,9 +280,9 @@ final class ProfileLibraryTests: XCTestCase {
         try library.setArtwork(pngData: Data("x".utf8), for: library.activeID)
 
         XCTAssertGreaterThan(library.artworkRevision, before)
-        XCTAssertNotNil(library.artworkURL())
+        XCTAssertTrue(library.artworkURL().isDefined)
 
         library.clearArtwork(for: library.activeID)
-        XCTAssertNil(library.artworkURL())
+        XCTAssertEqual(library.artworkURL(), Option.none())
     }
 }

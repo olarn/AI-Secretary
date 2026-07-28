@@ -1,3 +1,4 @@
+import FunctionalCore
 import Foundation
 
 /// A pipe table found in a reply.
@@ -46,7 +47,7 @@ public enum MarkdownTableParser {
         }
 
         while index < lines.count {
-            if let table = table(at: index, in: lines) {
+            if let table = table(at: index, in: lines).toOptional() {
                 flushProse()
                 segments.append(.table(table.value))
                 index = table.nextIndex
@@ -67,14 +68,14 @@ public enum MarkdownTableParser {
     /// A table is a row of cells followed by a dashes-and-colons row with the
     /// same number of cells. Requiring both is what keeps ordinary prose
     /// containing a `|` from being swallowed.
-    private static func table(at start: Int, in lines: [String]) -> (value: MarkdownTable, nextIndex: Int)? {
+    private static func table(at start: Int, in lines: [String]) -> Option<(value: MarkdownTable, nextIndex: Int)> {
         guard start + 1 < lines.count,
               isRow(lines[start]),
               isSeparator(lines[start + 1])
-        else { return nil }
+        else { return .none() }
 
         let header = cells(of: lines[start])
-        guard !header.isEmpty, cells(of: lines[start + 1]).count == header.count else { return nil }
+        guard !header.isEmpty, cells(of: lines[start + 1]).count == header.count else { return .none() }
 
         var rows: [[String]] = []
         var index = start + 2
@@ -82,7 +83,7 @@ public enum MarkdownTableParser {
             rows.append(fit(cells(of: lines[index]), to: header.count))
             index += 1
         }
-        return (MarkdownTable(header: header, rows: rows), index)
+        return .some((MarkdownTable(header: header, rows: rows), index))
     }
 
     private static func isRow(_ line: String) -> Bool {

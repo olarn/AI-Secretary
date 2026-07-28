@@ -1,3 +1,4 @@
+import FunctionalCore
 import XCTest
 import ProjectRegistry
 @testable import ToolAdapters
@@ -34,60 +35,51 @@ final class FileReadOnlyAdapterTests: XCTestCase {
     }
 
     func testListsRootSortedWithDirectoriesMarked() throws {
-        let result = try adapter.run(.listDirectory(relativePath: "."), in: project())
+        let result = try expectSuccess(adapter.run(.listDirectory(relativePath: "."), in: project()))
         XCTAssertTrue(result.succeeded)
         XCTAssertEqual(result.output, "README.md\nsrc/")
     }
 
     func testListsSubdirectory() throws {
-        let result = try adapter.run(.listDirectory(relativePath: "src"), in: project())
+        let result = try expectSuccess(adapter.run(.listDirectory(relativePath: "src"), in: project()))
         XCTAssertEqual(result.output, "main.c")
     }
 
     func testReadsTextFile() throws {
-        let result = try adapter.run(.readFile(relativePath: "README.md"), in: project())
+        let result = try expectSuccess(adapter.run(.readFile(relativePath: "README.md"), in: project()))
         XCTAssertTrue(result.succeeded)
         XCTAssertEqual(result.output, "hello\n")
     }
 
-    func testDotdotEscapeIsRefused() {
-        XCTAssertThrowsError(try adapter.run(.readFile(relativePath: "../secret/passwords.txt"), in: project())) {
-            XCTAssertEqual($0 as? ToolError, .pathEscapesProject("../secret/passwords.txt"))
-        }
+    func testDotdotEscapeIsRefused() throws {
+        XCTAssertEqual(try expectRefusal(adapter.run(.readFile(relativePath: "../secret/passwords.txt"), in: project())), .pathEscapesProject("../secret/passwords.txt"))
     }
 
-    func testAbsolutePathIsRefused() {
+    func testAbsolutePathIsRefused() throws {
         let abs = outside.appendingPathComponent("passwords.txt").path
-        XCTAssertThrowsError(try adapter.run(.readFile(relativePath: abs), in: project())) {
-            XCTAssertEqual($0 as? ToolError, .pathEscapesProject(abs))
-        }
+        XCTAssertEqual(try expectRefusal(adapter.run(.readFile(relativePath: abs), in: project())), .pathEscapesProject(abs))
     }
 
     func testSymlinkPointingOutsideIsRefused() throws {
         let link = root.appendingPathComponent("escape")
         try FileManager.default.createSymbolicLink(at: link, withDestinationURL: outside)
-        XCTAssertThrowsError(try adapter.run(.readFile(relativePath: "escape/passwords.txt"), in: project())) {
-            XCTAssertEqual($0 as? ToolError, .pathEscapesProject("escape/passwords.txt"))
-        }
+        XCTAssertEqual(try expectRefusal(adapter.run(.readFile(relativePath: "escape/passwords.txt"), in: project())), .pathEscapesProject("escape/passwords.txt"))
     }
 
-    func testMissingFileReported() {
-        XCTAssertThrowsError(try adapter.run(.readFile(relativePath: "nope.txt"), in: project())) { error in
-            guard case ToolError.fileNotFound = error else { return XCTFail("expected fileNotFound, got \(error)") }
-        }
+    func testMissingFileReported() throws {
+        let error = try expectRefusal(adapter.run(.readFile(relativePath: "nope.txt"), in: project()))
+        guard case ToolError.fileNotFound = error else { return XCTFail("expected fileNotFound, got \(error)") }
     }
 
     func testFileExceedingLimitIsRefused() throws {
         let big = String(repeating: "x", count: 200)
         try big.write(to: root.appendingPathComponent("big.txt"), atomically: true, encoding: .utf8)
-        XCTAssertThrowsError(try adapter.run(.readFile(relativePath: "big.txt"), in: project())) { error in
-            guard case ToolError.fileTooLarge = error else { return XCTFail("expected fileTooLarge, got \(error)") }
-        }
+        let error = try expectRefusal(adapter.run(.readFile(relativePath: "big.txt"), in: project()))
+        guard case ToolError.fileTooLarge = error else { return XCTFail("expected fileTooLarge, got \(error)") }
     }
 
-    func testReadingADirectoryAsFileIsRefused() {
-        XCTAssertThrowsError(try adapter.run(.readFile(relativePath: "src"), in: project())) { error in
-            guard case ToolError.notAFile = error else { return XCTFail("expected notAFile, got \(error)") }
-        }
+    func testReadingADirectoryAsFileIsRefused() throws {
+        let error = try expectRefusal(adapter.run(.readFile(relativePath: "src"), in: project()))
+        guard case ToolError.notAFile = error else { return XCTFail("expected notAFile, got \(error)") }
     }
 }

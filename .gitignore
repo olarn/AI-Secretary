@@ -6,6 +6,10 @@ DerivedData/
 .DS_Store
 AISecretary.app/
 
+# Worktrees created by background jobs live under .claude/, which is otherwise
+# tracked now that project skills live there. Never commit a nested checkout.
+.claude/worktrees/
+
 # Credentials must never be committed. The Anthropic API key belongs in the
 # macOS Keychain (Settings in the app puts it there); anything resembling a key
 # file sitting in the working tree is ignored so a stray `git add -A` can't
