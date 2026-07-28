@@ -1,85 +1,61 @@
+import Bow
 import Foundation
-import ProjectRegistry
 
-/// A concrete thing the assistant wants to do, described well enough that a
-/// human can decide on it without reading code.
-public struct ApprovalRequest: Equatable, Sendable {
-    public let taskID: String
-    public let toolID: String
-    public let actionClass: ActionClass
-    public let project: Project
-    /// Exact command that will run, for display. Never re-parsed to execute.
-    public let commandSummary: String
-    public let rationale: String
+// MARK: - Imperative edge
+//
+// Everything below is a boundary adapter, not domain logic. `SecretaryCore`
+// still holds permissions in a reference-typed object and mutates it in place;
+// until that target moves onto `PermissionGrants` + `decide`, this shim keeps
+// the old surface working over the pure core. Delete it once `Secretary` owns
+// its grants as part of its observable state.
 
-    public init(
-        taskID: String,
-        toolID: String,
-        actionClass: ActionClass,
-        project: Project,
-        commandSummary: String,
-        rationale: String
-    ) {
-        self.taskID = taskID
-        self.toolID = toolID
-        self.actionClass = actionClass
-        self.project = project
-        self.commandSummary = commandSummary
-        self.rationale = rationale
-    }
-}
-
-public enum PermissionDecision: Equatable, Sendable {
-    /// Nothing stands in the way; run it.
+/// The pre-`Either` shape of a decision, kept for callers that still switch on
+/// an enum. Prefer `PermissionDecision` (`Either<PermissionError, PermissionOutcome>`).
+public enum PolicyDecision: Equatable, Sendable {
     case allowed
-    /// A human must confirm before this runs.
     case needsApproval(ApprovalRequest)
-    /// Refused outright by policy — approval is not offered.
     case denied(reason: String)
 }
 
+extension Either where A == PermissionError, B == PermissionOutcome {
+    /// Collapse the two rails back into the flat enum the imperative edge wants.
+    public func toPolicyDecision() -> PolicyDecision {
+        fold(
+            { error in .denied(reason: error.reason) },
+            { outcome in
+                switch outcome {
+                case .allowed: return .allowed
+                case let .needsApproval(request): return .needsApproval(request)
+                }
+            }
+        )
+    }
+}
+
 public protocol PermissionPolicy: AnyObject {
-    func evaluate(_ request: ApprovalRequest) -> PermissionDecision
+    func evaluate(_ request: ApprovalRequest) -> PolicyDecision
     /// Records that a human approved this project/tool pair, so later
     /// read-only work in the same directory doesn't re-prompt.
     func recordApproval(projectID: UUID, toolID: String)
     func hasApproval(projectID: UUID, toolID: String) -> Bool
 }
 
-/// Default policy: the tool must be allow-listed on the project, the first use
-/// of a project/tool pair always asks (per the "accessing a new directory"
-/// rule), and anything with side effects asks every single time.
+/// Mutable box around the immutable `PermissionGrants`. It holds state and
+/// delegates every actual decision to `decide` — there is no policy logic here.
 public final class DefaultPermissionPolicy: PermissionPolicy {
-    private struct ApprovalKey: Hashable {
-        let projectID: UUID
-        let toolID: String
-    }
-
-    private var granted: Set<ApprovalKey> = []
+    private var grants = PermissionGrants()
 
     public init() {}
 
-    public func evaluate(_ request: ApprovalRequest) -> PermissionDecision {
-        guard request.project.allows(tool: request.toolID) else {
-            return .denied(
-                reason: "Tool '\(request.toolID)' is not in the allowlist for project '\(request.project.name)'."
-            )
-        }
-
-        guard request.actionClass.canRunUnattended else {
-            return .needsApproval(request)
-        }
-
-        return hasApproval(projectID: request.project.id, toolID: request.toolID)
-            ? .allowed
-            : .needsApproval(request)
+    public func evaluate(_ request: ApprovalRequest) -> PolicyDecision {
+        decide(grants)(request).toPolicyDecision()
     }
 
     public func recordApproval(projectID: UUID, toolID: String) {
-        granted.insert(ApprovalKey(projectID: projectID, toolID: toolID))
+        grants = grants |> PermissionGrants.granting(projectID: projectID, toolID: toolID)
     }
 
     public func hasApproval(projectID: UUID, toolID: String) -> Bool {
-        granted.contains(ApprovalKey(projectID: projectID, toolID: toolID))
+        grants.has(projectID: projectID, toolID: toolID)
     }
 }

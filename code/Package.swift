@@ -9,6 +9,11 @@ let package = Package(
     products: [
         .executable(name: "AISecretaryApp", targets: ["AISecretaryApp"])
     ],
+    dependencies: [
+        // Typed functional programming: Option instead of nil, Either instead of
+        // throws, plus |> >>> and curry for point-free composition.
+        .package(url: "https://github.com/bow-swift/bow.git", from: "0.8.0")
+    ],
     targets: [
         .target(
             name: "AssistantState"
@@ -18,7 +23,7 @@ let package = Package(
         ),
         .target(
             name: "Permissions",
-            dependencies: ["ProjectRegistry"]
+            dependencies: ["ProjectRegistry", .product(name: "Bow", package: "bow")]
         ),
         .target(
             name: "ToolAdapters",

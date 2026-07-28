@@ -1,0 +1,32 @@
+{
+  "pins" : [
+    {
+      "identity" : "bow",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/bow-swift/bow.git",
+      "state" : {
+        "revision" : "17ff76f1e0427a67e221c0a20b96324d256c340f",
+        "version" : "0.8.0"
+      }
+    },
+    {
+      "identity" : "rxswift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/ReactiveX/RxSwift.git",
+      "state" : {
+        "revision" : "cec68169a048a079f461ba203fe85636548d7a89",
+        "version" : "5.1.3"
+      }
+    },
+    {
+      "identity" : "swiftcheck",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/bow-swift/SwiftCheck.git",
+      "state" : {
+        "revision" : "748359f9a95edf94d0c4664102f104f56b1ff1fb",
+        "version" : "0.12.1"
+      }
+    }
+  ],
+  "version" : 2
+}
