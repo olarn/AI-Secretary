@@ -98,6 +98,16 @@ Prefer a macOS-native frontend:
 
 Do not commit to a large multi-language architecture before inspecting the repository and validating MVP needs.
 
+As built (2026-07-28): the domain modules — `AssistantState`, `ProjectRegistry`,
+`Permissions`, `ToolAdapters`, `LLMProvider`, `Credentials` and the support types
+in `SecretaryCore` — are written in a typed functional style on Bow, imported
+through the `FunctionalCore` target. Failures are the left of an `Either` rather
+than `throws`, and absence is `Option` rather than `?`. SwiftUI views stay
+ordinary SwiftUI and must not import `FunctionalCore`; they cross the boundary
+through `AISecretaryApp/DomainBridge.swift`. The rules, and the Bow APIs that do
+and don't exist, are in the `swift-functional-programming` skill — read it before
+changing domain code.
+
 ## MVP scope
 
 Build in phases.
@@ -135,7 +145,8 @@ Build in phases.
 
 - ใช้ window chat เดิมได้ ไม่ต้องมีหน้าต่างใหม่
 - เพิ่ม increase / decrease font size (มีปุ่มแค่ + -) max ที่ 32
-- เพิ่ม increase / decrease ขนาดหน้าต่าง chat (มีปุ่มแค่ + -) แล้วหน้าต่างจะยืดหดได้ (แนวตั้งเท่านั้น) โดย minimum เท่าขนาด default และ max ไม่เกินขนาดหน้าจอ
+- เพิ่ม increase / decrease ขนาดหน้าต่าง chat (มีปุ่มแค่ + -) แล้วหน้าต่างจะยืดหดได้ โดย minimum เท่าขนาด default และ max ไม่เกินขนาดหน้าจอ
+   - เดิมข้อนี้เขียนว่า "แนวตั้งเท่านั้น" — Phase 5.5 เปิดให้ปรับความกว้างด้วยแล้ว (ปุ่ม step และลาก grip)
 - เลือก model และ effort ได้จากหน้า setting (คลิกที่ชื่อแล้วมี popup ให้เลือก) โดย default ใช้ค่าเดียวกับ Claude Code ของ user และบอกการเปลี่ยนแปลงใน chat
 
 ### Phase 5: Secretary Profiles
@@ -188,16 +199,24 @@ Build in phases.
 - มีหน้าต่าง About เปิดจากเมนู status bar แสดงชื่อ, version, และคำอธิบายสั้นๆ
 - ⌘H = Hide/Show Character (ไม่ใช่ hide ทั้งแอป เพราะ accessory app ไม่มีหน้าต่างใน Dock ให้เรียกกลับ)
 
-### Phase 6: External tools and proactive assistance
+### Phase 6: External tools
 
 - MCP-based integrations such as calendar, Slack, email, and knowledge sources.
    - **ไม่ต้องเขียนโค้ดเพิ่ม — ทดสอบแล้วใช้ได้อยู่แล้ว (2026-07-28)** เพราะแอปขับ Claude Code ของ user ซึ่งโหลด MCP server จาก config ของเขาเองตามที่ Phase 3 ตั้งใจ
    - หลักฐาน: ถาม "ตอนนี้กี่โมงแล้ว" ลอยๆ ใน session ใหม่ โมเดลหา tool เจอเองด้วย ToolSearch แล้วเรียก `mcp__my-tools__get_time` สำเร็จ ไม่ต้องผ่านรอบขออนุมัติ และลิสต์ MCP server ที่เข้าถึงได้เองได้ครบ (ทั้ง server ราย project และ global เช่น Figma)
    - อย่าเพิ่ม `mcp__*` ลง allowlist หรือเขียน MCP client เอง — allowlist ปัจจุบันไม่ได้บล็อก MCP
-- Proactive behaviors must be transparent, rate-limited, and easy to disable.
+   - ยังไม่ได้พิสูจน์: MCP tool ที่มีผลออกนอกเครื่อง (ส่งเมล/สร้าง event) ถูกจัดเป็น `.localWrite` และการ์ดขออนุมัติขึ้นข้อความ "Send to Claude?" ซึ่งน่าจะสื่อผิด — ต้องทดสอบก่อนถือเป็นบั๊ก
+- Be able to understand the web content through Chrome Claude plug in
+  (suggest user that app can use this approach when user ask about app to understand the web contents).
+- Proactive behaviour ถูกตัดออกจาก phase นี้ (2026-07-28) — ถ้าจะกลับมาทำ ให้ตั้งเป็น phase ของตัวเอง และยังต้องโปร่งใส จำกัดความถี่ และปิดได้ง่ายตามเดิม
 
-### Phase 7: Voice
+### Phase 7: Talk to each other
 
+- Two or more app be able to talk to each other.
+- First, brainstorm about the feasible that can made 2 or more AI-Sevretary app can talk to each other.
+- Second, its can do the same project (or projects) with different role (configure with .md file in the project somehow)
+
+### Phase 8: Voice
 - Push-to-talk or explicit voice activation.
 - Speech-to-text, text-to-speech, interruption behavior, and privacy controls.
 - Voice must follow the same approval and auditing model as chat.
