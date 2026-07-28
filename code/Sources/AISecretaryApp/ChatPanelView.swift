@@ -52,56 +52,79 @@ struct ChatPanelView: View {
             SpeechBubbleShape(isMirrored: layout.isMirrored, isFlippedVertically: layout.isFlippedVertically)
                 .stroke(Color.primary.opacity(0.85), lineWidth: 2)
         )
-        .overlay(alignment: .topTrailing) { windowButtons }
-        // Inside the body rather than on the outer frame: the outer frame
-        // includes the strip reserved for the tail, and the grip would sit in
-        // it — floating outside the bubble.
-        // On whichever side the bubble actually grows from, which is the side
-        // away from the tail.
-        .overlay(alignment: layout.isMirrored ? .bottomLeading : .bottomTrailing) { resizeGrip }
+        // Both control clusters live along the top, in opposite corners, and
+        // trade places when the bubble is mirrored so each stays on the same
+        // side of the character as before.
+        //
+        // Attached inside the body rather than to the outer frame: the outer
+        // frame includes the strip reserved for the tail, and anything aligned
+        // to the bottom of it would sit in the tail, outside the bubble.
+        .overlay(alignment: layout.isMirrored ? .topLeading : .topTrailing) { windowButtons }
+        .overlay(alignment: layout.isMirrored ? .topTrailing : .topLeading) { resizeGrip }
         .onExitCommand(perform: onClose)
         .padding(layout.isFlippedVertically ? .top : .bottom, SpeechBubbleShape.defaultTailLength)
         .frame(width: appearance.settings.chatWidth, height: appearance.settings.chatHeight)
     }
 
-    /// Widen, restore, close, in that order. The two width buttons are drawn
-    /// smaller than the close button — closing is the one people reach for — and
-    /// are disabled rather than hidden when they'd do nothing, so the row never
-    /// changes shape and a greyed button reads as "already there".
+    /// Widen, restore, close — reversed when the row moves to the other corner,
+    /// so close stays on the outside and the two width buttons stay next to the
+    /// middle of the bubble. The width buttons are drawn smaller than the close
+    /// button (closing is the one people reach for) and are disabled rather than
+    /// hidden when they'd do nothing, so the row never changes shape and a greyed
+    /// button reads as "already there".
     private var windowButtons: some View {
         HStack(spacing: 8) {
-            Button(action: appearance.widenChat) {
-                Image(systemName: "arrow.left.and.line.vertical.and.arrow.right")
+            if layout.isMirrored {
+                closeButton
+                restoreButton
+                widenButton
+            } else {
+                widenButton
+                restoreButton
+                closeButton
             }
-            .font(.system(size: Self.widthButtonSize))
-            .disabled(!appearance.settings.canWiden)
-            .help("Wider — one step at a time, up to three times")
-
-            Button(action: appearance.restoreChatWidth) {
-                Image(systemName: "arrow.right.and.line.vertical.and.arrow.left")
-            }
-            .font(.system(size: Self.widthButtonSize))
-            .disabled(!appearance.settings.canRestoreWidth)
-            .help("Narrower — one step back")
-
-            Button(action: onClose) {
-                Image(systemName: "xmark.circle.fill")
-            }
-            .font(.system(size: Self.closeButtonSize))
-            .help("Close")
         }
         .foregroundStyle(.secondary)
         .buttonStyle(.plain)
         .padding(.top, 10)
-        .padding(.trailing, 10)
+        .padding(layout.isMirrored ? .leading : .trailing, 10)
     }
 
-    private static let closeButtonSize: Double = 18
-    /// 30% smaller than the close button.
+    private var widenButton: some View {
+        Button(action: appearance.widenChat) {
+            Image(systemName: "arrow.left.and.line.vertical.and.arrow.right")
+        }
+        .font(.system(size: Self.widthButtonSize))
+        .disabled(!appearance.settings.canWiden)
+        .help("Wider — one step at a time, up to three times")
+    }
+
+    private var restoreButton: some View {
+        Button(action: appearance.restoreChatWidth) {
+            Image(systemName: "arrow.right.and.line.vertical.and.arrow.left")
+        }
+        .font(.system(size: Self.widthButtonSize))
+        .disabled(!appearance.settings.canRestoreWidth)
+        .help("Back to the default width")
+    }
+
+    private var closeButton: some View {
+        Button(action: onClose) {
+            Image(systemName: "xmark.circle.fill")
+        }
+        .font(.system(size: Self.closeButtonSize))
+        .help("Close")
+    }
+
+    /// The filled circle behind the ✕ makes it read larger than its point size,
+    /// so it's set 10% down from the 18pt the other controls were measured
+    /// against.
+    private static let closeButtonSize: Double = 18 * 0.9
+    /// 30% smaller again than the close button's original 18pt.
     private static let widthButtonSize: Double = 18 * 0.7
 
-    /// Free resize, for when neither the steppers nor the widen button is the
-    /// size the user wants.
+    /// Free resize in both axes at once, for when neither the widen button nor
+    /// the height steppers give the size the user wants.
     ///
     /// Measured against the pointer's position on screen rather than the
     /// gesture's own translation: the bubble is re-anchored to the character on
@@ -111,8 +134,12 @@ struct ChatPanelView: View {
         Image(systemName: "arrow.up.left.and.arrow.down.right")
             .font(.system(size: 9, weight: .bold))
             .foregroundStyle(.secondary)
-            .rotationEffect(.degrees(layout.isMirrored ? 0 : 90))
-            .padding(8)
+            // The glyph points along ↖↘, which is the grip's own diagonal in the
+            // top-left corner; in the top-right it has to point ↗↙ instead.
+            .rotationEffect(.degrees(layout.isMirrored ? 90 : 0))
+            // Enough to sit clear of the bubble's rounded corner rather than
+            // tucked into it, and to match the inset of the button row opposite.
+            .padding(14)
             .contentShape(Rectangle())
             .help("Drag to resize")
             .gesture(
@@ -122,10 +149,21 @@ struct ChatPanelView: View {
             )
     }
 
-    /// The edge pinned to the character is the one on the tail's side, so the
-    /// bubble grows away from it: rightward normally, leftward when the tail is
-    /// on the right. The drag has to follow suit, or pulling outward would make
-    /// the bubble smaller on one of the two sides.
+    /// Drag the grip the way you want the bubble to extend, on both axes at once.
+    ///
+    /// The edges on the tail's side stay pinned to the character — the tail must
+    /// not slide off it just because the window got bigger — so the bubble only
+    /// ever grows into the two opposite edges, and the drag follows those. Which
+    /// way that is depends on where the bubble has been placed: it grows right
+    /// and up in the usual position, left when mirrored, down when it has been
+    /// flipped below the character.
+    ///
+    /// The alternative reading — pull the grip *away* from the bubble — is what a
+    /// corner handle usually means, but the grip now sits on the pinned corner,
+    /// and when mirrored that corner is hard against the right of the screen:
+    /// "away" would have been a drag with nowhere to go. Growing vertically the
+    /// two readings agree anyway, since the top edge is the one that moves and
+    /// the grip rides along with it.
     private func resize(to pointer: CGPoint) {
         let settings = appearance.settings
         let origin = dragOrigin ?? DragOrigin(
@@ -135,12 +173,13 @@ struct ChatPanelView: View {
         )
         if dragOrigin == nil { dragOrigin = origin }
 
-        let outward: Double = layout.isMirrored ? -1 : 1
+        let growsRight: Double = layout.isMirrored ? -1 : 1
+        // Screen coordinates point up, so this is already "up is taller" unless
+        // the bubble sits below the character and grows downward instead.
+        let growsUp: Double = layout.isFlippedVertically ? -1 : 1
         appearance.resizeChat(
-            width: origin.width + (pointer.x - origin.pointer.x) * outward,
-            // Screen coordinates point up; the grip is at the bottom, so
-            // dragging down is what makes the bubble taller.
-            height: origin.height - (pointer.y - origin.pointer.y)
+            width: origin.width + (pointer.x - origin.pointer.x) * growsRight,
+            height: origin.height + (pointer.y - origin.pointer.y) * growsUp
         )
     }
 
@@ -286,9 +325,19 @@ struct ChatPanelView: View {
                 .foregroundStyle(.secondary)
             Spacer()
         }
-        // Clears the widen/restore/close row above it.
-        .padding(.trailing, 72)
+        // Both top corners are occupied — the resize grip in one, the
+        // widen/restore/close row in the other — so the title drops below them
+        // rather than being inset past them. Inset was the first attempt and it
+        // moved the name around as the bubble mirrored; the title now stays
+        // flush left at every size and on either side.
+        .padding(.top, Self.headerTopClearance)
     }
+
+    /// Enough to clear the control row above, whose lowest point is ~29pt below
+    /// the bubble's top edge (10pt of padding plus an 18pt close button). The
+    /// title's own top already sits 18pt in, so this is the remainder — plus
+    /// breathing room, because merely not overlapping still read as crowded.
+    private static let headerTopClearance: Double = 26
 
     private var transcript: some View {
         // The outer geometry gives the viewport height; the one behind the
@@ -527,7 +576,11 @@ struct ChatPanelView: View {
     /// scrolls: five lines is about as much of the bubble as the input can take
     /// before the conversation above it stops being readable.
     private var inputRow: some View {
-        HStack(alignment: .bottom, spacing: 6) {
+        // Centred on the box rather than sitting on its baseline, and sized from
+        // the text: bottom-aligned against a box whose height now changes with
+        // both the message and the text size, the button never lined up with
+        // anything.
+        HStack(alignment: .center, spacing: 6) {
             ChatInputView(
                 text: $draft,
                 fontSize: appearance.settings.fontSize,
@@ -544,6 +597,7 @@ struct ChatPanelView: View {
             Button(action: send) {
                 Image(systemName: "arrow.up.circle.fill")
             }
+            .font(.system(size: appearance.settings.fontSize * 1.5))
             .buttonStyle(.plain)
             .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty)
         }

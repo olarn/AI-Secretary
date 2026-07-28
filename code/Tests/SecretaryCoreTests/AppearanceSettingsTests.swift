@@ -229,20 +229,26 @@ final class AppearanceSettingsTests: XCTestCase {
         XCTAssertEqual(settings.chatWidth, base * 3, "A dead button changes nothing")
     }
 
-    /// And back down the same way.
-    func testRestoringStepsBackDownToTheDefault() {
+    /// Asked for: coming back is *not* stepped — one press is the default width,
+    /// from however wide the bubble happens to be.
+    func testRestoringGoesStraightToTheDefaultWidth() {
         let base = AppearanceSettings.defaultWidth
         var settings = AppearanceSettings(chatWidth: base * 3, maxWidth: 2000)
 
         settings.restoreChatWidth()
-        XCTAssertEqual(settings.chatWidth, base * 2)
-
-        settings.restoreChatWidth()
-        XCTAssertEqual(settings.chatWidth, base)
+        XCTAssertEqual(settings.chatWidth, base, "Not ×2 on the way past")
 
         XCTAssertFalse(settings.canRestoreWidth, "Nothing narrower than the default")
+    }
+
+    /// Including from a width that isn't one of the stops at all.
+    func testRestoringFromAHandDraggedWidthAlsoGoesToTheDefault() {
+        var settings = AppearanceSettings(maxWidth: 2000)
+        settings.setChatSize(width: 940, height: settings.chatHeight)
+        XCTAssertTrue(settings.canRestoreWidth)
+
         settings.restoreChatWidth()
-        XCTAssertEqual(settings.chatWidth, base)
+        XCTAssertEqual(settings.chatWidth, AppearanceSettings.defaultWidth)
     }
 
     func testTheWidthButtonsAreBothLiveInTheMiddleOfTheRange() {
@@ -273,18 +279,14 @@ final class AppearanceSettingsTests: XCTestCase {
         XCTAssertFalse(settings.canRestoreWidth)
     }
 
-    /// A hand-dragged width sits between stops. Stepping from there goes to the
-    /// next stop in that direction — it must not snap the other way.
-    func testSteppingFromAHandDraggedWidthGoesToTheNextStop() {
+    /// A hand-dragged width sits between stops. Widening from there goes to the
+    /// next stop up — it must not snap backwards to a narrower one.
+    func testWideningFromAHandDraggedWidthGoesToTheNextStopUp() {
         var settings = AppearanceSettings(maxWidth: 2000)
         settings.setChatSize(width: 500, height: settings.chatHeight)
 
         settings.widenChat()
         XCTAssertEqual(settings.chatWidth, 720, "Up to ×2, not back down to ×1")
-
-        settings.setChatSize(width: 500, height: settings.chatHeight)
-        settings.restoreChatWidth()
-        XCTAssertEqual(settings.chatWidth, 360, "Down to ×1")
     }
 
     func testMovingToANarrowerScreenPullsTheWidthBackIn() {

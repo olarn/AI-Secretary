@@ -123,21 +123,21 @@ public struct AppearanceSettings: Equatable, Sendable {
         widthStops.first { $0 > chatWidth }
     }
 
-    public var nextNarrowerWidth: Double? {
-        widthStops.last { $0 < chatWidth }
-    }
-
     public var canWiden: Bool { nextWiderWidth != nil }
-    public var canRestoreWidth: Bool { nextNarrowerWidth != nil }
+    /// Restoring is one press back to the default, not a step, so it's offered
+    /// from any width above the default — including one dragged by hand.
+    public var canRestoreWidth: Bool { chatWidth > Self.defaultWidth }
 
     public mutating func widenChat() {
         guard let next = nextWiderWidth else { return }
         chatWidth = next
     }
 
+    /// Straight back to the default width in one press. Widening is a stepped
+    /// climb because each step is a size worth stopping at; coming back is not —
+    /// what's wanted there is the bubble out of the way, now.
     public mutating func restoreChatWidth() {
-        guard let previous = nextNarrowerWidth else { return }
-        chatWidth = previous
+        chatWidth = min(Self.defaultWidth, maxWidth)
     }
 
     // MARK: - Stepping
