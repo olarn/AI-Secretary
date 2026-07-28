@@ -59,8 +59,8 @@ struct ChatPanelView: View {
         // Attached inside the body rather than to the outer frame: the outer
         // frame includes the strip reserved for the tail, and anything aligned
         // to the bottom of it would sit in the tail, outside the bubble.
-        .overlay(alignment: layout.isMirrored ? .topLeading : .topTrailing) { windowButtons }
-        .overlay(alignment: layout.isMirrored ? .topTrailing : .topLeading) { resizeGrip }
+        .overlay(alignment: buttonsOnLeading ? .topLeading : .topTrailing) { windowButtons }
+        .overlay(alignment: buttonsOnLeading ? .topTrailing : .topLeading) { resizeGrip }
         .onExitCommand(perform: onClose)
         .padding(layout.isFlippedVertically ? .top : .bottom, SpeechBubbleShape.defaultTailLength)
         .frame(width: appearance.settings.chatWidth, height: appearance.settings.chatHeight)
@@ -74,7 +74,7 @@ struct ChatPanelView: View {
     /// button reads as "already there".
     private var windowButtons: some View {
         HStack(spacing: 8) {
-            if layout.isMirrored {
+            if buttonsOnLeading {
                 closeButton
                 restoreButton
                 widenButton
@@ -87,8 +87,18 @@ struct ChatPanelView: View {
         .foregroundStyle(.secondary)
         .buttonStyle(.plain)
         .padding(.top, 10)
-        .padding(layout.isMirrored ? .leading : .trailing, 10)
+        .padding(buttonsOnLeading ? .leading : .trailing, 10)
     }
+
+    /// Which top corner each cluster gets. The button row sits on the tail's
+    /// side and the grip opposite it, so both follow the bubble when it mirrors
+    /// and neither ever lands on the other.
+    ///
+    /// This only moves them. What the buttons *do* is decided elsewhere and
+    /// doesn't depend on where they are: widening still steps, restoring still
+    /// goes straight to the default, and the drag still follows the direction
+    /// the bubble grows rather than the grip's own corner.
+    private var buttonsOnLeading: Bool { !layout.isMirrored }
 
     private var widenButton: some View {
         Button(action: appearance.widenChat) {
@@ -136,7 +146,7 @@ struct ChatPanelView: View {
             .foregroundStyle(.secondary)
             // The glyph points along ↖↘, which is the grip's own diagonal in the
             // top-left corner; in the top-right it has to point ↗↙ instead.
-            .rotationEffect(.degrees(layout.isMirrored ? 90 : 0))
+            .rotationEffect(.degrees(buttonsOnLeading ? 90 : 0))
             // Enough to sit clear of the bubble's rounded corner rather than
             // tucked into it, and to match the inset of the button row opposite.
             .padding(14)
