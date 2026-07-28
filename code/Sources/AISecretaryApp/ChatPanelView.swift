@@ -28,6 +28,9 @@ struct ChatPanelView: View {
     @State private var settingsNote: String?
     @State private var scrollPin = TranscriptScrollPin()
     @State private var dragOrigin: DragOrigin?
+    /// How tall the message being typed actually is, reported by the field
+    /// itself. The box is sized from this and capped at five lines.
+    @State private var draftHeight: Double = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -132,6 +135,60 @@ struct ChatPanelView: View {
     /// Asked for: the message box grows to five lines and then scrolls. Past
     /// five it starts eating the conversation it's replying to.
     static let inputLineLimit = 5
+
+    /// The box grows with the message and stops at five lines, after which it
+    /// scrolls — by wheel or trackpad as well as by caret.
+    ///
+    /// The field is left to grow to its full height and a `ScrollView` is what's
+    /// capped, rather than capping the field with `lineLimit`. Both look the same
+    /// until you reach for the wheel: a line-limited field scrolls only to follow
+    /// the caret, and a wheel over it does nothing at all.
+    private var messageBox: some View {
+        ScrollView(.vertical) {
+            TextField("Ask the Secretary…", text: $draft, axis: .vertical)
+                .textFieldStyle(.plain)
+                .font(.system(size: appearance.settings.fontSize))
+                // Return sends. `onSubmit` doesn't fire for a vertical field in
+                // this panel — Return quietly drops first responder instead —
+                // which would leave no way to send from the keyboard.
+                // Shift/Option-Return is left alone so it still breaks the line.
+                .onKeyPress(.return, phases: .down) { press in
+                    let modifiers: EventModifiers = [.shift, .option]
+                    guard press.modifiers.isDisjoint(with: modifiers) else { return .ignored }
+                    send()
+                    return .handled
+                }
+                .background(
+                    GeometryReader { proxy in
+                        Color.clear.preference(key: MessageBoxHeightKey.self, value: proxy.size.height)
+                    }
+                )
+        }
+        .onPreferenceChange(MessageBoxHeightKey.self) { draftHeight = $0 }
+        .frame(height: messageBoxHeight)
+        // Nothing to scroll until it has outgrown the box; without this the
+        // content drifts under a trackpad's rubber-banding while still short.
+        .scrollDisabled(draftHeight <= maxMessageBoxHeight)
+        // Keeps the newest line in view as the message grows, which is where the
+        // caret is while typing.
+        .defaultScrollAnchor(.bottom)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .background(RoundedRectangle(cornerRadius: 6).fill(Color(nsColor: .textBackgroundColor)))
+        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.4), lineWidth: 1))
+    }
+
+    /// One line of the message font, measured rather than guessed — a fraction
+    /// of the point size is wrong by a whole line at the larger text sizes.
+    private var messageLineHeight: Double {
+        Double(NSLayoutManager().defaultLineHeight(for: .systemFont(ofSize: appearance.settings.fontSize)))
+    }
+
+    private var maxMessageBoxHeight: Double { messageLineHeight * Double(Self.inputLineLimit) }
+
+    private var messageBoxHeight: Double {
+        min(max(draftHeight, messageLineHeight), maxMessageBoxHeight)
+    }
 
     private static let closeButtonSize: Double = 18 * 0.9
     /// 30% smaller again than the close button's original 18pt.
@@ -602,24 +659,7 @@ struct ChatPanelView: View {
         // both the message and the text size, the button never lined up with
         // anything.
         HStack(alignment: .center, spacing: 6) {
-            TextField("Ask the Secretary…", text: $draft, axis: .vertical)
-                .textFieldStyle(.roundedBorder)
-                .font(.system(size: appearance.settings.fontSize))
-                // SwiftUI grows the field a line at a time to this limit and
-                // scrolls after it. An AppKit text view was tried instead and
-                // measured its own height wrongly — the box stayed one line and
-                // long messages spilled over the buttons below.
-                .lineLimit(1...ChatPanelView.inputLineLimit)
-                // Return sends. `onSubmit` alone doesn't fire for a vertical
-                // field in this panel — Return quietly drops first responder
-                // instead — which would leave no way to send from the keyboard.
-                // Shift/Option-Return is left alone so it still breaks the line.
-                .onKeyPress(.return, phases: .down) { press in
-                    let modifiers: EventModifiers = [.shift, .option]
-                    guard press.modifiers.isDisjoint(with: modifiers) else { return .ignored }
-                    send()
-                    return .handled
-                }
+            messageBox
             Button(action: send) {
                 Image(systemName: "arrow.up.circle.fill")
             }
@@ -786,4 +826,13 @@ struct ChatPanelView: View {
         settingsNote = credentials.clearAPIKeyReportingProblem() ?? "API key cleared."
     }
 
+}
+
+/// Carries the typed message's rendered height out of the field so the box can
+/// be sized from it.
+private struct MessageBoxHeightKey: PreferenceKey {
+    static let defaultValue: Double = 0
+    static func reduce(value: inout Double, nextValue: () -> Double) {
+        value = max(value, nextValue())
+    }
 }
