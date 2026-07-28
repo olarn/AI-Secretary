@@ -1,3 +1,4 @@
+import FunctionalCore
 import Foundation
 
 /// Who the assistant is: the name shown in the conversation, and the character
@@ -59,10 +60,10 @@ public struct SecretaryProfile: Identifiable, Equatable, Sendable, Codable {
             }
         }
 
-        /// Only set when the user gave a number; the prompt mentions it then.
-        public var years: Int? {
-            if case .years(let years) = self { return years }
-            return nil
+        /// Only present when the user gave a number; the prompt mentions it then.
+        public var years: Option<Int> {
+            if case .years(let years) = self { return .some(years) }
+            return .none()
         }
 
         public var label: String {
@@ -160,9 +161,9 @@ public struct SecretaryProfile: Identifiable, Equatable, Sendable, Codable {
     /// cases and reject innocent ones, whereas the prompt is where the style
     /// takes effect in the first place.
     public var promptDescription: String {
-        var identity = "You are \(displayName)"
-        if let years = age.years { identity += ", \(years)" }
-        identity += ", \(descriptor)."
+        let identity = "You are \(displayName)"
+            + age.years.fold({ "" }, { ", \($0)" })
+            + ", \(descriptor)."
 
         return """
         \(identity) You're the person's secretary and you're good at it: quick, \

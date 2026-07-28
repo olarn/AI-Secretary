@@ -2,6 +2,7 @@ import FunctionalCore
 import Credentials
 import Foundation
 import ProjectRegistry
+import SecretaryCore
 
 // MARK: - The view edge
 //
@@ -40,5 +41,20 @@ extension CredentialStore {
 
     func clearAPIKeyReportingProblem() -> String? {
         setAPIKey(.none()).fold({ "Could not clear: \($0.localizedDescription)" }, { nil })
+    }
+}
+
+@MainActor
+extension ProfileLibrary {
+    /// The active profile's picture as a plain optional, for the character view.
+    var artworkFileURL: URL? { artworkURL().toOptional() }
+
+    /// Stores a chosen picture. Returns the note to show, or `nil` on success.
+    func setArtworkReportingProblem(pngData: Data, for id: UUID) -> String? {
+        setArtwork(pngData: pngData, for: id).fold({ $0.reason }, { _ in nil })
+    }
+
+    func clearArtworkReportingProblem(for id: UUID) -> String? {
+        clearArtwork(for: id).fold({ $0.reason }, { nil })
     }
 }

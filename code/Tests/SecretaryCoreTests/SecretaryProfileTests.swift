@@ -1,3 +1,4 @@
+import FunctionalCore
 import XCTest
 import AssistantState
 import ProjectRegistry
@@ -47,7 +48,7 @@ final class SecretaryProfileTests: XCTestCase {
         XCTAssertEqual(SecretaryProfile.Age.years(8).band, .child)
         XCTAssertEqual(SecretaryProfile.Age.years(17).band, .teenager)
         XCTAssertEqual(SecretaryProfile.Age.years(40).band, .adult)
-        XCTAssertNil(SecretaryProfile.Age.adult.years, "No number was given")
+        XCTAssertEqual(SecretaryProfile.Age.adult.years, Option.none(), "No number was given")
     }
 
     func testALifeStageWithoutANumberStillReads() {

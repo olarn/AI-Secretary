@@ -184,7 +184,7 @@ struct ProfileSettingsView: View {
                         choosePicture()
                     }
                     if hasPicture {
-                        Button("Clear") { profiles.clearArtwork(for: id) }
+                        Button("Clear") { note = profiles.clearArtworkReportingProblem(for: id) }
                     }
                 } label: {
                     HStack(spacing: 3) {
@@ -269,12 +269,7 @@ struct ProfileSettingsView: View {
             note = "Couldn't read that image."
             return
         }
-        do {
-            try profiles.setArtwork(pngData: png, for: profiles.activeID)
-            note = nil
-        } catch {
-            note = "Couldn't save that image: \(error.localizedDescription)"
-        }
+        note = profiles.setArtworkReportingProblem(pngData: png, for: profiles.activeID)
     }
 }
 

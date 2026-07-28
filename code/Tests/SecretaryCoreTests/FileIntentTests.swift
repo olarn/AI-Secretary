@@ -1,3 +1,4 @@
+import FunctionalCore
 import XCTest
 import ToolAdapters
 @testable import SecretaryCore
@@ -8,35 +9,35 @@ final class FileIntentTests: XCTestCase {
     func testReadWithPathAndProject() {
         XCTAssertEqual(
             classifier.classify("read README.md in AI-Secretary"),
-            .fileTool(operation: .readFile(relativePath: "README.md"), projectQuery: "AI-Secretary")
+            .fileTool(operation: .readFile(relativePath: "README.md"), projectQuery: .some("AI-Secretary"))
         )
     }
 
     func testListWithNoPathDefaultsToRoot() {
         XCTAssertEqual(
             classifier.classify("list in AI-Secretary"),
-            .fileTool(operation: .listDirectory(relativePath: "."), projectQuery: "AI-Secretary")
+            .fileTool(operation: .listDirectory(relativePath: "."), projectQuery: .some("AI-Secretary"))
         )
     }
 
     func testListWithSubdirectory() {
         XCTAssertEqual(
             classifier.classify("list src/models in Demo"),
-            .fileTool(operation: .listDirectory(relativePath: "src/models"), projectQuery: "Demo")
+            .fileTool(operation: .listDirectory(relativePath: "src/models"), projectQuery: .some("Demo"))
         )
     }
 
     func testDotfilePathKeepsLeadingDot() {
         XCTAssertEqual(
             classifier.classify("read .env in Demo"),
-            .fileTool(operation: .readFile(relativePath: ".env"), projectQuery: "Demo")
+            .fileTool(operation: .readFile(relativePath: ".env"), projectQuery: .some("Demo"))
         )
     }
 
     func testBareListWithNoProject() {
         XCTAssertEqual(
             classifier.classify("ls"),
-            .fileTool(operation: .listDirectory(relativePath: "."), projectQuery: nil)
+            .fileTool(operation: .listDirectory(relativePath: "."), projectQuery: Option.none())
         )
     }
 
@@ -50,7 +51,7 @@ final class FileIntentTests: XCTestCase {
     func testGitStatusStillClassifiesAsGit() {
         XCTAssertEqual(
             classifier.classify("status in Demo"),
-            .codeTool(operation: .status, projectQuery: "demo")
+            .codeTool(operation: .status, projectQuery: .some("demo"))
         )
     }
 
@@ -67,14 +68,14 @@ final class FileIntentTests: XCTestCase {
     func testWeakVerbWithPathLikeArgIsAFileOpWithoutProject() {
         XCTAssertEqual(
             classifier.classify("read README.md"),
-            .fileTool(operation: .readFile(relativePath: "README.md"), projectQuery: nil)
+            .fileTool(operation: .readFile(relativePath: "README.md"), projectQuery: Option.none())
         )
     }
 
     func testExplicitPhrasingIsAFileOpEvenWithoutPathOrProject() {
         XCTAssertEqual(
             classifier.classify("show file notes"),
-            .fileTool(operation: .readFile(relativePath: "notes"), projectQuery: nil)
+            .fileTool(operation: .readFile(relativePath: "notes"), projectQuery: Option.none())
         )
     }
 
@@ -82,7 +83,7 @@ final class FileIntentTests: XCTestCase {
         // The word "log" must not hijack a file read.
         XCTAssertEqual(
             classifier.classify("read the-log-file.txt in Demo"),
-            .fileTool(operation: .readFile(relativePath: "the-log-file.txt"), projectQuery: "Demo")
+            .fileTool(operation: .readFile(relativePath: "the-log-file.txt"), projectQuery: .some("Demo"))
         )
     }
 }
@@ -124,7 +125,7 @@ final class NonASCIIIntentTests: XCTestCase {
         guard case .fileTool(_, let query) = classifier.classify("read notes.md IN Fixture") else {
             return XCTFail("Expected a file operation")
         }
-        XCTAssertEqual(query, "Fixture")
+        XCTAssertEqual(query, .some("Fixture"))
     }
 
     func testAThaiProjectNameSurvivesTheSplit() {
@@ -132,6 +133,6 @@ final class NonASCIIIntentTests: XCTestCase {
             return XCTFail("Expected a file operation")
         }
         XCTAssertEqual(operation.relativePath, "about.md")
-        XCTAssertEqual(query, "โลหะเจริญ")
+        XCTAssertEqual(query, .some("โลหะเจริญ"))
     }
 }

@@ -88,14 +88,14 @@ final class RuleBasedIntentClassifierTests: XCTestCase {
         guard case .codeTool(_, let query) = classifier.classify("git status in AI-Secretary") else {
             return XCTFail("Expected codeTool")
         }
-        XCTAssertEqual(query, "ai-secretary")
+        XCTAssertEqual(query, .some("ai-secretary"))
     }
 
-    func testNoProjectPhraseYieldsNilQuery() {
+    func testNoProjectPhraseYieldsAnAbsentQuery() {
         guard case .codeTool(_, let query) = classifier.classify("git status") else {
             return XCTFail("Expected codeTool")
         }
-        XCTAssertNil(query)
+        XCTAssertEqual(query, Option.none())
     }
 
     func testUnrecognisedTextIsUnknownRatherThanAGuess() {

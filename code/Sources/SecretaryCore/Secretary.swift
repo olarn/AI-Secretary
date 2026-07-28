@@ -640,17 +640,17 @@ public final class Secretary {
 
     // MARK: - Git pipeline
 
-    private func handleTool(operation: PlannedOperation, projectQuery: String?) {
+    private func handleTool(operation: PlannedOperation, projectQuery: Option<String>) {
         let taskID = activeTaskID ?? "-"
 
-        var resolution = registry.resolve(query: Option.fromOptional(projectQuery))
+        var resolution = registry.resolve(query: projectQuery)
 
         // No project named, but we were working in one a moment ago — keep
         // working there instead of asking again every single message. Only when
         // the user said nothing: an explicit name that doesn't match is still a
         // "not found", never silently redirected somewhere else.
-        if projectQuery == nil, case .needsSelection = resolution,
-           let remembered = lastProject, registry.project(id: remembered.id) != nil {
+        if !projectQuery.isDefined, case .needsSelection = resolution,
+           let remembered = lastProject, registry.project(id: remembered.id).isDefined {
             resolution = .resolved(remembered)
         }
 
@@ -991,12 +991,12 @@ public final class Secretary {
     private func describe(_ intent: Intent) -> String {
         switch intent {
         case .codeTool(let operation, let query):
-            return "codeTool(\(operation.rawValue)) project=\(query ?? "-")"
+            return "codeTool(\(operation.rawValue)) project=\(query.getOrElse("-"))"
         case .fileTool(let operation, let query):
             let kind = { switch operation { case .listDirectory: return "list"; case .readFile: return "read" } }()
-            return "fileTool(\(kind) \(operation.relativePath)) project=\(query ?? "-")"
+            return "fileTool(\(kind) \(operation.relativePath)) project=\(query.getOrElse("-"))"
         case .understandFile(let request, let query):
-            return "understandFile(\(request.task.rawValue) \(request.relativePath)) project=\(query ?? "-")"
+            return "understandFile(\(request.task.rawValue) \(request.relativePath)) project=\(query.getOrElse("-"))"
         case .help: return "help"
         case .unknown: return "chat"
         }

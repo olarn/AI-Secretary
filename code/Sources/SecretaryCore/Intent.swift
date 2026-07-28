@@ -1,3 +1,4 @@
+import FunctionalCore
 import Foundation
 import ToolAdapters
 
@@ -5,12 +6,12 @@ import ToolAdapters
 /// closed set for this phase — no free-form command construction.
 public enum Intent: Equatable, Sendable {
     /// Run a known read-only code operation, optionally against a named project.
-    case codeTool(operation: CodeToolOperation, projectQuery: String?)
+    case codeTool(operation: CodeToolOperation, projectQuery: Option<String>)
     /// Read a directory listing or a text file inside a named project.
-    case fileTool(operation: FileOperation, projectQuery: String?)
+    case fileTool(operation: FileOperation, projectQuery: Option<String>)
     /// Read a file *and send it to the model* to summarise, explain, analyse,
     /// review or describe. Separate from `fileTool` because it leaves the machine.
-    case understandFile(request: FileUnderstanding, projectQuery: String?)
+    case understandFile(request: FileUnderstanding, projectQuery: Option<String>)
     /// Understood, but nothing to execute.
     case help
     /// Not understood; the Secretary will say so rather than guess.
@@ -77,7 +78,7 @@ public final class RuleBasedIntentClassifier: IntentClassifying {
 
         // File operations are checked before Git rules so "read the log file"
         // isn't captured by the "log" keyword.
-        if let file = fileIntent(original: original) {
+        if let file = fileIntent(original: original).toOptional() {
             return file
         }
 
@@ -92,54 +93,62 @@ public final class RuleBasedIntentClassifier: IntentClassifying {
     /// Returns nil if the text isn't a file command, so it falls through to Git
     /// or chat. A path is never turned into an absolute path here — it stays a
     /// project-relative string for the adapter to resolve and bound-check.
-    private func fileIntent(original: String) -> Intent? {
+    private func fileIntent(original: String) -> Option<Intent> {
         let (head, project) = splitProject(original)
         let headLower = head.lowercased()
 
         // Understand: checked first so "summarize README.md" doesn't fall into
         // the read path and merely dump the file.
-        if let understanding = understandIntent(head: head, headLower: headLower) {
-            return .understandFile(request: understanding, projectQuery: project)
+        if let understanding = understandIntent(head: head, headLower: headLower).toOptional() {
+            return .some(.understandFile(request: understanding, projectQuery: project))
         }
 
         // Read: explicit phrasing always counts; weak verbs need a scope or a
         // path-like argument so they don't capture ordinary chat.
         for prefix in strongReadPrefixes where headLower.hasPrefix(prefix) {
             let path = cleanPath(String(head.dropFirst(prefix.count)))
-            guard !path.isEmpty else { return nil }
-            return .fileTool(operation: .readFile(relativePath: path), projectQuery: project)
+            guard !path.isEmpty else { return .none() }
+            return .some(.fileTool(operation: .readFile(relativePath: path), projectQuery: project))
         }
         for prefix in weakReadPrefixes where headLower.hasPrefix(prefix) {
             let path = cleanPath(String(head.dropFirst(prefix.count)))
-            guard !path.isEmpty else { return nil }
-            guard project != nil || looksLikePath(path) else { return nil }
-            return .fileTool(operation: .readFile(relativePath: path), projectQuery: project)
+            guard !path.isEmpty else { return .none() }
+            guard project.isDefined || looksLikePath(path) else { return .none() }
+            return .some(.fileTool(operation: .readFile(relativePath: path), projectQuery: project))
         }
 
         // List: a bare "list"/"ls"/"dir" is an unambiguous command. Everything
         // else follows the same weak-verb guard as read.
         if listExact.contains(headLower) {
-            return .fileTool(operation: .listDirectory(relativePath: "."), projectQuery: project)
+            return .some(.fileTool(operation: .listDirectory(relativePath: "."), projectQuery: project))
         }
         for prefix in strongListPrefixes where headLower.hasPrefix(prefix) {
             let path = cleanPath(String(head.dropFirst(prefix.count)))
-            return .fileTool(operation: .listDirectory(relativePath: path.isEmpty ? "." : path),
-                             projectQuery: project)
+            return .some(
+                .fileTool(
+                    operation: .listDirectory(relativePath: path.isEmpty ? "." : path),
+                    projectQuery: project
+                )
+            )
         }
         for prefix in weakListPrefixes where headLower.hasPrefix(prefix) {
             let path = cleanPath(String(head.dropFirst(prefix.count)))
-            guard project != nil || looksLikePath(path) else { return nil }
-            return .fileTool(operation: .listDirectory(relativePath: path.isEmpty ? "." : path),
-                             projectQuery: project)
+            guard project.isDefined || looksLikePath(path) else { return .none() }
+            return .some(
+                .fileTool(
+                    operation: .listDirectory(relativePath: path.isEmpty ? "." : path),
+                    projectQuery: project
+                )
+            )
         }
 
-        return nil
+        return .none()
     }
 
     /// Parses "summarize <path>", "explain <path>", "what does <path> do".
     /// Returns nil unless the argument actually looks like a path, so ordinary
     /// requests ("explain how actors work") stay conversation.
-    private func understandIntent(head: String, headLower: String) -> FileUnderstanding? {
+    private func understandIntent(head: String, headLower: String) -> Option<FileUnderstanding> {
         // "what does <path> do?" — the one non-prefix phrasing worth supporting.
         if headLower.hasPrefix("what does ") {
             // Trailing punctuation comes off first so the "… do?" suffix matches.
@@ -149,7 +158,9 @@ public final class RuleBasedIntentClassifier: IntentClassifying {
                 break
             }
             let path = cleanPath(body)
-            return looksLikePath(path) ? FileUnderstanding(relativePath: path, task: .explain) : nil
+            return looksLikePath(path)
+                ? .some(FileUnderstanding(relativePath: path, task: .explain))
+                : .none()
         }
 
         for (prefix, task) in understandPrefixes where headLower.hasPrefix(prefix) {
@@ -161,11 +172,11 @@ public final class RuleBasedIntentClassifier: IntentClassifying {
                 break
             }
             let path = cleanPath(body)
-            guard looksLikePath(path) else { return nil }
-            return FileUnderstanding(relativePath: path, task: task)
+            guard looksLikePath(path) else { return .none() }
+            return .some(FileUnderstanding(relativePath: path, task: task))
         }
 
-        return nil
+        return .none()
     }
 
     /// Heuristic for "this argument is a filesystem path, not prose": it contains
@@ -182,7 +193,7 @@ public final class RuleBasedIntentClassifier: IntentClassifying {
 
     /// Splits a "… in/for/on <project>" suffix off the command, preserving the
     /// original case of both halves. Returns (command, projectQuery?).
-    private func splitProject(_ text: String) -> (head: String, project: String?) {
+    private func splitProject(_ text: String) -> (head: String, project: Option<String>) {
         for marker in [" in ", " for ", " on "] {
             // Search `text` itself, case-insensitively. Searching a lowercased
             // copy and then slicing the original is undefined — a String.Index
@@ -195,10 +206,10 @@ public final class RuleBasedIntentClassifier: IntentClassifying {
                 .trimmingCharacters(in: .whitespacesAndNewlines)
                 .trimmingCharacters(in: CharacterSet(charactersIn: "?.!\"'"))
             if !tail.isEmpty {
-                return (head.trimmingCharacters(in: .whitespacesAndNewlines), tail)
+                return (head.trimmingCharacters(in: .whitespacesAndNewlines), .some(tail))
             }
         }
-        return (text, nil)
+        return (text, .none())
     }
 
     private func cleanPath(_ raw: String) -> String {
@@ -210,14 +221,14 @@ public final class RuleBasedIntentClassifier: IntentClassifying {
 
     /// Extracts a project name following "in"/"for"/"on", e.g.
     /// "git status in AI-Secretary". Returns nil when no such phrase appears.
-    private func projectQuery(in text: String) -> String? {
+    private func projectQuery(in text: String) -> Option<String> {
         for marker in [" in ", " for ", " on "] {
             guard let range = text.range(of: marker) else { continue }
             let tail = text[range.upperBound...]
                 .trimmingCharacters(in: .whitespacesAndNewlines)
                 .trimmingCharacters(in: CharacterSet(charactersIn: "?.!\"'"))
-            if !tail.isEmpty { return tail }
+            if !tail.isEmpty { return .some(tail) }
         }
-        return nil
+        return .none()
     }
 }

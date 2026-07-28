@@ -1,3 +1,4 @@
+import FunctionalCore
 import Foundation
 
 /// How big the floating character is on the desktop: three fixed steps, both
@@ -119,18 +120,17 @@ public struct AppearanceSettings: Equatable, Sendable {
     /// The next stop wider than the bubble is now. A hand-dragged width sits
     /// between stops, and stepping from there goes to the next one up rather
     /// than snapping backwards.
-    public var nextWiderWidth: Double? {
-        widthStops.first { $0 > chatWidth }
+    public var nextWiderWidth: Option<Double> {
+        Option.fromOptional(widthStops.first { $0 > chatWidth })
     }
 
-    public var canWiden: Bool { nextWiderWidth != nil }
+    public var canWiden: Bool { nextWiderWidth.isDefined }
     /// Restoring is one press back to the default, not a step, so it's offered
     /// from any width above the default — including one dragged by hand.
     public var canRestoreWidth: Bool { chatWidth > Self.defaultWidth }
 
     public mutating func widenChat() {
-        guard let next = nextWiderWidth else { return }
-        chatWidth = next
+        chatWidth = nextWiderWidth.getOrElse(chatWidth)
     }
 
     /// Straight back to the default width in one press. Widening is a stepped
@@ -221,7 +221,9 @@ public final class UserDefaultsAppearanceStore: AppearanceStoring, @unchecked Se
             fontSize: (defaults.object(forKey: fontKey) as? Double) ?? AppearanceSettings.defaultFontSize,
             chatWidth: (defaults.object(forKey: widthKey) as? Double) ?? AppearanceSettings.defaultWidth,
             chatHeight: (defaults.object(forKey: heightKey) as? Double) ?? AppearanceSettings.defaultHeight,
-            appScale: (defaults.string(forKey: scaleKey).flatMap(AppScale.init(rawValue:))) ?? .medium
+            appScale: Option.fromOptional(defaults.string(forKey: scaleKey))
+                .flatMap { Option.fromOptional(AppScale(rawValue: $0)) }^
+                .getOrElse(.medium)
         )
     }
 

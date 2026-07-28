@@ -78,7 +78,7 @@ final class FileUnderstandingIntentTests: XCTestCase {
             return XCTFail("Expected understandFile")
         }
         XCTAssertEqual(request.relativePath, "Package.swift")
-        XCTAssertEqual(query, "AI-Secretary")
+        XCTAssertEqual(query, .some("AI-Secretary"))
     }
 
     func testWhatDoesXDoIsAnExplainRequest() {
@@ -503,7 +503,7 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
             guard case .understandFile(let request, let query) = classifier.classify(text) else {
                 return XCTFail("Expected understandFile for “\(text)”")
             }
-            XCTAssertEqual(query, "Fixture", "for “\(text)”")
+            XCTAssertEqual(query, .some("Fixture"), "for “\(text)”")
             XCTAssertFalse(request.relativePath.contains(" "), "Path leaked the project phrase: \(request.relativePath)")
         }
     }

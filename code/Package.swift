@@ -82,7 +82,7 @@ let package = Package(
         ),
         .testTarget(
             name: "SecretaryCoreTests",
-            dependencies: ["SecretaryCore", "AssistantState", "ProjectRegistry", "Permissions", "ToolAdapters", "LLMProvider"]
+            dependencies: ["SecretaryCore", "FunctionalCore", "AssistantState", "ProjectRegistry", "Permissions", "ToolAdapters", "LLMProvider"]
         )
     ]
 )

@@ -1,3 +1,4 @@
+import FunctionalCore
 import Foundation
 import AssistantState
 
@@ -40,15 +41,15 @@ public struct ProfileArtwork: Sendable {
         directory(for: profile).appendingPathComponent(Self.fileName)
     }
 
-    /// The picture to show, or `nil` if there isn't one and the caller should
+    /// The picture to show, absent if there isn't one and the caller should
     /// fall back to the built-in avatar. A profile with no picture is normal, so
     /// this is an ordinary outcome rather than an error.
     public func resolve(
         profile: UUID,
         exists: (URL) -> Bool = { FileManager.default.fileExists(atPath: $0.path) }
-    ) -> URL? {
+    ) -> Option<URL> {
         let picture = url(for: profile)
-        return exists(picture) ? picture : nil
+        return exists(picture) ? .some(picture) : .none()
     }
 
     public func hasArtwork(
@@ -66,27 +67,36 @@ public struct ProfileArtwork: Sendable {
     /// chose (JPEG, HEIC…) and re-encodes, so the file on disk always matches
     /// its name.
     @discardableResult
-    public func install(pngData: Data, for profile: UUID) throws -> URL {
+    public func install(pngData: Data, for profile: UUID) -> Either<ArtworkError, URL> {
         let destination = url(for: profile)
-        try FileManager.default.createDirectory(
-            at: directory(for: profile),
-            withIntermediateDirectories: true
-        )
-        try pngData.write(to: destination, options: .atomic)
-        return destination
+        return attempt {
+            try FileManager.default.createDirectory(
+                at: directory(for: profile),
+                withIntermediateDirectories: true
+            )
+            try pngData.write(to: destination, options: .atomic)
+            return destination
+        }
+        .mapLeft { .installFailed(path: destination.path, message: $0.localizedDescription) }^
     }
 
-    public func remove(for profile: UUID) throws {
-        let target = url(for: profile)
-        guard FileManager.default.fileExists(atPath: target.path) else { return }
-        try FileManager.default.removeItem(at: target)
+    @discardableResult
+    public func remove(for profile: UUID) -> Either<ArtworkError, Void> {
+        removeIfPresent(at: url(for: profile))
     }
 
     /// Called when a profile is deleted, so its picture doesn't outlive it.
-    public func removeAll(for profile: UUID) throws {
-        let directory = directory(for: profile)
-        guard FileManager.default.fileExists(atPath: directory.path) else { return }
-        try FileManager.default.removeItem(at: directory)
+    @discardableResult
+    public func removeAll(for profile: UUID) -> Either<ArtworkError, Void> {
+        removeIfPresent(at: directory(for: profile))
+    }
+
+    /// Nothing there is success: the postcondition the caller wanted already
+    /// holds, so it is not a failure to report.
+    private func removeIfPresent(at target: URL) -> Either<ArtworkError, Void> {
+        guard FileManager.default.fileExists(atPath: target.path) else { return .right(()) }
+        return attempt { try FileManager.default.removeItem(at: target) }
+            .mapLeft { .removeFailed(path: target.path, message: $0.localizedDescription) }^
     }
 
     // MARK: - Migration
@@ -115,6 +125,22 @@ public struct ProfileArtwork: Sendable {
             guard manager.fileExists(atPath: candidate.path) else { continue }
             try? manager.copyItem(at: candidate, to: destination)
             return
+        }
+    }
+}
+
+/// Why a picture could not be written or deleted. Reading is not here: a
+/// missing picture is an `Option`, not an error.
+public enum ArtworkError: Error, Equatable, Sendable {
+    case installFailed(path: String, message: String)
+    case removeFailed(path: String, message: String)
+
+    public var reason: String {
+        switch self {
+        case let .installFailed(path, message):
+            return "Couldn't save the picture to \(path): \(message)"
+        case let .removeFailed(path, message):
+            return "Couldn't remove the picture at \(path): \(message)"
         }
     }
 }
