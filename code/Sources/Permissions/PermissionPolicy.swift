@@ -1,4 +1,4 @@
-import Bow
+import FunctionalCore
 import Foundation
 
 // MARK: - Imperative edge

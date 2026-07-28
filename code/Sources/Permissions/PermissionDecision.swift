@@ -1,4 +1,4 @@
-import Bow
+import FunctionalCore
 import Foundation
 
 /// What may happen to a request that policy did not refuse.

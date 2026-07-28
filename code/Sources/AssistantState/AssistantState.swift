@@ -1,3 +1,4 @@
+import FunctionalCore
 import Foundation
 
 /// The assistant's lifecycle state, shared between UI and orchestration logic.
@@ -33,8 +34,8 @@ public struct StateTransition: Equatable, Sendable {
     public let event: AssistantEvent
     public let reason: String
     public let timestamp: Date
-    public let taskID: String?
-    public let toolStatus: String?
+    public let taskID: Option<String>
+    public let toolStatus: Option<String>
 
     public init(
         from: AssistantState,
@@ -42,8 +43,8 @@ public struct StateTransition: Equatable, Sendable {
         event: AssistantEvent,
         reason: String,
         timestamp: Date = Date(),
-        taskID: String? = nil,
-        toolStatus: String? = nil
+        taskID: Option<String> = .none(),
+        toolStatus: Option<String> = .none()
     ) {
         self.from = from
         self.to = to
@@ -55,31 +56,48 @@ public struct StateTransition: Equatable, Sendable {
     }
 }
 
-public enum TransitionError: Error, Equatable {
+public enum TransitionError: Error, Equatable, Sendable {
     case invalidTransition(from: AssistantState, event: AssistantEvent)
 }
 
 /// Pure transition table. No side effects, no UI dependency — this is what
 /// makes the state machine independently unit-testable.
-public enum AssistantStateReducer {
-    public static func nextState(from state: AssistantState, on event: AssistantEvent) -> AssistantState? {
-        switch (state, event) {
-        case (.idle, .userBeganInput):
-            return .listening
-        case (.listening, .beginInterpreting):
-            return .thinking
-        case (.thinking, .beginExecuting):
-            return .working
-        case (.working, .succeeded):
-            return .success
-        case (.working, .failed):
-            return .error
-        case (.success, .acknowledge):
-            return .idle
-        case (.error, .acknowledge):
-            return .idle
-        default:
-            return nil
-        }
+///
+/// Absence is `Option.none`, so "this event does nothing in this state" is a
+/// value the caller must handle rather than a `nil` that reads as an oversight.
+public func nextAssistantState(
+    from state: AssistantState,
+    on event: AssistantEvent
+) -> Option<AssistantState> {
+    switch (state, event) {
+    case (.idle, .userBeganInput):
+        return .some(.listening)
+    case (.listening, .beginInterpreting):
+        return .some(.thinking)
+    case (.thinking, .beginExecuting):
+        return .some(.working)
+    case (.working, .succeeded):
+        return .some(.success)
+    case (.working, .failed):
+        return .some(.error)
+    case (.success, .acknowledge):
+        return .some(.idle)
+    case (.error, .acknowledge):
+        return .some(.idle)
+    default:
+        return .none()
     }
+}
+
+/// The transition as a decision: the rejected rail carries why, so a caller can
+/// log or surface it without reconstructing the reason.
+public func decideTransition(
+    from state: AssistantState,
+    on event: AssistantEvent
+) -> Either<TransitionError, AssistantState> {
+    nextAssistantState(from: state, on: event)
+        .fold(
+            { .left(.invalidTransition(from: state, event: event)) },
+            { .right($0) }
+        )
 }

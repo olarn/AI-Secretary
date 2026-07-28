@@ -1,4 +1,4 @@
-import Bow
+import FunctionalCore
 import XCTest
 import ProjectRegistry
 @testable import Permissions

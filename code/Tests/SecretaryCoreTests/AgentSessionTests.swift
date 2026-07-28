@@ -142,7 +142,7 @@ final class AgentSessionTests: XCTestCase {
         XCTAssertEqual(provider.lastMessages.last?.content, "summarise this repo please")
         XCTAssertEqual(provider.preparedDirectories.last??.path, projectPath)
 
-        let saved = try XCTUnwrap(try store.load().first)
+        let saved = try XCTUnwrap(store.load().getOrElse([]).first)
         XCTAssertTrue(saved.allowedTools.contains(Secretary.claudeCodeToolID),
                       "The grant must survive a relaunch")
     }
@@ -153,7 +153,7 @@ final class AgentSessionTests: XCTestCase {
         secretary.resolvePendingApproval(granted: false)
 
         XCTAssertEqual(provider.callCount, 0)
-        let saved = try XCTUnwrap(try store.load().first)
+        let saved = try XCTUnwrap(store.load().getOrElse([]).first)
         XCTAssertFalse(saved.allowedTools.contains(Secretary.claudeCodeToolID))
     }
 
@@ -301,7 +301,7 @@ final class AgentSessionTests: XCTestCase {
         secretary.resolvePendingApproval(granted: true)
         await waitUntilIdle()
 
-        let saved = try XCTUnwrap(try store.load().first)
+        let saved = try XCTUnwrap(store.load().getOrElse([]).first)
         XCTAssertFalse(saved.allowedTools.contains("Write"),
                        "A write grant must not survive a relaunch: \(saved.allowedTools)")
     }
@@ -630,8 +630,8 @@ final class ProjectGrantTests: XCTestCase {
         let store = InMemoryProjectStore(projects: [project])
         let registry = ProjectRegistry(store: store)
 
-        XCTAssertTrue(try registry.grant(tool: "b", to: project.id))
-        XCTAssertEqual(try store.load().first?.allowedTools, ["a", "b"])
+        XCTAssertTrue(registry.grant(tool: "b", to: project.id).getOrElse(false))
+        XCTAssertEqual(store.load().getOrElse([]).first?.allowedTools, ["a", "b"])
     }
 
     func testGrantingTwiceIsANoOp() throws {
@@ -639,13 +639,13 @@ final class ProjectGrantTests: XCTestCase {
         let store = InMemoryProjectStore(projects: [project])
         let registry = ProjectRegistry(store: store)
 
-        XCTAssertTrue(try registry.grant(tool: "b", to: project.id))
-        XCTAssertFalse(try registry.grant(tool: "b", to: project.id))
-        XCTAssertEqual(try store.load().first?.allowedTools, ["a", "b"])
+        XCTAssertTrue(registry.grant(tool: "b", to: project.id).getOrElse(false))
+        XCTAssertFalse(registry.grant(tool: "b", to: project.id).getOrElse(false))
+        XCTAssertEqual(store.load().getOrElse([]).first?.allowedTools, ["a", "b"])
     }
 
     func testGrantingToAnUnknownProjectDoesNothing() throws {
         let registry = ProjectRegistry(store: InMemoryProjectStore(projects: []))
-        XCTAssertFalse(try registry.grant(tool: "b", to: UUID()))
+        XCTAssertFalse(registry.grant(tool: "b", to: UUID()).getOrElse(false))
     }
 }

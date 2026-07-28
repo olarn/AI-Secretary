@@ -711,7 +711,7 @@ struct ChatPanelView: View {
                     }
                     Spacer()
                     Button {
-                        try? registry.remove(id: project.id)
+                        addProjectNote = registry.removeReportingProblem(id: project.id)
                     } label: {
                         Image(systemName: "minus.circle")
                     }
@@ -723,10 +723,7 @@ struct ChatPanelView: View {
             Button("Add project…") {
                 addProjectNote = nil
                 if let project = ProjectPicker.promptForProject() {
-                    let added = (try? registry.add(project)) ?? false
-                    if !added {
-                        addProjectNote = "“\(project.name)” is already registered."
-                    }
+                    addProjectNote = registry.addReportingProblem(project)
                 }
             }
             .buttonStyle(.bordered)
@@ -768,18 +765,16 @@ struct ChatPanelView: View {
     }
 
     private func saveAPIKey() {
-        do {
-            try credentials.setAPIKey(apiKeyDraft.trimmingCharacters(in: .whitespaces))
+        if let problem = credentials.saveAPIKeyReportingProblem(text: apiKeyDraft) {
+            settingsNote = problem
+        } else {
             apiKeyDraft = ""
             settingsNote = "API key saved."
-        } catch {
-            settingsNote = "Could not save: \(error.localizedDescription)"
         }
     }
 
     private func clearAPIKey() {
-        try? credentials.setAPIKey(nil)
-        settingsNote = "API key cleared."
+        settingsNote = credentials.clearAPIKeyReportingProblem() ?? "API key cleared."
     }
 
 }

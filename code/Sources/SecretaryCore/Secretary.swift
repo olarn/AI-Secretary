@@ -1,3 +1,4 @@
+import FunctionalCore
 import Foundation
 import Observation
 import AssistantState
@@ -204,8 +205,8 @@ public final class Secretary {
 
         activity = []
         activityEntryID = nil
-        stateMachine.send(.userBeganInput, reason: "user submitted a message", taskID: taskID)
-        stateMachine.send(.beginInterpreting, reason: "classifying intent", taskID: taskID)
+        stateMachine.send(.userBeganInput, reason: "user submitted a message", taskID: Option.fromOptional(taskID))
+        stateMachine.send(.beginInterpreting, reason: "classifying intent", taskID: Option.fromOptional(taskID))
 
         let intent = classifier.classify(trimmed)
         audit.record(AuditEntry(taskID: taskID, kind: .intentClassified, detail: describe(intent)))
@@ -410,8 +411,8 @@ public final class Secretary {
         // Re-enter through the normal path — sending `.beginExecuting` straight
         // from IDLE is an invalid transition, and the character would sit still
         // through the whole retry.
-        stateMachine.send(.userBeganInput, reason: "retrying with wider permissions", taskID: taskID)
-        stateMachine.send(.beginInterpreting, reason: "retrying with wider permissions", taskID: taskID)
+        stateMachine.send(.userBeganInput, reason: "retrying with wider permissions", taskID: Option.fromOptional(taskID))
+        stateMachine.send(.beginInterpreting, reason: "retrying with wider permissions", taskID: Option.fromOptional(taskID))
 
         // The request itself is already the last user turn in `conversation`.
         _ = prompt
@@ -528,7 +529,7 @@ public final class Secretary {
                 // The file-understanding path is already WORKING from the read;
                 // re-sending the event there would be an invalid transition.
                 guard self.stateMachine.state != .working else { return }
-                self.stateMachine.send(.beginExecuting, reason: "streaming reply", taskID: taskID, toolStatus: "streaming")
+                self.stateMachine.send(.beginExecuting, reason: "streaming reply", taskID: Option.fromOptional(taskID), toolStatus: .some("streaming"))
             }
 
             do {
@@ -582,10 +583,10 @@ public final class Secretary {
     private func finishChat(entryID: UUID, taskID: String, success: Bool, finalText: String) {
         updateEntry(id: entryID, text: finalText)
         if stateMachine.state != .working {
-            stateMachine.send(.beginExecuting, reason: "chat completed", taskID: taskID)
+            stateMachine.send(.beginExecuting, reason: "chat completed", taskID: Option.fromOptional(taskID))
         }
-        stateMachine.send(success ? .succeeded : .failed, reason: success ? "chat reply delivered" : "chat failed", taskID: taskID)
-        stateMachine.send(.acknowledge, reason: "result delivered", taskID: taskID)
+        stateMachine.send(success ? .succeeded : .failed, reason: success ? "chat reply delivered" : "chat failed", taskID: Option.fromOptional(taskID))
+        stateMachine.send(.acknowledge, reason: "result delivered", taskID: Option.fromOptional(taskID))
         activeTaskID = nil
     }
 
@@ -638,7 +639,7 @@ public final class Secretary {
     private func handleTool(operation: PlannedOperation, projectQuery: String?) {
         let taskID = activeTaskID ?? "-"
 
-        var resolution = registry.resolve(query: projectQuery)
+        var resolution = registry.resolve(query: Option.fromOptional(projectQuery))
 
         // No project named, but we were working in one a moment ago — keep
         // working there instead of asking again every single message. Only when
@@ -749,7 +750,7 @@ public final class Secretary {
         let taskID = activeTaskID ?? "-"
         let summary = summary(for: operation)
 
-        stateMachine.send(.beginExecuting, reason: summary, taskID: taskID, toolStatus: "running")
+        stateMachine.send(.beginExecuting, reason: summary, taskID: Option.fromOptional(taskID), toolStatus: .some("running"))
         audit.record(AuditEntry(taskID: taskID, kind: .executionStarted, detail: summary))
 
         do {
@@ -855,7 +856,7 @@ public final class Secretary {
         let taskID = activeTaskID ?? "-"
         let summary = summary(for: .understand(request))
 
-        stateMachine.send(.beginExecuting, reason: summary, taskID: taskID, toolStatus: "reading")
+        stateMachine.send(.beginExecuting, reason: summary, taskID: Option.fromOptional(taskID), toolStatus: .some("reading"))
         audit.record(AuditEntry(taskID: taskID, kind: .executionStarted, detail: summary))
 
         let contents: String
@@ -962,12 +963,12 @@ public final class Secretary {
         let taskID = activeTaskID ?? "-"
 
         if stateMachine.state != .working {
-            stateMachine.send(.beginExecuting, reason: reason, taskID: taskID, toolStatus: toolStatus)
+            stateMachine.send(.beginExecuting, reason: reason, taskID: Option.fromOptional(taskID), toolStatus: Option.fromOptional(toolStatus))
         }
 
-        stateMachine.send(success ? .succeeded : .failed, reason: reason, taskID: taskID, toolStatus: toolStatus)
+        stateMachine.send(success ? .succeeded : .failed, reason: reason, taskID: Option.fromOptional(taskID), toolStatus: Option.fromOptional(toolStatus))
         say(.secretary, message)
-        stateMachine.send(.acknowledge, reason: "result delivered", taskID: taskID)
+        stateMachine.send(.acknowledge, reason: "result delivered", taskID: Option.fromOptional(taskID))
         activeTaskID = nil
     }
 

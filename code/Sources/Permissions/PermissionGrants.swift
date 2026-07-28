@@ -1,4 +1,4 @@
-import Bow
+import FunctionalCore
 import Foundation
 
 /// Which project/tool pairs a human has already approved.
