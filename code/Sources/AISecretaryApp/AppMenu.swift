@@ -14,7 +14,7 @@ import AppKit
 /// responder inside the chat panel.
 @MainActor
 enum AppMenu {
-    static func make(appName: String = "AI Secretary") -> NSMenu {
+    static func make(appName: String = "AI Secretary", textSizeTarget: AnyObject? = nil) -> NSMenu {
         let mainMenu = NSMenu()
 
         let appItem = NSMenuItem()
@@ -25,7 +25,33 @@ enum AppMenu {
         editItem.submenu = editMenu()
         mainMenu.addItem(editItem)
 
+        let viewItem = NSMenuItem()
+        viewItem.submenu = viewMenu(target: textSizeTarget)
+        mainMenu.addItem(viewItem)
+
         return mainMenu
+    }
+
+    /// ⌘+ and ⌘− for the text size, the same thing the +/− buttons in Settings
+    /// do. Unlike the editing items these can't travel the responder chain —
+    /// nothing in it knows about the appearance — so they're aimed at an explicit
+    /// target, which must outlive the menu.
+    ///
+    /// Both `+` and `=` are registered for growing: ⌘+ on most layouts is really
+    /// ⌘⇧=, and people press it with and without the shift.
+    private static func viewMenu(target: AnyObject?) -> NSMenu {
+        let menu = NSMenu(title: "View")
+        let bigger = #selector(TextSizeCommands.increaseTextSize(_:))
+        let smaller = #selector(TextSizeCommands.decreaseTextSize(_:))
+
+        for key in ["+", "="] {
+            let item = menu.addItem(withTitle: "Bigger Text", action: bigger, keyEquivalent: key)
+            item.target = target
+        }
+        let smallerItem = menu.addItem(withTitle: "Smaller Text", action: smaller, keyEquivalent: "-")
+        smallerItem.target = target
+
+        return menu
     }
 
     private static func applicationMenu(appName: String) -> NSMenu {
@@ -66,4 +92,12 @@ enum AppMenu {
 
         return menu
     }
+}
+
+/// What the ⌘+/⌘− items call. Declared as a protocol so `AppMenu` can name the
+/// selectors without depending on the delegate that implements them.
+@MainActor
+@objc protocol TextSizeCommands {
+    @objc func increaseTextSize(_ sender: Any?)
+    @objc func decreaseTextSize(_ sender: Any?)
 }

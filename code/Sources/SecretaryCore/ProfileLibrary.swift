@@ -15,7 +15,7 @@ import AssistantState
 public final class ProfileLibrary {
     public private(set) var profiles: [SecretaryProfile]
     public private(set) var activeID: UUID
-    /// Bumped whenever the pictures on disk change. The character's image is
+    /// Bumped whenever the picture on disk changes. The character's image is
     /// looked up from the filesystem, which SwiftUI can't observe, so this is
     /// what tells the view its picture is stale.
     public private(set) var artworkRevision = 0
@@ -45,6 +45,10 @@ public final class ProfileLibrary {
         // install has a real default profile on disk — Miku, active — instead of
         // one that only exists in memory until something changes.
         if seeded || saved.activeID != activeID { persist() }
+
+        // Pictures used to have a slot per state. Carry whichever one the user
+        // had over to the single slot, so nobody loses their character.
+        for profile in self.profiles { artwork.migrateLegacyArtwork(for: profile.id) }
     }
 
     public var active: SecretaryProfile {
@@ -83,7 +87,7 @@ public final class ProfileLibrary {
         if profile.id == activeID { onActiveChange?(active) }
     }
 
-    /// Removes the profile and its pictures. Refuses the last one.
+    /// Removes the profile and its picture. Refuses the last one.
     public func delete(_ id: UUID) {
         guard canDelete, let index = profiles.firstIndex(where: { $0.id == id }) else { return }
         profiles.remove(at: index)
@@ -95,34 +99,30 @@ public final class ProfileLibrary {
         if switched { onActiveChange?(active) }
     }
 
-    // MARK: - Pictures
+    // MARK: - Picture
 
     /// Copies a chosen image in and reports the change, so the character reloads
     /// without waiting for the next state transition.
-    public func setArtwork(pngData: Data, state: AssistantState?, for id: UUID) throws {
-        try artwork.install(pngData: pngData, for: id, state: state)
+    public func setArtwork(pngData: Data, for id: UUID) throws {
+        try artwork.install(pngData: pngData, for: id)
         artworkRevision += 1
         if id == activeID { onActiveChange?(active) }
     }
 
-    public func clearArtwork(state: AssistantState?, for id: UUID) {
-        try? artwork.remove(for: id, state: state)
+    public func clearArtwork(for id: UUID) {
+        try? artwork.remove(for: id)
         artworkRevision += 1
         if id == activeID { onActiveChange?(active) }
     }
 
-    /// The picture for the active profile in this state, or `nil` to fall back
-    /// to the built-in avatar.
-    public func artworkURL(for state: AssistantState) -> URL? {
-        artwork.resolve(profile: activeID, state: state)
+    /// The active profile's picture, or `nil` to fall back to the built-in
+    /// avatar.
+    public func artworkURL() -> URL? {
+        artwork.resolve(profile: activeID)
     }
 
-    public func hasDefaultArtwork(for id: UUID) -> Bool {
-        artwork.hasDefaultArtwork(for: id)
-    }
-
-    public func statesWithArtwork(for id: UUID) -> Set<AssistantState> {
-        artwork.statesWithArtwork(for: id)
+    public func hasArtwork(for id: UUID) -> Bool {
+        artwork.hasArtwork(for: id)
     }
 
     private func persist() {

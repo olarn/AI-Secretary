@@ -132,7 +132,7 @@ final class AppearanceSettingsTests: XCTestCase {
 
     func testTheAppSizeIsRemembered() {
         let store = InMemoryAppearanceStore()
-        store.save(fontSize: 12, chatHeight: 520, appScale: .large)
+        store.save(StoredAppearance(appScale: .large))
         XCTAssertEqual(store.load().appScale, .large)
     }
 
@@ -149,17 +149,22 @@ final class AppearanceSettingsTests: XCTestCase {
 
     func testTheChoiceIsSavedAndReloaded() {
         let store = InMemoryAppearanceStore()
-        var settings = AppearanceSettings(maxHeight: 1200)
+        var settings = AppearanceSettings(maxWidth: 2000, maxHeight: 1200)
         settings.increaseFontSize()
         settings.increaseHeight()
+        settings.setChatSize(width: 900, height: settings.chatHeight)
         store.save(
-            fontSize: settings.fontSize,
-            chatHeight: settings.chatHeight,
-            appScale: settings.appScale
+            StoredAppearance(
+                fontSize: settings.fontSize,
+                chatWidth: settings.chatWidth,
+                chatHeight: settings.chatHeight,
+                appScale: settings.appScale
+            )
         )
 
         let reloaded = store.load()
         XCTAssertEqual(reloaded.fontSize, 14)
+        XCTAssertEqual(reloaded.chatWidth, 900)
         XCTAssertEqual(reloaded.chatHeight, AppearanceSettings.defaultHeight + 60)
     }
 
@@ -167,6 +172,125 @@ final class AppearanceSettingsTests: XCTestCase {
     func testAFreshStoreReturnsTheDefaults() {
         let reloaded = InMemoryAppearanceStore().load()
         XCTAssertEqual(reloaded.fontSize, AppearanceSettings.defaultFontSize)
+        XCTAssertEqual(reloaded.chatWidth, AppearanceSettings.defaultWidth)
         XCTAssertEqual(reloaded.chatHeight, AppearanceSettings.defaultHeight)
+    }
+
+    /// Width was added after the other two, so anyone upgrading has no value
+    /// stored. Falling back to zero would collapse the bubble.
+    func testAMissingStoredWidthFallsBackToTheDefault() {
+        let name = "AppearanceWidthFallbackTests"
+        let defaults = UserDefaults(suiteName: name)!
+        defaults.removePersistentDomain(forName: name)
+        defaults.set(14.0, forKey: "appearance.fontSize")
+
+        let reloaded = UserDefaultsAppearanceStore(defaults: defaults).load()
+        XCTAssertEqual(reloaded.fontSize, 14)
+        XCTAssertEqual(reloaded.chatWidth, AppearanceSettings.defaultWidth)
+    }
+
+    // MARK: - Window width
+
+    func testWidthStartsAtTheDefaultAndIsItsFloor() {
+        var settings = AppearanceSettings(maxWidth: 2000)
+        XCTAssertEqual(settings.chatWidth, AppearanceSettings.defaultWidth)
+
+        settings.setChatSize(width: 100, height: settings.chatHeight)
+        XCTAssertEqual(settings.chatWidth, AppearanceSettings.defaultWidth)
+    }
+
+    /// Free resize, as asked — but still inside the screen.
+    func testDraggingSetsBothAxesAndClampsToTheScreen() {
+        var settings = AppearanceSettings(maxWidth: 1000, maxHeight: 800)
+        settings.setChatSize(width: 640, height: 700)
+        XCTAssertEqual(settings.chatWidth, 640)
+        XCTAssertEqual(settings.chatHeight, 700)
+
+        settings.setChatSize(width: 5000, height: 5000)
+        XCTAssertEqual(settings.chatWidth, 1000)
+        XCTAssertEqual(settings.chatHeight, 800)
+    }
+
+    /// Asked for: one press is one step — ×1 → ×2 → ×3 — and then the button is
+    /// dead rather than jumping straight to the widest.
+    func testWideningStepsThroughOneTwoAndThreeTimes() {
+        let base = AppearanceSettings.defaultWidth
+        var settings = AppearanceSettings(maxWidth: 2000)
+        XCTAssertEqual(settings.chatWidth, base)
+
+        settings.widenChat()
+        XCTAssertEqual(settings.chatWidth, base * 2)
+
+        settings.widenChat()
+        XCTAssertEqual(settings.chatWidth, base * 3)
+
+        XCTAssertFalse(settings.canWiden, "Three times is the last step")
+        settings.widenChat()
+        XCTAssertEqual(settings.chatWidth, base * 3, "A dead button changes nothing")
+    }
+
+    /// And back down the same way.
+    func testRestoringStepsBackDownToTheDefault() {
+        let base = AppearanceSettings.defaultWidth
+        var settings = AppearanceSettings(chatWidth: base * 3, maxWidth: 2000)
+
+        settings.restoreChatWidth()
+        XCTAssertEqual(settings.chatWidth, base * 2)
+
+        settings.restoreChatWidth()
+        XCTAssertEqual(settings.chatWidth, base)
+
+        XCTAssertFalse(settings.canRestoreWidth, "Nothing narrower than the default")
+        settings.restoreChatWidth()
+        XCTAssertEqual(settings.chatWidth, base)
+    }
+
+    func testTheWidthButtonsAreBothLiveInTheMiddleOfTheRange() {
+        let settings = AppearanceSettings(chatWidth: AppearanceSettings.defaultWidth * 2, maxWidth: 2000)
+        XCTAssertTrue(settings.canWiden)
+        XCTAssertTrue(settings.canRestoreWidth)
+    }
+
+    /// Three times the default doesn't fit on every display, and a stop the
+    /// screen has squeezed into another one isn't a separate press.
+    func testStopsAreCappedToTheScreenAndNotRepeated() {
+        var settings = AppearanceSettings(maxWidth: 800)
+        XCTAssertEqual(settings.widthStops, [360, 720, 800])
+
+        settings.widenChat()
+        XCTAssertEqual(settings.chatWidth, 720)
+        settings.widenChat()
+        XCTAssertEqual(settings.chatWidth, 800)
+        XCTAssertFalse(settings.canWiden)
+    }
+
+    /// A screen too narrow for even two steps leaves one stop, so both buttons
+    /// are dead rather than pressable with nothing to show for it.
+    func testATinyScreenLeavesASingleStop() {
+        let settings = AppearanceSettings(maxWidth: 300)
+        XCTAssertEqual(settings.widthStops, [AppearanceSettings.defaultWidth])
+        XCTAssertFalse(settings.canWiden)
+        XCTAssertFalse(settings.canRestoreWidth)
+    }
+
+    /// A hand-dragged width sits between stops. Stepping from there goes to the
+    /// next stop in that direction — it must not snap the other way.
+    func testSteppingFromAHandDraggedWidthGoesToTheNextStop() {
+        var settings = AppearanceSettings(maxWidth: 2000)
+        settings.setChatSize(width: 500, height: settings.chatHeight)
+
+        settings.widenChat()
+        XCTAssertEqual(settings.chatWidth, 720, "Up to ×2, not back down to ×1")
+
+        settings.setChatSize(width: 500, height: settings.chatHeight)
+        settings.restoreChatWidth()
+        XCTAssertEqual(settings.chatWidth, 360, "Down to ×1")
+    }
+
+    func testMovingToANarrowerScreenPullsTheWidthBackIn() {
+        var settings = AppearanceSettings(chatWidth: 900, maxWidth: 1000)
+        settings.setMaxWidth(600)
+        XCTAssertEqual(settings.chatWidth, 600)
+        XCTAssertEqual(settings.maxWidth, 600)
     }
 }

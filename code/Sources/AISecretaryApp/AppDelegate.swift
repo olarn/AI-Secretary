@@ -7,7 +7,7 @@ import LLMProvider
 import Credentials
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, TextSizeCommands {
     private let stateMachine = AssistantStateMachine()
     private let chatLayout = ChatBubbleLayout()
     private let registry = ProjectRegistry()
@@ -45,18 +45,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             height: characterBaseSize.height * factor
         )
     }
-    /// Width is fixed: the bubble's tail is positioned against it, so letting
-    /// the width change would pull the tail away from the character. Height is
-    /// the user's, from Appearance.
-    private let chatWidth: CGFloat = 360
+    /// Both axes are the user's now, from Appearance. The tail is positioned
+    /// against the width rather than at a fixed offset, so `applyChatLayout`
+    /// re-anchors it on every size change and it stays on the character.
     private var chatSize: CGSize {
-        CGSize(width: chatWidth, height: appearance.settings.chatHeight)
+        CGSize(
+            width: appearance.settings.chatWidth,
+            height: appearance.settings.chatHeight
+        )
     }
-    /// Where the tail tip sits across the bubble's width, taken from the shape
-    /// itself so the two can't drift apart.
-    private var tailFraction: CGFloat {
-        SpeechBubbleShape.tailTipFraction(forWidth: chatSize.width)
-    }
+    /// Where the tail tip sits along the bubble's edge, taken from the shape
+    /// itself so the two can't drift apart. A distance rather than a fraction,
+    /// so widening the bubble leaves the tip on the character.
+    private var tailTipOffset: CGFloat { SpeechBubbleShape.tailTipOffset }
     /// Gap kept between the bubble and the screen edge when clamping horizontally.
     private let screenMargin: CGFloat = 8
     /// How far the bubble is pushed sideways, away from the character, as a
@@ -141,6 +142,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         characterPanel.orderFrontRegardless()
     }
+
+    // MARK: - Text size shortcuts
+
+    /// ⌘+ / ⌘−, doing exactly what the +/− buttons in Settings do. Wired here
+    /// rather than in the panel because the shortcut has to work whenever the
+    /// app is active, including when the chat is closed.
+    func increaseTextSize(_ sender: Any?) { appearance.increaseFontSize() }
+
+    func decreaseTextSize(_ sender: Any?) { appearance.decreaseFontSize() }
 
     /// Lets the window own its size and the hosted view fill it.
     private static func container(for host: NSView, size: CGSize) -> NSView {
@@ -277,11 +287,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Pushed sideways away from the character, so the bubble sits beside it
         // rather than across it. Whichever side it's on, the shift is outward:
         // right when the bubble is to the character's right, left when mirrored.
+        // Measured from the tip inwards, so only one edge is pinned to the
+        // character and the other is free: widening the bubble grows it away
+        // from the character instead of sliding the tip off it. Un-mirrored that
+        // pins the leading edge; mirrored — the tail on the right — it pins the
+        // trailing edge, and the bubble grows leftward.
         let clearance = characterFrame.width * bubbleClearanceFraction
-        let naturalX = characterCenterX - chatSize.width * tailFraction + clearance
+        let naturalX = characterCenterX - tailTipOffset + clearance
         let mirrored = naturalX + chatSize.width > visibleFrame.maxX - screenMargin
         var originX = mirrored
-            ? characterCenterX - chatSize.width * (1 - tailFraction) - clearance
+            ? characterCenterX - (chatSize.width - tailTipOffset) - clearance
             : naturalX
         originX = clamped(
             originX,
@@ -317,8 +332,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showChatPanel() {
         isChatVisible = true
-        // The display may have changed since launch; re-clamp before showing.
-        appearance.refreshScreenLimit()
+        // The display may have changed since launch; re-clamp before showing,
+        // against the screen the character is on rather than whichever one
+        // happens to be "main" at the time.
+        appearance.applyScreenLimits(
+            (characterPanel.screen ?? NSScreen.main)?.visibleFrame
+        )
         NSApp.activate(ignoringOtherApps: true)
         chatPanel.makeKeyAndOrderFront(nil)
         chatPanel.animator().alphaValue = 1

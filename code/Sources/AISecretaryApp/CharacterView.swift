@@ -31,16 +31,22 @@ struct CharacterView: View {
 
     private var content: some View {
         VStack(spacing: 6) {
-            ZStack(alignment: .bottomTrailing) {
+            // Centred, so the character sits in the middle of its halo whatever
+            // shape the picture is. The badge is an overlay rather than a third
+            // layer in here: aligning the stack to the corner for the badge's
+            // sake pushed the character over with it, by however much narrower
+            // than the halo it happened to be.
+            ZStack {
                 Circle()
                     .fill(stateColor(for: machine.state).opacity(0.25))
                     .frame(width: 104, height: 104)
 
                 characterArt
-
-                // The status badge doubles as the switch for the running
-                // commentary: it already shows what the assistant is doing, so
-                // it's the natural place to ask for more or less of it.
+            }
+            // The status badge doubles as the switch for the running
+            // commentary: it already shows what the assistant is doing, so
+            // it's the natural place to ask for more or less of it.
+            .overlay(alignment: .bottomTrailing) {
                 Button(action: secretary.toggleActivityVisibility) {
                     StatusBadge(state: machine.state)
                         .opacity(secretary.showsActivity ? 1 : 0.45)
@@ -60,9 +66,8 @@ struct CharacterView: View {
         .onTapGesture(perform: onTap)
     }
 
-    /// The active profile's picture for the state the assistant is in, falling
-    /// back to that profile's default picture, then to the legacy drop-in file,
-    /// then to the built-in avatar. A profile with no pictures at all is normal,
+    /// The active profile's picture, falling back to the legacy drop-in file and
+    /// then to the built-in avatar. A profile with no picture at all is normal,
     /// so the last fallback has to hold up on its own.
     @ViewBuilder
     private var characterArt: some View {
@@ -79,8 +84,7 @@ struct CharacterView: View {
     private var artworkImage: NSImage? {
         // Read the revision so an upload or a profile switch invalidates this.
         _ = profiles.artworkRevision
-        if let url = profiles.artworkURL(for: machine.state),
-           let image = NSImage(contentsOf: url) {
+        if let url = profiles.artworkURL(), let image = NSImage(contentsOf: url) {
             return image
         }
         return NSImage(contentsOf: CharacterAsset.url)

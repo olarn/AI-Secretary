@@ -19,10 +19,12 @@ struct SpeechBubbleShape: Shape {
     static let tailLengthRatio: CGFloat = 0.9
 
     var cornerRadius: CGFloat = 22
-    /// Fraction of the tail-bearing edge (0 = start) where the tail's base is
-    /// centered, before mirroring. Centered so mirroring keeps the base put
-    /// and only the slant direction swaps.
-    var tailHorizontalPosition: CGFloat = 0.5
+    /// How far along the tail-bearing edge the tail's base is centred, in
+    /// points from the near corner — an absolute distance, not a fraction of
+    /// the width. A fraction moved the tail into the middle of the bubble as it
+    /// was widened, dragging the tip away from the character; a fixed distance
+    /// leaves the tip where it is and grows the bubble out to the other side.
+    var tailInset: CGFloat = 180
     var tailBaseWidth: CGFloat = 30
     var tailLength: CGFloat = Self.defaultTailLength * Self.tailLengthRatio
     /// How far the tip drifts sideways from the base, giving the long
@@ -32,22 +34,19 @@ struct SpeechBubbleShape: Shape {
     var isMirrored: Bool = false
     var isFlippedVertically: Bool = false
 
-    /// Where the tail tip lands, as a fraction of the bubble's width, for the
-    /// un-mirrored shape. Window placement uses this to line the tip up with
+    /// Where the tail tip lands, in points from the bubble's leading edge, for
+    /// the un-mirrored shape. Window placement uses this to line the tip up with
     /// the character instead of duplicating the geometry as a magic number.
-    static func tailTipFraction(forWidth width: CGFloat) -> CGFloat {
+    /// Independent of the width, which is the point: resizing the bubble must
+    /// not move the tip.
+    static var tailTipOffset: CGFloat {
         let shape = SpeechBubbleShape()
-        guard width > 0 else { return shape.tailHorizontalPosition }
-        let baseLeft = max(
-            shape.cornerRadius,
-            width * shape.tailHorizontalPosition - shape.tailBaseWidth / 2
-        )
-        return (baseLeft - shape.tailDrift) / width
+        return max(shape.cornerRadius, shape.tailInset - shape.tailBaseWidth / 2) - shape.tailDrift
     }
 
     func path(in rect: CGRect) -> Path {
         let r = cornerRadius
-        let tailCenterX = rect.minX + rect.width * tailHorizontalPosition
+        let tailCenterX = rect.minX + tailInset
         let tailBaseLeftX = max(rect.minX + r, tailCenterX - tailBaseWidth / 2)
         let tailBaseRightX = min(rect.maxX - r, tailCenterX + tailBaseWidth / 2)
         let tip = CGPoint(x: tailBaseLeftX - tailDrift, y: rect.maxY + tailLength)
