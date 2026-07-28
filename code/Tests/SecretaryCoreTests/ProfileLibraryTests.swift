@@ -12,44 +12,30 @@ final class ProfileArtworkTests: XCTestCase {
         { present.contains($0.lastPathComponent) }
     }
 
-    func testAStateWithItsOwnPictureUsesIt() {
-        let resolved = artwork.resolve(
-            profile: profile,
-            state: .thinking,
-            exists: exists(["thinking.png", "default.png"])
-        )
-        XCTAssertEqual(resolved?.lastPathComponent, "thinking.png")
+    /// One picture per profile — there is nothing to resolve per state.
+    func testTheProfilePictureIsUsedWhenPresent() {
+        let resolved = artwork.resolve(profile: profile, exists: exists(["picture.png"]))
+        XCTAssertEqual(resolved?.lastPathComponent, "picture.png")
+        XCTAssertTrue(artwork.hasArtwork(for: profile, exists: exists(["picture.png"])))
     }
 
-    /// Asked for: only one picture is required, and the rest fall back to it.
-    func testAStateWithoutAPictureFallsBackToTheDefault() {
-        let resolved = artwork.resolve(
-            profile: profile,
-            state: .working,
-            exists: exists(["default.png"])
-        )
-        XCTAssertEqual(resolved?.lastPathComponent, "default.png")
-    }
-
-    /// A profile is allowed to have no pictures at all — the caller then keeps
+    /// A profile is allowed to have no picture at all — the caller then keeps
     /// the built-in avatar, so this must be nil rather than a missing-file URL.
-    func testNoPicturesAtAllResolvesToNothing() {
-        XCTAssertNil(artwork.resolve(profile: profile, state: .idle, exists: exists([])))
+    func testNoPictureResolvesToNothing() {
+        XCTAssertNil(artwork.resolve(profile: profile, exists: exists([])))
+        XCTAssertFalse(artwork.hasArtwork(for: profile, exists: exists([])))
+    }
+
+    /// A leftover file from the per-state scheme is not the picture; only the
+    /// migration may promote one, and only into the single slot.
+    func testALeftoverStateFileIsNotUsedDirectly() {
+        XCTAssertNil(artwork.resolve(profile: profile, exists: exists(["thinking.png"])))
     }
 
     func testEachProfileGetsItsOwnDirectory() {
         let other = UUID()
         XCTAssertNotEqual(artwork.directory(for: profile), artwork.directory(for: other))
         XCTAssertTrue(artwork.directory(for: profile).path.contains(profile.uuidString))
-    }
-
-    func testUploadedStatesAreReported() {
-        let states = artwork.statesWithArtwork(
-            for: profile,
-            exists: exists(["idle.png", "thinking.png"])
-        )
-        XCTAssertEqual(states, [.idle, .thinking])
-        XCTAssertFalse(artwork.hasDefaultArtwork(for: profile, exists: exists(["idle.png"])))
     }
 
     /// Pictures must stay out of the repository — they're the user's own files
@@ -67,23 +53,86 @@ final class ProfileArtworkTests: XCTestCase {
         let artwork = ProfileArtwork(root: root)
         let data = Data("not really a png".utf8)
 
-        let written = try artwork.install(pngData: data, for: profile, state: .thinking)
+        let written = try artwork.install(pngData: data, for: profile)
         XCTAssertEqual(try Data(contentsOf: written), data)
-        XCTAssertEqual(artwork.statesWithArtwork(for: profile), [.thinking])
+        XCTAssertTrue(artwork.hasArtwork(for: profile))
 
-        try artwork.remove(for: profile, state: .thinking)
-        XCTAssertTrue(artwork.statesWithArtwork(for: profile).isEmpty)
+        try artwork.remove(for: profile)
+        XCTAssertFalse(artwork.hasArtwork(for: profile))
 
-        try artwork.install(pngData: data, for: profile, state: nil)
+        try artwork.install(pngData: data, for: profile)
         try artwork.removeAll(for: profile)
-        XCTAssertFalse(artwork.hasDefaultArtwork(for: profile))
+        XCTAssertFalse(artwork.hasArtwork(for: profile))
+    }
+
+    /// Choosing a second picture replaces the first rather than piling up.
+    func testInstallingAgainReplacesThePicture() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("ProfileArtworkTests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let artwork = ProfileArtwork(root: root)
+
+        try artwork.install(pngData: Data("first".utf8), for: profile)
+        try artwork.install(pngData: Data("second".utf8), for: profile)
+
+        XCTAssertEqual(try Data(contentsOf: artwork.url(for: profile)), Data("second".utf8))
     }
 
     /// Removing something that isn't there is how "Clear" behaves after a
     /// failed upload; it must not throw.
     func testRemovingAMissingPictureIsNotAnError() {
-        XCTAssertNoThrow(try artwork.remove(for: profile, state: .idle))
+        XCTAssertNoThrow(try artwork.remove(for: profile))
         XCTAssertNoThrow(try artwork.removeAll(for: profile))
+    }
+
+    // MARK: - Migration from per-state pictures
+
+    /// Someone who uploaded a picture under the old per-state scheme keeps it,
+    /// rather than opening the app to a blank character.
+    func testALegacyStatePictureBecomesTheProfilePicture() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("ProfileArtworkTests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let artwork = ProfileArtwork(root: root)
+        let data = Data("legacy".utf8)
+
+        try FileManager.default.createDirectory(
+            at: artwork.directory(for: profile),
+            withIntermediateDirectories: true
+        )
+        try data.write(to: artwork.directory(for: profile).appendingPathComponent("thinking.png"))
+
+        artwork.migrateLegacyArtwork(for: profile)
+        XCTAssertEqual(try Data(contentsOf: artwork.url(for: profile)), data)
+    }
+
+    /// The old default outranks a state picture, and the migration must never
+    /// overwrite a picture that's already there — it runs on every launch.
+    func testMigrationPrefersTheOldDefaultAndNeverOverwrites() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("ProfileArtworkTests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let artwork = ProfileArtwork(root: root)
+        let directory = artwork.directory(for: profile)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try Data("old-default".utf8).write(to: directory.appendingPathComponent("default.png"))
+        try Data("idle".utf8).write(to: directory.appendingPathComponent("idle.png"))
+
+        artwork.migrateLegacyArtwork(for: profile)
+        XCTAssertEqual(try Data(contentsOf: artwork.url(for: profile)), Data("old-default".utf8))
+
+        artwork.migrateLegacyArtwork(for: profile)
+        XCTAssertEqual(try Data(contentsOf: artwork.url(for: profile)), Data("old-default".utf8))
+    }
+
+    func testMigrationDoesNothingWithoutLegacyFiles() {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("ProfileArtworkTests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let artwork = ProfileArtwork(root: root)
+
+        artwork.migrateLegacyArtwork(for: profile)
+        XCTAssertFalse(artwork.hasArtwork(for: profile))
     }
 }
 
@@ -227,10 +276,12 @@ final class ProfileLibraryTests: XCTestCase {
         let (library, _) = makeLibrary()
         let before = library.artworkRevision
 
-        try library.setArtwork(pngData: Data("x".utf8), state: .thinking, for: library.activeID)
+        try library.setArtwork(pngData: Data("x".utf8), for: library.activeID)
 
         XCTAssertGreaterThan(library.artworkRevision, before)
-        XCTAssertNotNil(library.artworkURL(for: .thinking))
-        XCTAssertNil(library.artworkURL(for: .idle), "No default picture yet, so idle has none")
+        XCTAssertNotNil(library.artworkURL())
+
+        library.clearArtwork(for: library.activeID)
+        XCTAssertNil(library.artworkURL())
     }
 }

@@ -4,7 +4,7 @@ import AssistantState
 import SecretaryCore
 
 /// The Profile section of the settings panel: which secretary the app is
-/// wearing, her details, and her pictures.
+/// wearing, her details, and her picture.
 ///
 /// Selecting a profile takes effect immediately; the detail fields are edited in
 /// a draft and committed with Save, because a text field that applied per
@@ -36,7 +36,7 @@ struct ProfileSettingsView: View {
             styleField
 
             Divider()
-            picturesSection
+            pictureRow
 
             Divider()
             appSizeRow
@@ -170,79 +170,42 @@ struct ProfileSettingsView: View {
         }
     }
 
-    /// One required picture, plus optional ones per state. Anything missing
-    /// falls back to the default picture, and a profile with no pictures at all
-    /// keeps the built-in avatar.
-    ///
-    /// Laid out as chips flowing left-to-right and wrapping, each opening a menu
-    /// on click — the same shape as the Model and Effort pickers. Seven full-width
-    /// rows of buttons made the section taller than the panel; this fits in two.
-    private var picturesSection: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Pictures")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            // Fixed rows rather than a LazyVGrid: a lazy container collapses to
-            // nothing when the panel proposes it a squeezed height, which is
-            // exactly what happens with a section open in a fixed-height bubble.
-            ForEach(Array(Self.chipRows.enumerated()), id: \.offset) { _, row in
-                HStack(spacing: 4) {
-                    ForEach(row, id: \.label) { chip in
-                        pictureChip(state: chip.state, label: chip.label)
+    /// One picture per profile. The same menu shape as the Model and Effort
+    /// pickers, so choosing and clearing work the way the rest of the panel does.
+    private var pictureRow: some View {
+        let id = profiles.activeID
+        let hasPicture = profiles.hasArtwork(for: id)
+
+        return VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                fieldLabel("Picture")
+                Menu {
+                    Button(hasPicture ? "Replace picture…" : "Choose picture…") {
+                        choosePicture()
                     }
-                    Spacer(minLength: 0)
+                    if hasPicture {
+                        Button("Clear") { profiles.clearArtwork(for: id) }
+                    }
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: hasPicture ? "checkmark.circle.fill" : "circle.dashed")
+                            .font(.system(size: 8))
+                            .foregroundStyle(hasPicture ? Color.green : .secondary)
+                        Text(hasPicture ? "Chosen" : "None")
+                            .font(.system(size: 10))
+                    }
                 }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                // Read from disk, so a change has to invalidate the label.
+                .id("picture-\(profiles.artworkRevision)-\(id)")
+                Spacer(minLength: 0)
             }
-            Text("Only the default is needed — states without a picture use it.")
+            Text("Shown in every state — the colour and badge say what she's doing.")
                 .font(.system(size: 9))
                 .foregroundStyle(.secondary)
         }
-    }
-
-    /// One chip per picture slot, wrapped into rows: the default first, then the
-    /// states in lifecycle order, left to right and top to bottom.
-    private struct Chip {
-        let state: AssistantState?
-        let label: String
-    }
-
-    private static let chipRows: [[Chip]] = {
-        let chips = [Chip(state: nil, label: "Default")]
-            + ProfileArtwork.artworkStates.map {
-                Chip(state: $0, label: $0.rawValue.capitalized)
-            }
-        return stride(from: 0, to: chips.count, by: 3).map {
-            Array(chips[$0..<min($0 + 3, chips.count)])
-        }
-    }()
-
-    private func pictureChip(state: AssistantState?, label: String) -> some View {
-        let id = profiles.activeID
-        let hasPicture = state.map { profiles.statesWithArtwork(for: id).contains($0) }
-            ?? profiles.hasDefaultArtwork(for: id)
-
-        return Menu {
-            Button(hasPicture ? "Replace picture…" : "Choose picture…") {
-                choosePicture(for: state)
-            }
-            if hasPicture {
-                Button("Clear") { profiles.clearArtwork(state: state, for: id) }
-            }
-        } label: {
-            HStack(spacing: 3) {
-                Image(systemName: hasPicture ? "checkmark.circle.fill" : "circle.dashed")
-                    .font(.system(size: 8))
-                    .foregroundStyle(hasPicture ? Color.green : .secondary)
-                Text(label)
-                    .font(.system(size: 10))
-                    .lineLimit(1)
-            }
-        }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        // The checkmarks are read from disk, so a change has to invalidate them.
-        .id("\(label)-\(profiles.artworkRevision)-\(id)")
     }
 
     private var appSizeRow: some View {
@@ -294,10 +257,10 @@ struct ProfileSettingsView: View {
         note = "Deleted “\(name)”."
     }
 
-    private func choosePicture(for state: AssistantState?) {
-        let what = state.map { "the \($0.rawValue) state" } ?? "\(profiles.active.displayName)"
-        guard let source = ImagePicker.promptForImage(message: "Choose a picture for \(what).")
-        else { return }
+    private func choosePicture() {
+        guard let source = ImagePicker.promptForImage(
+            message: "Choose a picture for \(profiles.active.displayName)."
+        ) else { return }
 
         // Re-encoded to PNG so the stored file matches its name whatever the
         // user picked, and so an unreadable file is reported now rather than
@@ -307,7 +270,7 @@ struct ProfileSettingsView: View {
             return
         }
         do {
-            try profiles.setArtwork(pngData: png, state: state, for: profiles.activeID)
+            try profiles.setArtwork(pngData: png, for: profiles.activeID)
             note = nil
         } catch {
             note = "Couldn't save that image: \(error.localizedDescription)"
