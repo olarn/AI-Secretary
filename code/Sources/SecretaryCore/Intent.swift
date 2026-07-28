@@ -82,11 +82,45 @@ public final class RuleBasedIntentClassifier: IntentClassifying {
             return file
         }
 
-        for rule in rules where rule.keywords.contains(where: normalized.contains) {
+        for rule in rules where rule.keywords.contains(where: { Self.containsWord($0, in: normalized) }) {
             return .codeTool(operation: rule.operation, projectQuery: projectQuery(in: normalized))
         }
 
         return .unknown(text: text)
+    }
+
+    /// Whether `keyword` appears in `text` as a whole word or phrase, rather
+    /// than buried inside a longer one.
+    ///
+    /// A plain `contains` matched "log" inside "login", so asking whether a web
+    /// page was logged in ran `git log` instead — and then failed, because the
+    /// tool path needs a registered project while ordinary chat does not. Any
+    /// keyword short enough to be useful is short enough to hide inside another
+    /// word: "diff" in "different", "status" in "statuses", "ls" in almost
+    /// anything.
+    ///
+    /// Only ASCII letters and digits continue a word, because every keyword is
+    /// ASCII. Thai is written without spaces, so an English term inside a Thai
+    /// sentence usually has none around it — "ขอดูlogหน่อย" is the word `log`
+    /// with Thai on either side, and treating any letter as continuing the word
+    /// would miss it.
+    static func containsWord(_ keyword: String, in text: String) -> Bool {
+        guard !keyword.isEmpty else { return false }
+        var searchRange = text.startIndex..<text.endIndex
+        while let found = text.range(of: keyword, range: searchRange) {
+            let beforeOK = found.lowerBound == text.startIndex
+                || !isWordCharacter(text[text.index(before: found.lowerBound)])
+            let afterOK = found.upperBound == text.endIndex
+                || !isWordCharacter(text[found.upperBound])
+            if beforeOK && afterOK { return true }
+            guard found.upperBound < text.endIndex else { return false }
+            searchRange = text.index(after: found.lowerBound)..<text.endIndex
+        }
+        return false
+    }
+
+    private static func isWordCharacter(_ character: Character) -> Bool {
+        character.isASCII && (character.isLetter || character.isNumber)
     }
 
     /// Parses "read <path> in <project>", "list [<path>] in <project>", etc.

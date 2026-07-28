@@ -377,6 +377,18 @@ struct ChatPanelView: View {
     /// the settings panel reads as one list of choices — and so this one is a
     /// deliberate pick from a menu, not a switch brushed by accident.
     private var browserPicker: some View {
+        HStack(spacing: 3) {
+            // Outside the menu on purpose. A menu label built from several
+            // views renders as the title and the chevron alone here — which is
+            // why Model and Effort show no value — and the one thing this row
+            // has to say is whether the browser is connected.
+            Text("Browser:").foregroundStyle(.secondary)
+            browserMenu
+        }
+        .font(.caption2)
+    }
+
+    private var browserMenu: some View {
         Menu {
             Button {
                 secretary.setBrowserEnabled(false)
@@ -389,11 +401,7 @@ struct ChatPanelView: View {
                 Label("Read my browser", systemImage: secretary.browserEnabled ? "checkmark" : "")
             }
         } label: {
-            settingLabel(
-                "Browser",
-                value: secretary.browserEnabled ? "Connected" : "Off",
-                inherited: false
-            )
+            Text(secretary.browserEnabled ? "Connected" : "Off")
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
@@ -738,6 +746,10 @@ struct ChatPanelView: View {
             )
             .font(.system(size: 9))
             .foregroundStyle(.secondary)
+            // Two lines rather than one truncated one: the sentence about
+            // reading signed-in sites is the part a person needs before they
+            // switch this on, and "…" is where it was being cut.
+            .fixedSize(horizontal: false, vertical: true)
 
             Divider()
 
