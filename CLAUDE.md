@@ -231,7 +231,6 @@ Build in phases.
    - extension เห็นเฉพาะแท็บที่ถูกแชร์เข้า session (กดไอคอน Claude ที่แท็บ) ไม่ใช่ทุกแท็บที่เปิดอยู่
    - ต้องมี Claude in Chrome extension (≥1.0.36) และ login แบบ subscription — ถ้าใช้ API key
      Claude Code จะปิด Chrome integration เอง แม้ส่ง `--chrome` ไป (แอป strip `ANTHROPIC_API_KEY` อยู่แล้ว)
-- Proactive behaviour ถูกตัดออกจาก phase นี้ (2026-07-28) — ถ้าจะกลับมาทำ ให้ตั้งเป็น phase ของตัวเอง และยังต้องโปร่งใส จำกัดความถี่ และปิดได้ง่ายตามเดิม
 
 ### Phase 7: Talk to each other
 
