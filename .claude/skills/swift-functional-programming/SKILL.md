@@ -9,6 +9,8 @@ description: Use when writing or changing Swift logic outside SwiftUI views in t
 
 Domain logic in this repo is written in typed functional style on [Bow](https://github.com/bow-swift/bow) 0.8.0: `Option` instead of `nil`, `Either` instead of `throws`, pure functions composed into pipelines. SwiftUI views stay ordinary SwiftUI.
 
+**Import `FunctionalCore`, never `Bow` directly.** It re-exports Bow and adds the `Sendable` conformances Bow predates, plus the `attempt` helper. Declaring those conformances in two modules would be ambiguous at every use site.
+
 **Core principle: a result is a value, not a control-flow event.** A decision you can store in state, compare in a test, and pass to the next step beats one that unwinds the stack.
 
 ## The boundary rule
@@ -18,10 +20,12 @@ Bow types live in the domain core. Swift-native types live at three edges, with 
 | Edge | What crosses it | Conversion |
 |---|---|---|
 | **Persistence** | `Codable` DTO with Swift `Optional` | `toDomain` / `toDTO` free functions |
-| **View** | `@Observable` may hold `Option`/`Either`; anything feeding `Binding`/`TextField` exposes a computed Swift-native projection | computed property |
-| **Foundation** | `FileManager`, `Process` keep `throws` | wrap once, in the adapter, into `Either` |
+| **View** | **A SwiftUI view file must not import `FunctionalCore`** — Bow exports its own `State`, which shadows SwiftUI's `@State` and breaks every `@State var` in the file | a non-view bridge file (`AISecretaryApp/DomainBridge.swift`) that hands views `String?` / `Bool` |
+| **Foundation** | `FileManager`, `Process`, `JSONDecoder` keep `throws` | `attempt { try … }`, then `mapLeft` into your module's error, once per adapter |
 
-`@Observable` holding `Option`/`Either` works. `async` returning `Either` consumed on `@MainActor` works, with no Sendable warnings. Only `Codable` is hard-blocked.
+`@Observable` holding `Option`/`Either` works. `async` returning `Either` consumed on `@MainActor` works. Conversion members (`Project(dto)`, `project.dto`) beat free `toDomain`/`toDTO` functions, which would collide across modules.
+
+The view rule is the one that bites hardest: the error is nine copies of `'State' is ambiguous for type lookup in this context` pointing at property wrappers you never touched.
 
 ## What Bow actually has
 
@@ -35,6 +39,8 @@ Verified by compiling against 0.8.0 in this repo. Getting this wrong is the most
 | Optional → Option | ✅ `Option.fromOptional(x)` | reverse: `opt.toOptional()` |
 | Result → Either | ✅ `result.toEither()` | |
 | accumulate many errors | ✅ `Validated`, `ValidatedNEA` | use for multi-field validation, not first-failure |
+| wrap a throwing call | ✅ `attempt { try … }` | ours, in `FunctionalCore`, over Bow's `Try.invoke().toEither()` |
+| `Sendable` on Bow types | ✅ via `FunctionalCore` | Bow itself declares none — that is why the module exists |
 | Kleisli composition `>=>` | ❌ **not in Bow** | use `.flatMap(f)^` or `binding` |
 | `Option.toEither(_:)` | ❌ **does not exist** | use `fold({ .left(e) }, { .right($0) })` |
 | `Codable` on `Option`/`Either` | ❌ **does not exist** | DTO at the persistence edge |
@@ -129,6 +135,10 @@ Reach for point-free on `Option`/`Either` and on functions you want to pass arou
 | `value of type 'Option<A>' has no member 'toEither'` | wrong API name | `fold({ .left(e) }, { .right($0) })` |
 | `closure passed to parameter of type 'BindingExpression'` | `binding` called with closures | use `n <- expr` and `yield:` |
 | `cannot find 'map' in scope` | Bow has no free `map` over `Array` | use `list.map(f)`; `curry` only your own functions |
+| `'State' is ambiguous for type lookup` | a SwiftUI view imported `FunctionalCore`; Bow's `State` shadows `@State` | drop the import, go through a bridge file |
+| `stored property … has non-Sendable type 'Option<…>'` | imported `Bow` directly instead of `FunctionalCore` | import `FunctionalCore` |
+| `type 'Void' cannot conform to 'Equatable'` | `XCTAssertEqual(x, .right(()))` on `Either<E, Void>` | assert `x.isRight` |
+| `member '…' is a function that produces expected type` | pattern-matching a Bow `Either` case like a Swift enum | `fold`, or `getOrElse` |
 | new `throws` in a domain function | Foundation call not wrapped | wrap in the adapter, return `Either` |
 
 ## Checklist before committing domain code
