@@ -336,6 +336,17 @@ public final class Secretary {
         return url
     }
 
+    /// Stands in for a project when none is registered. Chat and browser work
+    /// both run in the scratch folder in that case, so there is a real
+    /// workspace to name — it just isn't one the person chose.
+    static var scratchProject: Project {
+        Project(
+            name: "no project",
+            path: scratchDirectory.path,
+            allowedTools: [claudeCodeToolID]
+        )
+    }
+
     private func startChat(_ text: String, taskID: String) {
         // A directory-scoped backend needs to be told where to run before the
         // turn starts. Working in a registered project is a real capability
@@ -386,32 +397,53 @@ public final class Secretary {
     /// `.localWrite`, so it is asked every time and is never persisted to disk:
     /// permission to change files should not outlive the session.
     private func offerToWiden(_ denied: [DeniedTool], taskID: String) {
-        guard !denied.isEmpty,
-              let project = lastProject.toOptional(),
-              let prompt = activeRequestText.toOptional()
-        else { return }
+        // A browser action belongs to no project — it happens in Chrome — and
+        // the person may have registered none at all. Requiring one here meant
+        // the offer was silently skipped and the action stayed unreachable, the
+        // same way it did on the chat path. The grant is per-session, not
+        // per-project, so the project is only what the card names.
+        guard !denied.isEmpty, let prompt = activeRequestText.toOptional() else { return }
+        let project = lastProject.getOrElse(Self.scratchProject)
 
         let rules = denied.map(\.rule).reduced()
         guard !rules.isEmpty else { return }
 
+        let inBrowser = denied.contains { BrowserTools.changesState($0.name) }
         let request = ApprovalRequest(
             taskID: taskID,
             toolID: Self.claudeCodeToolID,
-            actionClass: .localWrite,
+            actionClass: inBrowser ? .browserAction : .localWrite,
             project: project,
-            commandSummary: rules.joined(separator: ", "),
+            // What it will do, not the rule that permits it: nobody can weigh
+            // `mcp__claude-in-chrome__navigate`.
+            commandSummary: denied.map { tool in
+                BrowserTools.humanDescription(for: tool.name)^.getOrElse(tool.rule)
+            }.joined(separator: ", "),
             rationale: "Retry with these tools allowed"
         )
         audit.record(AuditEntry(taskID: taskID, kind: .approvalRequested, detail: request.commandSummary))
 
-        let what = denied.map { "• \($0.summary)" }.joined(separator: "\n")
+        let what = denied.map { tool in
+            BrowserTools.humanDescription(for: tool.name)^
+                .fold({ "• \(tool.summary)" }, { "• \($0)" })
+        }.joined(separator: "\n")
+        // Browser actions happen inside a browser the person is signed into, so
+        // the card has to say that rather than leave them to infer it from a
+        // tool name. The wider-than-asked-for scope is stated too: they are
+        // agreeing to more than the one action that triggered this.
+        let scope = inBrowser
+            ? """
+              This is in your own Chrome, on whatever page is open — so it acts \
+              as you, in your signed-in session.\n\n
+              """
+            : ""
         say(.secretary, """
             I was blocked from doing this in \(project.name):
 
             \(what)
 
-            Shall I go ahead? This allows it for the rest of this session only, \
-            and I'll try your request again.
+            \(scope)Shall I go ahead? This allows it for the rest of this \
+            session only, and I'll try your request again.
             """)
         pendingDecision = .approval(request, operation: .widenAgentTools(rules: rules, prompt: prompt))
     }

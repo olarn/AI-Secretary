@@ -225,6 +225,15 @@ Build in phases.
    - ขับจริงในแอปแล้ว (ไม่ใช่แค่ unit test): ถามลอยๆ **โดยไม่มี project** ก็เข้าเส้นทาง agent ได้
      โมเดลเรียก browser tool เองโดยไม่มีการ์ดขออนุมัติ (เพราะเป็น tool อ่าน) และเมื่อสั่ง `navigate`
      ถูกปฏิเสธ ก็รายงานตรงๆ ว่า "ยังไม่ได้เปิดแท็บ ยังไม่ได้ปิดอะไร" ไม่แกล้งทำเป็นสำเร็จ
+   - การกระทำในเบราว์เซอร์ (scroll/คลิก/พิมพ์/เปิดหน้า) ขออนุมัติผ่าน try→refuse→ask→retry เดิม
+     - `scroll` = tool `computer` ซึ่งครอบคลิกและพิมพ์ด้วย — `--allowedTools` แยกระดับ argument ไม่ได้
+       การ์ดจึงต้องเขียนขอบเขตจริง ห้ามเขียนแคบแล้วให้กว้าง
+     - `ActionClass.browserAction` แยกจาก `.localWrite` — การ์ดเคยพาดหัวว่า "Send to Claude?"
+       และ "Writes files in the project" ซึ่งผิดทั้งคู่สำหรับการคลิกในหน้าเว็บ
+     - `offerToWiden` ต้องไม่บังคับ project — งานเบราว์เซอร์ไม่สังกัด project เคยทำให้
+       การ์ดไม่ขึ้นเงียบๆ และความสามารถนั้นเข้าไม่ถึงเลย
+     - ข้อความปฏิเสธของ browser tool คือ "requires permission" ไม่ตรงกับวลีของ Claude Code
+       — `isPermissionRefusal` ต้องรู้จัก แต่เฉพาะกับ browser tool เท่านั้น (วลีนี้กว้างเกินไป)
    - ชั้นอนุมัติมี **สองชั้น** และแอปคุมได้ชั้นเดียว: allowlist ของแอป กับ site permission ของ extension
      เอง (ข้อความ "Claude in Chrome requires permission") ชั้นหลังต้องกด allow ใน Chrome —
      ไม่เข้า `offerToWiden` ของแอป และไม่ควรพยายามทำให้เข้า

@@ -1,3 +1,4 @@
+import FunctionalCore
 import Foundation
 
 /// The browser tools Claude Code exposes when it is connected to the user's
@@ -53,6 +54,38 @@ public enum BrowserTools: Sendable {
     /// bare one.
     public static func isBrowserTool(_ name: String) -> Bool {
         name.hasPrefix("mcp__\(server)__") || readOnly.contains(name)
+    }
+
+    /// What a browser tool actually does, in words someone can decide on.
+    ///
+    /// `mcp__claude-in-chrome__computer` tells a person nothing, and the honest
+    /// answer is wider than the request that triggered it: one tool covers
+    /// scrolling, clicking and typing, and `--allowedTools` cannot express
+    /// argument-level rules — so allowing a scroll allows the other two. Saying
+    /// "scroll" here would be labelling narrowly and granting broadly.
+    public static func humanDescription(for name: String) -> Option<String> {
+        guard isBrowserTool(name) else { return .none() }
+        let bare = name.hasPrefix("mcp__\(server)__")
+            ? String(name.dropFirst("mcp__\(server)__".count))
+            : name
+        switch bare {
+        case "computer":
+            return .some("scroll, click and type in the page")
+        case "navigate":
+            return .some("open a web page")
+        case "form_input":
+            return .some("fill in fields on the page")
+        case "javascript_tool":
+            return .some("run JavaScript in the page")
+        case "file_upload", "upload_image":
+            return .some("upload a file from this Mac to the page")
+        case "tabs_create_mcp", "tabs_close_mcp":
+            return .some("open and close tabs")
+        case "gif_creator":
+            return .some("record the browser as a GIF")
+        default:
+            return .some("act in the browser (\(bare))")
+        }
     }
 
     /// Everything that is not on the read-only list changes something — it

@@ -24,7 +24,7 @@ final class BrowserAccessTests: XCTestCase {
         preference = InMemoryBrowserPreference()
     }
 
-    private func makeSecretary() -> Secretary {
+    private func makeSecretary(projects: [Project]? = nil) -> Secretary {
         let project = Project(
             name: "Fixture",
             path: projectPath,
@@ -32,7 +32,7 @@ final class BrowserAccessTests: XCTestCase {
         )
         return Secretary(
             stateMachine: machine,
-            registry: ProjectRegistry(store: InMemoryProjectStore(projects: [project])),
+            registry: ProjectRegistry(store: InMemoryProjectStore(projects: projects ?? [project])),
             adapter: SpyAdapter(),
             fileAdapter: SpyFileAdapter(),
             classifier: RuleBasedIntentClassifier(),
@@ -140,6 +140,60 @@ final class BrowserAccessTests: XCTestCase {
         await waitUntilIdle()
         XCTAssertTrue(lastAllowedTools().contains("Read"))
         XCTAssertTrue(lastAllowedTools().contains("Grep"))
+    }
+
+    // MARK: - Being asked for the browser
+
+    /// The offer to allow is the only way permissions widen here, and it used
+    /// to require a registered project. Browser work belongs to no project and
+    /// often runs with none registered at all, so the offer never appeared and
+    /// the action stayed permanently out of reach.
+    func testABlockedBrowserActionIsOfferedEvenWithNoProjectRegistered() async {
+        let secretary = makeSecretary(projects: [])
+        secretary.setBrowserEnabled(true)
+        provider.denialsForNextTurn = [
+            DeniedTool(
+                name: BrowserTools.rule(for: "computer"),
+                target: .none(),
+                rule: BrowserTools.rule(for: "computer")
+            )
+        ]
+        secretary.submit("scroll down the page")
+        await waitUntilIdle()
+
+        guard case .approval(let request, _) = secretary.pendingDecision else {
+            return XCTFail("Expected to be asked. Got: \(String(describing: secretary.pendingDecision))")
+        }
+        XCTAssertEqual(request.actionClass, .browserAction)
+        XCTAssertFalse(request.actionClass.canRunUnattended)
+    }
+
+    /// Nobody can weigh `mcp__claude-in-chrome__computer`. The card has to say
+    /// what will happen — including the parts they didn't ask for, since one
+    /// rule covers scrolling, clicking and typing together.
+    func testTheCardSaysWhatItWillDoRatherThanTheRuleName() async {
+        let secretary = makeSecretary(projects: [])
+        secretary.setBrowserEnabled(true)
+        provider.denialsForNextTurn = [
+            DeniedTool(
+                name: BrowserTools.rule(for: "computer"),
+                target: .none(),
+                rule: BrowserTools.rule(for: "computer")
+            )
+        ]
+        secretary.submit("scroll down the page")
+        await waitUntilIdle()
+
+        guard case .approval(let request, _) = secretary.pendingDecision else {
+            return XCTFail("Expected to be asked")
+        }
+        XCTAssertFalse(request.commandSummary.contains("mcp__"), "Got: \(request.commandSummary)")
+        XCTAssertTrue(request.commandSummary.contains("click"), "Got: \(request.commandSummary)")
+
+        // And the chat message has to say whose browser it is.
+        let said = secretary.transcript.last?.text ?? ""
+        XCTAssertTrue(said.contains("your own Chrome"), "Got: \(said)")
+        XCTAssertFalse(said.contains("session.Shall"), "Missing gap between sentences: \(said)")
     }
 
     // MARK: - What the model is told

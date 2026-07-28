@@ -245,12 +245,26 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
 
     /// Distinguishes "you may not" from an ordinary tool failure such as a
     /// missing file. Only the former is worth offering to widen.
-    static func isPermissionRefusal(_ message: String) -> Bool {
-        let phrases = [
+    static func isPermissionRefusal(_ message: String, tool: String = "") -> Bool {
+        var phrases = [
             "haven't granted",
             "requires approval",
             "requested permissions"
         ]
+        // The browser tools word their refusal differently — "Claude in Chrome
+        // requires permission" — and matched none of the three above, so a
+        // blocked scroll or click was never recognised as blocked: the app
+        // reported it as prose and never offered to allow it. Verified in the
+        // app that granting the rule is what unblocks it, so this belongs on
+        // the same try-refuse-ask-retry path as everything else.
+        //
+        // Only for browser tools. "requires permission" is broad enough that an
+        // unrelated tool failing for its own reasons would otherwise be read as
+        // a refusal, and the user would be offered a grant for something that
+        // was never blocked.
+        if BrowserTools.isBrowserTool(tool) {
+            phrases.append("requires permission")
+        }
         return phrases.contains { message.localizedCaseInsensitiveContains($0) }
     }
 
@@ -330,10 +344,15 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
             for block in Self.contentBlocks(of: object)
             where block["type"] as? String == "tool_result" && block["is_error"] as? Bool == true {
                 guard let id = block["tool_use_id"] as? String,
-                      Self.isPermissionRefusal(String(describing: block["content"] ?? ""))
+                      let call = stateLock.withLock({ _pendingToolUses[id] })
                 else { continue }
-                let call = stateLock.withLock { _pendingToolUses.removeValue(forKey: id) }
-                guard let call else { continue }
+                // Which tool it was decides which refusals count, so the call is
+                // looked up first and only dropped once it's been judged.
+                guard Self.isPermissionRefusal(
+                    String(describing: block["content"] ?? ""),
+                    tool: call.name
+                ) else { continue }
+                stateLock.withLock { _pendingToolUses.removeValue(forKey: id) }
                 denied.append(.toolDenied(Self.describe(tool: call.name, input: call.input)))
             }
             return denied

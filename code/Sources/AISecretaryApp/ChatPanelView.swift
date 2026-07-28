@@ -653,10 +653,18 @@ struct ChatPanelView: View {
             // that means sending a file off this Mac. Give it a louder colour so
             // it never looks like the routine local approval.
             let leavesTheMachine = request.actionClass != .readOnly
+            // "Send to Claude?" is right for a file leaving the Mac and wrong
+            // for a click inside the user's own browser — nothing is being
+            // sent, something is being done, as them.
+            let inBrowser = request.actionClass == .browserAction
             VStack(alignment: .leading, spacing: 6) {
                 Label(
-                    leavesTheMachine ? "Send to Claude?" : "Approval required",
-                    systemImage: leavesTheMachine ? "paperplane.circle" : "lock.shield"
+                    inBrowser
+                        ? "Act in your browser?"
+                        : (leavesTheMachine ? "Send to Claude?" : "Approval required"),
+                    systemImage: inBrowser
+                        ? "globe"
+                        : (leavesTheMachine ? "paperplane.circle" : "lock.shield")
                 )
                 .font(.caption.bold())
                 Text(request.commandSummary)
