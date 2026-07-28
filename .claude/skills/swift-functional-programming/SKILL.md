@@ -84,6 +84,11 @@ public func decidePermission(_ grants: PermissionGrants) -> (ApprovalRequest) ->
 Live version: `code/Sources/Permissions/`. Every snippet in this file is compiled
 by `code/Tests/PermissionsTests/SkillExampleTests.swift` — change one, change both.
 
+Worked examples of each edge, all in the repo: persistence
+(`ProjectRegistry/Project.swift`, `SecretaryCore/ProfileStore.swift`), Foundation
+(`ToolAdapters/GitReadOnlyAdapter.swift`), view (`AISecretaryApp/DomainBridge.swift`),
+async (`LLMProvider/ChatTypes.swift`'s `ChatStream`).
+
 **Name public free functions so they stay unambiguous across modules.**
 `SecretaryCore` imports all seven domain targets into one file scope, so a bare
 `decide` or `validate` collides. Qualify with the domain noun:

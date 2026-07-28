@@ -251,7 +251,7 @@ struct ChatPanelView: View {
     private var modelPicker: some View {
         Menu {
             Button {
-                secretary.selectModel(nil)
+                secretary.chooseModel(nil)
             } label: {
                 Label(
                     "Your Claude Code default",
@@ -261,11 +261,11 @@ struct ChatPanelView: View {
             Divider()
             ForEach(ChatModel.known, id: \.id) { candidate in
                 Button {
-                    secretary.selectModel(candidate)
+                    secretary.chooseModel(candidate)
                 } label: {
                     Label(
                         candidate.displayName,
-                        systemImage: secretary.model == candidate ? "checkmark" : ""
+                        systemImage: secretary.chosenModel == candidate ? "checkmark" : ""
                     )
                 }
             }
@@ -283,7 +283,7 @@ struct ChatPanelView: View {
     private var effortPicker: some View {
         Menu {
             Button {
-                secretary.selectEffort(nil)
+                secretary.chooseEffort(nil)
             } label: {
                 Label(
                     "Your Claude Code default",
@@ -293,11 +293,11 @@ struct ChatPanelView: View {
             Divider()
             ForEach(Effort.allCases, id: \.rawValue) { candidate in
                 Button {
-                    secretary.selectEffort(candidate)
+                    secretary.chooseEffort(candidate)
                 } label: {
                     Label(
                         candidate.rawValue,
-                        systemImage: secretary.effort == candidate ? "checkmark" : ""
+                        systemImage: secretary.chosenEffort == candidate ? "checkmark" : ""
                     )
                 }
             }

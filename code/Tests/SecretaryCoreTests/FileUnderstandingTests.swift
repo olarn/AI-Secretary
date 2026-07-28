@@ -134,13 +134,16 @@ final class FileUnderstandingPolicyTests: XCTestCase {
 
     /// Approving "read files here" must never become permission to upload them.
     func testApprovingReadOnlyDoesNotAuthoriseSending() {
-        let policy = DefaultPermissionPolicy()
         let project = Project(
             name: "Fixture",
             path: "/tmp/fixture",
             allowedTools: [FileReadOnlyAdapter.toolIdentifier]
         )
-        policy.recordApproval(projectID: project.id, toolID: FileReadOnlyAdapter.toolIdentifier)
+        let grants = PermissionGrants()
+            |> PermissionGrants.granting(
+                projectID: project.id,
+                toolID: FileReadOnlyAdapter.toolIdentifier
+            )
 
         let upload = ApprovalRequest(
             taskID: "t1",
@@ -151,9 +154,11 @@ final class FileUnderstandingPolicyTests: XCTestCase {
             rationale: "summarise"
         )
 
-        guard case .needsApproval = policy.evaluate(upload) else {
-            return XCTFail("Sending a file must still ask, even after a read-only approval")
-        }
+        XCTAssertEqual(
+            decidePermission(grants)(upload),
+            .right(.needsApproval(upload)),
+            "Sending a file must still ask, even after a read-only approval"
+        )
     }
 }
 
@@ -162,7 +167,6 @@ final class FileUnderstandingPolicyTests: XCTestCase {
 @MainActor
 final class FileUnderstandingSecretaryTests: XCTestCase {
     private var machine: AssistantStateMachine!
-    private var policy: DefaultPermissionPolicy!
     private var fileAdapter: SpyFileAdapter!
 
     private let project = Project(
@@ -174,7 +178,6 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
     override func setUp() {
         super.setUp()
         machine = AssistantStateMachine()
-        policy = DefaultPermissionPolicy()
         fileAdapter = SpyFileAdapter()
     }
 
@@ -182,7 +185,6 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
         Secretary(
             stateMachine: machine,
             registry: ProjectRegistry(store: InMemoryProjectStore(projects: [project])),
-            policy: policy,
             adapter: SpyAdapter(),
             fileAdapter: fileAdapter,
             classifier: RuleBasedIntentClassifier(),
@@ -365,7 +367,6 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
         let secretary = Secretary(
             stateMachine: machine,
             registry: ProjectRegistry(store: InMemoryProjectStore(projects: [project])),
-            policy: policy,
             adapter: adapter,
             fileAdapter: fileAdapter,
             classifier: RuleBasedIntentClassifier(),
@@ -410,7 +411,6 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
             registry: ProjectRegistry(store: InMemoryProjectStore(projects: [
                 Project(name: "โลหะเจริญ", path: "/Users/someone/Secret-Brain/โลหะเจริญ")
             ])),
-            policy: policy,
             adapter: SpyAdapter(),
             fileAdapter: fileAdapter,
             classifier: RuleBasedIntentClassifier(),
@@ -431,7 +431,6 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
         let secretary = Secretary(
             stateMachine: machine,
             registry: ProjectRegistry(store: InMemoryProjectStore(projects: [])),
-            policy: policy,
             adapter: SpyAdapter(),
             fileAdapter: fileAdapter,
             classifier: RuleBasedIntentClassifier(),
@@ -457,7 +456,6 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
         let secretary = Secretary(
             stateMachine: machine,
             registry: ProjectRegistry(store: InMemoryProjectStore(projects: [project, second])),
-            policy: policy,
             adapter: SpyAdapter(),
             fileAdapter: fileAdapter,
             classifier: RuleBasedIntentClassifier(),

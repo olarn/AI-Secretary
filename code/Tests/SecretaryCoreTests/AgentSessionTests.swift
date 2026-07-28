@@ -80,7 +80,6 @@ final class AgentSessionTests: XCTestCase {
         return Secretary(
             stateMachine: machine,
             registry: registry,
-            policy: DefaultPermissionPolicy(),
             adapter: SpyAdapter(),
             fileAdapter: SpyFileAdapter(),
             classifier: RuleBasedIntentClassifier(),
@@ -338,19 +337,19 @@ final class AgentSessionTests: XCTestCase {
     /// announced there — the same path the slash command uses.
     func testPickingAModelIsAnnouncedInTheTranscript() {
         let secretary = makeSecretary(projects: [])
-        secretary.selectModel(.opus5)
+        secretary.selectModel(.some(.opus5))
 
-        XCTAssertEqual(secretary.model, .opus5)
+        XCTAssertEqual(secretary.model, .some(.opus5))
         XCTAssertTrue(secretary.transcript.last?.text.contains("Claude Opus 5") == true,
                       "Got: \(secretary.transcript.last?.text ?? "-")")
     }
 
     func testGoingBackToTheInheritedDefaultIsAnnouncedToo() {
         let secretary = makeSecretary(projects: [])
-        secretary.selectModel(.opus5)
-        secretary.selectModel(nil)
+        secretary.selectModel(.some(.opus5))
+        secretary.selectModel(.none())
 
-        XCTAssertNil(secretary.model)
+        XCTAssertEqual(secretary.model, Option.none())
         XCTAssertTrue(secretary.isModelInherited)
         XCTAssertTrue(secretary.transcript.last?.text.contains("Claude Code default") == true,
                       "Got: \(secretary.transcript.last?.text ?? "-")")
@@ -358,18 +357,18 @@ final class AgentSessionTests: XCTestCase {
 
     func testPickingTheSameValueSaysNothing() {
         let secretary = makeSecretary(projects: [])
-        secretary.selectModel(.opus5)
+        secretary.selectModel(.some(.opus5))
         let count = secretary.transcript.count
-        secretary.selectModel(.opus5)
+        secretary.selectModel(.some(.opus5))
 
         XCTAssertEqual(secretary.transcript.count, count, "No change, nothing to announce")
     }
 
     func testPickingAnEffortIsAnnounced() {
         let secretary = makeSecretary(projects: [])
-        secretary.selectEffort(.xhigh)
+        secretary.selectEffort(.some(.xhigh))
 
-        XCTAssertEqual(secretary.effort, .xhigh)
+        XCTAssertEqual(secretary.effort, .some(.xhigh))
         XCTAssertFalse(secretary.isEffortInherited)
         XCTAssertTrue(secretary.transcript.last?.text.contains("xhigh") == true)
     }
@@ -377,7 +376,7 @@ final class AgentSessionTests: XCTestCase {
     /// The chosen value must reach the backend, not just the label.
     func testAPickedModelIsUsedForTheNextTurn() async {
         let secretary = makeSecretary(projects: [project(grantingAgent: true)])
-        secretary.selectModel(.fable5)
+        secretary.selectModel(.some(.fable5))
         secretary.submit("hello")
         await waitUntilIdle()
 

@@ -69,17 +69,49 @@ rediscovered per file.
 
 ## Sequencing
 
-Leaf-first up the dependency graph, `swift test` green at every commit:
+Leaf-first up the dependency graph, `swift test` green at every commit. All five
+phases are complete, each its own commit so any of them can be reverted alone:
 
-1. `Permissions` — pilot. **Done.**
-2. `AssistantState`, `ProjectRegistry`, `Credentials`
-3. `ToolAdapters`, `LLMProvider`
-4. `SecretaryCore` excluding `Secretary.swift`
-5. `Secretary.swift` (1210 lines) — its own phase; also deletes the
-   `DefaultPermissionPolicy` shim once `Secretary` owns its grants.
+1. `Permissions` — pilot.
+2. `AssistantState`, `ProjectRegistry`, `Credentials`.
+3. `ToolAdapters`, `LLMProvider`.
+4. `SecretaryCore` excluding `Secretary.swift`.
+5. `Secretary.swift`; grants moved into its observable state and the
+   `DefaultPermissionPolicy` shim deleted.
 
-A single big-bang commit cannot satisfy "all tests keep passing", so it is not
+A single big-bang commit cannot satisfy "all tests keep passing", so it was not
 attempted.
+
+## What the conversion turned up
+
+Four constraints only appeared once real code was compiled, and each is now
+recorded in the skill:
+
+- **Bow declares no `Sendable` conformances.** Storing an `Option` in a
+  `Sendable` struct warns today and fails under the Swift 6 language mode. That
+  is why `FunctionalCore` exists: it re-exports Bow and declares the
+  conformances once, since two modules declaring them would be ambiguous
+  everywhere.
+- **Bow exports its own `State`.** Importing it into a SwiftUI view shadows
+  `@State` and breaks every property wrapper in the file. Views therefore never
+  import it; `AISecretaryApp/DomainBridge.swift` does the conversion and holds
+  no views.
+- **`XCTAssertNil` on an `Option` asserts nothing** — it wraps the `Option` in
+  an `Optional`, which is never nil. Four assertions in the existing suite were
+  silently vacuous and were caught only because the types changed under them.
+- **Conversion members beat free functions.** `Project(dto)` / `project.dto`
+  rather than free `toDomain`/`toDTO`, which would collide once seven modules
+  each defined a pair.
+
+## Result
+
+- No `throws` in any domain target's public API. The only remaining `throws` are
+  `attempt` itself and one private `async` helper inside `ClaudeCodeProvider`
+  whose error is converted at the stream boundary.
+- No domain public API returns a Swift `Optional`.
+- On-disk formats are unchanged: `projects.json` and `profiles.json` keep their
+  keys, so existing installs load without migration.
+- `swift build` and `swift test` are clean — zero warnings, zero failures.
 
 ## Pilot outcome: `Permissions`
 

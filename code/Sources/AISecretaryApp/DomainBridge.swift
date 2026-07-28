@@ -2,6 +2,7 @@ import FunctionalCore
 import Credentials
 import Foundation
 import ProjectRegistry
+import LLMProvider
 import SecretaryCore
 
 // MARK: - The view edge
@@ -57,4 +58,16 @@ extension ProfileLibrary {
     func clearArtworkReportingProblem(for id: UUID) -> String? {
         clearArtwork(for: id).fold({ $0.reason }, { nil })
     }
+}
+
+@MainActor
+extension Secretary {
+    /// The chosen model, or `nil` while inheriting the backend's own — the
+    /// shape the settings menu's checkmarks compare against.
+    var chosenModel: ChatModel? { model.toOptional() }
+    var chosenEffort: Effort? { effort.toOptional() }
+
+    /// `nil` means "go back to inheriting".
+    func chooseModel(_ chosen: ChatModel?) { selectModel(Option.fromOptional(chosen)) }
+    func chooseEffort(_ chosen: Effort?) { selectEffort(Option.fromOptional(chosen)) }
 }

@@ -102,10 +102,10 @@ public final class Secretary {
     /// Whether activity is woven into the conversation. Hidden on a first run
     /// and remembered after that, so the choice survives quitting.
     public private(set) var showsActivity: Bool
-    /// nil means "whatever the backend is already set up to use" — for Claude
-    /// Code that's the model and effort from the user's own settings.
-    public private(set) var model: ChatModel?
-    public private(set) var effort: Effort?
+    /// Absent means "whatever the backend is already set up to use" — for
+    /// Claude Code that's the model and effort from the user's own settings.
+    public private(set) var model: Option<ChatModel> = .none()
+    public private(set) var effort: Option<Effort> = .none()
 
     /// Who the assistant is. The user can switch profiles while a conversation
     /// is open, so this changes at runtime — see `apply(profile:)`.
@@ -113,7 +113,12 @@ public final class Secretary {
 
     @ObservationIgnored public let stateMachine: AssistantStateMachine
     @ObservationIgnored private let registry: ProjectRegistry
-    @ObservationIgnored private let policy: PermissionPolicy
+    /// Which project/tool pairs the user has approved this session.
+    ///
+    /// A value inside the store rather than a policy object holding its own
+    /// mutable set: there is exactly one copy, it lives beside everything else
+    /// the UI renders, and the decision itself is a pure function of it.
+    public private(set) var grants: PermissionGrants
     @ObservationIgnored private let adapter: CodeToolAdapter
     @ObservationIgnored private let fileAdapter: FileToolAdapter
     @ObservationIgnored private let classifier: IntentClassifying
@@ -121,18 +126,18 @@ public final class Secretary {
     @ObservationIgnored private let chatProvider: ChatProvider
     @ObservationIgnored private let activityPreference: ActivityPreferenceStoring
 
-    @ObservationIgnored private var activeTaskID: String?
+    @ObservationIgnored private var activeTaskID: Option<String> = .none()
     /// The user's own words for the request in flight, so a completed tool run
     /// can be written into the conversation as a real exchange.
-    @ObservationIgnored private var activeRequestText: String?
+    @ObservationIgnored private var activeRequestText: Option<String> = .none()
     /// Last project actually worked in, so follow-up commands don't need
     /// "in <project>" repeated on every line.
-    @ObservationIgnored private var lastProject: Project?
+    @ObservationIgnored private var lastProject: Option<Project> = .none()
     @ObservationIgnored private var _sessionAgentTools: Set<String> = []
     /// This turn's activity entry. Without it, a later turn would find the
     /// previous turn's box by kind and overwrite that history instead of
     /// starting its own.
-    @ObservationIgnored private var activityEntryID: UUID?
+    @ObservationIgnored private var activityEntryID: Option<UUID> = .none()
     @ObservationIgnored private var conversation: [ChatMessage] = []
     @ObservationIgnored private var streamingTask: Task<Void, Never>?
 
@@ -157,7 +162,7 @@ public final class Secretary {
         stateMachine: AssistantStateMachine,
         registry: ProjectRegistry,
         profile: SecretaryProfile = .miku,
-        policy: PermissionPolicy = DefaultPermissionPolicy(),
+        grants: PermissionGrants = PermissionGrants(),
         adapter: CodeToolAdapter = GitReadOnlyAdapter(),
         fileAdapter: FileToolAdapter = FileReadOnlyAdapter(),
         classifier: IntentClassifying = RuleBasedIntentClassifier(),
@@ -168,7 +173,7 @@ public final class Secretary {
         self.profile = profile
         self.stateMachine = stateMachine
         self.registry = registry
-        self.policy = policy
+        self.grants = grants
         self.adapter = adapter
         self.fileAdapter = fileAdapter
         self.classifier = classifier
@@ -199,14 +204,14 @@ public final class Secretary {
         }
 
         let taskID = String(UUID().uuidString.prefix(8).lowercased())
-        activeTaskID = taskID
-        activeRequestText = trimmed
+        activeTaskID = .some(taskID)
+        activeRequestText = .some(trimmed)
         audit.record(AuditEntry(taskID: taskID, kind: .requestReceived, detail: "message received"))
 
         activity = []
-        activityEntryID = nil
-        stateMachine.send(.userBeganInput, reason: "user submitted a message", taskID: Option.fromOptional(taskID))
-        stateMachine.send(.beginInterpreting, reason: "classifying intent", taskID: Option.fromOptional(taskID))
+        activityEntryID = .none()
+        stateMachine.send(.userBeganInput, reason: "user submitted a message", taskID: .some(taskID))
+        stateMachine.send(.beginInterpreting, reason: "classifying intent", taskID: .some(taskID))
 
         let intent = classifier.classify(trimmed)
         audit.record(AuditEntry(taskID: taskID, kind: .intentClassified, detail: describe(intent)))
@@ -244,7 +249,10 @@ public final class Secretary {
         // — a grant the user never asked for. Non-read-only classes re-prompt
         // anyway, so there is nothing to record.
         if request.actionClass == .readOnly {
-            policy.recordApproval(projectID: request.project.id, toolID: request.toolID)
+            grants = grants |> PermissionGrants.granting(
+                projectID: request.project.id,
+                toolID: request.toolID
+            )
         }
         execute(operation, in: request.project)
     }
@@ -252,7 +260,7 @@ public final class Secretary {
     public func choose(project: Project) {
         guard case .projectChoice(_, let operation) = pendingDecision else { return }
         pendingDecision = nil
-        lastProject = project
+        lastProject = .some(project)
         proceed(operation: operation, project: project)
     }
 
@@ -277,9 +285,9 @@ public final class Secretary {
                 return
             }
             if ChatModel.meansInherit(argument) {
-                selectModel(nil)
-            } else if let resolved = ChatModel.named(argument).toOptional() {
-                selectModel(resolved)
+                selectModel(.none())
+            } else if ChatModel.named(argument).isDefined {
+                selectModel(ChatModel.named(argument))
             } else {
                 say(.secretary, "Unknown model “\(argument)”. Available: \(ChatModel.known.map(\.id).joined(separator: ", ")), or `default`.")
             }
@@ -291,9 +299,9 @@ public final class Secretary {
                 return
             }
             if ChatModel.meansInherit(argument) {
-                selectEffort(nil)
-            } else if let resolved = Effort.named(argument).toOptional() {
-                selectEffort(resolved)
+                selectEffort(.none())
+            } else if Effort.named(argument).isDefined {
+                selectEffort(Effort.named(argument))
             } else {
                 say(.secretary, "Unknown effort “\(argument)”. Available: \(Effort.allCases.map(\.rawValue).joined(separator: ", ")), or `default`.")
             }
@@ -330,15 +338,21 @@ public final class Secretary {
             // single unapproved project is worth asking about; with several,
             // guessing which one the user meant would be wrong.
             let primary = lastProject
-                .flatMap { remembered in approved.first { $0.id == remembered.id } }
-                ?? approved.first
-                ?? (registry.projects.count == 1 ? registry.projects.first : nil)
+                .flatMap { remembered in
+                    Option.fromOptional(approved.first { $0.id == remembered.id })
+                }^
+                .orElse(Option.fromOptional(approved.first))
+                .orElse(
+                    registry.projects.count == 1
+                        ? Option.fromOptional(registry.projects.first)
+                        : Option.none()
+                )
 
-            if let primary, !primary.allows(tool: Self.claudeCodeToolID) {
-                requestAgentAccess(to: primary, prompt: text, taskID: taskID)
+            if let chosen = primary.toOptional(), !chosen.allows(tool: Self.claudeCodeToolID) {
+                requestAgentAccess(to: chosen, prompt: text, taskID: taskID)
                 return
             }
-            if primary == nil, registry.projects.count > 1 {
+            if !primary.isDefined, registry.projects.count > 1 {
                 say(.secretary, "Which project should I start in? I'll be able to see the others once you've approved them too.")
                 pendingDecision = .projectChoice(
                     candidates: registry.projects,
@@ -364,8 +378,8 @@ public final class Secretary {
     /// permission to change files should not outlive the session.
     private func offerToWiden(_ denied: [DeniedTool], taskID: String) {
         guard !denied.isEmpty,
-              let project = lastProject,
-              let prompt = activeRequestText
+              let project = lastProject.toOptional(),
+              let prompt = activeRequestText.toOptional()
         else { return }
 
         let rules = denied.map(\.rule).reduced()
@@ -395,7 +409,7 @@ public final class Secretary {
 
     /// Adds the rules for this session and retries the request that was blocked.
     private func widenAndRetry(rules: [String], prompt: String, in project: Project) {
-        let taskID = activeTaskID ?? "-"
+        let taskID = activeTaskID.getOrElse("-")
         sessionAgentTools.formUnion(rules)
         audit.record(AuditEntry(
             taskID: taskID,
@@ -404,15 +418,15 @@ public final class Secretary {
         ))
 
         guard let scoped = chatProvider as? WorkspaceScopedProvider else { return }
-        lastProject = project
-        prepareWorkspace(primary: project, on: scoped)
+        lastProject = .some(project)
+        prepareWorkspace(primary: .some(project), on: scoped)
 
         // The previous turn already finished, so the machine is back at IDLE.
         // Re-enter through the normal path — sending `.beginExecuting` straight
         // from IDLE is an invalid transition, and the character would sit still
         // through the whole retry.
-        stateMachine.send(.userBeganInput, reason: "retrying with wider permissions", taskID: Option.fromOptional(taskID))
-        stateMachine.send(.beginInterpreting, reason: "retrying with wider permissions", taskID: Option.fromOptional(taskID))
+        stateMachine.send(.userBeganInput, reason: "retrying with wider permissions", taskID: .some(taskID))
+        stateMachine.send(.beginInterpreting, reason: "retrying with wider permissions", taskID: .some(taskID))
 
         // The request itself is already the last user turn in `conversation`.
         _ = prompt
@@ -436,15 +450,16 @@ public final class Secretary {
     /// alongside it, so a question spanning projects can be answered without
     /// making the user switch. Only approved folders are ever passed — the
     /// per-project grant is what widens this set.
-    private func prepareWorkspace(primary: Project?, on scoped: WorkspaceScopedProvider) {
+    private func prepareWorkspace(primary: Option<Project>, on scoped: WorkspaceScopedProvider) {
         // Remembered before streaming so the system prompt can name the folder
         // the backend is actually standing in.
         lastProject = primary
+        let primaryID = primary.map(\.id)^.toOptional()
         let others = approvedProjects
-            .filter { $0.id != primary?.id }
+            .filter { $0.id != primaryID }
             .map(\.url)
         scoped.prepare(
-            workingDirectory: primary?.url ?? Self.scratchDirectory,
+            workingDirectory: primary.map(\.url)^.getOrElse(Self.scratchDirectory),
             additionalDirectories: others,
             allowedTools: ClaudeCodeProvider.readOnlyTools + sessionAgentTools.sorted()
         )
@@ -472,24 +487,32 @@ public final class Secretary {
     /// Persists the grant, points the backend at the project, and runs the turn
     /// the user was trying to send when we interrupted them.
     private func beginAgentSession(prompt: String, in project: Project) {
-        let taskID = activeTaskID ?? "-"
-        do {
-            try registry.grant(tool: Self.claudeCodeToolID, to: project.id)
-        } catch {
-            finish(
-                success: false,
-                message: "Couldn't save that permission: \(error.localizedDescription)",
-                reason: "grant failed"
-            )
-            return
-        }
-        audit.record(AuditEntry(taskID: taskID, kind: .executionStarted, detail: "claude code in \(project.name)"))
-        if let scoped = chatProvider as? WorkspaceScopedProvider {
-            prepareWorkspace(primary: project, on: scoped)
-        }
+        let taskID = activeTaskID.getOrElse("-")
 
-        conversation.append(ChatMessage(role: .user, content: prompt))
-        streamReply(messages: conversation, taskID: taskID)
+        registry.grant(tool: Self.claudeCodeToolID, to: project.id).fold(
+            { error in
+                finish(
+                    success: false,
+                    message: "Couldn't save that permission: \(error.reason)",
+                    reason: "grant failed"
+                )
+            },
+            { _ in
+                audit.record(
+                    AuditEntry(
+                        taskID: taskID,
+                        kind: .executionStarted,
+                        detail: "claude code in \(project.name)"
+                    )
+                )
+                if let scoped = chatProvider as? WorkspaceScopedProvider {
+                    prepareWorkspace(primary: .some(project), on: scoped)
+                }
+
+                conversation.append(ChatMessage(role: .user, content: prompt))
+                streamReply(messages: conversation, taskID: taskID)
+            }
+        )
     }
 
     /// Streams a reply for `messages` into a new transcript entry.
@@ -508,8 +531,8 @@ public final class Secretary {
 
         let stream = chatProvider.stream(
             messages: messages,
-            model: Option.fromOptional(model),
-            effort: Option.fromOptional(effort),
+            model: model,
+            effort: effort,
             maxTokens: chatMaxTokens,
             system: .some(systemPrompt)
         )
@@ -529,7 +552,7 @@ public final class Secretary {
                 // The file-understanding path is already WORKING from the read;
                 // re-sending the event there would be an invalid transition.
                 guard self.stateMachine.state != .working else { return }
-                self.stateMachine.send(.beginExecuting, reason: "streaming reply", taskID: Option.fromOptional(taskID), toolStatus: .some("streaming"))
+                self.stateMachine.send(.beginExecuting, reason: "streaming reply", taskID: .some(taskID), toolStatus: .some("streaming"))
             }
 
             for await outcome in stream {
@@ -587,11 +610,11 @@ public final class Secretary {
     private func finishChat(entryID: UUID, taskID: String, success: Bool, finalText: String) {
         updateEntry(id: entryID, text: finalText)
         if stateMachine.state != .working {
-            stateMachine.send(.beginExecuting, reason: "chat completed", taskID: Option.fromOptional(taskID))
+            stateMachine.send(.beginExecuting, reason: "chat completed", taskID: .some(taskID))
         }
-        stateMachine.send(success ? .succeeded : .failed, reason: success ? "chat reply delivered" : "chat failed", taskID: Option.fromOptional(taskID))
-        stateMachine.send(.acknowledge, reason: "result delivered", taskID: Option.fromOptional(taskID))
-        activeTaskID = nil
+        stateMachine.send(success ? .succeeded : .failed, reason: success ? "chat reply delivered" : "chat failed", taskID: .some(taskID))
+        stateMachine.send(.acknowledge, reason: "result delivered", taskID: .some(taskID))
+        activeTaskID = .none()
     }
 
     /// Appends a step, collapsing an immediate repeat — several thinking blocks
@@ -604,14 +627,17 @@ public final class Secretary {
         let text = activity.map { "\($0.kind == .thinking ? "◇" : "▸") \($0.detail)" }
             .joined(separator: "\n")
 
-        if let entryID = activityEntryID,
-           let index = transcript.firstIndex(where: { $0.id == entryID }) {
+        let entries = transcript
+        let existing = activityEntryID
+            .flatMap { id in Option.fromOptional(entries.firstIndex { $0.id == id }) }^
+
+        if let index = existing.toOptional() {
             transcript[index].text = text
         } else if let replyIndex = transcript.firstIndex(where: { $0.id == replyID }) {
             // Inserted ahead of the reply: the work happened before the answer,
             // and the transcript should read in that order.
             let entry = TranscriptEntry(speaker: .secretary, kind: .activity, text: text)
-            activityEntryID = entry.id
+            activityEntryID = .some(entry.id)
             transcript.insert(entry, at: replyIndex)
         }
     }
@@ -628,7 +654,7 @@ public final class Secretary {
             // Nothing to back-fill mid-turn: the entry appears on the next step.
         } else {
             transcript.removeAll { $0.kind == .activity }
-            activityEntryID = nil
+            activityEntryID = .none()
             transcript.append(TranscriptEntry(speaker: .secretary, kind: .activity, text: "▸ Hiding what I'm doing"))
         }
     }
@@ -641,7 +667,7 @@ public final class Secretary {
     // MARK: - Git pipeline
 
     private func handleTool(operation: PlannedOperation, projectQuery: Option<String>) {
-        let taskID = activeTaskID ?? "-"
+        let taskID = activeTaskID.getOrElse("-")
 
         var resolution = registry.resolve(query: projectQuery)
 
@@ -650,14 +676,14 @@ public final class Secretary {
         // the user said nothing: an explicit name that doesn't match is still a
         // "not found", never silently redirected somewhere else.
         if !projectQuery.isDefined, case .needsSelection = resolution,
-           let remembered = lastProject, registry.project(id: remembered.id).isDefined {
+           let remembered = lastProject.toOptional(), registry.project(id: remembered.id).isDefined {
             resolution = .resolved(remembered)
         }
 
         switch resolution {
         case .resolved(let project):
             audit.record(AuditEntry(taskID: taskID, kind: .projectResolved, detail: project.name))
-            lastProject = project
+            lastProject = .some(project)
             proceed(operation: operation, project: project)
 
         case .notFound(let query):
@@ -686,7 +712,7 @@ public final class Secretary {
     }
 
     private func proceed(operation: PlannedOperation, project: Project) {
-        let taskID = activeTaskID ?? "-"
+        let taskID = activeTaskID.getOrElse("-")
 
         // Starting the agent in a project is what *creates* the grant, so it
         // can't be gated on the project already holding it.
@@ -696,7 +722,7 @@ public final class Secretary {
         }
         if case .startAgent(let prompt) = operation {
             if project.allows(tool: Self.claudeCodeToolID) {
-                lastProject = project
+                lastProject = .some(project)
                 beginAgentSession(prompt: prompt, in: project)
             } else {
                 requestAgentAccess(to: project, prompt: prompt, taskID: taskID)
@@ -713,27 +739,39 @@ public final class Secretary {
             rationale: operation.humanDescription
         )
 
-        switch policy.evaluate(request) {
-        case .allowed:
-            execute(operation, in: project)
-
-        case .needsApproval(let request):
-            audit.record(AuditEntry(taskID: taskID, kind: .approvalRequested, detail: request.commandSummary))
-            // A read is local, but its contents then join this conversation and
-            // travel with the next chat message. Say that at the point of asking
-            // rather than letting the user discover it later.
-            let caveat: String
-            if case .file(.readFile) = operation {
-                caveat = " Its contents will join this conversation, so they'll be sent to Claude with your next message."
-            } else {
-                caveat = ""
+        decidePermission(grants)(request).fold(
+            { error in
+                finish(success: false, message: error.reason, reason: "denied by policy")
+            },
+            { outcome in
+                switch outcome {
+                case .allowed:
+                    execute(operation, in: project)
+                case let .needsApproval(request):
+                    askForApproval(request, operation: operation, taskID: taskID, project: project)
+                }
             }
-            say(.secretary, "May I run `\(request.commandSummary)` in \(project.name)?" + caveat)
-            pendingDecision = .approval(request, operation: operation)
+        )
+    }
 
-        case .denied(let reason):
-            finish(success: false, message: reason, reason: "denied by policy")
+    private func askForApproval(
+        _ request: ApprovalRequest,
+        operation: PlannedOperation,
+        taskID: String,
+        project: Project
+    ) {
+        audit.record(AuditEntry(taskID: taskID, kind: .approvalRequested, detail: request.commandSummary))
+        // A read is local, but its contents then join this conversation and
+        // travel with the next chat message. Say that at the point of asking
+        // rather than letting the user discover it later.
+        let caveat: String
+        if case .file(.readFile) = operation {
+            caveat = " Its contents will join this conversation, so they'll be sent to Claude with your next message."
+        } else {
+            caveat = ""
         }
+        say(.secretary, "May I run `\(request.commandSummary)` in \(project.name)?" + caveat)
+        pendingDecision = .approval(request, operation: operation)
     }
 
     private func execute(_ operation: PlannedOperation, in project: Project) {
@@ -742,7 +780,7 @@ public final class Secretary {
             return
         }
         if case .startAgent(let prompt) = operation {
-            lastProject = project
+            lastProject = .some(project)
             beginAgentSession(prompt: prompt, in: project)
             return
         }
@@ -751,10 +789,10 @@ public final class Secretary {
             return
         }
 
-        let taskID = activeTaskID ?? "-"
+        let taskID = activeTaskID.getOrElse("-")
         let summary = summary(for: operation)
 
-        stateMachine.send(.beginExecuting, reason: summary, taskID: Option.fromOptional(taskID), toolStatus: .some("running"))
+        stateMachine.send(.beginExecuting, reason: summary, taskID: .some(taskID), toolStatus: .some("running"))
         audit.record(AuditEntry(taskID: taskID, kind: .executionStarted, detail: summary))
 
         run(operation, in: project).fold(
@@ -807,7 +845,7 @@ public final class Secretary {
     /// for a read says so. `summarize <path>` remains the path that asks before
     /// sending and never leaves the file in history.
     private func rememberToolExchange(_ operation: PlannedOperation, output: String) {
-        guard let request = activeRequestText else { return }
+        guard let request = activeRequestText.toOptional() else { return }
 
         let note: String
         switch operation {
@@ -863,10 +901,10 @@ public final class Secretary {
     /// turn. Only reached after an explicit approval, because the operation is
     /// `.externalNetwork` and so can never run unattended.
     private func executeUnderstanding(_ request: FileUnderstanding, in project: Project) {
-        let taskID = activeTaskID ?? "-"
+        let taskID = activeTaskID.getOrElse("-")
         let summary = summary(for: .understand(request))
 
-        stateMachine.send(.beginExecuting, reason: summary, taskID: Option.fromOptional(taskID), toolStatus: .some("reading"))
+        stateMachine.send(.beginExecuting, reason: summary, taskID: .some(taskID), toolStatus: .some("reading"))
         audit.record(AuditEntry(taskID: taskID, kind: .executionStarted, detail: summary))
 
         let read = fileAdapter.run(.readFile(relativePath: request.relativePath), in: project)
@@ -972,16 +1010,16 @@ public final class Secretary {
     // MARK: - Helpers
 
     private func finish(success: Bool, message: String, reason: String, toolStatus: String? = nil) {
-        let taskID = activeTaskID ?? "-"
+        let taskID = activeTaskID.getOrElse("-")
 
         if stateMachine.state != .working {
-            stateMachine.send(.beginExecuting, reason: reason, taskID: Option.fromOptional(taskID), toolStatus: Option.fromOptional(toolStatus))
+            stateMachine.send(.beginExecuting, reason: reason, taskID: .some(taskID), toolStatus: Option.fromOptional(toolStatus))
         }
 
-        stateMachine.send(success ? .succeeded : .failed, reason: reason, taskID: Option.fromOptional(taskID), toolStatus: Option.fromOptional(toolStatus))
+        stateMachine.send(success ? .succeeded : .failed, reason: reason, taskID: .some(taskID), toolStatus: Option.fromOptional(toolStatus))
         say(.secretary, message)
-        stateMachine.send(.acknowledge, reason: "result delivered", taskID: Option.fromOptional(taskID))
-        activeTaskID = nil
+        stateMachine.send(.acknowledge, reason: "result delivered", taskID: .some(taskID))
+        activeTaskID = .none()
     }
 
     private func say(_ speaker: TranscriptEntry.Speaker, _ text: String) {
@@ -1022,8 +1060,9 @@ public final class Secretary {
     /// It produced exactly that: asked to summarise a project, the assistant
     /// asked the user to paste the contents and to type `list files in <name>`.
     private var agentPrompt: String {
-        let location = lastProject.map { "the project “\($0.name)”" } ?? "a scratch folder"
-        let others = approvedProjects.filter { $0.id != lastProject?.id }.map(\.name)
+        let location = lastProject.map { "the project “\($0.name)”" }^.getOrElse("a scratch folder")
+        let lastID = lastProject.map(\.id)^.toOptional()
+        let others = approvedProjects.filter { $0.id != lastID }.map(\.name)
         let alsoOpen = others.isEmpty ? "" : """
 
 
@@ -1073,62 +1112,68 @@ public final class Secretary {
     /// The model that will actually be used, named. Falls back to what the
     /// backend is configured with so the settings panel can show a real name
     /// rather than "your default".
-    public var effectiveModel: ChatModel? {
-        model ?? inheritedDefaults.model.toOptional()
+    public var effectiveModel: Option<ChatModel> {
+        model.orElse(inheritedDefaults.model)
     }
 
-    public var effectiveEffort: Effort? {
-        effort ?? inheritedDefaults.effort.toOptional()
+    public var effectiveEffort: Option<Effort> {
+        effort.orElse(inheritedDefaults.effort)
     }
 
     public var effectiveModelName: String {
-        effectiveModel?.displayName ?? "Unknown"
+        effectiveModel.map(\.displayName)^.getOrElse("Unknown")
     }
 
     public var effectiveEffortName: String {
-        effectiveEffort?.rawValue ?? "Unknown"
+        effectiveEffort.map(\.rawValue)^.getOrElse("Unknown")
     }
 
     /// True when the value comes from the user's own Claude Code rather than a
     /// choice made in this app — worth showing, because it explains why it can
     /// change out from under the app.
-    public var isModelInherited: Bool { model == nil }
-    public var isEffortInherited: Bool { effort == nil }
+    public var isModelInherited: Bool { !model.isDefined }
+    public var isEffortInherited: Bool { !effort.isDefined }
 
     private var inheritedDefaults: ClaudeCodeDefaults {
-        (chatProvider as? ChatBackend)?.inheritedDefaults ?? .unknown
+        Option.fromOptional(chatProvider as? ChatBackend)
+            .map(\.inheritedDefaults)^
+            .getOrElse(.unknown)
     }
 
-    /// Picks a model, or `nil` to go back to inheriting. Announced in the
+    /// Picks a model, or absent to go back to inheriting. Announced in the
     /// transcript so a change made in the settings panel is visible in the
     /// conversation it affects.
-    public func selectModel(_ chosen: ChatModel?) {
+    public func selectModel(_ chosen: Option<ChatModel>) {
         guard chosen != model else { return }
         model = chosen
-        if let chosen {
-            say(.secretary, "Model set to \(chosen.displayName).")
-        } else {
-            say(.secretary, "Model: back to your Claude Code default (\(effectiveModelName)).")
-        }
+        say(
+            .secretary,
+            chosen.fold(
+                { "Model: back to your Claude Code default (\(self.effectiveModelName))." },
+                { "Model set to \($0.displayName)." }
+            )
+        )
     }
 
-    public func selectEffort(_ chosen: Effort?) {
+    public func selectEffort(_ chosen: Option<Effort>) {
         guard chosen != effort else { return }
         effort = chosen
-        if let chosen {
-            say(.secretary, "Effort set to \(chosen.rawValue).")
-        } else {
-            say(.secretary, "Effort: back to your Claude Code default (\(effectiveEffortName)).")
-        }
+        say(
+            .secretary,
+            chosen.fold(
+                { "Effort: back to your Claude Code default (\(self.effectiveEffortName))." },
+                { "Effort set to \($0.rawValue)." }
+            )
+        )
     }
 
     /// What to show the user for a setting they may never have touched.
     public var modelDescription: String {
-        model?.id ?? "your Claude Code default"
+        model.map(\.id)^.getOrElse("your Claude Code default")
     }
 
     public var effortDescription: String {
-        effort?.rawValue ?? "your Claude Code default"
+        effort.map(\.rawValue)^.getOrElse("your Claude Code default")
     }
 
     private var chatOnlyPrompt: String {

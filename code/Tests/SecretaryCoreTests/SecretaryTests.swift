@@ -117,7 +117,6 @@ final class RuleBasedIntentClassifierTests: XCTestCase {
 final class SecretaryTests: XCTestCase {
     private var machine: AssistantStateMachine!
     private var adapter: SpyAdapter!
-    private var policy: DefaultPermissionPolicy!
 
     private let project = Project(
         name: "Fixture",
@@ -129,7 +128,6 @@ final class SecretaryTests: XCTestCase {
         super.setUp()
         machine = AssistantStateMachine()
         adapter = SpyAdapter()
-        policy = DefaultPermissionPolicy()
     }
 
     private func makeSecretary(
@@ -139,7 +137,6 @@ final class SecretaryTests: XCTestCase {
         Secretary(
             stateMachine: machine,
             registry: ProjectRegistry(store: InMemoryProjectStore(projects: projects)),
-            policy: policy,
             adapter: adapter,
             classifier: RuleBasedIntentClassifier(),
             audit: AuditLog(),
@@ -312,7 +309,7 @@ final class SecretaryTests: XCTestCase {
 
         secretary.submit("/model claude-opus-4-8")
 
-        XCTAssertEqual(secretary.model, .opus48)
+        XCTAssertEqual(secretary.model, .some(.opus48))
         XCTAssertEqual(chat.callCount, 0)
         // Confirmed by display name now — the settings panel and the slash
         // command share one entry point, and a name reads better than an id.
