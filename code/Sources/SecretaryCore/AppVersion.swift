@@ -1,16 +1,32 @@
 import Foundation
 
-/// Which build of the app this is.
+/// Which build of the app this is, as `major.phase.change`.
 ///
 /// The number lives here, in code, rather than only in the packaging script's
 /// `Info.plist`: the app has to be able to answer the question itself — in the
 /// About window, and in a bug report where the `.plist` isn't to hand. The
 /// script reads this declaration when it assembles the bundle, so the two can't
 /// drift apart. Bump it here and the bundle follows.
+///
+/// The three parts are not semantic versioning, and are named `major`,
+/// `minor`, `patch` only because that is what the fields have always been
+/// called:
+///
+/// - **major** — `0` until the app is published. The owner says when.
+/// - **phase** — which phase of the charter the work belongs to, currently 6.
+///   Moved by hand when the work moves on, not derived: the charter lists
+///   phases 7 and 8 that nobody has started, so the highest heading is not the
+///   current one.
+/// - **change** — one per completed change, five for five. It never resets, so
+///   it only ever counts up and two builds can't share a number.
+///
+/// Because the middle part tracks a phase rather than progress, `<` is only
+/// meaningful within one phase: 0.6.51 is newer code than 0.9.0, which was
+/// numbered under the previous scheme.
 public struct AppVersion: Equatable, Comparable, Sendable, CustomStringConvertible {
     /// The current version. Keep the literal on one line and in this shape —
     /// `scripts/package-app.sh` parses it to fill in `CFBundleShortVersionString`.
-    public static let current = AppVersion(major: 0, minor: 9, patch: 0)
+    public static let current = AppVersion(major: 0, minor: 6, patch: 51)
 
     public let major: Int
     public let minor: Int
