@@ -94,7 +94,6 @@ struct ChatPanelView: View {
         // to the bottom of it would sit in the tail, outside the bubble.
         .overlay(alignment: buttonsOnLeading ? .topLeading : .topTrailing) { windowButtons }
         .overlay(alignment: buttonsOnLeading ? .topTrailing : .topLeading) { resizeGrip }
-        .onExitCommand(perform: onClose)
         .padding(layout.isFlippedVertically ? .top : .bottom, SpeechBubbleShape.defaultTailLength)
         .frame(width: appearance.settings.chatWidth, height: appearance.settings.chatHeight)
     }
@@ -1035,9 +1034,17 @@ struct ChatPanelView: View {
     private func startWatchingArrowKeys() {
         guard arrowKeyMonitor == nil else { return }
         arrowKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            // 126 is Up, 125 is Down.
-            guard messageBoxFocused, event.modifierFlags.isDisjoint(with: [.command, .option, .control])
+            guard event.modifierFlags.isDisjoint(with: [.command, .option, .control])
             else { return event }
+            // Escape closes the panel, wherever the focus happens to be —
+            // `.onExitCommand` was already declared and never fired on this
+            // non-activating panel, which is why pressing it did nothing.
+            if event.keyCode == 53 {
+                onClose()
+                return nil
+            }
+            // 126 is Up, 125 is Down.
+            guard messageBoxFocused else { return event }
             // A showing choice list owns the arrows; history is suspended
             // while it does, so the two never race for the same key.
             let options = pendingChoices
