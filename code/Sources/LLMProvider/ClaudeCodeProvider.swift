@@ -404,7 +404,6 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
         configuration: Configuration
     ) -> [String] {
         var arguments = [
-            "-p", prompt,
             "--output-format", "stream-json",
             "--verbose",
             "--include-partial-messages",
@@ -430,6 +429,13 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
         if let resume { arguments += ["--resume", resume] }
         arguments += system.filter { !$0.isEmpty }^
             .fold({ [] }, { ["--append-system-prompt", $0] })
+        // The message goes last, behind `--`, so the CLI can never mistake it
+        // for a flag. Passed as the value of `-p` it did: a message beginning
+        // "- A" died with `unknown option '- A…'`, and any message starting
+        // with a dash — a bullet list, a shell flag being asked about — was
+        // unsendable. Everything after `--` is a positional argument, so no
+        // other flag may follow it.
+        arguments += ["-p", "--", prompt]
         return arguments
     }
 

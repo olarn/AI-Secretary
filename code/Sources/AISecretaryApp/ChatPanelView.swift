@@ -48,6 +48,12 @@ struct ChatPanelView: View {
     /// How tall the message being typed actually is, reported by the field
     /// itself. The box is sized from this and capped at five lines.
     @State private var draftHeight: Double = 0
+    /// How far back through sent messages the box is currently showing.
+    /// `nil` means it's showing what you were actually typing.
+    @State private var recallIndex: Int?
+    /// What you were typing before you started looking back, so walking
+    /// forward past the newest message returns it rather than losing it.
+    @State private var stashedDraft = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -168,10 +174,28 @@ struct ChatPanelView: View {
                 // which would leave no way to send from the keyboard.
                 // Shift/Option-Return is left alone so it still breaks the line.
                 .onKeyPress(.return, phases: .down) { press in
-                    let modifiers: EventModifiers = [.shift, .option]
-                    guard press.modifiers.isDisjoint(with: modifiers) else { return .ignored }
+                    let newlineKeys: EventModifiers = [.shift, .option]
+                    guard press.modifiers.isDisjoint(with: newlineKeys) else {
+                        // Inserted here rather than passed on. Handing Shift+Return
+                        // back to the field left it doing nothing at all — the
+                        // modifier is swallowed and the line never breaks — which
+                        // is why only Option+Return worked.
+                        draft.append("\n")
+                        return .handled
+                    }
                     send()
                     return .handled
+                }
+                // Terminal-style recall of what you've already sent.
+                //
+                // Only while the draft is a single line: in a multi-line draft
+                // the arrows are how you move between lines, and stealing them
+                // would make the box uneditable.
+                .onKeyPress(.upArrow, phases: .down) { _ in
+                    recallOlder() ? .handled : .ignored
+                }
+                .onKeyPress(.downArrow, phases: .down) { _ in
+                    recallNewer() ? .handled : .ignored
                 }
                 .background(
                     GeometryReader { proxy in
@@ -916,9 +940,63 @@ struct ChatPanelView: View {
 
     // MARK: - Actions
 
+    /// What you've sent this session, oldest first.
+    ///
+    /// Read back out of the transcript rather than kept in a second list: the
+    /// transcript already is the record, and a copy of it would be one more
+    /// thing to keep in step. It also means recall covers exactly one session,
+    /// which is what was asked for.
+    private var sentMessages: [String] {
+        secretary.transcript
+            .filter { $0.speaker == .user && $0.kind == .message }
+            .map(\.text)
+    }
+
+    /// Whether the arrows should act as history rather than move the caret.
+    private var canRecall: Bool {
+        !draft.contains("\n") && !sentMessages.isEmpty
+    }
+
+    /// Steps back towards older messages. Returns whether it took the key.
+    private func recallOlder() -> Bool {
+        guard canRecall else { return false }
+        let history = sentMessages
+        switch recallIndex {
+        case nil:
+            stashedDraft = draft
+            recallIndex = history.count - 1
+        case let index? where index > 0:
+            recallIndex = index - 1
+        default:
+            // Already at the oldest. Take the key anyway, so it stops here
+            // rather than jumping the caret somewhere unexpected.
+            return true
+        }
+        draft = recallIndex.map { history[$0] } ?? draft
+        return true
+    }
+
+    /// Steps forward towards what you were typing.
+    private func recallNewer() -> Bool {
+        guard let index = recallIndex else { return false }
+        let history = sentMessages
+        if index + 1 < history.count {
+            recallIndex = index + 1
+            draft = history[index + 1]
+        } else {
+            recallIndex = nil
+            draft = stashedDraft
+        }
+        return true
+    }
+
     private func send() {
         let text = draft
         draft = ""
+        // A sent message ends the walk: the next Up starts again from the end,
+        // the way a shell behaves.
+        recallIndex = nil
+        stashedDraft = ""
         scrollPin.follow()
         secretary.submit(text)
     }

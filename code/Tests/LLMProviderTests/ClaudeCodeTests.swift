@@ -122,7 +122,9 @@ final class ClaudeCodeProviderLaunchTests: XCTestCase {
 
     func testAsksForTheStreamingJSONProtocolWeParse() {
         let args = arguments()
-        XCTAssertEqual(args.first, "-p")
+        // `-p` moved to the end, behind `--`, so a message beginning with a
+        // dash isn't read as a flag. See DashPromptTests.
+        XCTAssertTrue(args.contains("-p"))
         XCTAssertTrue(args.contains("stream-json"))
         XCTAssertTrue(args.contains("--include-partial-messages"),
                       "Without this there are no token-by-token deltas")
