@@ -14,10 +14,24 @@ public struct MarkdownTable: Equatable, Sendable {
     public var columnCount: Int { header.count }
 }
 
-/// One run of a message: either prose, or a table to lay out.
+/// A fenced block of code, or something the model handed over verbatim.
+public struct CodeBlock: Equatable, Sendable {
+    /// What the fence was labelled with — `swift`, `json`, and so on. Absent
+    /// when the fence carried no label.
+    public let language: String?
+    public let code: String
+
+    public init(language: String?, code: String) {
+        self.language = language
+        self.code = code
+    }
+}
+
+/// One run of a message: prose, a table to lay out, or code to show verbatim.
 public enum TranscriptSegment: Equatable, Sendable {
     case text(String)
     case table(MarkdownTable)
+    case code(CodeBlock)
 }
 
 /// Splits a reply into prose and tables.
@@ -47,7 +61,18 @@ public enum MarkdownTableParser {
         }
 
         while index < lines.count {
-            if let table = table(at: index, in: lines).toOptional() {
+            // Code first. A fenced block can contain pipes, dashes, anything —
+            // it is verbatim by definition — so looking for tables inside one
+            // would tear it apart.
+            if let block = codeBlock(at: index, in: lines) {
+                flushProse()
+                segments.append(.code(block.value))
+                index = block.nextIndex
+                if index < lines.count,
+                   lines[index].trimmingCharacters(in: .whitespaces).isEmpty {
+                    index += 1
+                }
+            } else if let table = table(at: index, in: lines).toOptional() {
                 flushProse()
                 segments.append(.table(table.value))
                 index = table.nextIndex
@@ -127,6 +152,57 @@ public enum MarkdownTableParser {
         }
         parts.append(current.trimmingCharacters(in: .whitespaces))
         return parts
+    }
+
+    /// A fenced block starting at `index`, if there is one.
+    ///
+    /// Fences have to be pulled out before anything else touches the message.
+    /// The inline markdown renderer is given `.inlineOnlyPreservingWhitespace`
+    /// so a stray character can't restructure a reply — but that also means it
+    /// swallows the fence and reflows the contents, which is how a JSON sample
+    /// arrived in the chat as `json { "iso": ... }` on one line.
+    ///
+    /// An unclosed fence still yields its block: replies stream in, and the
+    /// closing line may not have arrived yet.
+    static func codeBlock(at index: Int, in lines: [String]) -> (value: CodeBlock, nextIndex: Int)? {
+        let opening = lines[index].trimmingCharacters(in: .whitespaces)
+        guard opening.hasPrefix("```") else { return nil }
+
+        let label = opening.dropFirst(3).trimmingCharacters(in: .whitespaces)
+        // ```choices is the app's own marker for a question, handled elsewhere
+        // and already removed before rendering. Never draw it as code.
+        guard label.lowercased() != "choices" else { return nil }
+
+        var code: [String] = []
+        var cursor = index + 1
+        while cursor < lines.count {
+            if lines[cursor].trimmingCharacters(in: .whitespaces).hasPrefix("```") {
+                cursor += 1
+                break
+            }
+            code.append(lines[cursor])
+            cursor += 1
+        }
+
+        // A fence with nothing in it is punctuation, not code.
+        guard code.contains(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }) else {
+            return nil
+        }
+
+        return (
+            CodeBlock(
+                language: label.isEmpty ? nil : label,
+                code: trimmingBlankEdges(code).joined(separator: "\n")
+            ),
+            cursor
+        )
+    }
+
+    private static func trimmingBlankEdges(_ lines: [String]) -> [String] {
+        var trimmed = lines
+        while trimmed.first?.trimmingCharacters(in: .whitespaces).isEmpty == true { trimmed.removeFirst() }
+        while trimmed.last?.trimmingCharacters(in: .whitespaces).isEmpty == true { trimmed.removeLast() }
+        return trimmed
     }
 
     /// Ragged rows are common in generated markdown; pad or trim so the grid

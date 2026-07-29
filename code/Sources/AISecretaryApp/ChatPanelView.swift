@@ -577,6 +577,8 @@ struct ChatPanelView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     case .table(let table):
                         tableView(table)
+                    case .code(let block):
+                        codeView(block)
                     }
                 }
             }
@@ -618,6 +620,40 @@ struct ChatPanelView: View {
     /// caption: a table is content, so it has to grow with +/- like the rest of
     /// the answer. Only the table scrolls — the conversation itself
     /// must not, or every wide answer would drag the whole thread off-screen.
+    /// A fenced block, shown verbatim.
+    ///
+    /// Monospaced and scrolled sideways rather than wrapped: wrapping a line of
+    /// JSON or a shell command puts a break where none exists, and the reader
+    /// can no longer tell what would actually be typed. Same treatment as a
+    /// wide table — the block scrolls, the conversation doesn't.
+    private func codeView(_ block: CodeBlock) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if let language = block.language {
+                Text(language)
+                    .font(.system(size: appearance.settings.secondaryFontSize))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.top, 5)
+            }
+            ScrollView(.horizontal, showsIndicators: true) {
+                // Plain text, not `inlineMarkdown`: inside a code block an
+                // asterisk is an asterisk, and a backtick is a backtick.
+                Text(block.code)
+                    .font(.system(size: appearance.settings.fontSize, design: .monospaced))
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(Color.secondary.opacity(0.25), lineWidth: 1)
+        )
+    }
+
     private func tableView(_ table: MarkdownTable) -> some View {
         ScrollView(.horizontal, showsIndicators: true) {
             Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 4) {
