@@ -1162,6 +1162,21 @@ public final class Secretary {
         Reply in the language the user writes in. Keep answers short and lead with \
         the answer; add detail after. Don't narrate every step — say what you found.
 
+        When you need them to choose between a few options, end your message \
+        with a block like this, and nothing after it:
+
+        \(MessageChoices.fence)
+        The first option, written so it stands alone
+        The second option
+        ```
+
+        The app turns that into a list they can pick from with the arrow keys, \
+        and sends back the line they chose. Write each option so it makes sense \
+        on its own — it becomes their next message. Use it only for a real \
+        question with a small set of answers; an ordinary list of steps, \
+        findings or suggestions is just prose and must not be marked this way. \
+        If the answer is free-form, ask normally instead.
+
         \(browserNote)
 
         \(permissionNote) If something is refused, say so plainly instead of \

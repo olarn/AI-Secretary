@@ -58,12 +58,15 @@ struct ChatPanelView: View {
     @FocusState private var messageBoxFocused: Bool
     /// Watches for the arrow keys before the text field sees them.
     @State private var arrowKeyMonitor: Any?
+    /// Which option is highlighted in the choice list, when one is showing.
+    @State private var choiceIndex = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             header
             if backendStatus.needsOnboarding { onboardingCard }
             transcript
+            choiceList
             pendingDecisionView
             inputRow
             openPanelSection
@@ -560,7 +563,7 @@ struct ChatPanelView: View {
                     .font(.system(size: appearance.settings.secondaryFontSize, weight: .bold))
                     .foregroundStyle(entry.speaker == .user ? Color.accentColor : .secondary)
                 ForEach(
-                    Array(MarkdownTableParser.segments(of: entry.text).enumerated()),
+                    Array(MarkdownTableParser.segments(of: MessageChoices.parse(entry.text).body).enumerated()),
                     id: \.offset
                 ) { _, segment in
                     switch segment {
@@ -961,6 +964,66 @@ struct ChatPanelView: View {
         !draft.contains("\n") && !sentMessages.isEmpty
     }
 
+    /// The options the assistant is waiting on, if its latest message asked
+    /// something. Only the latest: an older question has been overtaken.
+    private var pendingChoices: [String] {
+        guard machine.state == .idle,
+              let last = secretary.transcript.last,
+              last.speaker == .secretary, last.kind == .message
+        else { return [] }
+        return MessageChoices.parse(last.text).options
+    }
+
+    /// The question's answers, as a list you can walk with the arrow keys and
+    /// take with Return — or simply click, since a keyboard-only control in a
+    /// window you reach with the mouse would be a trap.
+    @ViewBuilder
+    private var choiceList: some View {
+        let options = pendingChoices
+        if !options.isEmpty {
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(Array(options.enumerated()), id: \.offset) { index, option in
+                    Button { pick(option) } label: {
+                        HStack(alignment: .top, spacing: 6) {
+                            // The caret marks the highlight for anyone who
+                            // can't tell the tint apart from the background.
+                            Text(index == choiceIndex ? "›" : " ")
+                                .fontWeight(.bold)
+                            Text(option)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .font(.system(size: appearance.settings.fontSize))
+                        .padding(.vertical, 3)
+                        .padding(.horizontal, 6)
+                        .background(
+                            index == choiceIndex ? Color.accentColor.opacity(0.22) : .clear,
+                            in: RoundedRectangle(cornerRadius: 5)
+                        )
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+                Text("↑ ↓ to move · return to choose")
+                    .font(.system(size: appearance.settings.secondaryFontSize))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 6)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 4)
+            .onAppear { choiceIndex = 0 }
+        }
+    }
+
+    /// Answering sends the option's own words, not "A" or "the second one":
+    /// the model reads it as an ordinary reply, and the transcript records what
+    /// was actually chosen.
+    private func pick(_ option: String) {
+        choiceIndex = 0
+        draft = ""
+        scrollPin.follow()
+        secretary.submit(option)
+    }
+
     /// Catches Up and Down before the text field turns them into caret
     /// movement.
     ///
@@ -975,6 +1038,25 @@ struct ChatPanelView: View {
             // 126 is Up, 125 is Down.
             guard messageBoxFocused, event.modifierFlags.isDisjoint(with: [.command, .option, .control])
             else { return event }
+            // A showing choice list owns the arrows; history is suspended
+            // while it does, so the two never race for the same key.
+            let options = pendingChoices
+            if !options.isEmpty {
+                switch event.keyCode {
+                case 126:
+                    choiceIndex = max(0, choiceIndex - 1)
+                    return nil
+                case 125:
+                    choiceIndex = min(options.count - 1, choiceIndex + 1)
+                    return nil
+                case 36 where draft.isEmpty:
+                    // Return picks the highlighted option, but only when you
+                    // aren't part-way through typing something else.
+                    pick(options[choiceIndex])
+                    return nil
+                default: return event
+                }
+            }
             switch event.keyCode {
             case 126: return recallOlder() ? nil : event
             case 125: return recallNewer() ? nil : event
