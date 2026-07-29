@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import AssistantState
 import ProjectRegistry
@@ -54,6 +55,9 @@ struct ChatPanelView: View {
     /// What you were typing before you started looking back, so walking
     /// forward past the newest message returns it rather than losing it.
     @State private var stashedDraft = ""
+    @FocusState private var messageBoxFocused: Bool
+    /// Watches for the arrow keys before the text field sees them.
+    @State private var arrowKeyMonitor: Any?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -66,6 +70,8 @@ struct ChatPanelView: View {
             footer
         }
         .padding(18)
+        .onAppear { startWatchingArrowKeys() }
+        .onDisappear { stopWatchingArrowKeys() }
         .frame(width: appearance.settings.chatWidth)
         .frame(maxHeight: .infinity, alignment: .top)
         .background(
@@ -186,17 +192,7 @@ struct ChatPanelView: View {
                     send()
                     return .handled
                 }
-                // Terminal-style recall of what you've already sent.
-                //
-                // Only while the draft is a single line: in a multi-line draft
-                // the arrows are how you move between lines, and stealing them
-                // would make the box uneditable.
-                .onKeyPress(.upArrow, phases: .down) { _ in
-                    recallOlder() ? .handled : .ignored
-                }
-                .onKeyPress(.downArrow, phases: .down) { _ in
-                    recallNewer() ? .handled : .ignored
-                }
+                .focused($messageBoxFocused)
                 .background(
                     GeometryReader { proxy in
                         Color.clear.preference(key: MessageBoxHeightKey.self, value: proxy.size.height)
@@ -506,6 +502,14 @@ struct ChatPanelView: View {
                         ForEach(secretary.transcript) { entry in
                             messageBubble(entry).id(entry.id)
                         }
+                        // Breathing room under the last line.
+                        //
+                        // Scrolled to the bottom, the final line sat flush
+                        // against the edge and read as cut off — and with a
+                        // descender or a second line arriving mid-stream it
+                        // genuinely was. Scaled to the text size, because the
+                        // amount that goes missing scales with it too.
+                        Color.clear.frame(height: appearance.settings.fontSize)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(
@@ -955,6 +959,33 @@ struct ChatPanelView: View {
     /// Whether the arrows should act as history rather than move the caret.
     private var canRecall: Bool {
         !draft.contains("\n") && !sentMessages.isEmpty
+    }
+
+    /// Catches Up and Down before the text field turns them into caret
+    /// movement.
+    ///
+    /// `.onKeyPress` was the obvious way and does not work here: Return
+    /// arrives, the arrows never do, because the field consumes them as
+    /// `moveUp:`/`moveDown:` first. Verified in the running app — the handler
+    /// was in place and the box stayed empty. A local event monitor sees the
+    /// key before the responder chain does, which is the only reliable point.
+    private func startWatchingArrowKeys() {
+        guard arrowKeyMonitor == nil else { return }
+        arrowKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            // 126 is Up, 125 is Down.
+            guard messageBoxFocused, event.modifierFlags.isDisjoint(with: [.command, .option, .control])
+            else { return event }
+            switch event.keyCode {
+            case 126: return recallOlder() ? nil : event
+            case 125: return recallNewer() ? nil : event
+            default: return event
+            }
+        }
+    }
+
+    private func stopWatchingArrowKeys() {
+        arrowKeyMonitor.map(NSEvent.removeMonitor)
+        arrowKeyMonitor = nil
     }
 
     /// Steps back towards older messages. Returns whether it took the key.
