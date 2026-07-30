@@ -123,9 +123,9 @@ struct ChatPanelView: View {
         .padding(buttonsOnLeading ? .leading : .trailing, 10)
     }
 
-    /// Which top corner each cluster gets. The button row sits on the tail's
-    /// side and the grip opposite it, so both follow the bubble when it mirrors
-    /// and neither ever lands on the other.
+    /// Which top corner the button row gets: the tail's side, so it follows the
+    /// bubble when it mirrors. The grip's corner is `gripCorner`, which is kept
+    /// clear of this one.
     ///
     /// This only moves them. What the buttons *do* is decided elsewhere and
     /// doesn't depend on where they are: widening still steps, restoring still
