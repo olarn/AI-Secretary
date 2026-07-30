@@ -29,9 +29,14 @@ public struct GripCorner: Equatable, Sendable {
     /// "which way does this arrow point" is exactly the thing the grip has to say
     /// without ambiguity. Two corners share each diagonal — a double-headed arrow
     /// reads the same from both ends.
+    ///
+    /// Each diagonal has an inward twin whose name is the same two words in the
+    /// other order: `arrow.up.right.and.arrow.down.left` draws the arrows meeting
+    /// in the middle, which reads as "collapse". The name lists the directions the
+    /// heads point, so the outward one names the corner's own two directions.
     public var glyphName: String {
         isBottom == isLeading
-            ? "arrow.up.right.and.arrow.down.left"
+            ? "arrow.down.left.and.arrow.up.right"
             : "arrow.up.left.and.arrow.down.right"
     }
 }

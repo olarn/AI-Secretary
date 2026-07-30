@@ -51,12 +51,30 @@ final class GripCornerTests: XCTestCase {
     /// diagonal share a glyph: the arrow has a head at both ends.
     func testTheGlyphFlipsWithTheCorner() {
         let mainDiagonal = "arrow.up.left.and.arrow.down.right"
-        let antiDiagonal = "arrow.up.right.and.arrow.down.left"
+        let antiDiagonal = "arrow.down.left.and.arrow.up.right"
 
         XCTAssertEqual(corner(mirrored: false, flipped: false).glyphName, antiDiagonal, "top-trailing")
         XCTAssertEqual(corner(mirrored: true, flipped: false).glyphName, mainDiagonal, "top-leading")
         XCTAssertEqual(corner(mirrored: false, flipped: true).glyphName, mainDiagonal, "bottom-trailing")
         XCTAssertEqual(corner(mirrored: true, flipped: true).glyphName, antiDiagonal, "bottom-leading")
+    }
+
+    /// Never the inward twin. Both spellings of each diagonal are real symbols,
+    /// so nothing but looking at it catches this: the anti-diagonal grip shipped
+    /// once as `arrow.up.right.and.arrow.down.left`, which draws the two arrows
+    /// meeting in the middle and reads as "collapse" on a handle that grows the box.
+    func testTheGlyphIsTheOutwardArrowNotTheCollapseTwin() {
+        for mirrored in [false, true] {
+            for flipped in [false, true] {
+                XCTAssertFalse(
+                    [
+                        "arrow.up.right.and.arrow.down.left",
+                        "arrow.down.right.and.arrow.up.left"
+                    ].contains(corner(mirrored: mirrored, flipped: flipped).glyphName),
+                    "mirrored=\(mirrored) flipped=\(flipped) got an inward arrow"
+                )
+            }
+        }
     }
 
     /// Every name is a symbol that actually exists. A typo here renders nothing
