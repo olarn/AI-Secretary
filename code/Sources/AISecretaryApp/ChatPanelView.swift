@@ -85,15 +85,16 @@ struct ChatPanelView: View {
             SpeechBubbleShape(isMirrored: layout.isMirrored, isFlippedVertically: layout.isFlippedVertically)
                 .stroke(Color.primary.opacity(0.85), lineWidth: 2)
         )
-        // Both control clusters live along the top, in opposite corners, and
-        // trade places when the bubble is mirrored so each stays on the same
-        // side of the character as before.
+        // The button row stays on the tail's side of the top edge; the grip goes
+        // to the corner the bubble actually grows out of, which is not always a
+        // top corner. Both follow the bubble as it mirrors and flips, and they
+        // can never land in the same place.
         //
         // Attached inside the body rather than to the outer frame: the outer
         // frame includes the strip reserved for the tail, and anything aligned
         // to the bottom of it would sit in the tail, outside the bubble.
         .overlay(alignment: buttonsOnLeading ? .topLeading : .topTrailing) { windowButtons }
-        .overlay(alignment: buttonsOnLeading ? .topTrailing : .topLeading) { resizeGrip }
+        .overlay(alignment: gripAlignment) { resizeGrip }
         .padding(layout.isFlippedVertically ? .top : .bottom, SpeechBubbleShape.defaultTailLength)
         .frame(width: appearance.settings.chatWidth, height: appearance.settings.chatHeight)
     }
@@ -131,6 +132,31 @@ struct ChatPanelView: View {
     /// goes straight to the default, and the drag still follows the direction
     /// the bubble grows rather than the grip's own corner.
     private var buttonsOnLeading: Bool { !layout.isMirrored }
+
+    /// Which corner the grip gets, and which way its glyph points there.
+    ///
+    /// Horizontally it stays opposite the button row, on the side the bubble
+    /// grows into. Vertically it follows the edge that actually moves: the top
+    /// normally, the bottom once the bubble has been flipped below the character,
+    /// where the tail pins the top edge instead. Left at the top through a flip,
+    /// the grip asked you to drag downward — into the character — while the empty
+    /// half of the screen it was growing into lay past the other end of the box.
+    private var gripCorner: GripCorner {
+        GripCorner.forBubble(isMirrored: layout.isMirrored, isFlippedVertically: layout.isFlippedVertically)
+    }
+
+    private var gripAlignment: Alignment {
+        switch (gripCorner.isBottom, gripCorner.isLeading) {
+        case (false, false): .topTrailing
+        case (false, true): .topLeading
+        case (true, false): .bottomTrailing
+        case (true, true): .bottomLeading
+        }
+    }
+
+    /// The footer's buttons sit in a bottom corner too, so they move to the other
+    /// side when the grip takes theirs — otherwise the grip lands on Settings.
+    private var footerOnTrailing: Bool { gripCorner.isBottom && gripCorner.isLeading }
 
     private var widenButton: some View {
         Button(action: appearance.widenChat) {
@@ -242,9 +268,9 @@ struct ChatPanelView: View {
         Image(systemName: "arrow.up.left.and.arrow.down.right")
             .font(.system(size: 9, weight: .bold))
             .foregroundStyle(.secondary)
-            // The glyph points along ↖↘, which is the grip's own diagonal in the
-            // top-left corner; in the top-right it has to point ↗↙ instead.
-            .rotationEffect(.degrees(buttonsOnLeading ? 90 : 0))
+            // The glyph points along ↖↘, which is the grip's own diagonal in two
+            // of the four corners; in the other two it has to point ↗↙ instead.
+            .rotationEffect(.degrees(gripCorner.glyphRotation))
             // Enough to sit clear of the bubble's rounded corner rather than
             // tucked into it, and to match the inset of the button row opposite.
             .padding(14)
@@ -267,18 +293,13 @@ struct ChatPanelView: View {
     /// flipped below the character.
     ///
     /// Note this is keyed to the layout, not to the corner the grip happens to
-    /// be in — the two have been on both sides of each other, and only the
-    /// layout says which edges are free to move.
-    ///
-    /// Horizontally they agree in any case: the grip sits opposite the tail, on
-    /// the corner the bubble grows into, so dragging it "the way the bubble
-    /// extends" and the usual corner-handle reading of "away from the bubble"
-    /// are the same drag. Vertically they agree in the usual position too, where
-    /// the top edge is the one that moves and the grip rides along with it. They
-    /// part only when the bubble has been flipped below the character: the tail
-    /// is then on top, so the top edge is pinned and the bubble grows downward
-    /// while the grip stays where it is. The drag follows the growth, which
-    /// means dragging down through a grip that doesn't follow the cursor.
+    /// be in — only the layout says which edges are free to move. The two agree
+    /// on all four axes now that `GripCorner` puts the grip on the growing
+    /// corner, so the drag reads both ways at once: "the way you want the box to
+    /// extend" and the usual corner-handle "away from the box". They did not
+    /// always. With the grip pinned to the top through a vertical flip, growing
+    /// downward meant dragging down past a grip that stayed put, toward the
+    /// character, with the space being filled behind you.
     private func resize(to pointer: CGPoint) {
         let settings = appearance.settings
         let origin = dragOrigin ?? DragOrigin(
@@ -483,11 +504,11 @@ struct ChatPanelView: View {
             loopBadge
             Spacer()
         }
-        // Both top corners are occupied — the resize grip in one, the
-        // widen/restore/close row in the other — so the title drops below them
-        // rather than being inset past them. Inset was the first attempt and it
-        // moved the name around as the bubble mirrored; the title now stays
-        // flush left at every size and on either side.
+        // A top corner is taken by the widen/restore/close row, and can be taken
+        // by the resize grip as well, so the title drops below them rather than
+        // being inset past them. Inset was the first attempt and it moved the name
+        // around as the bubble mirrored; the title now stays flush left at every
+        // size, on either side, and whichever corner the grip is in.
         .padding(.top, Self.headerTopClearance)
     }
 
@@ -905,7 +926,7 @@ struct ChatPanelView: View {
                 onDecrease: appearance.decreaseHeight,
                 onIncrease: appearance.increaseHeight
             )
-            Text("Or drag the grip in the top corner to size it freely — the tail stays on \(secretary.profile.displayName) either way.")
+            Text("Or drag the grip in the corner away from the tail to size it freely — the tail stays on \(secretary.profile.displayName) either way.")
                 .font(.system(size: 9))
                 .foregroundStyle(.secondary)
 
@@ -1009,6 +1030,7 @@ struct ChatPanelView: View {
     /// stays mini around text that isn't.
     private var footer: some View {
         HStack(spacing: 10) {
+            if footerOnTrailing { Spacer() }
             // Still a toggle each, and clicking the open one still closes it —
             // only now opening one closes whichever was open.
             ForEach([Panel.settings, .profile, .projects]) { panel in
@@ -1020,7 +1042,7 @@ struct ChatPanelView: View {
                     )
                 )
             }
-            Spacer()
+            if !footerOnTrailing { Spacer() }
         }
         .toggleStyle(.button)
         .controlSize(appearance.settings.fontSize > 16 ? .regular : .small)
