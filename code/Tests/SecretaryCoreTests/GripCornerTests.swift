@@ -1,3 +1,4 @@
+import AppKit
 import XCTest
 @testable import SecretaryCore
 
@@ -46,11 +47,31 @@ final class GripCornerTests: XCTestCase {
     }
 
     /// The glyph lies along the diagonal of whichever corner it is in, so it
-    /// reads as a handle rather than an arbitrary arrow.
-    func testTheGlyphPointsAlongItsOwnCornersDiagonal() {
-        XCTAssertEqual(corner(mirrored: false, flipped: false).glyphRotation, 90)
-        XCTAssertEqual(corner(mirrored: true, flipped: false).glyphRotation, 0)
-        XCTAssertEqual(corner(mirrored: false, flipped: true).glyphRotation, 0)
-        XCTAssertEqual(corner(mirrored: true, flipped: true).glyphRotation, 90)
+    /// reads as a handle rather than an arbitrary arrow. Corners on the same
+    /// diagonal share a glyph: the arrow has a head at both ends.
+    func testTheGlyphFlipsWithTheCorner() {
+        let mainDiagonal = "arrow.up.left.and.arrow.down.right"
+        let antiDiagonal = "arrow.up.right.and.arrow.down.left"
+
+        XCTAssertEqual(corner(mirrored: false, flipped: false).glyphName, antiDiagonal, "top-trailing")
+        XCTAssertEqual(corner(mirrored: true, flipped: false).glyphName, mainDiagonal, "top-leading")
+        XCTAssertEqual(corner(mirrored: false, flipped: true).glyphName, mainDiagonal, "bottom-trailing")
+        XCTAssertEqual(corner(mirrored: true, flipped: true).glyphName, antiDiagonal, "bottom-leading")
+    }
+
+    /// Every name is a symbol that actually exists. A typo here renders nothing
+    /// at all, and an invisible grip is indistinguishable from a removed one.
+    func testEveryGlyphNameIsARealSymbol() throws {
+        #if canImport(AppKit)
+        for mirrored in [false, true] {
+            for flipped in [false, true] {
+                let name = corner(mirrored: mirrored, flipped: flipped).glyphName
+                XCTAssertNotNil(
+                    NSImage(systemSymbolName: name, accessibilityDescription: nil),
+                    "No such SF Symbol: \(name)"
+                )
+            }
+        }
+        #endif
     }
 }

@@ -265,12 +265,11 @@ struct ChatPanelView: View {
     /// every size change, so it moves under the pointer mid-drag and a
     /// translation reported in the window's own coordinates would drift.
     private var resizeGrip: some View {
-        Image(systemName: "arrow.up.left.and.arrow.down.right")
+        // The glyph flips with the corner, so the arrows always point out of it:
+        // ↖↘ at top-leading and bottom-trailing, ↗↙ at the other two.
+        Image(systemName: gripCorner.glyphName)
             .font(.system(size: 9, weight: .bold))
             .foregroundStyle(.secondary)
-            // The glyph points along ↖↘, which is the grip's own diagonal in two
-            // of the four corners; in the other two it has to point ↗↙ instead.
-            .rotationEffect(.degrees(gripCorner.glyphRotation))
             // Enough to sit clear of the bubble's rounded corner rather than
             // tucked into it, and to match the inset of the button row opposite.
             .padding(14)

@@ -23,10 +23,15 @@ public struct GripCorner: Equatable, Sendable {
         GripCorner(isBottom: isFlippedVertically, isLeading: isMirrored)
     }
 
-    /// Degrees to rotate the ↖↘ glyph so it lies along the corner's own diagonal.
-    /// Top-leading and bottom-trailing already do; the other two need a quarter
-    /// turn to point ↗↙.
-    public var glyphRotation: Double {
-        isBottom == isLeading ? 90 : 0
+    /// The SF Symbol whose arrows already lie along this corner's own diagonal,
+    /// pointing out of it. Named rather than produced by rotating one glyph: a
+    /// rotated symbol is a symbol drawn at an angle it was not hinted for, and
+    /// "which way does this arrow point" is exactly the thing the grip has to say
+    /// without ambiguity. Two corners share each diagonal — a double-headed arrow
+    /// reads the same from both ends.
+    public var glyphName: String {
+        isBottom == isLeading
+            ? "arrow.up.right.and.arrow.down.left"
+            : "arrow.up.left.and.arrow.down.right"
     }
 }
