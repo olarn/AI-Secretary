@@ -472,6 +472,7 @@ struct ChatPanelView: View {
             Text(machine.state.description.uppercased())
                 .font(.caption2.bold())
                 .foregroundStyle(.secondary)
+            loopBadge
             Spacer()
         }
         // Both top corners are occupied — the resize grip in one, the
@@ -480,6 +481,35 @@ struct ChatPanelView: View {
         // moved the name around as the bubble mirrored; the title now stays
         // flush left at every size and on either side.
         .padding(.top, Self.headerTopClearance)
+    }
+
+    /// Shows that the Secretary is on a timer, and stops it in one click.
+    ///
+    /// Something that speaks without being spoken to has to be visible while it
+    /// is armed, not only in the message that announced it — that message
+    /// scrolls away, and then an answer arriving on its own has no explanation
+    /// anywhere on screen.
+    @ViewBuilder
+    private var loopBadge: some View {
+        if let loop = secretary.activeLoop {
+            Button {
+                secretary.stopLoop()
+            } label: {
+                HStack(spacing: 3) {
+                    Image(systemName: "timer")
+                    Text(loop.intervalDescription)
+                    Image(systemName: "xmark")
+                        .font(.system(size: appearance.settings.secondaryFontSize * 0.7))
+                }
+                .font(.system(size: appearance.settings.secondaryFontSize, weight: .semibold))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Color.accentColor.opacity(0.22), in: Capsule())
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .help("Checking back every \(loop.intervalDescription) — click to stop")
+        }
     }
 
     /// Enough to clear the control row above, whose lowest point is ~29pt below
@@ -562,7 +592,16 @@ struct ChatPanelView: View {
                     .font(.system(size: appearance.settings.secondaryFontSize, weight: .bold))
                     .foregroundStyle(entry.speaker == .user ? Color.accentColor : .secondary)
                 ForEach(
-                    Array(MarkdownTableParser.segments(of: MessageChoices.parse(entry.text).body).enumerated()),
+                    // Both markers come out before anything is laid out. The
+                    // Secretary already strips a loop block from a finished
+                    // reply, but not from a failed one, and a reply still
+                    // streaming has yet to be stripped at all — neither should
+                    // put a fenced block on screen.
+                    Array(
+                        MarkdownTableParser
+                            .segments(of: LoopBlock.parse(MessageChoices.parse(entry.text).body).body)
+                            .enumerated()
+                    ),
                     id: \.offset
                 ) { _, segment in
                     switch segment {
