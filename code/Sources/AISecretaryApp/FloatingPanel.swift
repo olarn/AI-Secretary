@@ -56,6 +56,12 @@ final class FloatingPanel: NSPanel {
         becomesKeyOnlyIfNeeded = true
         hidesOnDeactivate = false
         isReleasedWhenClosed = false
+        // The app decides what is on screen, not AppKit's saved state. Left
+        // restorable, a panel hidden when the app was last quit can be ordered
+        // out again after launch — undoing the `orderFrontRegardless` in
+        // `applicationDidFinishLaunching` and leaving a running app with no way
+        // to reach it except the status bar.
+        isRestorable = false
         contentView = content
     }
 

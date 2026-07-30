@@ -140,7 +140,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
             onToggleCharacter: { [weak self] in self?.toggleCharacterVisibility() ?? true }
         )
 
+        showCharacter()
+    }
+
+    /// Launching the app again while it is already running.
+    ///
+    /// macOS does not start a second process — it reactivates this one and
+    /// sends this. With the character hidden, nothing at all would appear, and
+    /// double-clicking the app again is exactly what someone does when they
+    /// can't see it. Hiding is for getting it out of the way for a moment, not
+    /// a setting to be remembered, so reopening always brings it back.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        showCharacter()
+        return true
+    }
+
+    /// Puts the character on screen and keeps the menu wording honest. Safe
+    /// when it is already showing.
+    private func showCharacter() {
+        isCharacterVisible = true
         characterPanel.orderFrontRegardless()
+        statusBar?.setCharacterVisible(true)
     }
 
     // MARK: - Menu commands
@@ -230,7 +250,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     /// Opens the chat, making the character visible first if it was hidden so the
     /// bubble has something to anchor to.
     private func openChatFromMenu() {
-        if !isCharacterVisible { _ = toggleCharacterVisibility() }
+        showCharacter()
         showChatPanel()
     }
 
