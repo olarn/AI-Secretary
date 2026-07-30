@@ -209,7 +209,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     private func applyWindowSizes() {
         let old = characterPanel.frame
         let size = characterSize
-        if old.size != size {
+        let characterResized = old.size != size
+        if characterResized {
             characterPanel.setFrame(
                 NSRect(
                     x: old.midX - size.width / 2,
@@ -226,22 +227,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
         chatPanel.setFrame(frame, display: true)
 
         if let screen = characterPanel.screen ?? NSScreen.main {
-            keepCharacterOnScreen(in: screen.visibleFrame)
+            // Only a character that just changed size can have been pushed off
+            // an edge by this call. Resizing the chat used to run this too, and
+            // a character standing where the user put it — at the bottom of the
+            // screen, over the Dock — was yanked 54pt upward the moment the
+            // grip moved. Resizing the bubble must resize the bubble and
+            // nothing else.
+            if characterResized { keepCharacterOnScreen(in: screen) }
             applyChatLayout(in: screen.visibleFrame)
         }
     }
 
     /// A character that just grew near an edge would otherwise hang off it.
-    private func keepCharacterOnScreen(in visibleFrame: NSRect) {
+    ///
+    /// Measured against the whole screen rather than the part left over by the
+    /// Dock and menu bar: standing on top of the Dock is a normal place to put
+    /// a desktop character, and having it shoved out of there for growing one
+    /// size is the same complaint as being shoved for a resize. The rule is
+    /// only "don't end up off the screen".
+    private func keepCharacterOnScreen(in screen: NSScreen) {
+        let bounds = screen.frame
         let frame = characterPanel.frame
-        let x = min(
-            max(frame.minX, visibleFrame.minX),
-            visibleFrame.maxX - frame.width
-        )
-        let y = min(
-            max(frame.minY, visibleFrame.minY),
-            visibleFrame.maxY - frame.height
-        )
+        let x = min(max(frame.minX, bounds.minX), bounds.maxX - frame.width)
+        let y = min(max(frame.minY, bounds.minY), bounds.maxY - frame.height)
         if x != frame.minX || y != frame.minY {
             characterPanel.setFrameOrigin(NSPoint(x: x, y: y))
         }
