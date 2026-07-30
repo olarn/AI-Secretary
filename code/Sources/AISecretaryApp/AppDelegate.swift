@@ -304,58 +304,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
         }
     }
 
-    /// Clamps a coordinate into a range, tolerating an inverted one: a window
-    /// taller than the screen has no valid origin, and the top edge is the less
-    /// bad end to lose.
-    private func clamped(_ value: CGFloat, min lower: CGFloat, max upper: CGFloat) -> CGFloat {
-        min(max(value, lower), max(lower, upper))
-    }
-
     /// Repositions the bubble relative to the character's current frame.
-    /// Flips horizontally (mirroring the tail) if the natural placement
-    /// would run off the left/right screen edge, and flips vertically
-    /// (bubble below instead of above, tail pointing up) if placing it
-    /// above the character would run off the top of the screen.
+    /// The decision itself is `placeBubble`, which can be checked without a
+    /// screen; this only feeds it the current frames and applies the answer.
     private func applyChatLayout(in visibleFrame: NSRect) {
         let characterFrame = characterPanel.frame
-        let characterCenterX = characterFrame.midX
-
-        // Pushed sideways away from the character, so the bubble sits beside it
-        // rather than across it. Whichever side it's on, the shift is outward:
-        // right when the bubble is to the character's right, left when mirrored.
-        // Measured from the tip inwards, so only one edge is pinned to the
-        // character and the other is free: widening the bubble grows it away
-        // from the character instead of sliding the tip off it. Un-mirrored that
-        // pins the leading edge; mirrored — the tail on the right — it pins the
-        // trailing edge, and the bubble grows leftward.
-        let clearance = characterFrame.width * bubbleClearanceFraction
-        let naturalX = characterCenterX - tailTipOffset + clearance
-        let mirrored = naturalX + chatSize.width > visibleFrame.maxX - screenMargin
-        var originX = mirrored
-            ? characterCenterX - (chatSize.width - tailTipOffset) - clearance
-            : naturalX
-        originX = clamped(
-            originX,
-            min: visibleFrame.minX + screenMargin,
-            max: visibleFrame.maxX - chatSize.width - screenMargin
+        let placement = placeBubble(
+            character: characterFrame,
+            bubble: chatSize,
+            visibleFrame: visibleFrame,
+            tailTipOffset: tailTipOffset,
+            clearance: characterFrame.width * bubbleClearanceFraction,
+            gap: characterGap,
+            margin: screenMargin
         )
 
-        let aboveY = characterFrame.minY + characterFrame.height + characterGap
-        let flippedVertically = aboveY + chatSize.height > visibleFrame.maxY - screenMargin
-        // Clamped like the horizontal axis, and for the same reason. A tall
-        // panel — one with a settings section open — doesn't fit above the
-        // character, and flipping it below a character that sits near the Dock
-        // put the whole window off the bottom of the screen: the app looked like
-        // it had vanished. Staying on screen wins over the tail's ideal side.
-        let originY = clamped(
-            flippedVertically ? characterFrame.minY - chatSize.height - characterGap : aboveY,
-            min: visibleFrame.minY + screenMargin,
-            max: visibleFrame.maxY - chatSize.height - screenMargin
-        )
-
-        chatLayout.isMirrored = mirrored
-        chatLayout.isFlippedVertically = flippedVertically
-        chatPanel.setFrameOrigin(NSPoint(x: originX, y: originY))
+        chatLayout.isMirrored = placement.isMirrored
+        chatLayout.isFlippedVertically = placement.isFlippedVertically
+        chatPanel.setFrameOrigin(placement.origin)
     }
 
     private func toggleChatPanel() {
