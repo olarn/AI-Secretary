@@ -198,6 +198,13 @@ Build in phases.
 - แอปต้องบอก version ตัวเองได้ แม้รันแบบไม่มี bundle
 - มีหน้าต่าง About เปิดจากเมนู status bar แสดงชื่อ, version, และคำอธิบายสั้นๆ
 - ⌘H = Hide/Show Character (ไม่ใช่ hide ทั้งแอป เพราะ accessory app ไม่มีหน้าต่างใน Dock ให้เรียกกลับ)
+  - ซ่อนคือ "เอาไปพ้นทางแป๊บนึง" ไม่ใช่ค่าที่ต้องจำ — เปิดแอปอีกครั้งต้องเห็นตัวละครเสมอ
+    ต้องปิดสองทางถึงจะครบ ทั้งคู่เคยทำให้เปิดแอปแล้วไม่มีอะไรขึ้นเลย
+    - เปิดแอปซ้ำตอนตัวเดิมยังรันอยู่ macOS **ไม่ได้ launch process ใหม่** แต่ส่ง
+      `applicationShouldHandleReopen` มาแทน — ถ้าไม่ดักไว้ การดับเบิลคลิกแอป (ซึ่งเป็นสิ่งที่
+      คนทำตอนหาตัวละครไม่เจอ) จะไม่เกิดอะไรขึ้นเลย
+    - panel ต้อง `isRestorable = false` ไม่งั้น state ที่ AppKit จำไว้ตอน quit สั่ง orderOut
+      ทับ `orderFrontRegardless` ใน `applicationDidFinishLaunching` ได้
 
 ### Phase 5.7: คีย์ลัดในแชท และตัวเลือกที่กดเลือกได้
 
