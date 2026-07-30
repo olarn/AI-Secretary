@@ -284,17 +284,17 @@ struct ChatPanelView: View {
         let origin = dragOrigin ?? DragOrigin(
             pointer: pointer,
             width: settings.chatWidth,
-            height: settings.chatHeight
+            height: settings.chatHeight,
+            growsRight: layout.isMirrored ? -1 : 1,
+            // Screen coordinates point up, so this is already "up is taller"
+            // unless the bubble sits below the character and grows downward.
+            growsUp: layout.isFlippedVertically ? -1 : 1
         )
         if dragOrigin == nil { dragOrigin = origin }
 
-        let growsRight: Double = layout.isMirrored ? -1 : 1
-        // Screen coordinates point up, so this is already "up is taller" unless
-        // the bubble sits below the character and grows downward instead.
-        let growsUp: Double = layout.isFlippedVertically ? -1 : 1
         appearance.resizeChat(
-            width: origin.width + (pointer.x - origin.pointer.x) * growsRight,
-            height: origin.height + (pointer.y - origin.pointer.y) * growsUp
+            width: origin.width + (pointer.x - origin.pointer.x) * origin.growsRight,
+            height: origin.height + (pointer.y - origin.pointer.y) * origin.growsUp
         )
     }
 
@@ -304,6 +304,14 @@ struct ChatPanelView: View {
         let pointer: CGPoint
         let width: Double
         let height: Double
+        /// Which way the bubble grows, fixed for the whole drag. Read fresh on
+        /// every event instead, a layout that flips mid-drag inverts the
+        /// gesture: keep dragging the same way and the box shrinks, which
+        /// un-flips it, which grows it again. Measured at the top of the
+        /// screen, the height oscillated 909 → 801 → 933 → 777 in four events,
+        /// the swing widening each time.
+        let growsRight: Double
+        let growsUp: Double
     }
 
     // MARK: - Sections
