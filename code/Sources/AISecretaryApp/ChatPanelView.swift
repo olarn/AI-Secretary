@@ -1038,14 +1038,23 @@ struct ChatPanelView: View {
                     }
                     .buttonStyle(.plain)
                 }
-                Text("↑ ↓ to move · return to choose")
-                    .font(.system(size: appearance.settings.secondaryFontSize))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 6)
+                // Says who the arrows currently belong to, because a key that
+                // silently means two things is the part people get wrong.
+                Text(
+                    draft.isEmpty
+                        ? "↑ ↓ to move · return to choose"
+                        : "typing your own answer · ↑ ↓ recall sent messages"
+                )
+                .font(.system(size: appearance.settings.secondaryFontSize))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 6)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, 4)
             .onAppear { choiceIndex = 0 }
+            // A new question replaces the old options in place, without the
+            // list ever leaving the screen, so `onAppear` doesn't fire again.
+            .onChange(of: options) { choiceIndex = 0 }
         }
     }
 
@@ -1079,31 +1088,44 @@ struct ChatPanelView: View {
                 onClose()
                 return nil
             }
-            // 126 is Up, 125 is Down.
-            guard messageBoxFocused else { return event }
-            // A showing choice list owns the arrows; history is suspended
-            // while it does, so the two never race for the same key.
+            // 126 is Up, 125 is Down. Which feature they belong to is decided
+            // in one place — see `ArrowKeyOwner` — so the picker, history
+            // recall and caret movement can never each take a turn at the same
+            // keystroke.
             let options = pendingChoices
-            if !options.isEmpty {
+            switch ArrowKeyOwner.owner(
+                hasChoices: !options.isEmpty,
+                draft: draft,
+                hasHistory: !sentMessages.isEmpty
+            ) {
+            case .choiceList:
+                // Clamped at use: a second question can arrive while the list
+                // is still up, and a highlight left pointing past a shorter
+                // list would trap on Return.
+                let highlighted = min(choiceIndex, options.count - 1)
                 switch event.keyCode {
                 case 126:
-                    choiceIndex = max(0, choiceIndex - 1)
+                    choiceIndex = max(0, highlighted - 1)
                     return nil
                 case 125:
-                    choiceIndex = min(options.count - 1, choiceIndex + 1)
+                    choiceIndex = min(options.count - 1, highlighted + 1)
                     return nil
-                case 36 where draft.isEmpty:
-                    // Return picks the highlighted option, but only when you
-                    // aren't part-way through typing something else.
-                    pick(options[choiceIndex])
+                case 36:
+                    pick(options[highlighted])
                     return nil
                 default: return event
                 }
-            }
-            switch event.keyCode {
-            case 126: return recallOlder() ? nil : event
-            case 125: return recallNewer() ? nil : event
-            default: return event
+            case .history:
+                // Recall stays tied to the caret being in the box: it edits
+                // what you are typing, so it needs you to be typing.
+                guard messageBoxFocused else { return event }
+                switch event.keyCode {
+                case 126: return recallOlder() ? nil : event
+                case 125: return recallNewer() ? nil : event
+                default: return event
+                }
+            case .textCaret:
+                return event
             }
         }
     }
