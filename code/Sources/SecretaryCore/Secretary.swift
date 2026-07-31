@@ -1398,6 +1398,10 @@ public final class Secretary {
         findings or suggestions is just prose and must not be marked this way. \
         If the answer is free-form, ask normally instead.
 
+        \(Self.windowPrompt)
+
+        \(Self.loopPrompt)
+
         \(browserNote)
 
         \(permissionNote) If something is refused, say so plainly instead of \
