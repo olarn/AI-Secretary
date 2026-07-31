@@ -99,12 +99,16 @@ final class InfoWindowSetTests: XCTestCase {
     /// A model that keeps emitting window blocks must not be able to bury the
     /// screen. The oldest goes rather than the newest being refused, since the
     /// newest is the one just asked for.
+    ///
+    /// Ten, set by the owner. Pinned here so the number is a decision rather
+    /// than whatever the code happens to say.
     func testTheOldestGoesOnceTheLimitIsReached() {
         var set = InfoWindowSet.empty
         for index in 1...(InfoWindowSet.limit + 3) {
             set = set.adding(spec("w\(index)"))
         }
-        XCTAssertEqual(set.windows.count, InfoWindowSet.limit)
+        XCTAssertEqual(InfoWindowSet.limit, 10)
+        XCTAssertEqual(set.windows.count, 10)
         XCTAssertEqual(set.windows.first?.title, "w4")
         XCTAssertEqual(set.windows.last?.title, "w\(InfoWindowSet.limit + 3)")
     }

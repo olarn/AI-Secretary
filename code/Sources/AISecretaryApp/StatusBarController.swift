@@ -147,26 +147,33 @@ final class StatusBarController {
             return
         }
 
+        // One row per pane, and clicking it brings that pane to the front.
+        // Deleting lives on the pane's own close button and on Clear All: a row
+        // whose whole job is "show me this" should not need a submenu in front
+        // of it, and a Delete sitting one pixel from Show is a mis-click waiting
+        // to throw away the thing you meant to look at.
         for spec in open {
-            let item = NSMenuItem(title: spec.title, action: nil, keyEquivalent: "")
-            let actions = NSMenu(title: spec.title)
-
-            let show = NSMenuItem(title: "Show", action: #selector(Target.showWindow(_:)), keyEquivalent: "")
-            show.target = target
-            show.representedObject = spec.id
-            actions.addItem(show)
-
-            let delete = NSMenuItem(title: "Delete", action: #selector(Target.deleteWindow(_:)), keyEquivalent: "")
-            delete.target = target
-            delete.representedObject = spec.id
-            actions.addItem(delete)
-
-            item.submenu = actions
+            let item = NSMenuItem(
+                title: spec.title,
+                action: #selector(Target.showWindow(_:)),
+                keyEquivalent: ""
+            )
+            item.target = target
+            item.representedObject = spec.id
             submenu.addItem(item)
         }
 
-        // Always last, so its position doesn't move as panes come and go.
+        // Always last, in this order, so their positions don't move as panes
+        // come and go.
         submenu.addItem(.separator())
+        let showAll = NSMenuItem(
+            title: "Show All",
+            action: #selector(Target.showAllWindows(_:)),
+            keyEquivalent: ""
+        )
+        showAll.target = target
+        submenu.addItem(showAll)
+
         let clear = NSMenuItem(title: "Clear All", action: #selector(Target.clearWindows(_:)), keyEquivalent: "")
         clear.target = target
         submenu.addItem(clear)
@@ -175,7 +182,7 @@ final class StatusBarController {
     }
 
     fileprivate func handleShowWindow(_ id: UUID) { windows()?.show(id) }
-    fileprivate func handleDeleteWindow(_ id: UUID) { windows()?.remove(id) }
+    fileprivate func handleShowAllWindows() { windows()?.showAll() }
     fileprivate func handleClearWindows() { windows()?.clearAll() }
 
     fileprivate func handleShowAbout() { AboutPanel.show() }
@@ -198,10 +205,7 @@ final class StatusBarController {
             controller.handleShowWindow(id)
         }
 
-        @objc func deleteWindow(_ sender: Any?) {
-            guard let id = (sender as? NSMenuItem)?.representedObject as? UUID else { return }
-            controller.handleDeleteWindow(id)
-        }
+        @objc func showAllWindows(_ sender: Any?) { controller.handleShowAllWindows() }
 
         @objc func clearWindows(_ sender: Any?) { controller.handleClearWindows() }
 

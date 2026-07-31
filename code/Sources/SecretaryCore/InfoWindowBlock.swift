@@ -99,7 +99,7 @@ public struct InfoWindowSet: Equatable, Sendable {
 
     /// Enough to be useful, few enough that a runaway loop of window blocks
     /// cannot bury the screen. The oldest goes when the limit is reached.
-    public static let limit = 12
+    public static let limit = 10
 
     public static let empty = InfoWindowSet(windows: [])
 

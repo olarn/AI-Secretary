@@ -83,6 +83,12 @@ final class InfoWindows: NSObject, NSWindowDelegate {
         panels[id] = panel
     }
 
+    /// Every pane back on screen, in the order they were pinned so the newest
+    /// ends up in front.
+    func showAll() {
+        for spec in set.windows { show(spec.id) }
+    }
+
     /// Esc: off the screen, still in the menu.
     func hide(_ id: UUID) {
         panels[id]?.orderOut(nil)
