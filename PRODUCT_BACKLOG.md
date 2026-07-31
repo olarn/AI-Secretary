@@ -187,6 +187,11 @@ The current phase for version-bumping purposes (`AppVersion.swift`,
   - บทเรียน: ก่อนสรุปว่า CLI ทำอะไรไม่ได้ **ให้ลองสั่งจริงก่อน** อย่าอนุมานจาก help กับ output format
   - เป็น text ที่ออกแบบมาให้คนอ่านในเทอร์มินัล และเป็นของโปรแกรมอื่นที่เปลี่ยน format เมื่อไหร่ก็ได้ ตัว parser จึงต้อง **อ่านออกหรือไม่พูดอะไรเลย** ห้ามเดา — ตัวเลข % นี้คือตัวที่คนใช้ตัดสินใจว่าจะทำงานต่อไหม ค่าที่ผิดหรือค่าค้างที่ดูเหมือนสด แย่กว่าช่องว่าง
   - กับดักที่มีเทสคุมไว้: บรรทัด `83% of your usage was at >150k context` เป็นเปอร์เซ็นต์ของคนละเรื่อง ห้ามกลายเป็นแถบ limit
+  - [x] **จัดหน้าตาให้เหมือนแผง Usage ของ Claude app** — "Plan usage limits" + ชื่อแพ็กเกจ / Current session / หัวข้อ "Weekly limits" → All models, Fable / "Last updated: … ⟳"
+    - เวลารีเซ็ตที่ใกล้กว่า 24 ชม. แสดงเป็น "Resets in 18 min" และเดินถอยหลังเอง (view มี tick ทุก 30 วิ ส่วนตัวเลขจริง poll 2 นาที) ไกลกว่านั้นใช้คำของ CLI ตรงๆ เพราะมี timezone ติดมาแล้ว — CLI ไม่บอกปี ต้องเดาปีที่ทำให้วันอยู่ข้างหน้า ไม่งั้นรีเซ็ตเดือนมกราจะอ่านเป็นอดีต 11 เดือน
+    - ชื่อแพ็กเกจมาจาก `claude auth status` ซึ่งตอบเป็น JSON (`subscriptionType`) — reply เดียวกันมี email กับ orgId ด้วย **หยิบมาเฉพาะ tier เท่านั้น**
+  - [ ] **ยังทำไม่ได้: ส่วน Usage credits** ($ spent, monthly spend limit, current balance, promotional credit) และตัวคูณของแพ็กเกจ ("Max (5x)" ได้แค่ "Max") — ตรวจ `/usage`, `/cost`, `claude auth status` และ `--help` ครบแล้ว ไม่มีที่ไหนเลย
+    - ทางเดียวที่เหลือคือยิง endpoint ของ Anthropic เองด้วย OAuth credential ของ user ซึ่งแปลว่าแอปต้องเริ่มอ่าน credential ที่ตั้งใจไม่แตะมาตลอด + เป็น endpoint ที่ไม่มีเอกสาร (พังเงียบได้) + เป็นข้อมูลการเงิน — ต้องให้เจ้าของอนุมัติก่อน ไม่ทำเอง
   - poll ทุก 2 นาที **เฉพาะตอนหน้าต่างเปิด** และมีปุ่ม refresh — spawn process ทิ้งไว้ตลอดเพื่อวาดแถบที่ไม่มีใครดู ไม่ใช่สิ่งที่ companion ควรทำ
 
 ## Phase 7: Loop & Notification
