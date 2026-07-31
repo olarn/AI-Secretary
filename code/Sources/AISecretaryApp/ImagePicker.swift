@@ -14,6 +14,12 @@ enum ImagePicker {
         panel.prompt = "Use Picture"
         panel.message = message
 
+        // Same reason as `ProjectPicker`: an open panel owned by an inactive app
+        // is not key, and its file list ignores clicks until something activates
+        // the app. This one is reached from the Profile panel, which is inside
+        // the same non-activating chat window.
+        NSApp.activate(ignoringOtherApps: true)
+
         guard panel.runModal() == .OK else { return nil }
         return panel.url
     }

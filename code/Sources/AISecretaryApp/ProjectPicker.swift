@@ -17,6 +17,15 @@ enum ProjectPicker {
         panel.prompt = "Add Project"
         panel.message = "Choose a folder the assistant may work in."
 
+        // `runModal()` shows the panel but does not bring the app forward, and
+        // this app is usually not the active one when the button is pressed: the
+        // chat is a non-activating panel, so clicking Projects → Add Project
+        // never made it active. An open panel belonging to an inactive app is
+        // not key — the folder list stops answering clicks, and the first click
+        // is spent activating instead of selecting. That is the "sometimes":
+        // it worked right after the chat opened, because opening it activates.
+        NSApp.activate(ignoringOtherApps: true)
+
         guard panel.runModal() == .OK, let url = panel.url else { return nil }
 
         return Project(
