@@ -196,12 +196,21 @@ The current phase for version-bumping purposes (`AppVersion.swift`,
     - ทางเดียวที่เหลือคือยิง endpoint ของ Anthropic เองด้วย OAuth credential ของ user ซึ่งแปลว่าแอปต้องเริ่มอ่าน credential ที่ตั้งใจไม่แตะมาตลอด + เป็น endpoint ที่ไม่มีเอกสาร (พังเงียบได้) + เป็นข้อมูลการเงิน — ต้องให้เจ้าของอนุมัติก่อน ไม่ทำเอง
   - poll ทุก 2 นาที **เฉพาะตอนหน้าต่างเปิด** และมีปุ่ม refresh — spawn process ทิ้งไว้ตลอดเพื่อวาดแถบที่ไม่มีใครดู ไม่ใช่สิ่งที่ companion ควรทำ
 
-## Phase 7: Loop & Notification
+## Phase 7 : Info-window
+- [ ] สามารถเอาข้อมูลไปเปิด window ลอยๆ ค้างไว้ได้ เช่น เมื่อถามข้อมูลอะไรบางอย่าง แล้วได้เป็นตาราง ก็บอก app ได้ว่า แสดงข้อมูลนั้นแยกออกจาก chat หรือแสดงข้อมูลนั้นแยก window ก็จะดึงข้อมูลที่คุยกัน (ในส่วนที่ระบุ) ออกไปเป็น window แยกได้
+- [ ] แสดงได้หลาย window
+- [ ] ปิดได้, hide ได้ (กดปุ่มปิด คือปิดและลบ, กด Esc คือ hide)
+- [ ] list ของ windows แสดงอยู่ในกลุ่มเมนู Windows ที่เปิดได้จาก menu icon และกดลบได้จากเมนูนั้นๆ
+- [ ] กดที่เมนูก็แสดง window นั้นขึ้นมา
+- [ ] ในเมนู Windows มีเมนู Clear all (อยู่ล่างเสมอ) เพื่อ clear ทุก windows ที่มีอยู่
+- [ ] ขนาดของ window จะขยายตาม content ระดับนึง แต่ถ้าเนื้อหาเยอะเกินไป ก็ scroll ได้
+
+## Phase 8: Loop & Notification
 - [ ] สั่งให้ loop ได้ เช่น นับถอยหลัง 5 นาทีแล้วแจ้งเตือน หรือ long run แล้วแจ้งเตือนได้
 - [ ] มี local notification เมื่อทำงานเสร็จ (notification settings ตาม macOS)
 - [ ] เมื่อ click ที่กล่อง notication, จะเปิด app และ chat window ขึ้นมา
 
-## Phase 8: Multi-session
+## Phase 9: Multi-session
 - [ ] สามารถเปิด chat bubble ได้มากกว่า 1 window โดยที่แต่ละ window จะแยก Claude Session ออกจากกัน
 - [ ] แยก settings ตาม chat window ของใครของมัน แปลว่า แต่ละ chat จะแยก model, effort ได้
 - [ ] ถ้ามี Project อยู่แล้ว แล้วขึ้น session ใหม่ ให้ใช้ project เดิมเลย แต่สามารถเพิ่ม project ได้ 
@@ -213,22 +222,13 @@ The current phase for version-bumping purposes (`AppVersion.swift`,
   - [ ] ถ้า click ที่ session ใน menu จะเปิด chat bubble แล้วคุยต่อ (resumr session) ได้เลย
   - [ ] แต่ละ session ใน menu มีปุ่มปิด ถ้าปิดก็ลบ history ไปเลย
 
-## Phase 8.1 : Info-window
-- [ ] สามารถเอาข้อมูลไปเปิด window ลอยๆ ค้างไว้ได้ เช่น เมื่อถามข้อมูลอะไรบางอย่าง แล้วได้เป็นตาราง ก็บอก app ได้ว่า แสดงข้อมูลนั้นแยกออกจาก chat หรือแสดงข้อมูลนั้นแยก window ก็จะดึงข้อมูลที่คุยกัน (ในส่วนที่ระบุ) ออกไปเป็น window แยกได้
-- [ ] แสดงได้หลาย window
-- [ ] ปิดได้, hide ได้ (กดปุ่มปิด คือปิดและลบ, กด Esc คือ hide)
-- [ ] list ของ windows แสดงอยู่ในกลุ่มเมนู Windows ที่เปิดได้จาก menu icon และกดลบได้จากเมนูนั้นๆ
-- [ ] กดที่เมนูก็แสดง window นั้นขึ้นมา
-- [ ] ในเมนู Windows มีเมนู Clear all (อยู่ล่างเสมอ) เพื่อ clear ทุก windows ที่มีอยู่
-- [ ] ขนาดของ window จะขยายตาม content ระดับนึง แต่ถ้าเนื้อหาเยอะเกินไป ก็ scroll ได้
-
-## Phase 9: Talk to each other
+## Phase 10: Talk to each other
 
 - [ ] Two or more app be able to talk to each other.
 - [ ] First, brainstorm about the feasible that can made 2 or more AI-Secretary app can talk to each other.
 - [ ] Second, its can do the same project (or projects) with different role (configure with .md file in the project somehow)
 
-## Phase 10: Voice
+## Phase 11: Voice
 
 - [ ] Push-to-talk or explicit voice activation.
 - [ ] Speech-to-text, text-to-speech, interruption behavior, and privacy controls.
