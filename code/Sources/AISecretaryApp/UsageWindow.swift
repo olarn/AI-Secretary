@@ -91,6 +91,13 @@ private struct UsageView: View {
     /// figures behind them are polled far less often; this only re-renders the
     /// words, which would otherwise sit at "Resets in 18 min" for an hour.
     @State private var tick = Date()
+    /// Which sections are open. Held here rather than persisted: the window is
+    /// built once and kept, so a fold survives closing and reopening within a
+    /// run, which is as long as anyone is watching a live gauge.
+    @State private var showPlan = true
+    @State private var showWeekly = true
+    @State private var showActivity = true
+    @State private var showConversation = true
 
     private var usage: SessionUsage { secretary.sessionUsage }
 
@@ -110,9 +117,10 @@ private struct UsageView: View {
         VStack(alignment: .leading, spacing: 12) {
             planSection
             Divider()
-            Text("This conversation")
-                .font(.system(size: appearance.settings.secondaryFontSize, weight: .semibold))
-            if usage.turns == 0 {
+            sectionHeader("This conversation", isExpanded: $showConversation)
+            if !showConversation {
+                EmptyView()
+            } else if usage.turns == 0 {
                 Text("Nothing used yet this session.")
                     .foregroundStyle(.secondary)
             } else {
@@ -145,16 +153,15 @@ private struct UsageView: View {
     @ViewBuilder
     private var planSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
-                Text("Plan usage limits")
-                    .font(.system(size: appearance.settings.secondaryFontSize, weight: .semibold))
+            sectionHeader("Plan usage limits", isExpanded: $showPlan) {
                 if let name = plan.usage?.planName {
                     Text(name).foregroundStyle(.secondary)
                 }
-                Spacer()
             }
 
-            if let problem = plan.problem {
+            if !showPlan {
+                EmptyView()
+            } else if let problem = plan.problem {
                 Text(problem)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -201,6 +208,33 @@ private struct UsageView: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    /// A heading that folds what is under it. The whole row is the target, not
+    /// just the chevron — a 10pt triangle is a poor thing to have to hit, and
+    /// the title is right there.
+    private func sectionHeader(
+        _ title: String,
+        isExpanded: Binding<Bool>,
+        @ViewBuilder trailing: () -> some View = { EmptyView() }
+    ) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.15)) { isExpanded.wrappedValue.toggle() }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: max(8, appearance.settings.secondaryFontSize - 4), weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(isExpanded.wrappedValue ? 90 : 0))
+                Text(title)
+                    .font(.system(size: appearance.settings.secondaryFontSize, weight: .semibold))
+                trailing()
+                Spacer()
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(isExpanded.wrappedValue ? "Hide this section" : "Show this section")
     }
 
     /// How much work went through this machine in a stretch, and what shape it
