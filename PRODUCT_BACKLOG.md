@@ -172,12 +172,16 @@ The current phase for version-bumping purposes (`AppVersion.swift`,
   - [x] `.beginExecuting` ออกจาก `.idle` ไม่ได้ — tick ต้องส่ง `.userBeganInput` → `.beginInterpreting` เหมือนข้อความที่ user พิมพ์ และต้องเข้า `startChat` ตรงๆ ไม่ผ่าน intent classifier (คำของเราเองอาจถูกอ่านเป็นคำสั่งแล้วไปรัน tool ที่ไม่มีใครสั่ง)
   - [x] ตัวจับเวลาอยู่ใน `Secretary` ไม่ใช่ใน view — loop ต้องเดินต่อแม้ปิดหน้าต่างแชท เพราะคนที่สั่งกำลังมองห้องประชุม ไม่ได้มองจอ
 
+## Phase 6.7: เพิ่ม Token Usage
+- [ ] สามารถ chat ถาม AI usage token ได้
+- [ ] มี windows ที่เปิดได้จาก menu icon แล้วแสดง usage token ได้
+
 ## Phase 7: Loop & Notification
 - [ ] สั่งให้ loop ได้ เช่น นับถอยหลัง 5 นาทีแล้วแจ้งเตือน หรือ long run แล้วแจ้งเตือนได้
 - [ ] มี local notification เมื่อทำงานเสร็จ (notification settings ตาม macOS)
 - [ ] เมื่อ click ที่กล่อง notication, จะเปิด app และ chat window ขึ้นมา
 
-## Phase 7: Multi-session
+## Phase 8: Multi-session
 - [ ] สามารถเปิด chat bubble ได้มากกว่า 1 window โดยที่แต่ละ window จะแยก Claude Session ออกจากกัน
 - [ ] แยก settings ตาม chat window ของใครของมัน แปลว่า แต่ละ chat จะแยก model, effort ได้
 - [ ] ถ้ามี Project อยู่แล้ว แล้วขึ้น session ใหม่ ให้ใช้ project เดิมเลย แต่สามารถเพิ่ม project ได้ 
@@ -189,13 +193,21 @@ The current phase for version-bumping purposes (`AppVersion.swift`,
   - [ ] ถ้า click ที่ session ใน menu จะเปิด chat bubble แล้วคุยต่อ (resumr session) ได้เลย
   - [ ] แต่ละ session ใน menu มีปุ่มปิด ถ้าปิดก็ลบ history ไปเลย
 
-## Phase 8: Talk to each other
+## Phase 8.1 : Info-window
+- [ ] สามารถเอาข้อมูลไปเปิด window ลอยๆ ค้างไว้ได้ เช่น เมื่อถามข้อมูลอะไรบางอย่าง แล้วได้เป็นตาราง ก็บอก app ได้ว่า แสดงข้อมูลนั้นแยกออกจาก chat หรือแสดงข้อมูลนั้นแยก window ก็จะดึงข้อมูลที่คุยกัน (ในส่วนที่ระบุ) ออกไปเป็น window แยกได้
+- [ ] แสดงได้หลาย window
+- [ ] ปิดได้, hide ได้ (กดปุ่มปิด คือปิดและลบ, กด Esc คือ hide)
+- [ ] list ของ windows แสดงอยู่ในกลุ่มเมนู Windows ที่เปิดได้จาก menu icon และกดลบได้จากเมนูนั้นๆ
+- [ ] กดที่เมนูก็แสดง window นั้นขึ้นมา
+- [ ] ใรเมนู Windows มีเมนู Clear all (อยู่ล่างเสมอ) เพื่อ clear ทุก windows ที่มีอยู่
+
+## Phase 9: Talk to each other
 
 - [ ] Two or more app be able to talk to each other.
 - [ ] First, brainstorm about the feasible that can made 2 or more AI-Secretary app can talk to each other.
 - [ ] Second, its can do the same project (or projects) with different role (configure with .md file in the project somehow)
 
-## Phase 9: Voice
+## Phase 10: Voice
 
 - [ ] Push-to-talk or explicit voice activation.
 - [ ] Speech-to-text, text-to-speech, interruption behavior, and privacy controls.
