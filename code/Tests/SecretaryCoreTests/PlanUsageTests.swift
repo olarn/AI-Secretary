@@ -21,7 +21,47 @@ final class PlanUsageTests: XCTestCase {
 
     Last 24h · 510 requests · 11 sessions
       83% of your usage was at >150k context
+      Top skills: /artifact-design 2%
+
+    Last 7d · 3,428 requests · 105 sessions
+      85% of your usage was at >150k context
+      83% of your usage came from sessions active for 8+ hours
+      Top plugins: superpowers 1%
     """
+
+    func testItReadsTheRequestAndSessionCounts() throws {
+        let usage = try XCTUnwrap(PlanUsageParser.parse(real))
+        XCTAssertEqual(usage.activity.count, 2)
+        XCTAssertEqual(usage.activity[0].period, "Last 24h")
+        XCTAssertEqual(usage.activity[0].requests, 510)
+        XCTAssertEqual(usage.activity[0].sessions, 11)
+        // Thousands separators appear once the counts get large.
+        XCTAssertEqual(usage.activity[1].requests, 3_428)
+        XCTAssertEqual(usage.activity[1].sessions, 105)
+    }
+
+    func testTheBehaviourNotesRideAlongWithTheirPeriod() throws {
+        let usage = try XCTUnwrap(PlanUsageParser.parse(real))
+        XCTAssertEqual(usage.activity[0].notes, ["83% of your usage was at >150k context"])
+        XCTAssertEqual(usage.activity[1].notes.count, 2)
+        XCTAssertTrue(usage.activity[1].notes[1].contains("8+ hours"))
+    }
+
+    /// The skill and plugin lines name what the user has been working on. A
+    /// usage gauge does not need to put that on screen.
+    func testSkillAndPluginNamesAreDropped() throws {
+        let usage = try XCTUnwrap(PlanUsageParser.parse(real))
+        let notes = usage.activity.flatMap(\.notes).joined(separator: " ")
+        XCTAssertFalse(notes.contains("artifact-design"), notes)
+        XCTAssertFalse(notes.contains("superpowers"), notes)
+    }
+
+    /// Output with no activity block still yields the bars.
+    func testTheLimitsSurviveWithoutAnActivityBlock() throws {
+        let usage = try XCTUnwrap(PlanUsageParser.parse("Current session: 4% used"))
+        XCTAssertEqual(usage.limits.count, 1)
+        XCTAssertTrue(usage.activity.isEmpty)
+    }
 
     func testItReadsEveryLimitLine() throws {
         let usage = try XCTUnwrap(PlanUsageParser.parse(real))

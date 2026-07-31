@@ -165,6 +165,19 @@ private struct UsageView: View {
                         limitRow(limit)
                     }
                 }
+                if !usage.activity.isEmpty {
+                    Text("What's driving it")
+                        .font(.system(size: appearance.settings.secondaryFontSize, weight: .semibold))
+                        .padding(.top, 4)
+                    ForEach(Array(usage.activity.enumerated()), id: \.offset) { _, period in
+                        activityRow(period)
+                    }
+                    Text(PlanUsage.activityNote)
+                        .font(.system(size: max(9, appearance.settings.secondaryFontSize - 2)))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
                 HStack(spacing: 6) {
                     Text("Last updated: \(UsageFormat.age(of: usage.checkedAt, now: tick))")
                         .font(.system(size: max(9, appearance.settings.secondaryFontSize - 2)))
@@ -181,6 +194,27 @@ private struct UsageView: View {
             } else {
                 Text(plan.isRefreshing ? "Checking…" : "Not checked yet.")
                     .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    /// How much work went through this machine in a stretch, and what shape it
+    /// had. The counts answer "why is the bar there"; the notes say what kind of
+    /// work drove it.
+    private func activityRow(_ period: PlanUsage.Activity) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Text(period.period)
+                Spacer()
+                Text("\(UsageFormat.tokens(period.requests)) req · \(UsageFormat.tokens(period.sessions)) sessions")
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(period.notes, id: \.self) { note in
+                Text(note)
+                    .font(.system(size: max(9, appearance.settings.secondaryFontSize - 2)))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }

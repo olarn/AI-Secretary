@@ -58,21 +58,52 @@ public struct PlanUsage: Equatable, Sendable {
         }
     }
 
+    /// A recent stretch of work, as Claude Code counts it locally.
+    public struct Activity: Equatable, Sendable {
+        /// "Last 24h", "Last 7d" — the CLI's own wording.
+        public let period: String
+        public let requests: Int
+        public let sessions: Int
+        /// The behaviour lines under it, e.g. "84% of your usage was at >150k
+        /// context". Kept verbatim: they explain *why* the bars are where they
+        /// are, which is the only reason this section is worth the space.
+        public let notes: [String]
+
+        public init(period: String, requests: Int, sessions: Int, notes: [String]) {
+            self.period = period
+            self.requests = requests
+            self.sessions = sessions
+            self.notes = notes
+        }
+    }
+
     public let limits: [Limit]
+    public let activity: [Activity]
     /// "Max", "Pro" — the subscription tier, title-cased from what
     /// `claude auth status` reports. Absent if it could not be read.
     public let planName: String?
     public let checkedAt: Date
 
-    public init(limits: [Limit], planName: String? = nil, checkedAt: Date) {
+    public init(
+        limits: [Limit],
+        activity: [Activity] = [],
+        planName: String? = nil,
+        checkedAt: Date
+    ) {
         self.limits = limits
+        self.activity = activity
         self.planName = planName
         self.checkedAt = checkedAt
     }
 
     public func named(_ planName: String?) -> PlanUsage {
-        PlanUsage(limits: limits, planName: planName, checkedAt: checkedAt)
+        PlanUsage(limits: limits, activity: activity, planName: planName, checkedAt: checkedAt)
     }
+
+    /// The CLI's own disclaimer, shown with the counts because it changes what
+    /// they mean: they are this machine's sessions, not the account's.
+    public static let activityNote =
+        "Counted from sessions on this Mac only — other devices and claude.ai aren't included."
 
     public var session: [Limit] { limits.filter { $0.scope == .session } }
     public var weekly: [Limit] { limits.filter { $0.scope == .week } }
@@ -121,7 +152,60 @@ public enum PlanUsageParser {
             )
         }
 
-        return limits.isEmpty ? nil : PlanUsage(limits: limits, checkedAt: now)
+        return limits.isEmpty
+            ? nil
+            : PlanUsage(limits: limits, activity: activity(in: text), checkedAt: now)
+    }
+
+    /// Matches `Last 24h · 532 requests · 11 sessions`.
+    private static let periodLine = try? NSRegularExpression(
+        pattern: #"^(Last [^·]+)·\s*([\d,]+)\s+requests\s*·\s*([\d,]+)\s+sessions\s*$"#
+    )
+
+    /// The "what's contributing" block: how much work went through this machine
+    /// recently, and what shape it had.
+    ///
+    /// The notes are the indented lines under each period. `Top skills` and
+    /// `Top plugins` are deliberately dropped — they name what the user has been
+    /// working on, which is more than a usage gauge needs to put on screen.
+    static func activity(in text: String) -> [PlanUsage.Activity] {
+        guard let periodLine else { return [] }
+        var found: [PlanUsage.Activity] = []
+
+        for raw in text.components(separatedBy: .newlines) {
+            let trimmed = raw.trimmingCharacters(in: .whitespaces)
+            let range = NSRange(trimmed.startIndex..., in: trimmed)
+            if let match = periodLine.firstMatch(in: trimmed, range: range),
+               let periodRange = Range(match.range(at: 1), in: trimmed),
+               let requestsRange = Range(match.range(at: 2), in: trimmed),
+               let sessionsRange = Range(match.range(at: 3), in: trimmed) {
+                found.append(
+                    PlanUsage.Activity(
+                        period: String(trimmed[periodRange]).trimmingCharacters(in: .whitespaces),
+                        requests: number(String(trimmed[requestsRange])),
+                        sessions: number(String(trimmed[sessionsRange])),
+                        notes: []
+                    )
+                )
+                continue
+            }
+            // Indented, so it belongs to the period above it.
+            guard raw.hasPrefix("  "), !trimmed.isEmpty, let last = found.popLast() else { continue }
+            let keep = trimmed.hasPrefix("Top skills") || trimmed.hasPrefix("Top plugins")
+                ? last.notes
+                : last.notes + [trimmed]
+            found.append(
+                PlanUsage.Activity(
+                    period: last.period, requests: last.requests,
+                    sessions: last.sessions, notes: keep
+                )
+            )
+        }
+        return found
+    }
+
+    private static func number(_ text: String) -> Int {
+        Int(text.replacingOccurrences(of: ",", with: "")) ?? 0
     }
 
     /// The CLI says "Current week (all models)"; under a "Weekly limits" heading
