@@ -217,7 +217,8 @@ The current phase for version-bumping purposes (`AppVersion.swift`,
 - [ ] ปิดได้, hide ได้ (กดปุ่มปิด คือปิดและลบ, กด Esc คือ hide)
 - [ ] list ของ windows แสดงอยู่ในกลุ่มเมนู Windows ที่เปิดได้จาก menu icon และกดลบได้จากเมนูนั้นๆ
 - [ ] กดที่เมนูก็แสดง window นั้นขึ้นมา
-- [ ] ใรเมนู Windows มีเมนู Clear all (อยู่ล่างเสมอ) เพื่อ clear ทุก windows ที่มีอยู่
+- [ ] ในเมนู Windows มีเมนู Clear all (อยู่ล่างเสมอ) เพื่อ clear ทุก windows ที่มีอยู่
+- [ ] ขนาดของ window จะขยายตาม content ระดับนึง แต่ถ้าเนื้อหาเยอะเกินไป ก็ scroll ได้
 
 ## Phase 9: Talk to each other
 
