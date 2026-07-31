@@ -176,8 +176,14 @@ The current phase for version-bumping purposes (`AppVersion.swift`,
   - [x] ตัวจับเวลาอยู่ใน `Secretary` ไม่ใช่ใน view — loop ต้องเดินต่อแม้ปิดหน้าต่างแชท เพราะคนที่สั่งกำลังมองห้องประชุม ไม่ได้มองจอ
 
 ## Phase 6.7: เพิ่ม Token Usage
-- [ ] สามารถ chat ถาม AI usage token ได้
-- [ ] มี windows ที่เปิดได้จาก menu icon แล้วแสดง usage token ได้
+- [x] สามารถ chat ถาม AI usage token ได้ — `/usage` (หรือ `/tokens`) ตอบเป็นตารางในสายแชท
+- [x] มี windows ที่เปิดได้จาก menu icon แล้วแสดง usage token ได้ — เมนูแถบสถานะ → Token Usage (⌘U)
+  - [x] **เปิดค้างไว้ได้** เป็นหน้าต่างของตัวเอง ไม่ใช่แผงในกล่องแชท — ปิดแชทแล้วตัวเลขต้องไม่หายไปด้วย และ observe `Secretary.sessionUsage` จึงอัปเดตสด เปิดทิ้งไว้ก่อนถามคำถามแรกก็เห็นตัวเลขไหลเข้ามาเอง
+- [x] **แก้บั๊ก: อ่าน cache token ตกไปทั้งสองก้อน** — `result` event ส่ง token มา 4 ก้อน แต่โค้ดอ่านแค่ `input_tokens` กับ `output_tokens` เทิร์นที่วัดจริงได้ `in=2 out=5` ทั้งที่ traffic จริงคือ 11,768 cache write + 24,436 cache read รวม **36,211** — ไม่ใช่แค่ไม่ครบ แต่ผิดคนละ order of magnitude และตัวเลขนี้ถูกเขียนลง audit log มาตลอด
+  - แยก 4 ก้อนไว้ ไม่รวมเป็นเลขเดียว เพราะราคาต่างกันมาก (cache read ถูก, cache write แพง) และเป็นตัวบอกว่าบทสนทนายาวขึ้นแล้วจ่ายอะไรอยู่
+  - **context ใช้ค่าของเทิร์นล่าสุด ไม่ใช่ผลรวม** — คำถามคือ "ตอนนี้ context เต็มแค่ไหน" ถ้าบวกสะสมจะทะลุ 100% ทั้งที่ยังว่างอยู่เยอะ (`contextWindow` อ่านจาก `modelUsage` ซึ่ง key เป็นชื่อโมเดล ต้องขุด ไม่ใช่ path ตายตัว)
+  - **ตัวเลขเงินต้องมีคำกำกับเสมอ** — Claude Code ส่ง `total_cost_usd` มาแม้ใช้ subscription ซึ่งไม่ได้ถูกตัดเงินต่อ token เลขดอลลาร์ลอยๆ ในแชทอ่านแล้วเข้าใจว่าโดนเรียกเก็บ มีเทสบังคับว่าสรุปทุกครั้งต้องมีคำอธิบายติดไปด้วย
+- [ ] ยังทำไม่ได้: โควตาของ subscription (แบบที่ `/usage` โหมด interactive โชว์ 5 ชั่วโมง/สัปดาห์) — ไม่มีใน stream, CLI ไม่มี subcommand, และไม่มี cache ใน `~/.claude` ต้องยิง endpoint ของ Anthropic เองซึ่งเกินขอบเขต "หน้ากากทับ Claude Code"
 
 ## Phase 7: Loop & Notification
 - [ ] สั่งให้ loop ได้ เช่น นับถอยหลัง 5 นาทีแล้วแจ้งเตือน หรือ long run แล้วแจ้งเตือนได้
