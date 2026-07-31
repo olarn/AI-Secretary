@@ -214,13 +214,11 @@ The current phase for version-bumping purposes (`AppVersion.swift`,
 - [x] **บั๊กที่เจอตอนขับจริง: prompt ไปไม่ถึง backend ที่ใช้จริง** — `capabilityPrompt` ที่อธิบาย ```loop กับ ```window ใช้เฉพาะเส้นทาง API key ส่วน Claude Code ใช้ `agentPrompt` คนละตัวซึ่งไม่มีทั้งคู่ ขอให้ปักตารางแล้วโมเดลตอบว่า "no window tool is available to me in this session" ซึ่งถูกจากมุมของมัน — แปลว่า loop ที่โมเดลตั้งเองตาม Phase 6.1 ก็ไปไม่ถึงเช่นกัน มาตลอด
   - เทสใหม่ยิงหนึ่งเทิร์นบน backend ทั้งสองแบบ แล้วเช็คว่า fence ทุกตัวที่แอป parse ได้ ต้องปรากฏใน prompt ที่ส่งจริง — parser ถูกและเทสเขียวไม่ได้แปลว่าโมเดลรู้ว่ามีความสามารถนี้
 
-## Phase 8: Loop & Notification
-- [ ] สั่งให้ loop ได้ เช่น นับถอยหลัง 5 นาทีแล้วแจ้งเตือน หรือ long run แล้วแจ้งเตือนได้
-- [ ] มี local notification เมื่อทำงานเสร็จ (notification settings ตาม macOS)
-- [ ] เมื่อ click ที่กล่อง notication, จะเปิด app และ chat window ขึ้นมา
-
-## Phase 9: Multi-session
+## Phase 8: Multi-session
 - [ ] สามารถเปิด chat bubble ได้มากกว่า 1 window โดยที่แต่ละ window จะแยก Claude Session ออกจากกัน
+- [ ] การแสดง chat bubble ให้แสดง on top window เดิท แต่ให้ซ้อนทับแบบแหลื่อมกันฃ
+- [ ] ถ้า drag ตัวละคร, ให้ลากเอา chat bubble ทั้งหมดไปด้วย โดยซ้อนกับเป็นชั้นแบบเหลื่อมๆ แล้วลากไปด้วยกัน 
+- [ ] มีเมนูใน Menu icon ชื่อ Chats และลอกเอา feature มาจาก Windows เลย
 - [ ] แยก settings ตาม chat window ของใครของมัน แปลว่า แต่ละ chat จะแยก model, effort ได้
 - [ ] ถ้ามี Project อยู่แล้ว แล้วขึ้น session ใหม่ ให้ใช้ project เดิมเลย แต่สามารถเพิ่ม project ได้ 
 - [ ] project ที่เพิ่มใหมม่ใน session ใหม่ จะไม่เห็นใน session เดิม
@@ -230,6 +228,11 @@ The current phase for version-bumping purposes (`AppVersion.swift`,
   - [ ] ตั้งชื่อเมนูสั้นๆ ให้ด้วย ตาม context ที่คุยกัน  
   - [ ] ถ้า click ที่ session ใน menu จะเปิด chat bubble แล้วคุยต่อ (resumr session) ได้เลย
   - [ ] แต่ละ session ใน menu มีปุ่มปิด ถ้าปิดก็ลบ history ไปเลย
+
+## Phase 9: Loop & Notification
+- [ ] สั่งให้ loop ได้ เช่น นับถอยหลัง 5 นาทีแล้วแจ้งเตือน หรือ long run แล้วแจ้งเตือนได้
+- [ ] มี local notification เมื่อทำงานเสร็จ (notification settings ตาม macOS)
+- [ ] เมื่อ click ที่กล่อง notication, จะเปิด app และ chat window ขึ้นมา
 
 ## Phase 10: Talk to each other
 
