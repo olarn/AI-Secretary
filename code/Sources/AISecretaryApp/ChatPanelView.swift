@@ -973,9 +973,12 @@ struct ChatPanelView: View {
 
             Button("Add project…") {
                 addProjectNote = nil
-                if let project = ProjectPicker.promptForProject() {
-                    addProjectNote = registry.addReportingProblem(project)
-                }
+                guard let project = ProjectPicker.promptForProject() else { return }
+                addProjectNote = registry.addReportingProblem(project)
+                // Adding a project mid-conversation is almost always a
+                // correction to the question already asked, so the Secretary
+                // re-scopes the workspace and runs it again.
+                secretary.projectsDidChange()
             }
             .buttonStyle(.bordered)
             .font(.caption2)

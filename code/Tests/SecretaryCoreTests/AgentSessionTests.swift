@@ -253,6 +253,39 @@ final class AgentSessionTests: XCTestCase {
         }
     }
 
+    /// Adding a project mid-conversation is a correction, so the question that
+    /// prompted it gets asked again on the newly scoped workspace. Without this
+    /// the registry gained a folder and nothing else happened at all.
+    func testAddingAProjectRunsTheLastQuestionAgain() async {
+        let secretary = makeSecretary(projects: [])
+        secretary.submit("what is in the ratebook?")
+        await waitUntilIdle()
+        let before = provider.callCount
+
+        _ = registry.add(project(grantingAgent: true))
+        secretary.projectsDidChange()
+        await waitUntilIdle()
+
+        XCTAssertEqual(provider.callCount, before + 1, "The earlier question should have been re-sent")
+        XCTAssertEqual(
+            provider.lastMessages.last(where: { $0.role == .user })?.content,
+            "what is in the ratebook?"
+        )
+        XCTAssertTrue(
+            secretary.transcript.contains { $0.kind == .activity && $0.text.contains("asking again") },
+            "An answer nobody just asked for has to say why it appeared"
+        )
+    }
+
+    /// Nothing to resume, nothing to do — and no empty turn sent.
+    func testAddingAProjectWithNoConversationAsksNothing() async {
+        let secretary = makeSecretary(projects: [])
+        let before = provider.callCount
+        secretary.projectsDidChange()
+        await waitUntilIdle()
+        XCTAssertEqual(provider.callCount, before)
+    }
+
     func testTheAgentPromptNamesTheProjectItIsStandingIn() async {
         let secretary = makeSecretary(projects: [project(grantingAgent: true)])
         secretary.submit("hello")

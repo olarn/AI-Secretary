@@ -656,6 +656,66 @@ public final class Secretary {
         pendingDecision = .approval(request, operation: .widenAgentTools(rules: rules, prompt: prompt))
     }
 
+    /// The set of projects changed while a conversation was going.
+    ///
+    /// Adding a project is nearly always a correction: the person asked for
+    /// something, the assistant couldn't reach the folder — or the MCP servers
+    /// that folder configures — and they went and added it. Until now nothing
+    /// told this object at all, so the workspace kept its old scope and the
+    /// question that prompted the change sat there answered wrongly.
+    ///
+    /// Re-preparing matters as much as re-asking. Claude Code loads a project's
+    /// MCP servers when a session starts, so a server added mid-conversation is
+    /// invisible until the session is replaced — which moving the working
+    /// directory already does. The app's own `conversation` carries the context
+    /// across that, so nothing is lost by starting a new one.
+    public func projectsDidChange() {
+        guard let scoped = chatProvider as? WorkspaceScopedProvider,
+              scoped.hasWorkspaceTools
+        else { return }
+
+        let stillThere = lastProject.toOptional().flatMap { previous in
+            approvedProjects.first { $0.id == previous.id }
+        }
+        prepareWorkspace(
+            primary: Option.fromOptional(stillThere ?? approvedProjects.first),
+            on: scoped
+        )
+        resumeLastRequest()
+    }
+
+    /// Runs the last thing the user asked, again, on the freshly scoped
+    /// workspace.
+    ///
+    /// Announced in an activity box rather than done silently: an answer nobody
+    /// just asked for has to carry the reason it appeared, the same rule the
+    /// loop follows. Skipped while the assistant is busy — cancelling a reply
+    /// the user is reading to re-ask an older question is worse than waiting.
+    private func resumeLastRequest() {
+        guard stateMachine.state == .idle, streamingTask == nil, pendingDecision == nil else { return }
+        guard let request = conversation.last(where: { $0.role == .user })?.content,
+              !request.isEmpty
+        else { return }
+
+        let taskID = UUID().uuidString
+        transcript.append(TranscriptEntry(
+            speaker: .secretary,
+            kind: .activity,
+            text: "▸ Workspace changed — asking again: \(Self.shortened(request))"
+        ))
+        stateMachine.send(.userBeganInput, reason: "workspace changed", taskID: .some(taskID))
+        stateMachine.send(.beginInterpreting, reason: "workspace changed", taskID: .some(taskID))
+        streamReply(messages: conversation, taskID: taskID)
+    }
+
+    /// One line of it, so the box names the question without reprinting it.
+    static func shortened(_ text: String, limit: Int = 60) -> String {
+        let flat = text
+            .replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespaces)
+        return flat.count <= limit ? flat : String(flat.prefix(limit)) + "…"
+    }
+
     /// What to do when the person supplies the thing that was missing.
     ///
     /// From a real conversation: asked for a ratebook and to pin it, the
