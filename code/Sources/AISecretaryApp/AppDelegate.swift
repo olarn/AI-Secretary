@@ -32,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     private var statusBar: StatusBarController!
     private var hotKeys: GlobalHotKeys?
     private lazy var usageWindow = UsageWindow(secretary: secretary, appearance: appearance, backend: backend)
+    private lazy var infoWindows = InfoWindows(appearance: appearance)
     private var isChatVisible = false
     private var isCharacterVisible = true
 
@@ -140,18 +141,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
         statusBar = StatusBarController(
             onOpenChat: { [weak self] in self?.openChatFromMenu() },
             onToggleCharacter: { [weak self] in self?.toggleCharacterVisibility() ?? true },
-            onShowUsage: { [weak self] in self?.usageWindow.toggle() }
+            onShowUsage: { [weak self] in self?.usageWindow.toggle() },
+            windows: { [weak self] in self?.infoWindows }
         )
+
+        // A reply can ask for part of itself to be kept on screen.
+        secretary.onPinWindow = { [weak self] spec in self?.infoWindows.open(spec) }
+        infoWindows.onCountChanged = { [weak self] in self?.refreshHotKeyClaim() }
 
         // Esc is claimed from the whole system, so the bubble answers it while
         // the user is typing in another app. Only Esc, and only while the chat
         // is showing — see `GlobalShortcut` for why ⌘H is not in this list.
         hotKeys = GlobalHotKeys(actions: [
-            .closeChat: { [weak self] in self?.hideChatPanel() }
+            // Esc means "put away whatever is in front". A pinned pane in front
+            // is what it puts away; otherwise it closes the chat.
+            .closeChat: { [weak self] in
+                guard let self else { return }
+                if self.infoWindows.hideKeyWindow() { return }
+                self.hideChatPanel()
+            }
         ])
-        hotKeys?.apply(chatVisible: isChatVisible)
+        refreshHotKeyClaim()
 
         showCharacter()
+    }
+
+    /// Esc is worth claiming only while something is on screen to dismiss —
+    /// the chat bubble or a pinned pane. Called from both, since either can be
+    /// the last one standing.
+    func refreshHotKeyClaim() {
+        hotKeys?.apply(hasDismissableWindow: isChatVisible || !infoWindows.set.isEmpty)
     }
 
     /// Hands Esc back to the rest of the system on the way out. The process
@@ -356,7 +375,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
 
     private func showChatPanel() {
         isChatVisible = true
-        hotKeys?.apply(chatVisible: true)
+        refreshHotKeyClaim()
         // The display may have changed since launch; re-clamp before showing,
         // against the screen the character is on rather than whichever one
         // happens to be "main" at the time.
@@ -370,9 +389,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
 
     private func hideChatPanel() {
         isChatVisible = false
-        // Esc goes back to whichever app the user is actually in the moment the
-        // bubble is off screen.
-        hotKeys?.apply(chatVisible: false)
+        // Esc goes back to whichever app the user is actually in the moment
+        // there is nothing left to put away.
+        refreshHotKeyClaim()
         chatPanel.animator().alphaValue = 0
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
             self?.chatPanel.orderOut(nil)

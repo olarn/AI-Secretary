@@ -30,15 +30,16 @@ public enum GlobalShortcut: String, CaseIterable, Sendable {
 
 /// Which shortcuts should be claimed right now.
 ///
-/// `closeChat` is claimed only while the chat is on screen. Esc is the busiest
+/// `closeChat` is claimed only while there is something on screen for it to put
+/// away — the chat bubble, or a pinned pane. Esc is the busiest
 /// key on the keyboard — it cancels dialogs, leaves full screen, ends a Keynote
 /// slideshow — and claiming it permanently would break all of that for the sake
 /// of a window that isn't even showing. With the chat closed the shortcut has
 /// nothing to do anyway, so releasing it costs nothing and hands Esc back to
 /// whatever app the user is actually in.
 ///
-/// Nothing at all is claimed while the chat is closed. A desktop companion that
-/// is only sitting there has no business holding a key hostage.
-public func claimedShortcuts(chatVisible: Bool) -> Set<GlobalShortcut> {
-    chatVisible ? [.closeChat] : []
+/// Nothing at all is claimed when there is nothing to dismiss. A desktop
+/// companion that is only sitting there has no business holding a key hostage.
+public func claimedShortcuts(hasDismissableWindow: Bool) -> Set<GlobalShortcut> {
+    hasDismissableWindow ? [.closeChat] : []
 }

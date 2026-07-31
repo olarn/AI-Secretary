@@ -14,21 +14,23 @@ final class GlobalShortcutTests: XCTestCase {
     /// from every other app on the machine — reported within minutes of the
     /// build landing, and the reason this file now claims as little as possible.
     func testNothingIsClaimedWhileTheChatIsClosed() {
-        XCTAssertTrue(claimedShortcuts(chatVisible: false).isEmpty)
+        XCTAssertTrue(claimedShortcuts(hasDismissableWindow: false).isEmpty)
     }
 
     /// The mitigation that keeps this from being hostile. Esc cancels dialogs,
     /// leaves full screen and ends a slideshow; holding it while the chat is
     /// closed would break all of that to serve a window that isn't showing.
-    func testEscapeIsHandedBackWhenTheChatIsClosed() {
-        XCTAssertFalse(claimedShortcuts(chatVisible: false).contains(.closeChat))
-        XCTAssertTrue(claimedShortcuts(chatVisible: true).contains(.closeChat))
+    /// A pinned pane counts too: with the chat closed and a pane on screen, Esc
+    /// still has something to put away.
+    func testEscapeIsClaimedForAnythingDismissable() {
+        XCTAssertFalse(claimedShortcuts(hasDismissableWindow: false).contains(.closeChat))
+        XCTAssertTrue(claimedShortcuts(hasDismissableWindow: true).contains(.closeChat))
     }
 
     func testNothingElseIsEverClaimed() {
         for visible in [false, true] {
             XCTAssertTrue(
-                claimedShortcuts(chatVisible: visible).isSubset(of: [.closeChat]),
+                claimedShortcuts(hasDismissableWindow: visible).isSubset(of: [.closeChat]),
                 "chatVisible=\(visible)"
             )
         }

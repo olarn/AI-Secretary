@@ -33,8 +33,8 @@ final class GlobalHotKeys {
 
     /// Brings the claimed set in line with `claimedShortcuts`. Safe to call on
     /// every visibility change: already-claimed keys are left alone.
-    func apply(chatVisible: Bool) {
-        let wanted = claimedShortcuts(chatVisible: chatVisible)
+    func apply(hasDismissableWindow: Bool) {
+        let wanted = claimedShortcuts(hasDismissableWindow: hasDismissableWindow)
         for shortcut in registered.keys where !wanted.contains(shortcut) {
             release(shortcut)
         }

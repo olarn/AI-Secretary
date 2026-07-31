@@ -15,15 +15,23 @@ final class StatusBarController {
     private let onOpenChat: () -> Void
     private let onToggleCharacter: () -> Bool // returns the new "is visible" state
     private let onShowUsage: () -> Void
+    /// Panes pulled out of the chat. Read when the menu opens rather than kept
+    /// in step with every change: a menu only has to be right at the moment it
+    /// is shown, and rebuilding then means no stale rows.
+    private let windows: () -> InfoWindows?
+    private let windowsMenuItem: NSMenuItem
 
     init(
         onOpenChat: @escaping () -> Void,
         onToggleCharacter: @escaping () -> Bool,
-        onShowUsage: @escaping () -> Void
+        onShowUsage: @escaping () -> Void,
+        windows: @escaping () -> InfoWindows?
     ) {
         self.onOpenChat = onOpenChat
         self.onToggleCharacter = onToggleCharacter
         self.onShowUsage = onShowUsage
+        self.windows = windows
+        self.windowsMenuItem = NSMenuItem(title: "Windows", action: nil, keyEquivalent: "")
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         self.characterMenuItem = NSMenuItem(
             title: "Hide Character",
@@ -74,6 +82,10 @@ final class StatusBarController {
         usageItem.target = target
         menu.addItem(usageItem)
 
+        windowsMenuItem.submenu = NSMenu(title: "Windows")
+        menu.addItem(windowsMenuItem)
+        menu.delegate = target
+
         menu.addItem(.separator())
 
         let aboutItem = NSMenuItem(
@@ -112,6 +124,60 @@ final class StatusBarController {
 
     fileprivate func handleShowUsage() { onShowUsage() }
 
+    /// Rebuilt each time the menu opens.
+    ///
+    /// Each pane gets a submenu rather than a bare row: the list has to both
+    /// bring a pane back and delete one, and an action hidden behind a modifier
+    /// key is an action most people never find.
+    fileprivate func rebuildWindowsMenu() {
+        let submenu = NSMenu(title: "Windows")
+        guard let windows = windows() else {
+            windowsMenuItem.submenu = submenu
+            windowsMenuItem.isEnabled = false
+            return
+        }
+
+        let open = windows.set.windows
+        windowsMenuItem.isEnabled = !open.isEmpty
+        if open.isEmpty {
+            let empty = NSMenuItem(title: "Nothing pinned yet", action: nil, keyEquivalent: "")
+            empty.isEnabled = false
+            submenu.addItem(empty)
+            windowsMenuItem.submenu = submenu
+            return
+        }
+
+        for spec in open {
+            let item = NSMenuItem(title: spec.title, action: nil, keyEquivalent: "")
+            let actions = NSMenu(title: spec.title)
+
+            let show = NSMenuItem(title: "Show", action: #selector(Target.showWindow(_:)), keyEquivalent: "")
+            show.target = target
+            show.representedObject = spec.id
+            actions.addItem(show)
+
+            let delete = NSMenuItem(title: "Delete", action: #selector(Target.deleteWindow(_:)), keyEquivalent: "")
+            delete.target = target
+            delete.representedObject = spec.id
+            actions.addItem(delete)
+
+            item.submenu = actions
+            submenu.addItem(item)
+        }
+
+        // Always last, so its position doesn't move as panes come and go.
+        submenu.addItem(.separator())
+        let clear = NSMenuItem(title: "Clear All", action: #selector(Target.clearWindows(_:)), keyEquivalent: "")
+        clear.target = target
+        submenu.addItem(clear)
+
+        windowsMenuItem.submenu = submenu
+    }
+
+    fileprivate func handleShowWindow(_ id: UUID) { windows()?.show(id) }
+    fileprivate func handleDeleteWindow(_ id: UUID) { windows()?.remove(id) }
+    fileprivate func handleClearWindows() { windows()?.clearAll() }
+
     fileprivate func handleShowAbout() { AboutPanel.show() }
 
     fileprivate func handleQuit() { NSApp.terminate(nil) }
@@ -119,13 +185,27 @@ final class StatusBarController {
     /// Objective-C selector target. `StatusBarController` isn't an `NSObject`, so
     /// this thin class receives the menu actions and forwards them.
     @MainActor
-    private final class Target: NSObject {
+    private final class Target: NSObject, NSMenuDelegate {
         private unowned let controller: StatusBarController
         init(controller: StatusBarController) { self.controller = controller }
 
         @objc func openChat(_ sender: Any?) { controller.handleOpenChat() }
         @objc func toggleCharacter(_ sender: Any?) { controller.handleToggleCharacter() }
         @objc func showUsage(_ sender: Any?) { controller.handleShowUsage() }
+
+        @objc func showWindow(_ sender: Any?) {
+            guard let id = (sender as? NSMenuItem)?.representedObject as? UUID else { return }
+            controller.handleShowWindow(id)
+        }
+
+        @objc func deleteWindow(_ sender: Any?) {
+            guard let id = (sender as? NSMenuItem)?.representedObject as? UUID else { return }
+            controller.handleDeleteWindow(id)
+        }
+
+        @objc func clearWindows(_ sender: Any?) { controller.handleClearWindows() }
+
+        func menuWillOpen(_ menu: NSMenu) { controller.rebuildWindowsMenu() }
         @objc func showAbout(_ sender: Any?) { controller.handleShowAbout() }
         @objc func quit(_ sender: Any?) { controller.handleQuit() }
     }
