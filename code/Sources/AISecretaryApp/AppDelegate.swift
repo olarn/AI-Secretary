@@ -31,7 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     private var chatPanel: FloatingPanel!
     private var statusBar: StatusBarController!
     private var hotKeys: GlobalHotKeys?
-    private lazy var usageWindow = UsageWindow(secretary: secretary, appearance: appearance)
+    private lazy var usageWindow = UsageWindow(secretary: secretary, appearance: appearance, backend: backend)
     private var isChatVisible = false
     private var isCharacterVisible = true
 

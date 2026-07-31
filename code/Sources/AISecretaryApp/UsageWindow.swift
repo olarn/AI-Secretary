@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import LLMProvider
 import SecretaryCore
 
 /// A small window showing what this conversation has spent, meant to be left
@@ -16,10 +17,12 @@ final class UsageWindow: NSObject, NSWindowDelegate {
     private var window: NSPanel?
     private let secretary: Secretary
     private let appearance: Appearance
+    private let plan: PlanUsageModel
 
-    init(secretary: Secretary, appearance: Appearance) {
+    init(secretary: Secretary, appearance: Appearance, backend: ChatBackend) {
         self.secretary = secretary
         self.appearance = appearance
+        self.plan = PlanUsageModel(backend: backend)
     }
 
     var isOpen: Bool { window?.isVisible ?? false }
@@ -34,13 +37,15 @@ final class UsageWindow: NSObject, NSWindowDelegate {
         // happened" — the same trap the About window and the pickers hit.
         NSApp.activate(ignoringOtherApps: true)
 
+        plan.startPolling()
+
         if let window {
             window.makeKeyAndOrderFront(nil)
             return
         }
 
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 300, height: 260),
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 460),
             styleMask: [.titled, .closable, .utilityWindow, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -56,7 +61,7 @@ final class UsageWindow: NSObject, NSWindowDelegate {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.delegate = self
         panel.contentView = NSHostingView(
-            rootView: UsageView(secretary: secretary, appearance: appearance)
+            rootView: UsageView(secretary: secretary, appearance: appearance, plan: plan)
         )
         panel.center()
         panel.makeKeyAndOrderFront(nil)
@@ -65,6 +70,12 @@ final class UsageWindow: NSObject, NSWindowDelegate {
 
     func close() {
         window?.orderOut(nil)
+        plan.stopPolling()
+    }
+
+    /// Closing by the window's own button goes through here, not `close()`.
+    func windowWillClose(_ notification: Notification) {
+        plan.stopPolling()
     }
 }
 
@@ -73,11 +84,16 @@ final class UsageWindow: NSObject, NSWindowDelegate {
 private struct UsageView: View {
     @Bindable var secretary: Secretary
     let appearance: Appearance
+    @Bindable var plan: PlanUsageModel
 
     private var usage: SessionUsage { secretary.sessionUsage }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            planSection
+            Divider()
+            Text("This conversation")
+                .font(.system(size: appearance.settings.secondaryFontSize, weight: .semibold))
             if usage.turns == 0 {
                 Text("Nothing used yet this session.")
                     .foregroundStyle(.secondary)
@@ -111,6 +127,54 @@ private struct UsageView: View {
         .font(.system(size: appearance.settings.secondaryFontSize))
         .padding(16)
         .frame(minWidth: 260, minHeight: 200)
+    }
+
+    /// What is left of the subscription's allowance. Above the token counts
+    /// because it is the one that actually stops work, and because it covers
+    /// every Claude Code session on the account — not only this app's.
+    @ViewBuilder
+    private var planSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Plan limits")
+                    .font(.system(size: appearance.settings.secondaryFontSize, weight: .semibold))
+                Spacer()
+                Button {
+                    plan.refresh()
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .buttonStyle(.plain)
+                .disabled(plan.isRefreshing)
+                .help("Check again")
+            }
+
+            if let problem = plan.problem {
+                Text(problem)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if let usage = plan.usage {
+                ForEach(Array(usage.limits.enumerated()), id: \.offset) { _, limit in
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack {
+                            Text(limit.label)
+                            Spacer()
+                            Text(limit.percentText).monospacedDigit()
+                        }
+                        ProgressView(value: limit.fraction)
+                            .tint(limit.fraction > 0.85 ? .orange : .accentColor)
+                        if let resets = limit.resets {
+                            Text("Resets \(resets)")
+                                .font(.system(size: max(9, appearance.settings.secondaryFontSize - 2)))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            } else {
+                Text(plan.isRefreshing ? "Checking…" : "Not checked yet.")
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 
     /// The one figure worth watching while working: how close this conversation
