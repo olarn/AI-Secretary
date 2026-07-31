@@ -170,24 +170,26 @@ private struct UsageView: View {
                     limitRow(limit)
                 }
                 if !usage.weekly.isEmpty {
-                    Text("Weekly limits")
-                        .font(.system(size: appearance.settings.secondaryFontSize, weight: .semibold))
+                    sectionHeader("Weekly limits", isExpanded: $showWeekly)
                         .padding(.top, 4)
-                    ForEach(Array(usage.weekly.enumerated()), id: \.offset) { _, limit in
-                        limitRow(limit)
+                    if showWeekly {
+                        ForEach(Array(usage.weekly.enumerated()), id: \.offset) { _, limit in
+                            limitRow(limit)
+                        }
                     }
                 }
                 if !usage.activity.isEmpty {
-                    Text("What's driving it")
-                        .font(.system(size: appearance.settings.secondaryFontSize, weight: .semibold))
+                    sectionHeader("What's driving it", isExpanded: $showActivity)
                         .padding(.top, 4)
-                    ForEach(Array(usage.activity.enumerated()), id: \.offset) { _, period in
-                        activityRow(period)
+                    if showActivity {
+                        ForEach(Array(usage.activity.enumerated()), id: \.offset) { _, period in
+                            activityRow(period)
+                        }
+                        Text(PlanUsage.activityNote)
+                            .font(.system(size: max(9, appearance.settings.secondaryFontSize - 2)))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-                    Text(PlanUsage.activityNote)
-                        .font(.system(size: max(9, appearance.settings.secondaryFontSize - 2)))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 HStack(spacing: 6) {
