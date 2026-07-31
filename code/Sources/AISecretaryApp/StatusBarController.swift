@@ -14,10 +14,16 @@ final class StatusBarController {
     /// need to know about panels or the Secretary.
     private let onOpenChat: () -> Void
     private let onToggleCharacter: () -> Bool // returns the new "is visible" state
+    private let onShowUsage: () -> Void
 
-    init(onOpenChat: @escaping () -> Void, onToggleCharacter: @escaping () -> Bool) {
+    init(
+        onOpenChat: @escaping () -> Void,
+        onToggleCharacter: @escaping () -> Bool,
+        onShowUsage: @escaping () -> Void
+    ) {
         self.onOpenChat = onOpenChat
         self.onToggleCharacter = onToggleCharacter
+        self.onShowUsage = onShowUsage
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         self.characterMenuItem = NSMenuItem(
             title: "Hide Character",
@@ -56,6 +62,18 @@ final class StatusBarController {
         characterMenuItem.keyEquivalentModifierMask = [.command]
         menu.addItem(characterMenuItem)
 
+        // Its own window rather than a row in the chat: the figures are for
+        // leaving open next to the work, and closing the chat must not take
+        // them away.
+        let usageItem = NSMenuItem(
+            title: "Token Usage",
+            action: #selector(Target.showUsage(_:)),
+            keyEquivalent: "u"
+        )
+        usageItem.keyEquivalentModifierMask = [.command]
+        usageItem.target = target
+        menu.addItem(usageItem)
+
         menu.addItem(.separator())
 
         let aboutItem = NSMenuItem(
@@ -92,6 +110,8 @@ final class StatusBarController {
         characterMenuItem.title = isVisible ? "Hide Character" : "Show Character"
     }
 
+    fileprivate func handleShowUsage() { onShowUsage() }
+
     fileprivate func handleShowAbout() { AboutPanel.show() }
 
     fileprivate func handleQuit() { NSApp.terminate(nil) }
@@ -105,6 +125,7 @@ final class StatusBarController {
 
         @objc func openChat(_ sender: Any?) { controller.handleOpenChat() }
         @objc func toggleCharacter(_ sender: Any?) { controller.handleToggleCharacter() }
+        @objc func showUsage(_ sender: Any?) { controller.handleShowUsage() }
         @objc func showAbout(_ sender: Any?) { controller.handleShowAbout() }
         @objc func quit(_ sender: Any?) { controller.handleQuit() }
     }

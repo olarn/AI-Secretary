@@ -375,10 +375,19 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
             return [.textDelta(text)]
 
         case "result":
+            // Cost and the context window sit beside `usage`, not inside it.
+            let cost = object["total_cost_usd"] as? Double ?? 0
+            let window = Self.contextWindow(of: object)
             let usage = Option.fromOptional(object["usage"] as? [String: Any]).map {
                 ChatUsage(
                     inputTokens: $0["input_tokens"] as? Int ?? 0,
-                    outputTokens: $0["output_tokens"] as? Int ?? 0
+                    outputTokens: $0["output_tokens"] as? Int ?? 0,
+                    // Left out until now, which made the reported figure useless
+                    // on any real turn: these two are almost all of the traffic.
+                    cacheWriteTokens: $0["cache_creation_input_tokens"] as? Int ?? 0,
+                    cacheReadTokens: $0["cache_read_input_tokens"] as? Int ?? 0,
+                    costUSD: cost,
+                    contextWindow: window
                 )
             }^
             return [
@@ -391,6 +400,18 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
         default:
             return []
         }
+    }
+
+    /// The context window, dug out of `modelUsage`, which is keyed by model id.
+    ///
+    /// Only one model answers a turn, so the largest window present is that
+    /// model's — and taking the largest means a turn that somehow lists two
+    /// can't report the smaller one and make the bar look fuller than it is.
+    static func contextWindow(of object: [String: Any]) -> Int? {
+        guard let models = object["modelUsage"] as? [String: Any] else { return nil }
+        return models.values
+            .compactMap { ($0 as? [String: Any])?["contextWindow"] as? Int }
+            .max()
     }
 
     // MARK: - Launch

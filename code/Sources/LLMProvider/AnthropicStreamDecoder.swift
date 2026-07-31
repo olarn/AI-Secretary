@@ -7,6 +7,8 @@ import Foundation
 public struct AnthropicStreamDecoder {
     private var inputTokens = 0
     private var outputTokens = 0
+    private var cacheWriteTokens = 0
+    private var cacheReadTokens = 0
     private var stopReason: Option<String> = .none()
 
     public init() {}
@@ -22,6 +24,8 @@ public struct AnthropicStreamDecoder {
         case "message_start":
             if let event = try? decoder.decode(MessageStart.self, from: data) {
                 inputTokens = event.message.usage?.input_tokens ?? 0
+                cacheWriteTokens = event.message.usage?.cache_creation_input_tokens ?? 0
+                cacheReadTokens = event.message.usage?.cache_read_input_tokens ?? 0
             }
             return .none()
 
@@ -51,7 +55,12 @@ public struct AnthropicStreamDecoder {
             return .some(
                 .completed(
                     stopReason: stopReason,
-                    usage: .some(ChatUsage(inputTokens: inputTokens, outputTokens: outputTokens))
+                    usage: .some(ChatUsage(
+                        inputTokens: inputTokens,
+                        outputTokens: outputTokens,
+                        cacheWriteTokens: cacheWriteTokens,
+                        cacheReadTokens: cacheReadTokens
+                    ))
                 )
             )
 
@@ -66,7 +75,11 @@ public struct AnthropicStreamDecoder {
 
     private struct MessageStart: Decodable {
         struct Message: Decodable {
-            struct Usage: Decodable { let input_tokens: Int? }
+            struct Usage: Decodable {
+                let input_tokens: Int?
+                let cache_creation_input_tokens: Int?
+                let cache_read_input_tokens: Int?
+            }
             let usage: Usage?
         }
         let message: Message

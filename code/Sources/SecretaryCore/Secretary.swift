@@ -109,6 +109,13 @@ public final class Secretary {
     /// into the conversation. Observed so the panel can show that it is on and
     /// offer one click to stop it — a timer that talks must be visible.
     public private(set) var activeLoop: LoopSchedule?
+    /// Tokens and cost so far. Observed, so the usage window can be left open
+    /// and follow along instead of showing a figure from whenever it was opened.
+    ///
+    /// Per session, not per lifetime: the number people want is "how much of the
+    /// context have I filled in this conversation", and a running total that
+    /// survived restarts would answer a question nobody asked.
+    public private(set) var sessionUsage: SessionUsage = .empty
     /// Absent means "whatever the backend is already set up to use" — for
     /// Claude Code that's the model and effort from the user's own settings.
     public private(set) var model: Option<ChatModel> = .none()
@@ -294,6 +301,18 @@ public final class Secretary {
 
     // MARK: - Slash commands
 
+    /// Folds one turn's usage into the session total.
+    private func record(usage: ChatUsage) {
+        sessionUsage = sessionUsage.adding(
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
+            cacheWriteTokens: usage.cacheWriteTokens,
+            cacheReadTokens: usage.cacheReadTokens,
+            costUSD: usage.costUSD,
+            contextWindow: usage.contextWindow
+        )
+    }
+
     private func handleSlashCommand(_ text: String) {
         let parts = text.dropFirst().split(separator: " ", maxSplits: 1).map(String.init)
         let command = parts.first?.lowercased() ?? ""
@@ -314,6 +333,9 @@ public final class Secretary {
                 say(.secretary, "Unknown model “\(argument)”. Available: \(ChatModel.known.map(\.id).joined(separator: ", ")), or `default`.")
             }
 
+        case "usage", "tokens":
+            say(.secretary, UsageFormat.summary(sessionUsage))
+
         case "effort":
             guard let argument else {
                 let list = Effort.allCases.map(\.rawValue).joined(separator: ", ")
@@ -332,7 +354,7 @@ public final class Secretary {
             handleLoopCommand(argument ?? "")
 
         default:
-            say(.secretary, "Unknown command “/\(command)”. Try /model, /effort or /loop.")
+            say(.secretary, "Unknown command “/\(command)”. Try /model, /effort, /usage or /loop.")
         }
     }
 
@@ -825,10 +847,11 @@ public final class Secretary {
                     case .completed(let stopReason, let usage):
                         ensureWorking()
                         let reason = stopReason.getOrElse("end_turn")
+                        usage.fold({ }, { self.record(usage: $0) })
                         self.audit.record(AuditEntry(
                             taskID: taskID,
                             kind: .executionFinished,
-                            detail: "stop=\(reason) in=\(usage.map(\.inputTokens)^.getOrElse(0)) out=\(usage.map(\.outputTokens)^.getOrElse(0))"
+                            detail: "stop=\(reason) tokens=\(self.sessionUsage.totalTokens)"
                         ))
                         if reason == "refusal" {
                             self.finishChat(entryID: replyID, taskID: taskID, success: false,

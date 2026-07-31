@@ -31,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     private var chatPanel: FloatingPanel!
     private var statusBar: StatusBarController!
     private var hotKeys: GlobalHotKeys?
+    private lazy var usageWindow = UsageWindow(secretary: secretary, appearance: appearance)
     private var isChatVisible = false
     private var isCharacterVisible = true
 
@@ -138,7 +139,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
 
         statusBar = StatusBarController(
             onOpenChat: { [weak self] in self?.openChatFromMenu() },
-            onToggleCharacter: { [weak self] in self?.toggleCharacterVisibility() ?? true }
+            onToggleCharacter: { [weak self] in self?.toggleCharacterVisibility() ?? true },
+            onShowUsage: { [weak self] in self?.usageWindow.toggle() }
         )
 
         // Esc is claimed from the whole system, so the bubble answers it while

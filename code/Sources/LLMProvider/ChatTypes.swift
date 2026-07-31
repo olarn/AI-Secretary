@@ -69,13 +69,39 @@ public enum Effort: String, CaseIterable, Sendable {
     }
 }
 
+/// What one turn cost.
+///
+/// The cache counts are separate fields rather than folded into `inputTokens`
+/// because they are priced differently, and because leaving them out is not a
+/// rounding error: a turn reported as 2 in / 5 out really moved 11,768 cache
+/// writes and 24,436 cache reads.
 public struct ChatUsage: Equatable, Sendable {
     public let inputTokens: Int
     public let outputTokens: Int
+    /// Tokens written into the prompt cache.
+    public let cacheWriteTokens: Int
+    /// Tokens served from the prompt cache.
+    public let cacheReadTokens: Int
+    /// What the traffic would bill on the API. Reported even on a subscription,
+    /// where nothing is charged per token.
+    public let costUSD: Double
+    /// The model's context window, when the backend says.
+    public let contextWindow: Int?
 
-    public init(inputTokens: Int, outputTokens: Int) {
+    public init(
+        inputTokens: Int,
+        outputTokens: Int,
+        cacheWriteTokens: Int = 0,
+        cacheReadTokens: Int = 0,
+        costUSD: Double = 0,
+        contextWindow: Int? = nil
+    ) {
         self.inputTokens = inputTokens
         self.outputTokens = outputTokens
+        self.cacheWriteTokens = cacheWriteTokens
+        self.cacheReadTokens = cacheReadTokens
+        self.costUSD = costUSD
+        self.contextWindow = contextWindow
     }
 }
 
