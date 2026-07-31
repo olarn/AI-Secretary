@@ -133,7 +133,6 @@ The current phase for version-bumping purposes (`AppVersion.swift`,
   - [x] ไม่ต้องเขียนโค้ดเพิ่ม — ทดสอบแล้วใช้ได้อยู่แล้ว (2026-07-28) เพราะแอปขับ Claude Code ของ user ซึ่งโหลด MCP server จาก config ของเขาเองตามที่ Phase 3 ตั้งใจ
   - [x] หลักฐาน: ถาม "ตอนนี้กี่โมงแล้ว" ลอยๆ ใน session ใหม่ โมเดลหา tool เจอเองด้วย ToolSearch แล้วเรียก `mcp__my-tools__get_time` สำเร็จ ไม่ต้องผ่านรอบขออนุมัติ และลิสต์ MCP server ที่เข้าถึงได้เองได้ครบ (ทั้ง server ราย project และ global เช่น Figma)
   - [x] อย่าเพิ่ม `mcp__*` ลง allowlist หรือเขียน MCP client เอง — allowlist ปัจจุบันไม่ได้บล็อก MCP
-  - [ ] ยังไม่ได้พิสูจน์: MCP tool ที่มีผลออกนอกเครื่อง (ส่งเมล/สร้าง event) ถูกจัดเป็น `.localWrite` และการ์ดขออนุมัติขึ้นข้อความ "Send to Claude?" ซึ่งน่าจะสื่อผิด — ต้องทดสอบก่อนถือเป็นบั๊ก
 - [x] Be able to understand the web content through Chrome Claude plug in (suggest user that app can use this approach when user ask about app to understand the web contents).
   - [x] ทำแล้ว (2026-07-28) — ไม่ใช่แค่ "แนะนำ" อย่างเดียว แอปอ่านหน้าเว็บที่ต้อง login ได้จริง
   - [x] เหตุผล: `WebFetch` ยิงจาก process ของแอปเอง ไม่มี cookie/session — หน้า login จะคืนหน้า sign-in มาแทนเนื้อหา แล้วโมเดลรายงานหน้า sign-in ว่าเป็นเนื้อหาของหน้านั้น ส่วน extension ไม่ได้ fetch แต่อ่าน DOM ของ tab ใน Chrome ที่ user login ค้างอยู่ — ยืม session ที่เปิดอยู่ ไม่เคยเห็น password
@@ -168,14 +167,34 @@ The current phase for version-bumping purposes (`AppVersion.swift`,
   - [x] `.beginExecuting` ออกจาก `.idle` ไม่ได้ — tick ต้องส่ง `.userBeganInput` → `.beginInterpreting` เหมือนข้อความที่ user พิมพ์ และต้องเข้า `startChat` ตรงๆ ไม่ผ่าน intent classifier (คำของเราเองอาจถูกอ่านเป็นคำสั่งแล้วไปรัน tool ที่ไม่มีใครสั่ง)
   - [x] ตัวจับเวลาอยู่ใน `Secretary` ไม่ใช่ใน view — loop ต้องเดินต่อแม้ปิดหน้าต่างแชท เพราะคนที่สั่งกำลังมองห้องประชุม ไม่ได้มองจอ
 
-## Phase 7: Talk to each other
+## Phase 7: Loop & Notification
+- [ ] สั่งให้ loop ได้ เช่น นับถอยหลัง 5 นาทีแล้วแจ้งเตือน หรือ long run แล้วแจ้งเตือนได้
+- [ ] มี local notification เมื่อทำงานเสร็จ (notification settings ตาม macOS)
+- [ ] เมื่อ click ที่กล่อง notication, จะเปิด app และ chat window ขึ้นมา
+
+## Phase 7: Multi-session
+- [ ] สามารถเปิด chat bubble ได้มากกว่า 1 window โดยที่แต่ละ window จะแยก Claude Session ออกจากกัน
+- [ ] แยก settings ตาม chat window ของใครของมัน แปลว่า แต่ละ chat จะแยก model, effort ได้
+- [ ] ถ้ามี Project อยู่แล้ว แล้วขึ้น session ใหม่ ให้ใช้ project เดิมเลย แต่สามารถเพิ่ม project ได้ 
+- [ ] project ที่เพิ่มใหมม่ใน session ใหม่ จะไม่เห็นใน session เดิม
+- [ ] chat window ที่ 2,3 จะไม่มี Profile จนกว่าจะปิดจนเหลือ session (window) เดียว app ก็จะแสดงกลับมา
+- [ ] จำ session history ได้ 
+- [ ] เพิ่ม menu Sessions ใน Menu bar
+  - [ ] ตั้งชื่อเมนูสั้นๆ ให้ด้วย ตาม context ที่คุยกัน  
+  - [ ] ถ้า click ที่ session ใน menu จะเปิด chat bubble แล้วคุยต่อ (resumr session) ได้เลย
+  - [ ] แต่ละ session ใน menu มีปุ่มปิด ถ้าปิดก็ลบ history ไปเลย
+
+## Phase 8: Talk to each other
 
 - [ ] Two or more app be able to talk to each other.
 - [ ] First, brainstorm about the feasible that can made 2 or more AI-Secretary app can talk to each other.
 - [ ] Second, its can do the same project (or projects) with different role (configure with .md file in the project somehow)
 
-## Phase 8: Voice
+## Phase 9: Voice
 
 - [ ] Push-to-talk or explicit voice activation.
 - [ ] Speech-to-text, text-to-speech, interruption behavior, and privacy controls.
 - [ ] Voice must follow the same approval and auditing model as chat.
+
+## Defered
+  - [ ] ยังไม่ได้พิสูจน์: MCP tool ที่มีผลออกนอกเครื่อง (ส่งเมล/สร้าง event) ถูกจัดเป็น `.localWrite`และการ์ดขออนุมัติขึ้นข้อความ "Send to Claude?" ซึ่งน่าจะสื่อผิด — ต้องทดสอบก่อนถือเป็นบั๊ก
