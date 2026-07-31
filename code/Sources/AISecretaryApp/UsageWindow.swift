@@ -45,8 +45,10 @@ final class UsageWindow: NSObject, NSWindowDelegate {
         }
 
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 320, height: 460),
-            styleMask: [.titled, .closable, .utilityWindow, .nonactivatingPanel],
+            contentRect: NSRect(x: 0, y: 0, width: 340, height: 620),
+            // Resizable as well: the content is scrolled, but someone with room
+            // on screen should be able to see all of it at once.
+            styleMask: [.titled, .closable, .resizable, .utilityWindow, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
@@ -93,6 +95,18 @@ private struct UsageView: View {
     private var usage: SessionUsage { secretary.sessionUsage }
 
     var body: some View {
+        // Scrolled, because the content grows: plan limits, however many weekly
+        // windows the account has, the activity block, and the token table. A
+        // fixed height that fits today gets cut off the next time Claude Code
+        // adds a line — which it did, and the last row went off the bottom.
+        ScrollView {
+            content.padding(16)
+        }
+        .frame(minWidth: 300, minHeight: 320)
+        .onReceive(Timer.publish(every: 30, on: .main, in: .common).autoconnect()) { tick = $0 }
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: 12) {
             planSection
             Divider()
@@ -120,12 +134,9 @@ private struct UsageView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            Spacer(minLength: 0)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .font(.system(size: appearance.settings.secondaryFontSize))
-        .padding(16)
-        .frame(minWidth: 280, minHeight: 240)
-        .onReceive(Timer.publish(every: 30, on: .main, in: .common).autoconnect()) { tick = $0 }
     }
 
     /// What is left of the subscription's allowance, laid out like the Usage
