@@ -119,6 +119,10 @@ public final class Secretary {
     /// Called when a reply asked for a pane to be pinned. Set by the app layer,
     /// which owns the windows; the Secretary only recognises the request.
     @ObservationIgnored public var onPinWindow: ((InfoWindowSpec) -> Void)?
+    /// The last request the assistant said it could not finish. Put back in
+    /// front of the model on the next turn, then cleared once a turn completes
+    /// without declaring itself blocked.
+    @ObservationIgnored private(set) var outstanding: OutstandingRequest?
     /// Absent means "whatever the backend is already set up to use" — for
     /// Claude Code that's the model and effort from the user's own settings.
     public private(set) var model: Option<ChatModel> = .none()
@@ -725,6 +729,19 @@ public final class Secretary {
     /// anything. It had read the second message as a fresh instruction rather
     /// than as the missing piece of the first.
     static let resumePrompt = """
+    If you cannot finish what was asked — a folder you can't reach, a tool you \
+    don't have, a file that isn't there, something you need to be told — say so \
+    in your answer and end the message with a block naming what is missing, and \
+    nothing after it:
+
+    ```blocked
+    one line: what you would need to finish it
+    ```
+
+    The app remembers the request for you and puts it back in front of you next \
+    turn. Only use it when you genuinely could not do the thing; an answer you \
+    completed is not blocked.
+
     When a message supplies something that was missing — a folder, a project, a \
     tool, a permission, a file, or simply where to look — it is almost never a \
     new request. It is the missing piece of the one you could not finish. Go \
@@ -962,7 +979,16 @@ public final class Secretary {
         // A pane the assistant was asked to pin, read once the reply is whole for
         // the same reason as the loop block.
         let pinned = success ? InfoWindowBlock.parse(parsed.body) : InfoWindowBlock(body: parsed.body, requests: [])
-        updateEntry(id: entryID, text: pinned.body)
+        // Whether the assistant declared itself stuck, and on what. Recorded
+        // before the transcript is updated so the marker never reaches the eye.
+        let blocked = success ? BlockedBlock.parse(pinned.body) : BlockedBlock(body: pinned.body, missing: nil)
+        if let missing = blocked.missing,
+           let request = conversation.last(where: { $0.role == .user })?.content {
+            outstanding = OutstandingRequest(request: request, missing: missing)
+        } else if success {
+            outstanding = nil
+        }
+        updateEntry(id: entryID, text: blocked.body)
         if stateMachine.state != .working {
             stateMachine.send(.beginExecuting, reason: "chat completed", taskID: .some(taskID))
         }
@@ -1427,10 +1453,14 @@ public final class Secretary {
     /// user can plainly see in the UI. Names only — paths, tool allowlists and
     /// approval state stay out of chat history.
     private var systemPrompt: String {
-        if (chatProvider as? WorkspaceScopedProvider)?.hasWorkspaceTools == true {
-            return agentPrompt
-        }
-        return chatOnlyPrompt
+        let base = (chatProvider as? WorkspaceScopedProvider)?.hasWorkspaceTools == true
+            ? agentPrompt
+            : chatOnlyPrompt
+        // Named, verbatim, for this one turn. A standing rule about "messages
+        // that supply the missing piece" was already in the prompt and was not
+        // enough; the request itself has to be in front of the model.
+        guard let outstanding else { return base }
+        return base + "\n\n" + outstanding.reminder
     }
 
     /// For a backend that has its own file tools and is already running inside

@@ -21,6 +21,8 @@ final class SpyWorkspaceProvider: ChatProvider, WorkspaceScopedProvider, @unchec
     /// Refusals to emit on the next turn, then cleared — so a retry succeeds.
     var denialsForNextTurn: [DeniedTool] = []
     var activityForNextTurn: [AgentActivity] = []
+    /// Scripted text for the next turn, then cleared.
+    var replyForNextTurn: String?
 
     private(set) var preparedExtras: [[URL]] = []
 
@@ -51,10 +53,12 @@ final class SpyWorkspaceProvider: ChatProvider, WorkspaceScopedProvider, @unchec
         denialsForNextTurn = []
         let steps = activityForNextTurn
         activityForNextTurn = []
+        let text = replyForNextTurn ?? "ok"
+        replyForNextTurn = nil
         return AsyncStream { continuation in
             for step in steps { continuation.yield(.right(.activity(step))) }
             for denial in denials { continuation.yield(.right(.toolDenied(denial))) }
-            continuation.yield(.right(.textDelta("ok")))
+            continuation.yield(.right(.textDelta(text)))
             continuation.yield(.right(.completed(stopReason: .none(), usage: .none())))
             continuation.finish()
         }
@@ -284,6 +288,53 @@ final class AgentSessionTests: XCTestCase {
         secretary.projectsDidChange()
         await waitUntilIdle()
         XCTAssertEqual(provider.callCount, before)
+    }
+
+    /// The whole point: after a blocked turn the next prompt carries the
+    /// request itself, not just a general rule about missing pieces.
+    func testABlockedTurnPutsTheRequestBackInFrontOfTheModel() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        provider.replyForNextTurn = """
+        The folder is empty.
+
+        ```blocked
+        a project whose MCP serves ratebook data
+        ```
+        """
+        secretary.submit("ratebook for Vios and City 2022, and pin it")
+        await waitUntilIdle()
+
+        XCTAssertFalse(
+            secretary.transcript.contains { $0.text.contains("```blocked") },
+            "The marker is for the app, not the eye"
+        )
+
+        secretary.submit("from the project's MCP")
+        await waitUntilIdle()
+
+        let prompt = provider.lastSystem ?? "-"
+        XCTAssertTrue(prompt.contains("ratebook for Vios and City 2022, and pin it"),
+                      "The unfinished request must be named. Got: \(prompt)")
+        XCTAssertTrue(prompt.contains("a project whose MCP serves ratebook data"))
+    }
+
+    /// A turn that finished clears it, so the reminder can't haunt the rest of
+    /// the conversation.
+    func testACompletedTurnClearsTheReminder() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        provider.replyForNextTurn = "nope\n```blocked\na path\n```"
+        secretary.submit("first question")
+        await waitUntilIdle()
+
+        secretary.submit("second question")
+        await waitUntilIdle()
+        secretary.submit("third question")
+        await waitUntilIdle()
+
+        XCTAssertFalse(
+            (provider.lastSystem ?? "").contains("UNFINISHED REQUEST"),
+            "The second turn completed, so the third must not still be reminded"
+        )
     }
 
     func testTheAgentPromptNamesTheProjectItIsStandingIn() async {
