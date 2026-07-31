@@ -26,7 +26,9 @@ enum ProjectPicker {
         // it worked right after the chat opened, because opening it activates.
         NSApp.activate(ignoringOtherApps: true)
 
-        guard panel.runModal() == .OK, let url = panel.url else { return nil }
+        // Esc has to cancel this dialog, not the chat window behind it.
+        let response = GlobalHotKeys.whileSuspended { panel.runModal() }
+        guard response == .OK, let url = panel.url else { return nil }
 
         return Project(
             name: url.lastPathComponent,

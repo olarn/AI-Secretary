@@ -20,7 +20,8 @@ enum ImagePicker {
         // the same non-activating chat window.
         NSApp.activate(ignoringOtherApps: true)
 
-        guard panel.runModal() == .OK else { return nil }
+        // Esc has to cancel this dialog, not the chat window behind it.
+        guard GlobalHotKeys.whileSuspended({ panel.runModal() }) == .OK else { return nil }
         return panel.url
     }
 }

@@ -47,6 +47,23 @@ final class GlobalHotKeys {
         for shortcut in registered.keys { release(shortcut) }
     }
 
+    /// Runs `body` with every claimed key handed back, then claims the same set
+    /// again.
+    ///
+    /// For modal panels. A Carbon hot key fires no matter what is on screen, so
+    /// with the chat open behind an open panel, Esc closed the chat and left the
+    /// dialog sitting there — the one key everybody presses to cancel a dialog,
+    /// swallowed by a window in the background. Suspending rather than ignoring
+    /// the key matters: an ignored hot key is still consumed, so Esc would do
+    /// nothing at all.
+    static func whileSuspended<T>(_ body: () -> T) -> T {
+        guard let keys = current else { return body() }
+        let held = Set(keys.registered.keys)
+        keys.releaseAll()
+        defer { for shortcut in held { keys.claim(shortcut) } }
+        return body()
+    }
+
     private func claim(_ shortcut: GlobalShortcut) {
         var ref: EventHotKeyRef?
         let id = EventHotKeyID(signature: Self.signature, id: shortcut.hotKeyID)
