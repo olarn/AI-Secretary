@@ -199,6 +199,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
 
     func showAbout(_ sender: Any?) { AboutPanel.show() }
 
+    func toggleUsageWindow(_ sender: Any?) { usageWindow.toggle() }
+
     /// Lets the window own its size and the hosted view fill it.
     private static func container(for host: NSView, size: CGSize) -> NSView {
         let container = FirstMouseContainerView(frame: NSRect(origin: .zero, size: size))

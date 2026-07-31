@@ -76,6 +76,16 @@ enum AppMenu {
             keyEquivalent: "h"
         )
         hide.target = target
+
+        // Also in the status bar menu, but a key equivalent only works from the
+        // main menu — a status item's menu is not searched for shortcuts, so
+        // ⌘U there did nothing at all until this existed.
+        let usage = menu.addItem(
+            withTitle: "Token Usage",
+            action: #selector(AppCommands.toggleUsageWindow(_:)),
+            keyEquivalent: "u"
+        )
+        usage.target = target
         menu.addItem(.separator())
         menu.addItem(
             withTitle: "Quit \(appName)",
@@ -121,4 +131,5 @@ enum AppMenu {
     @objc func decreaseTextSize(_ sender: Any?)
     @objc func toggleCharacter(_ sender: Any?)
     @objc func showAbout(_ sender: Any?)
+    @objc func toggleUsageWindow(_ sender: Any?)
 }
