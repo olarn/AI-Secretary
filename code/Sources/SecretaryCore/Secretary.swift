@@ -878,7 +878,7 @@ public final class Secretary {
         let parsed = success ? LoopBlock.parse(finalText) : LoopBlock(body: finalText, request: nil)
         // A pane the assistant was asked to pin, read once the reply is whole for
         // the same reason as the loop block.
-        let pinned = success ? InfoWindowBlock.parse(parsed.body) : InfoWindowBlock(body: parsed.body, request: nil)
+        let pinned = success ? InfoWindowBlock.parse(parsed.body) : InfoWindowBlock(body: parsed.body, requests: [])
         updateEntry(id: entryID, text: pinned.body)
         if stateMachine.state != .working {
             stateMachine.send(.beginExecuting, reason: "chat completed", taskID: .some(taskID))
@@ -890,7 +890,7 @@ public final class Secretary {
         // a settled conversation and a loop asked for mid-reply can't fire into
         // the reply that asked for it.
         if let request = parsed.request { applyLoopRequest(request) }
-        if let pane = pinned.request { onPinWindow?(pane) }
+        for pane in pinned.requests { onPinWindow?(pane) }
     }
 
     /// Appends a step, collapsing an immediate repeat — several thinking blocks
@@ -1604,8 +1604,8 @@ public final class Secretary {
     ```
 
     Put the content only inside the block, not in the message as well, or it \
-    appears twice. Use it only when asked for; a table in an ordinary answer \
-    belongs in the chat.
+    appears twice. One block per window — for two windows, write two blocks. \
+    Use it only when asked for; a table in an ordinary answer belongs in the chat.
     """
 
     /// How the assistant asks for the timer. Written as a block rather than

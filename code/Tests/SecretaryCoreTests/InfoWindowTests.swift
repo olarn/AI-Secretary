@@ -14,8 +14,8 @@ final class InfoWindowBlockTests: XCTestCase {
         | 09:00 | Intro |
         ```
         """)
-        XCTAssertEqual(parsed.request?.title, "Workshop agenda")
-        XCTAssertTrue(parsed.request?.body.contains("| 09:00 | Intro |") == true)
+        XCTAssertEqual(parsed.requests.first?.title, "Workshop agenda")
+        XCTAssertTrue(parsed.requests.first?.body.contains("| 09:00 | Intro |") == true)
         XCTAssertEqual(parsed.body, "Here's the schedule — I've put it in its own window.")
     }
 
@@ -29,7 +29,7 @@ final class InfoWindowBlockTests: XCTestCase {
             "Pick one.\n\n```choices\nFirst\nSecond\n```"
         ] {
             let parsed = InfoWindowBlock.parse(message)
-            XCTAssertNil(parsed.request, "Should not have opened a window: \(message)")
+            XCTAssertTrue(parsed.requests.isEmpty, "Should not have opened a window: \(message)")
             XCTAssertEqual(parsed.body, message, "An unmarked message must pass through untouched")
         }
     }
@@ -43,10 +43,41 @@ final class InfoWindowBlockTests: XCTestCase {
         XCTAssertEqual(parsed.body, "Done.")
     }
 
+    /// Reported from real use: "pin two windows" produced one, because every
+    /// block was folded into a single pane and the second title was thrown away.
+    func testTwoBlocksInOneReplyOpenTwoWindows() {
+        let parsed = InfoWindowBlock.parse("""
+        Pinning two windows now.
+
+        ```window
+        title: Alpha
+        | A | B |
+        | --- | --- |
+        | 1 | 2 |
+        ```
+
+        ```window
+        title: Beta
+        a short note
+        ```
+        """)
+        XCTAssertEqual(parsed.requests.map(\.title), ["Alpha", "Beta"])
+        XCTAssertTrue(parsed.requests[0].body.contains("| 1 | 2 |"))
+        XCTAssertEqual(parsed.requests[1].body, "a short note")
+        XCTAssertEqual(parsed.body, "Pinning two windows now.")
+        XCTAssertFalse(parsed.requests[0].body.contains("a short note"), "The panes must not be merged")
+    }
+
+    /// A reply cut off mid-block still pins what arrived, rather than dropping it.
+    func testAnUnterminatedBlockStillCounts() {
+        let parsed = InfoWindowBlock.parse("ok\n```window\ntitle: Half\nsome content")
+        XCTAssertEqual(parsed.requests.map(\.title), ["Half"])
+    }
+
     func testTheTitleIsOptional() {
         let parsed = InfoWindowBlock.parse("ok\n```window\njust the content\n```")
-        XCTAssertEqual(parsed.request?.title, InfoWindowBlock.defaultTitle)
-        XCTAssertEqual(parsed.request?.body, "just the content")
+        XCTAssertEqual(parsed.requests.first?.title, InfoWindowBlock.defaultTitle)
+        XCTAssertEqual(parsed.requests.first?.body, "just the content")
     }
 
     /// A "title:" further down is content, not a second title.
@@ -58,14 +89,14 @@ final class InfoWindowBlockTests: XCTestCase {
         title: this one is data
         ```
         """)
-        XCTAssertEqual(parsed.request?.title, "First")
-        XCTAssertEqual(parsed.request?.body, "title: this one is data")
+        XCTAssertEqual(parsed.requests.first?.title, "First")
+        XCTAssertEqual(parsed.requests.first?.body, "title: this one is data")
     }
 
     func testAnEmptyBlockOpensNothingAndLeavesTheMessageWhole() {
         let message = "nothing\n\n```window\ntitle: Empty\n```"
         let parsed = InfoWindowBlock.parse(message)
-        XCTAssertNil(parsed.request)
+        XCTAssertTrue(parsed.requests.isEmpty)
         XCTAssertEqual(parsed.body, message)
     }
 }

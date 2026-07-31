@@ -25,20 +25,33 @@ public struct InfoWindowSpec: Equatable, Identifiable, Sendable {
 /// counts, and the block never survives into what is shown — otherwise the
 /// content appears twice, once in the chat and once in the window.
 public struct InfoWindowBlock: Equatable, Sendable {
-    /// The message with the block taken out.
+    /// The message with every block taken out.
     public let body: String
-    /// What to open, if anything.
-    public let request: InfoWindowSpec?
+    /// What to open, in the order the blocks appeared. Several are allowed:
+    /// "pin these two side by side" is one request, and merging them into a
+    /// single pane — which an earlier version did silently — answers a question
+    /// nobody asked.
+    public let requests: [InfoWindowSpec]
 
     public static let fence = "```window"
 
     public static func parse(_ text: String, now: Date = Date()) -> InfoWindowBlock {
-        guard text.contains(fence) else { return InfoWindowBlock(body: text, request: nil) }
+        guard text.contains(fence) else { return InfoWindowBlock(body: text, requests: []) }
 
         var kept: [String] = []
+        var found: [InfoWindowSpec] = []
         var inside = false
         var title: String?
         var content: [String] = []
+
+        func finishBlock() {
+            let body = content.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !body.isEmpty {
+                found.append(InfoWindowSpec(title: title ?? Self.defaultTitle, body: body, createdAt: now))
+            }
+            title = nil
+            content = []
+        }
 
         for line in text.components(separatedBy: .newlines) {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
@@ -48,6 +61,7 @@ public struct InfoWindowBlock: Equatable, Sendable {
             }
             if inside, trimmed == "```" {
                 inside = false
+                finishBlock()
                 continue
             }
             if inside {
@@ -63,23 +77,24 @@ public struct InfoWindowBlock: Equatable, Sendable {
                 kept.append(line)
             }
         }
+        // An unterminated block still counts; the stream ended, not the intent.
+        if inside { finishBlock() }
 
-        let text2 = content.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-        // A block with no content opens nothing, and the message is left whole
-        // rather than half-swallowed.
-        guard !text2.isEmpty else { return InfoWindowBlock(body: text, request: nil) }
+        // Nothing usable: leave the message whole rather than half-swallowed.
+        guard !found.isEmpty else { return InfoWindowBlock(body: text, requests: []) }
 
         return InfoWindowBlock(
             body: kept.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines),
-            request: InfoWindowSpec(
-                title: title ?? Self.defaultTitle,
-                body: text2,
-                createdAt: now
-            )
+            requests: found
         )
     }
 
     public static let defaultTitle = "Pinned"
+
+    public init(body: String, requests: [InfoWindowSpec]) {
+        self.body = body
+        self.requests = requests
+    }
 
     private static func title(of line: String) -> String? {
         let lowered = line.lowercased()
