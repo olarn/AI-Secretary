@@ -104,18 +104,12 @@ private struct UsageView: View {
             } else {
                 contextBar
                 Divider()
-                Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 5) {
+                VStack(alignment: .leading, spacing: 5) {
                     row("Input", usage.inputTokens)
                     row("Output", usage.outputTokens)
                     row("Cache write", usage.cacheWriteTokens)
                     row("Cache read", usage.cacheReadTokens)
-                    GridRow {
-                        Text("Total").fontWeight(.semibold)
-                        Text(UsageFormat.tokens(usage.totalTokens))
-                            .fontWeight(.semibold)
-                            .monospacedDigit()
-                            .gridColumnAlignment(.trailing)
-                    }
+                    row("Total", usage.totalTokens, emphasised: true)
                 }
                 Divider()
                 VStack(alignment: .leading, spacing: 3) {
@@ -263,12 +257,18 @@ private struct UsageView: View {
         }
     }
 
-    private func row(_ label: String, _ value: Int) -> some View {
-        GridRow {
-            Text(label).foregroundStyle(.secondary)
+    /// Label left, number hard against the right edge — a `Grid` sizes itself to
+    /// its contents, so its right column floated in the middle of the window
+    /// instead of lining up with the percentages above it.
+    private func row(_ label: String, _ value: Int, emphasised: Bool = false) -> some View {
+        HStack {
+            Text(label)
+                .fontWeight(emphasised ? .semibold : .regular)
+                .foregroundStyle(emphasised ? .primary : .secondary)
+            Spacer()
             Text(UsageFormat.tokens(value))
+                .fontWeight(emphasised ? .semibold : .regular)
                 .monospacedDigit()
-                .gridColumnAlignment(.trailing)
         }
     }
 }
