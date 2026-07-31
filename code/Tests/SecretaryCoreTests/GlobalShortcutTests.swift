@@ -10,9 +10,11 @@ import XCTest
 /// working in every other app on the machine, so the set has to be deliberate
 /// and stay that way.
 final class GlobalShortcutTests: XCTestCase {
-    func testHideIsClaimedWhetherOrNotTheChatIsOpen() {
-        XCTAssertTrue(claimedShortcuts(chatVisible: false).contains(.hideApp))
-        XCTAssertTrue(claimedShortcuts(chatVisible: true).contains(.hideApp))
+    /// ⌘H must stay an ordinary per-app shortcut. Claiming it took Hide away
+    /// from every other app on the machine — reported within minutes of the
+    /// build landing, and the reason this file now claims as little as possible.
+    func testNothingIsClaimedWhileTheChatIsClosed() {
+        XCTAssertTrue(claimedShortcuts(chatVisible: false).isEmpty)
     }
 
     /// The mitigation that keeps this from being hostile. Esc cancels dialogs,
@@ -26,8 +28,7 @@ final class GlobalShortcutTests: XCTestCase {
     func testNothingElseIsEverClaimed() {
         for visible in [false, true] {
             XCTAssertTrue(
-                claimedShortcuts(chatVisible: visible)
-                    .isSubset(of: [.hideApp, .closeChat]),
+                claimedShortcuts(chatVisible: visible).isSubset(of: [.closeChat]),
                 "chatVisible=\(visible)"
             )
         }
@@ -36,18 +37,17 @@ final class GlobalShortcutTests: XCTestCase {
     /// Carbon takes raw virtual key codes, so a typo is a shortcut on the wrong
     /// key that still registers happily.
     func testTheKeysAreTheOnesAdvertised() {
-        XCTAssertEqual(GlobalShortcut.hideApp.keyCode, 4, "kVK_ANSI_H")
-        XCTAssertEqual(GlobalShortcut.hideApp.modifiers, 0x0100, "cmdKey")
         XCTAssertEqual(GlobalShortcut.closeChat.keyCode, 53, "kVK_Escape")
         XCTAssertEqual(GlobalShortcut.closeChat.modifiers, 0, "no modifiers")
     }
 
-    #if canImport(Carbon)
-    /// The modifier constant is spelled out rather than imported, so pin it to
-    /// the real one.
-    func testTheModifierMatchesCarbonsOwnConstant() {
-        XCTAssertEqual(GlobalShortcut.hideApp.modifiers, UInt32(cmdKey))
+    /// Guards the fix directly: no claimed shortcut may carry Command. Those are
+    /// the combinations other apps' menus own.
+    func testNoClaimedShortcutUsesCommand() {
+        for shortcut in GlobalShortcut.allCases {
+            XCTAssertEqual(shortcut.modifiers & 0x0100, 0, "\(shortcut) claims Command")
+        }
     }
-    #endif
+
 }
 

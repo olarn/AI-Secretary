@@ -2,13 +2,13 @@ import AppKit
 import Carbon.HIToolbox
 import SecretaryCore
 
-/// Claims key combinations from the whole system, so they reach this app even
-/// when another one is frontmost.
+/// Claims a key from the whole system, so it reaches this app even when another
+/// one is frontmost.
 ///
 /// Carbon's `RegisterEventHotKey` is the only way to do this without the
 /// Accessibility permission a `CGEventTap` demands, and it is the only one that
 /// *consumes* the keystroke: `NSEvent.addGlobalMonitorForEvents` can watch but
-/// not swallow, so ⌘H would hide the frontmost app as well as this one.
+/// not swallow, so the frontmost app would act on the key too.
 ///
 /// Why any of this is needed: a local monitor and a menu key equivalent both
 /// only ever see events the system already decided to deliver here. With the
@@ -119,7 +119,6 @@ private extension GlobalShortcut {
     /// Stable per-case id for Carbon, which identifies hot keys by number.
     var hotKeyID: UInt32 {
         switch self {
-        case .hideApp: 1
         case .closeChat: 2
         }
     }

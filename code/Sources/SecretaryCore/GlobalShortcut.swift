@@ -6,25 +6,23 @@
 /// used to mean in every other app. Which ones are claimed, and when, is
 /// therefore a decision worth stating in one place and testing, rather than a
 /// pair of register calls buried in window code.
+/// ⌘H is deliberately **not** here. It was, briefly, and taking it broke Hide in
+/// every other app on the machine — which is the whole hazard this type exists to
+/// make visible. ⌘H stays an ordinary per-app shortcut, served by the menu item,
+/// and works when this app is frontmost like everyone else's.
 public enum GlobalShortcut: String, CaseIterable, Sendable {
-    /// ⌘H — hide the character and the chat together, from anywhere.
-    case hideApp
     /// Esc — put the chat away, from anywhere.
     case closeChat
 
     /// Key code and modifier mask, in the form Carbon wants.
     public var keyCode: UInt32 {
         switch self {
-        case .hideApp: 4      // kVK_ANSI_H
         case .closeChat: 53   // kVK_Escape
         }
     }
 
-    /// `cmdKey` is Carbon's 0x0100. Spelled out rather than imported so this
-    /// stays a plain value type that tests can reach without AppKit.
     public var modifiers: UInt32 {
         switch self {
-        case .hideApp: 0x0100
         case .closeChat: 0
         }
     }
@@ -39,10 +37,8 @@ public enum GlobalShortcut: String, CaseIterable, Sendable {
 /// nothing to do anyway, so releasing it costs nothing and hands Esc back to
 /// whatever app the user is actually in.
 ///
-/// `hideApp` is claimed always, which is the cost of "⌘H works from anywhere":
-/// other apps stop hiding on ⌘H while this one runs. It toggles, so the same
-/// key brings the character back — otherwise hiding from another app would
-/// leave no way in except the status bar.
+/// Nothing at all is claimed while the chat is closed. A desktop companion that
+/// is only sitting there has no business holding a key hostage.
 public func claimedShortcuts(chatVisible: Bool) -> Set<GlobalShortcut> {
-    chatVisible ? [.hideApp, .closeChat] : [.hideApp]
+    chatVisible ? [.closeChat] : []
 }

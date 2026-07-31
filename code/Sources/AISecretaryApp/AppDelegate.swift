@@ -141,16 +141,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
             onToggleCharacter: { [weak self] in self?.toggleCharacterVisibility() ?? true }
         )
 
-        // Claimed from the whole system, so the bubble answers Esc while the
-        // user is typing in another app. See `GlobalShortcut` for what that
-        // costs and why Esc is only held while the chat is on screen.
+        // Esc is claimed from the whole system, so the bubble answers it while
+        // the user is typing in another app. Only Esc, and only while the chat
+        // is showing — see `GlobalShortcut` for why ⌘H is not in this list.
         hotKeys = GlobalHotKeys(actions: [
-            .hideApp: { [weak self] in self?.toggleCharacterVisibility() },
             .closeChat: { [weak self] in self?.hideChatPanel() }
         ])
         hotKeys?.apply(chatVisible: isChatVisible)
 
         showCharacter()
+    }
+
+    /// Hands Esc back to the rest of the system on the way out. The process
+    /// dying releases it anyway; doing it explicitly means a slow teardown
+    /// can't leave the key claimed by a window that's already gone.
+    func applicationWillTerminate(_ notification: Notification) {
+        hotKeys?.releaseAll()
     }
 
     /// Launching the app again while it is already running.
@@ -160,12 +166,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     /// double-clicking the app again is exactly what someone does when they
     /// can't see it. Hiding is for getting it out of the way for a moment, not
     /// a setting to be remembered, so reopening always brings it back.
-    /// Hands ⌘H and Esc back to the rest of the system on the way out. The
-    /// process dying releases them anyway; doing it explicitly means a slow
-    /// teardown can't leave the keys claimed by a window that's already gone.
-    func applicationWillTerminate(_ notification: Notification) {
-        hotKeys?.releaseAll()
-    }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
         showCharacter()
