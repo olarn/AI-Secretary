@@ -116,6 +116,24 @@ public enum UsageFormat {
     public static let costNote =
         "Cost is what this traffic would bill on the API — a subscription is not charged per token."
 
+    /// "18 min", "3 hr", "2 days" — the gap to a reset, in one unit. Rounded up,
+    /// so a window with 30 seconds left says "1 min" rather than "0 min".
+    public static func duration(until date: Date, from now: Date) -> String {
+        let seconds = max(0, date.timeIntervalSince(now))
+        if seconds < 3600 { return "\(Int((seconds / 60).rounded(.up))) min" }
+        if seconds < 86_400 { return "\(Int((seconds / 3600).rounded())) hr" }
+        let days = Int((seconds / 86_400).rounded())
+        return "\(days) day\(days == 1 ? "" : "s")"
+    }
+
+    /// "just now", "3 min ago" — how old a reading is, for the line under it.
+    public static func age(of date: Date, now: Date = Date()) -> String {
+        let seconds = max(0, now.timeIntervalSince(date))
+        if seconds < 60 { return "just now" }
+        if seconds < 3600 { return "\(Int(seconds / 60)) min ago" }
+        return "\(Int(seconds / 3600)) hr ago"
+    }
+
     /// The whole summary, as shown by `/usage`.
     public static func summary(_ usage: SessionUsage) -> String {
         guard usage.turns > 0 else {

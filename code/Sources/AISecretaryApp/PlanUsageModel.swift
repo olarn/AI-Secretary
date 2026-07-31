@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import FunctionalCore
 import LLMProvider
 import SecretaryCore
 
@@ -22,6 +23,9 @@ final class PlanUsageModel {
     @ObservationIgnored private let backend: ChatBackend
     @ObservationIgnored private var timer: Task<Void, Never>?
     @ObservationIgnored private var inFlight: Task<Void, Never>?
+    /// Read once. The subscription tier does not change while the app is open,
+    /// and asking on every poll would run a second process for a fixed string.
+    @ObservationIgnored private var planName: String?
 
     /// Often enough that the bar is not misleading, rarely enough that it is not
     /// a background job. The windows it tracks are five hours and a week long.
@@ -58,6 +62,10 @@ final class PlanUsageModel {
         }
         isRefreshing = true
         inFlight = Task { [weak self] in
+            if self?.planName == nil {
+                let identity = await PlanUsageProbe.readIdentity(installation: installation)
+                self?.planName = identity.fold({ _ in nil }, PlanIdentityParser.planName(fromAuthStatus:))
+            }
             let result = await PlanUsageProbe.read(installation: installation)
             guard let self else { return }
             self.isRefreshing = false
@@ -65,13 +73,16 @@ final class PlanUsageModel {
             result.fold(
                 { error in self.problem = error.errorDescription ?? "Couldn't read plan limits." },
                 { text in
-                    guard let parsed = PlanUsageParser.parse(text) else {
+                    guard var parsed = PlanUsageParser.parse(text) else {
                         // Recognising nothing usually means Claude Code changed
                         // its wording. Say so rather than showing the last
                         // reading as if it were new.
                         self.problem = "Couldn't read the plan limits from Claude Code's reply."
                         return
                     }
+                    // Carried over so the tier does not blink out on a refresh
+                    // whose identity lookup happened to fail.
+                    parsed = parsed.named(self.planName ?? self.usage?.planName)
                     self.usage = parsed
                     self.problem = nil
                 }

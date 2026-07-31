@@ -21,11 +21,27 @@ public enum PlanUsageProbe {
     public static func read(
         installation: ClaudeCodeInstallation
     ) async -> Either<ChatError, String> {
-        let process = Process()
-        process.executableURL = installation.executableURL
         // After `--` so nothing here can be read as a flag, the same rule the
         // chat path follows for user text.
-        process.arguments = ["-p", "--output-format", "text", "--", "/usage"]
+        await run(["-p", "--output-format", "text", "--", "/usage"], installation: installation)
+    }
+
+    /// `claude auth status`, which answers JSON including the subscription tier.
+    /// Its reply also carries the account's email and organisation id; only the
+    /// tier is ever taken out of it.
+    public static func readIdentity(
+        installation: ClaudeCodeInstallation
+    ) async -> Either<ChatError, String> {
+        await run(["auth", "status"], installation: installation)
+    }
+
+    private static func run(
+        _ arguments: [String],
+        installation: ClaudeCodeInstallation
+    ) async -> Either<ChatError, String> {
+        let process = Process()
+        process.executableURL = installation.executableURL
+        process.arguments = arguments
         process.environment = ClaudeCodeProvider.childEnvironment(for: installation)
 
         let output = Pipe()

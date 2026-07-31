@@ -85,6 +85,10 @@ private struct UsageView: View {
     @Bindable var secretary: Secretary
     let appearance: Appearance
     @Bindable var plan: PlanUsageModel
+    /// Re-read every half minute so the relative times move on their own. The
+    /// figures behind them are polled far less often; this only re-renders the
+    /// words, which would otherwise sit at "Resets in 18 min" for an hour.
+    @State private var tick = Date()
 
     private var usage: SessionUsage { secretary.sessionUsage }
 
@@ -126,27 +130,23 @@ private struct UsageView: View {
         }
         .font(.system(size: appearance.settings.secondaryFontSize))
         .padding(16)
-        .frame(minWidth: 260, minHeight: 200)
+        .frame(minWidth: 280, minHeight: 240)
+        .onReceive(Timer.publish(every: 30, on: .main, in: .common).autoconnect()) { tick = $0 }
     }
 
-    /// What is left of the subscription's allowance. Above the token counts
-    /// because it is the one that actually stops work, and because it covers
-    /// every Claude Code session on the account — not only this app's.
+    /// What is left of the subscription's allowance, laid out like the Usage
+    /// panel in the Claude app — session first, then the weekly windows — since
+    /// that is the arrangement the user already reads.
     @ViewBuilder
     private var planSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Plan limits")
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Text("Plan usage limits")
                     .font(.system(size: appearance.settings.secondaryFontSize, weight: .semibold))
-                Spacer()
-                Button {
-                    plan.refresh()
-                } label: {
-                    Image(systemName: "arrow.clockwise")
+                if let name = plan.usage?.planName {
+                    Text(name).foregroundStyle(.secondary)
                 }
-                .buttonStyle(.plain)
-                .disabled(plan.isRefreshing)
-                .help("Check again")
+                Spacer()
             }
 
             if let problem = plan.problem {
@@ -154,24 +154,56 @@ private struct UsageView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             } else if let usage = plan.usage {
-                ForEach(Array(usage.limits.enumerated()), id: \.offset) { _, limit in
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack {
-                            Text(limit.label)
-                            Spacer()
-                            Text(limit.percentText).monospacedDigit()
-                        }
-                        ProgressView(value: limit.fraction)
-                            .tint(limit.fraction > 0.85 ? .orange : .accentColor)
-                        if let resets = limit.resets {
-                            Text("Resets \(resets)")
-                                .font(.system(size: max(9, appearance.settings.secondaryFontSize - 2)))
-                                .foregroundStyle(.secondary)
-                        }
+                ForEach(Array(usage.session.enumerated()), id: \.offset) { _, limit in
+                    limitRow(limit)
+                }
+                if !usage.weekly.isEmpty {
+                    Text("Weekly limits")
+                        .font(.system(size: appearance.settings.secondaryFontSize, weight: .semibold))
+                        .padding(.top, 4)
+                    ForEach(Array(usage.weekly.enumerated()), id: \.offset) { _, limit in
+                        limitRow(limit)
                     }
                 }
+                HStack(spacing: 6) {
+                    Text("Last updated: \(UsageFormat.age(of: usage.checkedAt, now: tick))")
+                        .font(.system(size: max(9, appearance.settings.secondaryFontSize - 2)))
+                        .foregroundStyle(.secondary)
+                    Button { plan.refresh() } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(plan.isRefreshing)
+                    .help("Check again")
+                    Spacer()
+                }
+                .padding(.top, 2)
             } else {
                 Text(plan.isRefreshing ? "Checking…" : "Not checked yet.")
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    /// One limit: name, bar, percentage, and when it rolls over. A model-specific
+    /// window at zero says so in words rather than showing an empty bar and a
+    /// reset time it does not have.
+    private func limitRow(_ limit: PlanUsage.Limit) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack {
+                Text(limit.name)
+                Spacer()
+                Text(limit.percentText).monospacedDigit().foregroundStyle(.secondary)
+            }
+            ProgressView(value: limit.fraction)
+                .tint(limit.fraction > 0.85 ? .orange : .accentColor)
+            if let resets = limit.resetDescription(now: tick) {
+                Text(resets)
+                    .font(.system(size: max(9, appearance.settings.secondaryFontSize - 2)))
+                    .foregroundStyle(.secondary)
+            } else if limit.fraction == 0 {
+                Text("Not used yet")
+                    .font(.system(size: max(9, appearance.settings.secondaryFontSize - 2)))
                     .foregroundStyle(.secondary)
             }
         }
