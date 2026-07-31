@@ -138,6 +138,17 @@ items. The current phase for version-bumping purposes is **6**.
   message box shipped with eight passing tests over its height arithmetic while
   the box itself never grew past one line, because the measurement it fed was
   always zero. Open the app, do the thing a user would do, and look at it.
+- **`AISecretaryApp` is invisible to coverage, so decisions must not live there.**
+  It is an executable target and is never linked into the test bundle: measured
+  on 2026-07-30 at v0.6.60, not one of its 18 files / 2,289 ncloc appeared in the
+  `llvm-cov` report at all. The headline number — 80.2% — is coverage of the
+  other two thirds; whole-tree it is nearer 54%. Rule that follows: any rule the
+  app has to *decide* (where the bubble goes, which corner the grip is in, which
+  keys are claimed) belongs in a pure function in a library target, and the view
+  or delegate only applies the answer. `placeBubble`, `GripCorner` and
+  `claimedShortcuts` were each extracted for exactly this reason and are each at
+  100%. Reproduce with `swift test --enable-code-coverage`, then
+  `xcrun llvm-cov report .build/debug/AISecretaryPackageTests.xctest/Contents/MacOS/AISecretaryPackageTests -instr-profile .build/debug/codecov/default.profdata -ignore-filename-regex='(Tests|\.build)/'`.
 - **แผง Settings/Profile/Projects ต้องล้นหน้าต่างไม่ได้ "โดยโครงสร้าง"** — เปิดได้ทีละแผง
   (`openPanel: Panel?` ไม่ใช่ bool สามตัว) และแผงที่เปิดถูกจำกัดที่สัดส่วนของความสูงหน้าต่างแล้ว
   scroll ในตัวเอง เคยล้นมาแล้วสองรอบเพราะแก้ด้วยการจูนตัวเลข ซึ่งตัวเลขถูกทำให้เกินได้เสมอ —
