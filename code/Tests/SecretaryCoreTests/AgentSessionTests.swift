@@ -203,6 +203,56 @@ final class AgentSessionTests: XCTestCase {
                       "It should be told to open files itself. Got: \(prompt ?? "-")")
     }
 
+    /// Every marker block the app can act on has to be described in the prompt
+    /// the backend actually receives.
+    ///
+    /// This exists because it wasn't. The loop and window blocks were written
+    /// into `capabilityPrompt`, which only the API-key path uses, while Claude
+    /// Code — the backend this app really runs on — got `agentPrompt`, which
+    /// mentioned neither. The parsers were right and every test passed, and the
+    /// assistant answered "no window tool is available to me in this session",
+    /// because as far as it knew there wasn't one.
+    func testTheAgentPromptDescribesEveryMarkerBlockTheAppUnderstands() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        secretary.submit("hello")
+        await waitUntilIdle()
+
+        let prompt = provider.lastSystem ?? "-"
+        for fence in [MessageChoices.fence, LoopBlock.fence, InfoWindowBlock.fence] {
+            XCTAssertTrue(prompt.contains(fence), "\(fence) is not described. Got: \(prompt)")
+        }
+    }
+
+    /// From a real conversation: asked for a ratebook and to pin it, the
+    /// assistant said the folder was empty; told "from the project's MCP", it
+    /// tried the server, reported that it worked, and searched for a different
+    /// car in a different year — never answering the question or pinning
+    /// anything. It read the second message as a fresh instruction instead of
+    /// as the missing piece of the first.
+    func testTheAgentIsToldToFinishTheEarlierRequest() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        secretary.submit("hello")
+        await waitUntilIdle()
+
+        XCTAssertTrue(
+            (provider.lastSystem ?? "-").contains(Secretary.resumePrompt),
+            "The prompt must say what to do when the missing piece arrives."
+        )
+    }
+
+    func testTheChatOnlyPromptCarriesTheSameRules() async {
+        provider.hasWorkspaceTools = false
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        secretary.submit("hello")
+        await waitUntilIdle()
+
+        let prompt = provider.lastSystem ?? "-"
+        XCTAssertTrue(prompt.contains(Secretary.resumePrompt), "resume rule missing")
+        for fence in [LoopBlock.fence, InfoWindowBlock.fence] {
+            XCTAssertTrue(prompt.contains(fence), "\(fence) is not described. Got: \(prompt)")
+        }
+    }
+
     func testTheAgentPromptNamesTheProjectItIsStandingIn() async {
         let secretary = makeSecretary(projects: [project(grantingAgent: true)])
         secretary.submit("hello")
