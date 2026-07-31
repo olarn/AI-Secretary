@@ -30,6 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     private var characterPanel: FloatingPanel!
     private var chatPanel: FloatingPanel!
     private var statusBar: StatusBarController!
+    private var hotKeys: GlobalHotKeys?
     private var isChatVisible = false
     private var isCharacterVisible = true
 
@@ -140,6 +141,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
             onToggleCharacter: { [weak self] in self?.toggleCharacterVisibility() ?? true }
         )
 
+        // Claimed from the whole system, so the bubble answers Esc while the
+        // user is typing in another app. See `GlobalShortcut` for what that
+        // costs and why Esc is only held while the chat is on screen.
+        hotKeys = GlobalHotKeys(actions: [
+            .hideApp: { [weak self] in self?.toggleCharacterVisibility() },
+            .closeChat: { [weak self] in self?.hideChatPanel() }
+        ])
+        hotKeys?.apply(chatVisible: isChatVisible)
+
         showCharacter()
     }
 
@@ -150,6 +160,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     /// double-clicking the app again is exactly what someone does when they
     /// can't see it. Hiding is for getting it out of the way for a moment, not
     /// a setting to be remembered, so reopening always brings it back.
+    /// Hands ⌘H and Esc back to the rest of the system on the way out. The
+    /// process dying releases them anyway; doing it explicitly means a slow
+    /// teardown can't leave the keys claimed by a window that's already gone.
+    func applicationWillTerminate(_ notification: Notification) {
+        hotKeys?.releaseAll()
+    }
+
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
         showCharacter()
         return true
@@ -273,6 +290,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
             if isChatVisible { hideChatPanel() }
             characterPanel.orderOut(nil)
         }
+        statusBar?.setCharacterVisible(isCharacterVisible)
         return isCharacterVisible
     }
 
@@ -334,6 +352,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
 
     private func showChatPanel() {
         isChatVisible = true
+        hotKeys?.apply(chatVisible: true)
         // The display may have changed since launch; re-clamp before showing,
         // against the screen the character is on rather than whichever one
         // happens to be "main" at the time.
@@ -347,6 +366,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
 
     private func hideChatPanel() {
         isChatVisible = false
+        // Esc goes back to whichever app the user is actually in the moment the
+        // bubble is off screen.
+        hotKeys?.apply(chatVisible: false)
         chatPanel.animator().alphaValue = 0
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
             self?.chatPanel.orderOut(nil)
