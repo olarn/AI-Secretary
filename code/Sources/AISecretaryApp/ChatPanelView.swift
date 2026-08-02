@@ -691,7 +691,12 @@ struct ChatPanelView: View {
         .overlay(alignment: .topTrailing) {
             if style.showsCopyButton, hoveredBox == box {
                 copyButton(text: copyText(of: part), box: box)
-                    .padding(4)
+                    // Straddling the corner rather than sitting inside it: over
+                    // the text, the button hid the end of the first line — and
+                    // the one thing a copy button must not do is cover the words
+                    // you are deciding whether to copy. The room it moves into is
+                    // the gutter, which is empty by construction.
+                    .offset(x: 10, y: -10)
             }
         }
         // Hover, not always: a button on every box at rest is three buttons in
@@ -778,6 +783,16 @@ struct ChatPanelView: View {
         }
         .buttonStyle(.plain)
         .help("Copy this box")
+        // The button hangs off the corner of the box, so the pointer reaching it
+        // has left the box. Without this it would vanish on the way to being
+        // clicked.
+        .onHover { inside in
+            if inside {
+                hoveredBox = box
+            } else if hoveredBox == box {
+                hoveredBox = nil
+            }
+        }
     }
 
     /// Shows the tick, then takes it away again. Held only briefly: it says
