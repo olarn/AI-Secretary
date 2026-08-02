@@ -24,6 +24,11 @@ public struct MessageBubbleStyle: Equatable, Sendable {
     /// already says who spoke, but a thread kept across launches needs to say
     /// *when*, and a name to hang the time on costs nothing.
     public let showsSpeakerName: Bool
+    /// A turn that ended in an error rather than an answer. Drawn on the
+    /// Secretary's side, because that is where an answer would have been, but
+    /// in a warning colour and headed as a failure — the app reporting that it
+    /// couldn't get an answer, not the persona saying something.
+    public let isFailure: Bool
     /// Only the Secretary's answers can be copied. Yours you already have, and
     /// a copy button on every line you typed is clutter on the side of the
     /// thread that never needs it.
@@ -34,23 +39,39 @@ public func messageBubbleStyle(
     speaker: TranscriptEntry.Speaker,
     kind: TranscriptEntry.Kind
 ) -> MessageBubbleStyle {
-    guard kind == .message else {
+    switch kind {
+    case .activity:
         return MessageBubbleStyle(
             side: .leading,
             isMine: false,
             isBubble: false,
             showsSpeakerName: false,
+            isFailure: false,
             showsCopyButton: false
         )
+    case .failure:
+        // Copyable like an answer: the text of a failure is the thing most
+        // worth pasting somewhere — a terminal, a bug report — of anything in
+        // the thread.
+        return MessageBubbleStyle(
+            side: .leading,
+            isMine: false,
+            isBubble: true,
+            showsSpeakerName: true,
+            isFailure: true,
+            showsCopyButton: true
+        )
+    case .message:
+        let mine = speaker == .user
+        return MessageBubbleStyle(
+            side: mine ? .trailing : .leading,
+            isMine: mine,
+            isBubble: true,
+            showsSpeakerName: true,
+            isFailure: false,
+            showsCopyButton: !mine
+        )
     }
-    let mine = speaker == .user
-    return MessageBubbleStyle(
-        side: mine ? .trailing : .leading,
-        isMine: mine,
-        isBubble: true,
-        showsSpeakerName: true,
-        showsCopyButton: !mine
-    )
 }
 
 /// The empty lane left on the far side of a bubble, so a message is visibly

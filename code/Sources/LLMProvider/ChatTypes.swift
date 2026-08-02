@@ -195,7 +195,11 @@ public enum ChatError: Error, Equatable, Sendable, LocalizedError {
             copy of it. Install it and sign in, then try again.
             """
         case .claudeCodeFailed(let detail):
-            return "Claude Code failed: \(detail)"
+            // Read for a cause rather than shown raw: "Claude Code failed:" in
+            // front of a stack trace leaves the reader to work out whether they
+            // are logged out, out of usage, or offline — three different things
+            // to do about it.
+            return ClaudeCodeFailure.classify(detail).message(detail: detail)
         }
     }
 }

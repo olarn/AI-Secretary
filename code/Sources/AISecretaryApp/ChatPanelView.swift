@@ -210,7 +210,9 @@ struct ChatPanelView: View {
     /// the caret, and a wheel over it does nothing at all.
     private var messageBox: some View {
         ScrollView(.vertical) {
-            TextField("Ask the Secretary…", text: $draft, axis: .vertical)
+            // The persona's own name, not "the Secretary": the app can be
+            // several people and the box should ask for whoever is listening.
+            TextField("", text: $draft, prompt: Text("Ask \(secretary.profile.displayName)…"), axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(.system(size: appearance.settings.fontSize))
                 // Return sends. `onSubmit` doesn't fire for a vertical field in
@@ -752,12 +754,20 @@ struct ChatPanelView: View {
     /// message size it competes with the message.
     private func header(_ entry: TranscriptEntry, style: MessageBubbleStyle) -> some View {
         HStack(spacing: 5) {
-            Text(style.isMine ? "Me" : secretary.profile.displayName)
-                .font(.system(size: appearance.settings.secondaryFontSize, weight: .bold))
+            if style.isFailure {
+                // Named as the app's own failure, not as something the persona
+                // said. A warning in the persona's voice reads as the character
+                // being unhelpful rather than as the tool being unreachable.
+                Label("Couldn't reply", systemImage: "exclamationmark.triangle.fill")
+                    .font(.system(size: appearance.settings.secondaryFontSize, weight: .bold))
+            } else {
+                Text(style.isMine ? "Me" : secretary.profile.displayName)
+                    .font(.system(size: appearance.settings.secondaryFontSize, weight: .bold))
+            }
             Text(MessageTime.label(for: entry.timestamp))
                 .font(.system(size: appearance.settings.secondaryFontSize))
         }
-        .foregroundStyle(.secondary)
+        .foregroundStyle(style.isFailure ? Color.orange : Color.secondary)
     }
 
     /// Copies this box, and says so.
@@ -855,7 +865,8 @@ struct ChatPanelView: View {
     /// the rest of the panel uses. Both are faint: the text has to stay the
     /// loudest thing in the bubble.
     private func bubbleFill(_ style: MessageBubbleStyle) -> Color {
-        style.isMine ? Color.accentColor.opacity(0.16) : Color.secondary.opacity(0.12)
+        if style.isFailure { return Color.orange.opacity(0.14) }
+        return style.isMine ? Color.accentColor.opacity(0.16) : Color.secondary.opacity(0.12)
     }
 
     /// One setting, two buttons. A button that can't do anything is disabled

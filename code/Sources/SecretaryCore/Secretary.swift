@@ -14,12 +14,16 @@ public struct TranscriptEntry: Identifiable, Equatable, Sendable {
 
     /// What this entry is. Activity sits in the conversation in order, so you
     /// can see what happened before an answer, but it is not an answer and the
-    /// UI renders it differently.
-    public enum Kind: Sendable { case message, activity }
+    /// UI renders it differently. A failure is not an answer either — it is the
+    /// app reporting that it couldn't get one — and looking like one is how
+    /// "Can't reach Claude Code" gets read as something the Secretary said.
+    public enum Kind: Sendable, Equatable { case message, activity, failure }
 
     public let id = UUID()
     public let speaker: Speaker
-    public let kind: Kind
+    /// Set at the end of a turn that failed, so it is a `var`: the entry exists
+    /// from the first streamed token, long before anyone knows how it ends.
+    public var kind: Kind
     public var text: String
     public let timestamp: Date
 
@@ -988,7 +992,7 @@ public final class Secretary {
         } else if success {
             outstanding = nil
         }
-        updateEntry(id: entryID, text: blocked.body)
+        updateEntry(id: entryID, text: blocked.body, kind: success ? .message : .failure)
         if stateMachine.state != .working {
             stateMachine.send(.beginExecuting, reason: "chat completed", taskID: .some(taskID))
         }
@@ -1067,9 +1071,10 @@ public final class Secretary {
             : "Browser disconnected. I can only reach public pages again.")
     }
 
-    private func updateEntry(id: UUID, text: String) {
+    private func updateEntry(id: UUID, text: String, kind: TranscriptEntry.Kind? = nil) {
         guard let index = transcript.firstIndex(where: { $0.id == id }) else { return }
         transcript[index].text = text
+        if let kind { transcript[index].kind = kind }
     }
 
     // MARK: - Git pipeline

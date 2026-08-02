@@ -46,6 +46,30 @@ final class MessageBubbleStyleTests: XCTestCase {
         XCTAssertTrue(messageBubbleStyle(speaker: .user, kind: .message).showsSpeakerName)
     }
 
+    /// A failure sits where the answer would have been, but never looks like
+    /// one: it is the app reporting that it couldn't get an answer.
+    func testAFailureIsABubbleOnTheSecretarysSideAndMarkedAsOne() {
+        let style = messageBubbleStyle(speaker: .secretary, kind: .failure)
+        XCTAssertTrue(style.isFailure)
+        XCTAssertTrue(style.isBubble)
+        XCTAssertEqual(style.side, .leading)
+        XCTAssertFalse(style.isMine)
+    }
+
+    /// The text of a failure is the most worth pasting elsewhere of anything in
+    /// the thread — a terminal, a bug report.
+    func testAFailureCanBeCopied() {
+        XCTAssertTrue(messageBubbleStyle(speaker: .secretary, kind: .failure).showsCopyButton)
+    }
+
+    /// Nothing else is marked as a failure, or the warning colour would stop
+    /// meaning anything.
+    func testOnlyAFailureIsMarkedAsOne() {
+        XCTAssertFalse(messageBubbleStyle(speaker: .secretary, kind: .message).isFailure)
+        XCTAssertFalse(messageBubbleStyle(speaker: .user, kind: .message).isFailure)
+        XCTAssertFalse(messageBubbleStyle(speaker: .secretary, kind: .activity).isFailure)
+    }
+
     /// Only what the Secretary said can be copied — you already have what you
     /// typed.
     func testOnlyTheSecretarysAnswersOfferACopyButton() {
