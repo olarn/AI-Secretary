@@ -59,6 +59,24 @@ branch it was built from — shown in About and in the status-bar menu. Several
 bundles carrying the same version and different code inside is how a fixed
 feature comes to look broken again.
 
+**Copying it to another Mac.** The bundle is ad-hoc signed and not notarized —
+`spctl` rejects it and `codesign` reports `TeamIdentifier=not set`. That is
+invisible on the machine it was built on, because a locally built app is never
+quarantined. Move it to another Mac by AirDrop, zip or download and macOS
+attaches `com.apple.quarantine`, then refuses with *"can't be opened because
+Apple cannot check it for malicious software. This software needs to be
+updated."* Nothing is wrong with the build; Gatekeeper simply has no developer
+identity to check. On your own second machine, either right-click → **Open** (or
+System Settings → Privacy & Security → **Open Anyway**), or:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/AISecretary.app
+```
+
+Handing it to anyone else needs a Developer ID certificate, notarization and a
+stapled ticket — a paid Apple Developer account, so it is the owner's call, not
+something the packaging script can do on its own.
+
 ## The repository
 
 | Path | What's there |
