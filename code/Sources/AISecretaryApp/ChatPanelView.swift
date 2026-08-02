@@ -568,7 +568,10 @@ struct ChatPanelView: View {
         GeometryReader { viewport in
             ScrollViewReader { proxy in
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 8) {
+                    // Wider than the gap between boxes of one turn, so the eye
+                    // groups a split answer together before it groups the
+                    // conversation.
+                    VStack(alignment: .leading, spacing: 16) {
                         if secretary.transcript.isEmpty {
                             Text(emptyTranscriptHint)
                                 .font(.system(size: appearance.settings.fontSize))
@@ -637,7 +640,10 @@ struct ChatPanelView: View {
             // all — neither should put a fenced block on screen.
             let body = LoopBlock.parse(MessageChoices.parse(entry.text).body).body
             let parts = messageParts(of: MarkdownTableParser.segments(of: body))
-            VStack(alignment: style.side == .trailing ? .trailing : .leading, spacing: 5) {
+            // Boxes within one turn sit closer together than turns do, but not
+            // as close as they were: three boxes 5pt apart read as one striped
+            // block rather than as three things.
+            VStack(alignment: style.side == .trailing ? .trailing : .leading, spacing: 9) {
                 // Both speakers are named above their boxes, not inside them:
                 // the name is about the turn, and a reply split into three
                 // boxes has one speaker, not three. Each header sits against
