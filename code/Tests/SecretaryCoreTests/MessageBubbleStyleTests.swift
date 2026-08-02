@@ -46,15 +46,6 @@ final class MessageBubbleStyleTests: XCTestCase {
         XCTAssertTrue(messageBubbleStyle(speaker: .user, kind: .message).showsSpeakerName)
     }
 
-    /// The header sits in the bubble's own outer corner, so the two mirror each
-    /// other instead of both hugging the left.
-    func testTheHeaderSitsOnTheSameSideAsTheBubble() {
-        for speaker in [TranscriptEntry.Speaker.user, .secretary] {
-            let style = messageBubbleStyle(speaker: speaker, kind: .message)
-            XCTAssertEqual(style.headerSide, style.side, "\(speaker)")
-        }
-    }
-
     /// Only what the Secretary said can be copied — you already have what you
     /// typed.
     func testOnlyTheSecretarysAnswersOfferACopyButton() {

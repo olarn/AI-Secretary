@@ -638,11 +638,11 @@ struct ChatPanelView: View {
             let body = LoopBlock.parse(MessageChoices.parse(entry.text).body).body
             let parts = messageParts(of: MarkdownTableParser.segments(of: body))
             VStack(alignment: style.side == .trailing ? .trailing : .leading, spacing: 5) {
-                // The Secretary is named above its boxes, not inside them: the
-                // name is about the turn, and a reply split into three boxes
-                // has one speaker, not three. Yours stays inside its bubble,
-                // in the corner, which is where it was asked for.
-                if style.showsSpeakerName, !style.isMine {
+                // Both speakers are named above their boxes, not inside them:
+                // the name is about the turn, and a reply split into three
+                // boxes has one speaker, not three. Each header sits against
+                // its own speaker's edge, so they mirror.
+                if style.showsSpeakerName {
                     messageRow(style: style) {
                         header(entry, style: style).padding(.horizontal, 2)
                     }
@@ -672,14 +672,7 @@ struct ChatPanelView: View {
         Group {
             switch part {
             case .prose(let segments):
-                proseBubble(
-                    segments,
-                    entry: entry,
-                    style: style,
-                    // Only your own bubble carries a header now, and only on the
-                    // first box of the turn.
-                    showsHeader: style.isMine && index == 0
-                )
+                proseBubble(segments, style: style)
             case .block(let segment):
                 // Its own message, with no bubble around it: a table and a
                 // fenced block each already have a border, a fill and their own
@@ -813,14 +806,9 @@ struct ChatPanelView: View {
     /// look.
     private func proseBubble(
         _ segments: [TranscriptSegment],
-        entry: TranscriptEntry,
-        style: MessageBubbleStyle,
-        showsHeader: Bool
+        style: MessageBubbleStyle
     ) -> some View {
-            VStack(alignment: style.headerSide == .trailing ? .trailing : .leading, spacing: 4) {
-                if showsHeader, style.showsSpeakerName {
-                    header(entry, style: style)
-                }
+            VStack(alignment: .leading, spacing: 4) {
                 ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
                     if case .text(let body) = segment {
                         // AppKit-backed: SwiftUI's Text draws links but doesn't

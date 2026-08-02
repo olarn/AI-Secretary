@@ -18,14 +18,12 @@ public struct MessageBubbleStyle: Equatable, Sendable {
     /// Secretary's words.
     public let isBubble: Bool
     /// Every message is named — "Me" for yours, the persona's name for the
-    /// Secretary's — with the time beside it. The side already says who spoke,
-    /// but a thread kept across launches needs to say *when*, and a name to hang
-    /// the time on costs nothing.
+    /// Secretary's — with the time beside it, on a line above the boxes rather
+    /// than inside one: a turn split into three boxes has one speaker, and a
+    /// name inside the first box reads as a caption on that box alone. The side
+    /// already says who spoke, but a thread kept across launches needs to say
+    /// *when*, and a name to hang the time on costs nothing.
     public let showsSpeakerName: Bool
-    /// Which corner of the bubble the name and time sit in. Against the
-    /// bubble's own outer edge in both cases, so the two headers mirror each
-    /// other rather than both hugging the left.
-    public let headerSide: Side
     /// Only the Secretary's answers can be copied. Yours you already have, and
     /// a copy button on every line you typed is clutter on the side of the
     /// thread that never needs it.
@@ -42,7 +40,6 @@ public func messageBubbleStyle(
             isMine: false,
             isBubble: false,
             showsSpeakerName: false,
-            headerSide: .leading,
             showsCopyButton: false
         )
     }
@@ -52,7 +49,6 @@ public func messageBubbleStyle(
         isMine: mine,
         isBubble: true,
         showsSpeakerName: true,
-        headerSide: mine ? .trailing : .leading,
         showsCopyButton: !mine
     )
 }
