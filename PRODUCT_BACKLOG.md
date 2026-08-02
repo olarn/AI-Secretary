@@ -256,18 +256,18 @@ The current phase for version-bumping purposes (`AppVersion.swift`,
   - [ ] ถ้า click ที่ session ใน menu จะเปิด chat bubble แล้วคุยต่อ (resumr session) ได้เลย
   - [ ] แต่ละ session ใน menu มีปุ่มปิด ถ้าปิดก็ลบ history ไปเลย
 
-## Phase 9: Loop & Notification
+## Phase 10: Loop & Notification
 - [ ] สั่งให้ loop ได้ เช่น นับถอยหลัง 5 นาทีแล้วแจ้งเตือน หรือ long run แล้วแจ้งเตือนได้
 - [ ] มี local notification เมื่อทำงานเสร็จ (notification settings ตาม macOS)
 - [ ] เมื่อ click ที่กล่อง notication, จะเปิด app และ chat window ขึ้นมา
 
-## Phase 10: Talk to each other
+## Phase 11: Talk to each other
 
 - [ ] Two or more app be able to talk to each other.
 - [ ] First, brainstorm about the feasible that can made 2 or more AI-Secretary app can talk to each other.
 - [ ] Second, its can do the same project (or projects) with different role (configure with .md file in the project somehow)
 
-## Phase 11: Voice
+## Phase 12: Voice
 
 - [ ] Push-to-talk or explicit voice activation.
 - [ ] Speech-to-text, text-to-speech, interruption behavior, and privacy controls.
