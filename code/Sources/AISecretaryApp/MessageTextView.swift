@@ -13,6 +13,11 @@ struct MessageTextView: NSViewRepresentable {
     let text: AttributedString
     let fontSize: Double
 
+    /// Stands in for "as much room as you like" when measuring. A finite number
+    /// rather than `.greatestFiniteMagnitude`: TextKit lays out against this
+    /// value, and the infinities produce degenerate line fragments.
+    private static let unboundedWidth: CGFloat = 100_000
+
     func makeNSView(context: Context) -> HoverLinkTextView {
         let view = HoverLinkTextView()
         view.isEditable = false
@@ -53,16 +58,33 @@ struct MessageTextView: NSViewRepresentable {
         guard let container = nsView.textContainer, let manager = nsView.layoutManager else {
             return nil
         }
-        let width = proposal.width ?? nsView.bounds.width
-        guard width > 0 else { return nil }
+        // Every proposal is answered, including the two SwiftUI uses to learn
+        // how flexible this view is. Returning nil for those — which is what
+        // the zero-width and unspecified cases used to do — leaves the layout
+        // treating the text as infinitely stretchy, and inside a bubble that
+        // showed up as a two-word message filling the whole row.
+        //
+        // Answered properly, the range is: at its narrowest, the longest single
+        // word; at its widest, the text set on one line.
+        let measured: CGFloat
+        switch proposal.width {
+        case .some(let width) where width > 0 && width.isFinite:
+            measured = width
+        case .some(let width) where width <= 0:
+            // A container of 1pt can't break a word, so what comes back is the
+            // width of the longest one — the narrowest this text can ever be.
+            measured = 1
+        default:
+            measured = Self.unboundedWidth
+        }
 
-        container.containerSize = CGSize(width: width, height: .greatestFiniteMagnitude)
+        container.containerSize = CGSize(width: measured, height: .greatestFiniteMagnitude)
         manager.ensureLayout(for: container)
         let used = manager.usedRect(for: container)
         // Rounded up, and never wider than the offer: `usedRect` can come back a
         // fraction over the container's own width, which would re-wrap the last
         // word on the next pass.
-        return CGSize(width: min(width, ceil(used.width)), height: ceil(used.height))
+        return CGSize(width: min(measured, ceil(used.width)), height: ceil(used.height))
     }
 
     /// The transcript is monospaced; markdown emphasis keeps that face and only
