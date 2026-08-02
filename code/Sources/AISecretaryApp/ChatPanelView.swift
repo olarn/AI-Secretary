@@ -227,6 +227,10 @@ struct ChatPanelView: View {
                     return .handled
                 }
                 .focused($messageBoxFocused)
+                // The lane the ↵ sits in. Taken out of the field's own width so
+                // the text wraps before it rather than running underneath —
+                // an overlay alone would have let a long line slide behind it.
+                .padding(.trailing, sendGlyphLane)
                 .background(
                     GeometryReader { proxy in
                         Color.clear.preference(key: MessageBoxHeightKey.self, value: proxy.size.height)
@@ -245,6 +249,7 @@ struct ChatPanelView: View {
         .padding(.vertical, 4)
         .background(RoundedRectangle(cornerRadius: 6).fill(Color(nsColor: .textBackgroundColor)))
         .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.4), lineWidth: 1))
+        .overlay(alignment: .bottomTrailing) { sendGlyph }
     }
 
     /// One line of the message font, measured rather than guessed — a fraction
@@ -849,21 +854,36 @@ struct ChatPanelView: View {
     /// Grows a line at a time as the message gets longer, then stops and
     /// scrolls: five lines is about as much of the bubble as the input can take
     /// before the conversation above it stops being readable.
+    /// The box spans the full width now, with the send affordance inside it
+    /// rather than a button beside it.
     private var inputRow: some View {
-        // Centred on the box rather than sitting on its baseline, and sized from
-        // the text: bottom-aligned against a box whose height now changes with
-        // both the message and the text size, the button never lined up with
-        // anything.
-        HStack(alignment: .center, spacing: 6) {
-            messageBox
-            Button(action: send) {
-                Image(systemName: "arrow.up.circle.fill")
-            }
-            .font(.system(size: appearance.settings.fontSize * 1.5))
-            .buttonStyle(.plain)
-            .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty)
-        }
+        messageBox
     }
+
+    /// How much room the ↵ needs, glyph plus breathing space on either side.
+    /// Scales with the text, since the glyph does.
+    private var sendGlyphLane: Double { appearance.settings.fontSize * 1.1 + 16 }
+
+    /// Return, drawn rather than boxed: the keyboard is how this is sent, so the
+    /// affordance says which key rather than offering a second, different thing
+    /// to press. Still clickable for anyone who reaches for the mouse.
+    ///
+    /// Bottom-aligned, because the box grows downward as the message wraps and a
+    /// centred glyph would drift away from the caret.
+    private var sendGlyph: some View {
+        Button(action: send) {
+            Image(systemName: "return")
+                .font(.system(size: appearance.settings.fontSize * 1.1, weight: .medium))
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(canSend ? Color.secondary : Color.secondary.opacity(0.35))
+        .disabled(!canSend)
+        .help("Return to send")
+        .padding(.trailing, 8)
+        .padding(.bottom, 5)
+    }
+
+    private var canSend: Bool { !draft.trimmingCharacters(in: .whitespaces).isEmpty }
 
     private var settingsSection: some View {
         VStack(alignment: .leading, spacing: 6) {
