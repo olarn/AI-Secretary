@@ -1,41 +1,47 @@
 import XCTest
 @testable import SecretaryCore
 
-/// The order of the three panel buttons along the bottom of the chat.
+/// How the three panel buttons are arranged along the bottom of the chat.
+///
+/// Not one cluster: Projects sits alone against one edge and the other two sit
+/// together against the opposite edge, with the window's width between them.
 final class FooterOrderTests: XCTestCase {
-    /// The owner's arrangement: Projects on the far left, then Profile, with
-    /// Settings on the right.
-    func testTheDefaultRowReadsProjectsProfileSettings() {
+    func testProjectsSitsAloneAndTheOtherTwoAreTogether() {
         XCTAssertEqual(
-            footerOrder(alignedTrailing: false),
-            [.projects, .profile, .settings]
+            footerSlots(mirrored: false),
+            [.button(.projects), .gap, .button(.profile), .button(.settings)]
         )
     }
 
-    /// Mirrored, the row hugs the other edge, so the sequence reverses and each
-    /// button keeps the same distance from the outer edge it had before. Holding
-    /// the literal order instead would move every button under a different
-    /// finger depending on which way the bubble happened to flip.
-    func testMirroringReversesTheRow() {
+    /// The mirror image of itself — the gap moves too. Moving only the groups
+    /// and leaving each group's own order alone would put Profile where
+    /// Settings had been.
+    func testMirroringReversesEverythingIncludingTheGap() {
         XCTAssertEqual(
-            footerOrder(alignedTrailing: true),
-            [.settings, .profile, .projects]
+            footerSlots(mirrored: true),
+            [.button(.settings), .button(.profile), .gap, .button(.projects)]
         )
     }
 
-    func testTheSameThreeButtonsAppearWhicheverSideItIsOn() {
-        XCTAssertEqual(
-            Set(footerOrder(alignedTrailing: false)),
-            Set(footerOrder(alignedTrailing: true))
-        )
-        XCTAssertEqual(footerOrder(alignedTrailing: false).count, FooterButton.allCases.count)
+    /// Whichever way it faces, Projects is the one against the outer edge on
+    /// its own, and Settings is the one against the other.
+    func testTheEndsHoldTheSameButtonsEitherWay() {
+        XCTAssertEqual(footerSlots(mirrored: false).first, .button(.projects))
+        XCTAssertEqual(footerSlots(mirrored: false).last, .button(.settings))
+        XCTAssertEqual(footerSlots(mirrored: true).first, .button(.settings))
+        XCTAssertEqual(footerSlots(mirrored: true).last, .button(.projects))
     }
 
-    /// Whichever side it is on, the button nearest the outer edge is the same
-    /// one — that is what "the order swapped correctly" means here.
-    func testProjectsStaysOnTheOutsideOnBothSides() {
-        XCTAssertEqual(footerOrder(alignedTrailing: false).first, .projects)
-        XCTAssertEqual(footerOrder(alignedTrailing: true).last, .projects)
+    func testExactlyOneGapAndAllThreeButtons() {
+        for mirrored in [false, true] {
+            let slots = footerSlots(mirrored: mirrored)
+            XCTAssertEqual(slots.filter { $0 == .gap }.count, 1, "mirrored=\(mirrored)")
+            let buttons = slots.compactMap { slot -> FooterButton? in
+                if case .button(let b) = slot { return b }
+                return nil
+            }
+            XCTAssertEqual(Set(buttons), Set(FooterButton.allCases), "mirrored=\(mirrored)")
+        }
     }
 
     func testTitlesAreTheOnesShown() {

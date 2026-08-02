@@ -164,11 +164,6 @@ struct ChatPanelView: View {
         }
     }
 
-    /// The footer's buttons sit in a bottom corner too, so they move to the
-    /// other side when the grip takes theirs — otherwise the grip lands on
-    /// whichever button is outermost.
-    private var footerOnTrailing: Bool { gripCorner.isBottom && gripCorner.isLeading }
-
     private var widenButton: some View {
         Button(action: appearance.widenChat) {
             Image(systemName: "arrow.left.and.line.vertical.and.arrow.right")
@@ -1043,23 +1038,28 @@ struct ChatPanelView: View {
     /// stays mini around text that isn't.
     private var footer: some View {
         HStack(spacing: 10) {
-            if footerOnTrailing { Spacer() }
-            // Order comes from `footerOrder`, which reverses with the row so
-            // each button keeps its distance from the outer edge when the
-            // bubble mirrors. Still a toggle each, and clicking the open one
-            // still closes it — opening one closes whichever was open.
-            ForEach(footerOrder(alignedTrailing: footerOnTrailing), id: \.self) { button in
-                let panel = Panel(button)
-                Toggle(
-                    button.title,
-                    isOn: Binding(
-                        get: { openPanel == panel },
-                        set: { openPanel = $0 ? panel : nil }
+            ForEach(Array(footerSlots(mirrored: layout.isMirrored).enumerated()), id: \.offset) { _, slot in
+                switch slot {
+                case .gap:
+                    Spacer(minLength: 12)
+                case .button(let button):
+                    let panel = Panel(button)
+                    // Still a toggle each, and clicking the open one still
+                    // closes it — opening one closes whichever was open.
+                    Toggle(
+                        button.title,
+                        isOn: Binding(
+                            get: { openPanel == panel },
+                            set: { openPanel = $0 ? panel : nil }
+                        )
                     )
-                )
+                }
             }
-            if !footerOnTrailing { Spacer() }
         }
+        // Both ends of this row now hold a button, so the resize grip can no
+        // longer be dodged by moving the buttons — it is kept clear by leaving
+        // room at whichever bottom corner it is in.
+        .padding(gripCorner.isLeading ? .leading : .trailing, gripCorner.isBottom ? 26 : 0)
         .toggleStyle(.button)
         .controlSize(appearance.settings.fontSize > 16 ? .regular : .small)
         .font(.system(size: appearance.settings.secondaryFontSize))
