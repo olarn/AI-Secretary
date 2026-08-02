@@ -13,16 +13,23 @@ public struct MessageBubbleStyle: Equatable, Sendable {
     /// The user's own messages, which get the tinted fill.
     public let isMine: Bool
     /// Whether the entry is drawn as a bubble at all. Activity is a report of
-    /// what happened rather than something anyone said, and stays the
-    /// full-width dashed box it already was — bubbling it would make it look
-    /// like part of the answer, which is the one thing its styling exists to
-    /// avoid.
+    /// what happened rather than something anyone said, so it is drawn as a
+    /// system message instead: narrowed from both sides and centred, which is
+    /// neither speaker's side.
     public let isBubble: Bool
-    /// The Secretary is named above its bubble because the app has several
-    /// personas and which one answered matters. "You" is not shown: the side
-    /// already says it, and a 1:1 chat that labels your own messages reads as a
-    /// transcript rather than a conversation.
+    /// Every message is named — "Me" for yours, the persona's name for the
+    /// Secretary's — with the time beside it. The side already says who spoke,
+    /// but a thread kept across launches needs to say *when*, and a name to hang
+    /// the time on costs nothing.
     public let showsSpeakerName: Bool
+    /// Which corner of the bubble the name and time sit in. Against the
+    /// bubble's own outer edge in both cases, so the two headers mirror each
+    /// other rather than both hugging the left.
+    public let headerSide: Side
+    /// Only the Secretary's answers can be copied. Yours you already have, and
+    /// a copy button on every line you typed is clutter on the side of the
+    /// thread that never needs it.
+    public let showsCopyButton: Bool
 }
 
 public func messageBubbleStyle(
@@ -30,14 +37,23 @@ public func messageBubbleStyle(
     kind: TranscriptEntry.Kind
 ) -> MessageBubbleStyle {
     guard kind == .message else {
-        return MessageBubbleStyle(side: .leading, isMine: false, isBubble: false, showsSpeakerName: false)
+        return MessageBubbleStyle(
+            side: .leading,
+            isMine: false,
+            isBubble: false,
+            showsSpeakerName: false,
+            headerSide: .leading,
+            showsCopyButton: false
+        )
     }
     let mine = speaker == .user
     return MessageBubbleStyle(
         side: mine ? .trailing : .leading,
         isMine: mine,
         isBubble: true,
-        showsSpeakerName: !mine
+        showsSpeakerName: true,
+        headerSide: mine ? .trailing : .leading,
+        showsCopyButton: !mine
     )
 }
 
@@ -51,4 +67,16 @@ public func messageBubbleStyle(
 /// column.
 public func messageBubbleGutter(panelWidth: Double) -> Double {
     min(max(panelWidth * 0.16, 28), 160)
+}
+
+/// How far a system message — the activity report — is pulled in from *both*
+/// edges.
+///
+/// Narrower than the conversation on either side and centred between them, so
+/// it reads as the app talking about itself rather than as either speaker's
+/// turn. Smaller than the bubble gutter on purpose: it is inset from both sides
+/// at once, and a system note that ends up narrower than the messages it
+/// explains is harder to read for no gain.
+public func systemMessageInset(panelWidth: Double) -> Double {
+    min(max(panelWidth * 0.06, 10), 48)
 }

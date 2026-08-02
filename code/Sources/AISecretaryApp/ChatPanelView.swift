@@ -70,6 +70,8 @@ struct ChatPanelView: View {
     @State private var arrowKeyMonitor: Any?
     /// Which option is highlighted in the choice list, when one is showing.
     @State private var choiceIndex = 0
+    /// Which answer was last copied, so its button can show a tick.
+    @State private var copiedEntry: UUID?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -625,22 +627,120 @@ struct ChatPanelView: View {
     private func messageBubble(_ entry: TranscriptEntry) -> some View {
         let style = messageBubbleStyle(speaker: entry.speaker, kind: entry.kind)
         if !style.isBubble {
-            activityBubble(entry)
+            activityRow(entry)
         } else {
-            // The gutter is a minimum, not a fixed width: a short message keeps
-            // its bubble small and a long one grows into the rest of the row,
-            // which is what makes the thread read as a conversation rather than
-            // as two columns.
-            HStack(spacing: 0) {
-                if style.side == .trailing {
-                    Spacer(minLength: messageBubbleGutter(panelWidth: appearance.settings.chatWidth))
+            // Both markers come out before anything is laid out. The Secretary
+            // already strips a loop block from a finished reply, but not from a
+            // failed one, and a reply still streaming has yet to be stripped at
+            // all — neither should put a fenced block on screen.
+            let body = LoopBlock.parse(MessageChoices.parse(entry.text).body).body
+            let parts = messageParts(of: MarkdownTableParser.segments(of: body))
+            VStack(alignment: style.side == .trailing ? .trailing : .leading, spacing: 5) {
+                // A reply that opens with a table has nowhere to put the name,
+                // so the header comes out on its own line above it. Anything
+                // else carries the header inside its first bubble, which is
+                // where the request put it: in the corner of the box.
+                if style.showsSpeakerName, !startsWithProse(parts) {
+                    messageRow(style: style) { header(entry, style: style) }
                 }
-                bubbleBody(entry, style: style)
-                if style.side == .leading {
-                    Spacer(minLength: messageBubbleGutter(panelWidth: appearance.settings.chatWidth))
+                ForEach(Array(parts.enumerated()), id: \.offset) { index, part in
+                    switch part {
+                    case .prose(let segments):
+                        messageRow(style: style) {
+                            proseBubble(
+                                segments,
+                                entry: entry,
+                                style: style,
+                                // Named once per turn, on the first thing it
+                                // says. Repeating it on every bubble of a split
+                                // reply is what makes a thread look like a log.
+                                showsHeader: index == 0
+                            )
+                        }
+                    case .block(let segment):
+                        // Its own message, with no bubble around it: a table and
+                        // a fenced block each already have a border, a fill and
+                        // their own sideways scroll, and a bubble around that is
+                        // a second frame that says nothing.
+                        messageRow(style: style) { blockView(segment) }
+                    }
                 }
             }
         }
+    }
+
+    private func startsWithProse(_ parts: [MessagePart]) -> Bool {
+        if case .prose = parts.first { return true }
+        return false
+    }
+
+    /// One line of the thread, tucked against this speaker's edge.
+    ///
+    /// The gutter is a minimum, not a fixed width: a short message keeps its
+    /// bubble small and a long one grows into the rest of the row, which is what
+    /// makes the thread read as a conversation rather than as two columns.
+    private func messageRow<Content: View>(
+        style: MessageBubbleStyle,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        HStack(spacing: 0) {
+            if style.side == .trailing {
+                Spacer(minLength: messageBubbleGutter(panelWidth: appearance.settings.chatWidth))
+            }
+            content()
+            if style.side == .leading {
+                Spacer(minLength: messageBubbleGutter(panelWidth: appearance.settings.chatWidth))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func blockView(_ segment: TranscriptSegment) -> some View {
+        switch segment {
+        case .table(let table): tableView(table)
+        case .code(let block): codeView(block)
+        case .text(let body): Text(body)
+        }
+    }
+
+    /// Who said it and when, and — on the Secretary's side — the copy button.
+    ///
+    /// Both are `secondaryFontSize`: the header is there to be found, not read,
+    /// and at message size it competes with the message.
+    private func header(_ entry: TranscriptEntry, style: MessageBubbleStyle) -> some View {
+        HStack(spacing: 5) {
+            Text(style.isMine ? "Me" : secretary.profile.displayName)
+                .font(.system(size: appearance.settings.secondaryFontSize, weight: .bold))
+            Text(MessageTime.label(for: entry.timestamp))
+                .font(.system(size: appearance.settings.secondaryFontSize))
+            if style.showsCopyButton {
+                copyButton(for: entry)
+            }
+        }
+        .foregroundStyle(.secondary)
+    }
+
+    /// Copies the whole answer, markers and all removed — the text as it is on
+    /// screen, not the raw reply.
+    ///
+    /// One button per turn rather than one per bubble: a reply split around a
+    /// table is still one answer, and picking which third of it you meant is
+    /// not a decision worth asking for.
+    private func copyButton(for entry: TranscriptEntry) -> some View {
+        Button {
+            let body = LoopBlock.parse(MessageChoices.parse(entry.text).body).body
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(body, forType: .string)
+            copiedEntry = entry.id
+        } label: {
+            Image(systemName: copiedEntry == entry.id ? "checkmark" : "doc.on.doc")
+                .font(.system(size: appearance.settings.secondaryFontSize))
+        }
+        .buttonStyle(.plain)
+        .help("Copy this answer")
+        // The tick is the whole confirmation: a copy that says nothing leaves
+        // you pressing it again to be sure.
+        .onChange(of: entry.text) { copiedEntry = nil }
     }
 
     /// The bubble itself: the message, in a rounded fill.
@@ -648,28 +748,18 @@ struct ChatPanelView: View {
     /// The fill is the panel's own accent and secondary, not a new palette —
     /// the point of the change is the shape of the conversation, not a different
     /// look.
-    private func bubbleBody(_ entry: TranscriptEntry, style: MessageBubbleStyle) -> some View {
-            VStack(alignment: .leading, spacing: 4) {
-                if style.showsSpeakerName {
-                    Text(secretary.profile.displayName)
-                        .font(.system(size: appearance.settings.secondaryFontSize, weight: .bold))
-                        .foregroundStyle(.secondary)
+    private func proseBubble(
+        _ segments: [TranscriptSegment],
+        entry: TranscriptEntry,
+        style: MessageBubbleStyle,
+        showsHeader: Bool
+    ) -> some View {
+            VStack(alignment: style.headerSide == .trailing ? .trailing : .leading, spacing: 4) {
+                if showsHeader, style.showsSpeakerName {
+                    header(entry, style: style)
                 }
-                ForEach(
-                    // Both markers come out before anything is laid out. The
-                    // Secretary already strips a loop block from a finished
-                    // reply, but not from a failed one, and a reply still
-                    // streaming has yet to be stripped at all — neither should
-                    // put a fenced block on screen.
-                    Array(
-                        MarkdownTableParser
-                            .segments(of: LoopBlock.parse(MessageChoices.parse(entry.text).body).body)
-                            .enumerated()
-                    ),
-                    id: \.offset
-                ) { _, segment in
-                    switch segment {
-                    case .text(let body):
+                ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
+                    if case .text(let body) = segment {
                         // AppKit-backed: SwiftUI's Text draws links but doesn't
                         // open them from a non-activating panel, and can't show
                         // a pointer or a hover underline over them.
@@ -690,13 +780,6 @@ struct ChatPanelView: View {
                             ),
                             alignment: .leading
                         )
-                    case .table(let table):
-                        // A table or a fenced block takes the whole bubble and
-                        // scrolls inside it, as before. Wide content is the one
-                        // case where the bubble grows to the full row.
-                        tableView(table)
-                    case .code(let block):
-                        codeView(block)
                     }
                 }
             }
@@ -817,6 +900,16 @@ struct ChatPanelView: View {
     /// Sits in the conversation in order, but deliberately doesn't look like
     /// one: a bordered, dimmer box so it reads as "here's what happened" rather
     /// than as part of the answer.
+    ///
+    /// Pulled in from both edges and centred between them, which is neither
+    /// speaker's side — the shape says "system message" before the dashed border
+    /// is even noticed. Its text stays left-aligned: a centred tool command is
+    /// harder to read and nothing is gained by it.
+    private func activityRow(_ entry: TranscriptEntry) -> some View {
+        activityBubble(entry)
+            .padding(.horizontal, systemMessageInset(panelWidth: appearance.settings.chatWidth))
+    }
+
     private func activityBubble(_ entry: TranscriptEntry) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Label("Working", systemImage: "gearshape.2")

@@ -39,12 +39,46 @@ final class MessageBubbleStyleTests: XCTestCase {
         }
     }
 
-    /// Only the Secretary is named. The side already says which messages are
-    /// yours, and the app has several personas, so which one answered is the
-    /// part that isn't obvious.
-    func testOnlyTheSecretaryIsNamed() {
+    /// Both speakers are named, because the name is what the time hangs on and
+    /// a thread kept across launches has to say when things were said.
+    func testBothSpeakersAreNamed() {
         XCTAssertTrue(messageBubbleStyle(speaker: .secretary, kind: .message).showsSpeakerName)
-        XCTAssertFalse(messageBubbleStyle(speaker: .user, kind: .message).showsSpeakerName)
+        XCTAssertTrue(messageBubbleStyle(speaker: .user, kind: .message).showsSpeakerName)
+    }
+
+    /// The header sits in the bubble's own outer corner, so the two mirror each
+    /// other instead of both hugging the left.
+    func testTheHeaderSitsOnTheSameSideAsTheBubble() {
+        for speaker in [TranscriptEntry.Speaker.user, .secretary] {
+            let style = messageBubbleStyle(speaker: speaker, kind: .message)
+            XCTAssertEqual(style.headerSide, style.side, "\(speaker)")
+        }
+    }
+
+    /// Only what the Secretary said can be copied — you already have what you
+    /// typed.
+    func testOnlyTheSecretarysAnswersOfferACopyButton() {
+        XCTAssertTrue(messageBubbleStyle(speaker: .secretary, kind: .message).showsCopyButton)
+        XCTAssertFalse(messageBubbleStyle(speaker: .user, kind: .message).showsCopyButton)
+        XCTAssertFalse(messageBubbleStyle(speaker: .secretary, kind: .activity).showsCopyButton)
+    }
+
+    /// A system message is narrowed from both sides at once, so it must stay
+    /// narrower than the lane a one-sided bubble is given — otherwise "centred
+    /// and pulled in" would read as wider than the conversation around it.
+    func testASystemMessageIsPulledInLessThanABubbleIsPushedOver() {
+        for width in [320.0, 480.0, 700.0, 1200.0] {
+            XCTAssertLessThan(
+                systemMessageInset(panelWidth: width),
+                messageBubbleGutter(panelWidth: width),
+                "width=\(width)"
+            )
+        }
+    }
+
+    func testTheSystemInsetIsFlooredAndCapped() {
+        XCTAssertEqual(systemMessageInset(panelWidth: 100), 10)
+        XCTAssertEqual(systemMessageInset(panelWidth: 4000), 48)
     }
 
     func testTheGutterGrowsWithThePanel() {
