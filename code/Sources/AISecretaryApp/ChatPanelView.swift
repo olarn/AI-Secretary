@@ -623,13 +623,38 @@ struct ChatPanelView: View {
 
     @ViewBuilder
     private func messageBubble(_ entry: TranscriptEntry) -> some View {
-        switch entry.kind {
-        case .activity: activityBubble(entry)
-        case .message:
+        let style = messageBubbleStyle(speaker: entry.speaker, kind: entry.kind)
+        if !style.isBubble {
+            activityBubble(entry)
+        } else {
+            // The gutter is a minimum, not a fixed width: a short message keeps
+            // its bubble small and a long one grows into the rest of the row,
+            // which is what makes the thread read as a conversation rather than
+            // as two columns.
+            HStack(spacing: 0) {
+                if style.side == .trailing {
+                    Spacer(minLength: messageBubbleGutter(panelWidth: appearance.settings.chatWidth))
+                }
+                bubbleBody(entry, style: style)
+                if style.side == .leading {
+                    Spacer(minLength: messageBubbleGutter(panelWidth: appearance.settings.chatWidth))
+                }
+            }
+        }
+    }
+
+    /// The bubble itself: the message, in a rounded fill.
+    ///
+    /// The fill is the panel's own accent and secondary, not a new palette —
+    /// the point of the change is the shape of the conversation, not a different
+    /// look.
+    private func bubbleBody(_ entry: TranscriptEntry, style: MessageBubbleStyle) -> some View {
             VStack(alignment: .leading, spacing: 4) {
-                Text(entry.speaker == .user ? "You" : secretary.profile.displayName)
-                    .font(.system(size: appearance.settings.secondaryFontSize, weight: .bold))
-                    .foregroundStyle(entry.speaker == .user ? Color.accentColor : .secondary)
+                if style.showsSpeakerName {
+                    Text(secretary.profile.displayName)
+                        .font(.system(size: appearance.settings.secondaryFontSize, weight: .bold))
+                        .foregroundStyle(.secondary)
+                }
                 ForEach(
                     // Both markers come out before anything is laid out. The
                     // Secretary already strips a loop block from a finished
@@ -648,20 +673,35 @@ struct ChatPanelView: View {
                         // AppKit-backed: SwiftUI's Text draws links but doesn't
                         // open them from a non-activating panel, and can't show
                         // a pointer or a hover underline over them.
+                        // No `maxWidth: .infinity` around it any more: inside a
+                        // bubble the text has to report the width it actually
+                        // uses, or every bubble — "ok" included — would be as
+                        // wide as the row allows and the two sides would read
+                        // as columns rather than as a conversation.
                         MessageTextView(
                             text: MessageMarkdown.attributed(body),
                             fontSize: appearance.settings.fontSize
                         )
-                        .frame(maxWidth: .infinity, alignment: .leading)
                     case .table(let table):
+                        // A table or a fenced block takes the whole bubble and
+                        // scrolls inside it, as before. Wide content is the one
+                        // case where the bubble grows to the full row.
                         tableView(table)
                     case .code(let block):
                         codeView(block)
                     }
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(bubbleFill(style), in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    /// Yours is tinted with the accent, the Secretary's with the same neutral
+    /// the rest of the panel uses. Both are faint: the text has to stay the
+    /// loudest thing in the bubble.
+    private func bubbleFill(_ style: MessageBubbleStyle) -> Color {
+        style.isMine ? Color.accentColor.opacity(0.16) : Color.secondary.opacity(0.12)
     }
 
     /// One setting, two buttons. A button that can't do anything is disabled
@@ -860,9 +900,16 @@ struct ChatPanelView: View {
         messageBox
     }
 
+    /// The ↵'s point size, relative to the message text. Was 1.1 — 10% smaller
+    /// now that it is drawn at full strength and no longer needs the size to be
+    /// noticed.
+    private var sendGlyphSize: Double { appearance.settings.fontSize * 1.1 * 0.9 }
+
     /// How much room the ↵ needs, glyph plus breathing space on either side.
-    /// Scales with the text, since the glyph does.
-    private var sendGlyphLane: Double { appearance.settings.fontSize * 1.1 + 16 }
+    /// Derived from the glyph's own size rather than repeating the arithmetic:
+    /// a lane that stopped matching the glyph would let a long line slide back
+    /// under it.
+    private var sendGlyphLane: Double { sendGlyphSize + 16 }
 
     /// Return, drawn rather than boxed: the keyboard is how this is sent, so the
     /// affordance says which key rather than offering a second, different thing
@@ -873,10 +920,19 @@ struct ChatPanelView: View {
     private var sendGlyph: some View {
         Button(action: send) {
             Image(systemName: "return")
-                .font(.system(size: appearance.settings.fontSize * 1.1, weight: .medium))
+                .font(.system(size: sendGlyphSize, weight: .medium))
         }
         .buttonStyle(.plain)
-        .foregroundStyle(canSend ? Color.secondary : Color.secondary.opacity(0.35))
+        // Empty box: exactly the placeholder's colour, so the glyph sits at the
+        // same weight as the "Ask the Secretary…" beside it. It used to be
+        // dimmed to 35% of that and read as switched off.
+        // `placeholderTextColor` and `secondaryLabelColor` are the same value
+        // (black/white at 0.5 alpha) — naming the placeholder one says which
+        // of the two this is matched to.
+        .foregroundStyle(
+            canSend ? AnyShapeStyle(Color.primary.opacity(0.75))
+                    : AnyShapeStyle(Color(nsColor: .placeholderTextColor))
+        )
         .disabled(!canSend)
         .help("Return to send")
         .padding(.trailing, 8)

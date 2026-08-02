@@ -321,11 +321,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
         guard let screen = NSScreen.main else { return }
         let visibleFrame = screen.visibleFrame
 
-        let characterOrigin = NSPoint(
-            x: visibleFrame.maxX - 160,
-            y: visibleFrame.minY + 120
+        let characterOrigin = CharacterLaunch.origin(
+            characterSize: characterPanel.frame.size,
+            visibleFrame: visibleFrame,
+            screenFrame: screen.frame
         )
-        characterPanel.setFrameOrigin(characterOrigin)
+        characterPanel.setFrameOrigin(NSPoint(x: characterOrigin.x, y: characterOrigin.y))
 
         applyChatLayout(in: visibleFrame)
     }

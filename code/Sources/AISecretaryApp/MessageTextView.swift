@@ -40,6 +40,11 @@ struct MessageTextView: NSViewRepresentable {
 
     /// SwiftUI needs a height for the width it's offering; ask the layout
     /// manager rather than guessing, or long replies get clipped.
+    ///
+    /// The width reported back is the width the text *used*, which is narrower
+    /// than the offer for anything short. That is what lets a bubble hug a
+    /// two-word message; returning the offered width made every bubble as wide
+    /// as the row.
     func sizeThatFits(
         _ proposal: ProposedViewSize,
         nsView: HoverLinkTextView,
@@ -53,7 +58,11 @@ struct MessageTextView: NSViewRepresentable {
 
         container.containerSize = CGSize(width: width, height: .greatestFiniteMagnitude)
         manager.ensureLayout(for: container)
-        return CGSize(width: width, height: ceil(manager.usedRect(for: container).height))
+        let used = manager.usedRect(for: container)
+        // Rounded up, and never wider than the offer: `usedRect` can come back a
+        // fraction over the container's own width, which would re-wrap the last
+        // word on the next pass.
+        return CGSize(width: min(width, ceil(used.width)), height: ceil(used.height))
     }
 
     /// The transcript is monospaced; markdown emphasis keeps that face and only
