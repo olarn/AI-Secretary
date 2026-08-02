@@ -95,25 +95,19 @@ struct MessageTextView: NSViewRepresentable {
     /// `sizeThatFits` is deliberate — a representable is treated as fully
     /// stretchy by the surrounding layout no matter what it answers, which is
     /// why "ok?" was drawn in a bubble the full width of the panel.
+    /// Measured in one pass, deliberately. A reply with newlines in it should be
+    /// as wide as its widest line — which is what this returns, because a hard
+    /// newline still breaks the line when nothing else does. Splitting the text
+    /// up and measuring each line separately gives the same answer and costs a
+    /// scan of the whole message per line, on every streamed token.
     static func naturalWidth(_ text: AttributedString, fontSize: Double) -> Double {
         let styled = Self.styled(text, fontSize: fontSize)
-        // Line by line: a reply with newlines in it should be as wide as its
-        // widest line, not as wide as all of them run together.
-        return styled.string
-            .components(separatedBy: "\n")
-            .map { line -> Double in
-                let range = (styled.string as NSString).range(of: line)
-                let piece = range.location == NSNotFound
-                    ? styled
-                    : styled.attributedSubstring(from: range)
-                return ceil(
-                    piece.boundingRect(
-                        with: CGSize(width: unboundedWidth, height: .greatestFiniteMagnitude),
-                        options: [.usesLineFragmentOrigin, .usesFontLeading]
-                    ).width
-                )
-            }
-            .max() ?? 0
+        return ceil(
+            styled.boundingRect(
+                with: CGSize(width: unboundedWidth, height: .greatestFiniteMagnitude),
+                options: [.usesLineFragmentOrigin, .usesFontLeading]
+            ).width
+        )
     }
 
     /// The transcript is monospaced; markdown emphasis keeps that face and only
