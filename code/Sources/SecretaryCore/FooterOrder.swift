@@ -24,11 +24,17 @@ public enum FooterSlot: Equatable, Sendable {
     case gap
 }
 
-/// Left to right.
+/// Left to right, for a bubble whose tail is on the given side.
 ///
 /// The row is not one cluster: Projects sits alone against one edge, and
 /// Profile and Settings sit together against the other, with the window's width
 /// between them.
+///
+/// The tail is on the right in the ordinary case — the character stands to the
+/// bubble's right, which is where it sits by default — and that is the
+/// arrangement below. Keying it to the tail rather than to a `mirrored` flag is
+/// deliberate: read as "mirrored", the usual layout is the *true* case, and the
+/// first version of this shipped with the two arrangements the wrong way round.
 ///
 /// ```text
 /// | [Projects]                        [Profile] [Settings] |
@@ -44,12 +50,12 @@ public enum FooterSlot: Equatable, Sendable {
 /// Reversing everything is what keeps each button the same distance from the
 /// outer edge it was against before. Moving only the groups, and leaving each
 /// group's own order alone, would put Profile where Settings had been.
-public func footerSlots(mirrored: Bool) -> [FooterSlot] {
-    let normal: [FooterSlot] = [
+public func footerSlots(tailOnRight: Bool) -> [FooterSlot] {
+    let usual: [FooterSlot] = [
         .button(.projects),
         .gap,
         .button(.profile),
         .button(.settings)
     ]
-    return mirrored ? normal.reversed() : normal
+    return tailOnRight ? usual : usual.reversed()
 }

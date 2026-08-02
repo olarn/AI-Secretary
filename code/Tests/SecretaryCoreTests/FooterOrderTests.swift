@@ -8,17 +8,18 @@ import XCTest
 final class FooterOrderTests: XCTestCase {
     func testProjectsSitsAloneAndTheOtherTwoAreTogether() {
         XCTAssertEqual(
-            footerSlots(mirrored: false),
+            footerSlots(tailOnRight: true),
             [.button(.projects), .gap, .button(.profile), .button(.settings)]
         )
     }
 
-    /// The mirror image of itself — the gap moves too. Moving only the groups
+    /// Tail on the left — the bubble sitting to the character's left. The mirror
+    /// image of itself, gap included. Moving only the groups
     /// and leaving each group's own order alone would put Profile where
     /// Settings had been.
     func testMirroringReversesEverythingIncludingTheGap() {
         XCTAssertEqual(
-            footerSlots(mirrored: true),
+            footerSlots(tailOnRight: false),
             [.button(.settings), .button(.profile), .gap, .button(.projects)]
         )
     }
@@ -26,21 +27,21 @@ final class FooterOrderTests: XCTestCase {
     /// Whichever way it faces, Projects is the one against the outer edge on
     /// its own, and Settings is the one against the other.
     func testTheEndsHoldTheSameButtonsEitherWay() {
-        XCTAssertEqual(footerSlots(mirrored: false).first, .button(.projects))
-        XCTAssertEqual(footerSlots(mirrored: false).last, .button(.settings))
-        XCTAssertEqual(footerSlots(mirrored: true).first, .button(.settings))
-        XCTAssertEqual(footerSlots(mirrored: true).last, .button(.projects))
+        XCTAssertEqual(footerSlots(tailOnRight: true).first, .button(.projects))
+        XCTAssertEqual(footerSlots(tailOnRight: true).last, .button(.settings))
+        XCTAssertEqual(footerSlots(tailOnRight: false).first, .button(.settings))
+        XCTAssertEqual(footerSlots(tailOnRight: false).last, .button(.projects))
     }
 
     func testExactlyOneGapAndAllThreeButtons() {
-        for mirrored in [false, true] {
-            let slots = footerSlots(mirrored: mirrored)
-            XCTAssertEqual(slots.filter { $0 == .gap }.count, 1, "mirrored=\(mirrored)")
+        for tailOnRight in [true, false] {
+            let slots = footerSlots(tailOnRight: tailOnRight)
+            XCTAssertEqual(slots.filter { $0 == FooterSlot.gap }.count, 1, "tailOnRight=\(tailOnRight)")
             let buttons = slots.compactMap { slot -> FooterButton? in
                 if case .button(let b) = slot { return b }
                 return nil
             }
-            XCTAssertEqual(Set(buttons), Set(FooterButton.allCases), "mirrored=\(mirrored)")
+            XCTAssertEqual(Set(buttons), Set(FooterButton.allCases), "tailOnRight=\(tailOnRight)")
         }
     }
 
