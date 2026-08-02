@@ -38,6 +38,16 @@ struct ChatPanelView: View {
             case .projects: return "Projects"
             }
         }
+
+        /// The row's order lives in `FooterButton`, which knows nothing about
+        /// this view's state; this is the one place the two meet.
+        init(_ button: FooterButton) {
+            switch button {
+            case .settings: self = .settings
+            case .profile: self = .profile
+            case .projects: self = .projects
+            }
+        }
     }
 
     @State private var openPanel: Panel?
@@ -154,8 +164,9 @@ struct ChatPanelView: View {
         }
     }
 
-    /// The footer's buttons sit in a bottom corner too, so they move to the other
-    /// side when the grip takes theirs — otherwise the grip lands on Settings.
+    /// The footer's buttons sit in a bottom corner too, so they move to the
+    /// other side when the grip takes theirs — otherwise the grip lands on
+    /// whichever button is outermost.
     private var footerOnTrailing: Bool { gripCorner.isBottom && gripCorner.isLeading }
 
     private var widenButton: some View {
@@ -1033,11 +1044,14 @@ struct ChatPanelView: View {
     private var footer: some View {
         HStack(spacing: 10) {
             if footerOnTrailing { Spacer() }
-            // Still a toggle each, and clicking the open one still closes it —
-            // only now opening one closes whichever was open.
-            ForEach([Panel.settings, .profile, .projects]) { panel in
+            // Order comes from `footerOrder`, which reverses with the row so
+            // each button keeps its distance from the outer edge when the
+            // bubble mirrors. Still a toggle each, and clicking the open one
+            // still closes it — opening one closes whichever was open.
+            ForEach(footerOrder(alignedTrailing: footerOnTrailing), id: \.self) { button in
+                let panel = Panel(button)
                 Toggle(
-                    panel.title,
+                    button.title,
                     isOn: Binding(
                         get: { openPanel == panel },
                         set: { openPanel = $0 ? panel : nil }
