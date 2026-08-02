@@ -673,14 +673,22 @@ struct ChatPanelView: View {
                         // AppKit-backed: SwiftUI's Text draws links but doesn't
                         // open them from a non-activating panel, and can't show
                         // a pointer or a hover underline over them.
-                        // No `maxWidth: .infinity` around it any more: inside a
-                        // bubble the text has to report the width it actually
-                        // uses, or every bubble — "ok" included — would be as
-                        // wide as the row allows and the two sides would read
-                        // as columns rather than as a conversation.
+                        // Capped at the width the text would take unwrapped, so
+                        // a short message keeps a short bubble. Without the cap
+                        // every bubble — "ok?" included — is as wide as the row
+                        // allows, and the two sides read as columns rather than
+                        // as a conversation. A long message asks for more than
+                        // the row has and simply gets the row.
                         MessageTextView(
                             text: MessageMarkdown.attributed(body),
                             fontSize: appearance.settings.fontSize
+                        )
+                        .frame(
+                            maxWidth: MessageTextView.naturalWidth(
+                                MessageMarkdown.attributed(body),
+                                fontSize: appearance.settings.fontSize
+                            ),
+                            alignment: .leading
                         )
                     case .table(let table):
                         // A table or a fenced block takes the whole bubble and

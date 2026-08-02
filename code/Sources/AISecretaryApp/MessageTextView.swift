@@ -87,6 +87,35 @@ struct MessageTextView: NSViewRepresentable {
         return CGSize(width: min(measured, ceil(used.width)), height: ceil(used.height))
     }
 
+    /// The width this text would take if nothing made it wrap.
+    ///
+    /// Used as a cap on the view, not as its size: a short message is held to
+    /// its own width so the bubble hugs it, and a long one asks for more than
+    /// the row has and gets the row. Measuring here rather than leaving it to
+    /// `sizeThatFits` is deliberate — a representable is treated as fully
+    /// stretchy by the surrounding layout no matter what it answers, which is
+    /// why "ok?" was drawn in a bubble the full width of the panel.
+    static func naturalWidth(_ text: AttributedString, fontSize: Double) -> Double {
+        let styled = Self.styled(text, fontSize: fontSize)
+        // Line by line: a reply with newlines in it should be as wide as its
+        // widest line, not as wide as all of them run together.
+        return styled.string
+            .components(separatedBy: "\n")
+            .map { line -> Double in
+                let range = (styled.string as NSString).range(of: line)
+                let piece = range.location == NSNotFound
+                    ? styled
+                    : styled.attributedSubstring(from: range)
+                return ceil(
+                    piece.boundingRect(
+                        with: CGSize(width: unboundedWidth, height: .greatestFiniteMagnitude),
+                        options: [.usesLineFragmentOrigin, .usesFontLeading]
+                    ).width
+                )
+            }
+            .max() ?? 0
+    }
+
     /// The transcript is monospaced; markdown emphasis keeps that face and only
     /// changes weight/slant, so a bold word doesn't jump to a different font.
     static func styled(_ text: AttributedString, fontSize: Double) -> NSAttributedString {
