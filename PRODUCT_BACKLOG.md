@@ -233,7 +233,13 @@ The current phase for version-bumping purposes (`AppVersion.swift`,
   - กฎอยู่ใน `footerSlots` ที่ `SecretaryCore` มีเทสคุมทั้งสองด้าน ไม่ใช่ array ตายตัวในไฟล์ view
 - [x] ตอนนี้ปลายแถวมีปุ่มทั้งสองข้าง กริป resize จึงหลบด้วยการย้ายปุ่มไม่ได้อีก ต้องเว้นที่ให้ที่มุมล่างที่กริปอยู่แทน
 
-## Phase 8: Multi-session
+## Phase 8: เลือก Skills ที่ติดตั้งใน Claude Code ได้
+- [ ] เพิ่มปุ่ม Skills อยู่ระหว่าง Profile และ Settings
+- [ ] เมื่อกดปุ่ม Skills App จะแสดงหน้าจอเหมือน settings
+- [ ] ในหน้าจอจะมี list ของ Skills ที่มี 
+- [ ] สามารถ check เพื่อเลือกใช้ Skills ใน session นั้นได้
+
+## Phase 9: Multi-session
 - [ ] สามารถเปิด chat bubble ได้มากกว่า 1 window โดยที่แต่ละ window จะแยก Claude Session ออกจากกัน
 - [ ] การแสดง chat bubble ให้แสดง on top window เดิท แต่ให้ซ้อนทับแบบแหลื่อมกันฃ
 - [ ] ถ้า drag ตัวละคร, ให้ลากเอา chat bubble ทั้งหมดไปด้วย โดยซ้อนกับเป็นชั้นแบบเหลื่อมๆ แล้วลากไปด้วยกัน 
