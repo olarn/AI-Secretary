@@ -727,20 +727,37 @@ struct ChatPanelView: View {
     /// table is still one answer, and picking which third of it you meant is
     /// not a decision worth asking for.
     private func copyButton(for entry: TranscriptEntry) -> some View {
-        Button {
-            let body = LoopBlock.parse(MessageChoices.parse(entry.text).body).body
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(body, forType: .string)
-            copiedEntry = entry.id
-        } label: {
-            Image(systemName: copiedEntry == entry.id ? "checkmark" : "doc.on.doc")
-                .font(.system(size: appearance.settings.secondaryFontSize))
+        HStack(spacing: 3) {
+            Button {
+                let body = LoopBlock.parse(MessageChoices.parse(entry.text).body).body
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(body, forType: .string)
+                confirmCopy(of: entry.id)
+            } label: {
+                Image(systemName: "doc.on.doc")
+                    .font(.system(size: appearance.settings.secondaryFontSize))
+            }
+            .buttonStyle(.plain)
+            .help("Copy this answer")
+            // A tick beside the button, never instead of it. Swapping the icon
+            // for a tick left the answer looking as though its copy button had
+            // gone — the confirmation ate the thing it was confirming.
+            if copiedEntry == entry.id {
+                Image(systemName: "checkmark")
+                    .font(.system(size: appearance.settings.secondaryFontSize))
+            }
         }
-        .buttonStyle(.plain)
-        .help("Copy this answer")
-        // The tick is the whole confirmation: a copy that says nothing leaves
-        // you pressing it again to be sure.
-        .onChange(of: entry.text) { copiedEntry = nil }
+    }
+
+    /// Shows the tick, then takes it away again. Held only briefly: it says
+    /// "that press worked", and a tick still sitting there ten minutes later
+    /// says something else.
+    private func confirmCopy(of id: UUID) {
+        copiedEntry = id
+        Task {
+            try? await Task.sleep(for: .seconds(1.5))
+            if copiedEntry == id { copiedEntry = nil }
+        }
     }
 
     /// The bubble itself: the message, in a rounded fill.
@@ -783,10 +800,16 @@ struct ChatPanelView: View {
                     }
                 }
             }
-            .padding(.horizontal, 10)
+            .padding(.horizontal, Self.bubbleTextInset)
             .padding(.vertical, 7)
             .background(bubbleFill(style), in: RoundedRectangle(cornerRadius: 12))
     }
+
+    /// How far a bubble's text sits in from the bubble's edge — and, because a
+    /// bubble starts at the edge of the thread, how far in from the thread the
+    /// Secretary's words begin. The activity line is indented by the same amount
+    /// so the two start in one column.
+    private static let bubbleTextInset: Double = 10
 
     /// Yours is tinted with the accent, the Secretary's with the same neutral
     /// the rest of the panel uses. Both are faint: the text has to stay the
@@ -897,37 +920,29 @@ struct ChatPanelView: View {
         MessageMarkdown.attributed(text)
     }
 
-    /// Sits in the conversation in order, but deliberately doesn't look like
-    /// one: a bordered, dimmer box so it reads as "here's what happened" rather
-    /// than as part of the answer.
+    /// What happened, as bare text — no box, no border, no fill.
     ///
-    /// Pulled in from both edges and centred between them, which is neither
-    /// speaker's side — the shape says "system message" before the dashed border
-    /// is even noticed. Its text stays left-aligned: a centred tool command is
-    /// harder to read and nothing is gained by it.
+    /// It still has to read as the app talking about itself rather than as part
+    /// of an answer, and now that is carried by the type alone: dimmer, smaller,
+    /// with the "Working" label above it. A box did the same job louder, and
+    /// stacked a frame inside a thread that is already made of frames.
+    ///
+    /// Left-aligned, and started at exactly the column the Secretary's words
+    /// start at — the bubble's own horizontal padding, shared as a constant so
+    /// the two can't drift a point apart and leave the thread looking ragged.
     private func activityRow(_ entry: TranscriptEntry) -> some View {
-        activityBubble(entry)
-            .padding(.horizontal, systemMessageInset(panelWidth: appearance.settings.chatWidth))
-    }
-
-    private func activityBubble(_ entry: TranscriptEntry) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Label("Working", systemImage: "gearshape.2")
                 .font(.system(size: appearance.settings.footnoteFontSize, weight: .semibold))
-                .foregroundStyle(.secondary)
             Text(entry.text)
                 .font(.system(size: appearance.settings.secondaryFontSize, design: .monospaced))
-                .foregroundStyle(.secondary)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        .foregroundStyle(.secondary)
+        .padding(.leading, Self.bubbleTextInset)
+        .padding(.trailing, messageBubbleGutter(panelWidth: appearance.settings.chatWidth))
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(8)
-        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))
-        .overlay(
-            RoundedRectangle(cornerRadius: 6)
-                .stroke(Color.secondary.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
-        )
     }
 
     @ViewBuilder

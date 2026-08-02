@@ -63,23 +63,6 @@ final class MessageBubbleStyleTests: XCTestCase {
         XCTAssertFalse(messageBubbleStyle(speaker: .secretary, kind: .activity).showsCopyButton)
     }
 
-    /// A system message is narrowed from both sides at once, so it must stay
-    /// narrower than the lane a one-sided bubble is given — otherwise "centred
-    /// and pulled in" would read as wider than the conversation around it.
-    func testASystemMessageIsPulledInLessThanABubbleIsPushedOver() {
-        for width in [320.0, 480.0, 700.0, 1200.0] {
-            XCTAssertLessThan(
-                systemMessageInset(panelWidth: width),
-                messageBubbleGutter(panelWidth: width),
-                "width=\(width)"
-            )
-        }
-    }
-
-    func testTheSystemInsetIsFlooredAndCapped() {
-        XCTAssertEqual(systemMessageInset(panelWidth: 100), 10)
-        XCTAssertEqual(systemMessageInset(panelWidth: 4000), 48)
-    }
 
     func testTheGutterGrowsWithThePanel() {
         XCTAssertLessThan(
