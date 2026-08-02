@@ -70,8 +70,10 @@ struct ChatPanelView: View {
     @State private var arrowKeyMonitor: Any?
     /// Which option is highlighted in the choice list, when one is showing.
     @State private var choiceIndex = 0
-    /// Which answer was last copied, so its button can show a tick.
-    @State private var copiedEntry: UUID?
+    /// Which box was last copied, so its button can show a tick.
+    @State private var copiedBox: BoxID?
+    /// Which box the pointer is over, so only that one shows its copy button.
+    @State private var hoveredBox: BoxID?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -636,42 +638,79 @@ struct ChatPanelView: View {
             let body = LoopBlock.parse(MessageChoices.parse(entry.text).body).body
             let parts = messageParts(of: MarkdownTableParser.segments(of: body))
             VStack(alignment: style.side == .trailing ? .trailing : .leading, spacing: 5) {
-                // A reply that opens with a table has nowhere to put the name,
-                // so the header comes out on its own line above it. Anything
-                // else carries the header inside its first bubble, which is
-                // where the request put it: in the corner of the box.
-                if style.showsSpeakerName, !startsWithProse(parts) {
-                    messageRow(style: style) { header(entry, style: style) }
+                // The Secretary is named above its boxes, not inside them: the
+                // name is about the turn, and a reply split into three boxes
+                // has one speaker, not three. Yours stays inside its bubble,
+                // in the corner, which is where it was asked for.
+                if style.showsSpeakerName, !style.isMine {
+                    messageRow(style: style) {
+                        header(entry, style: style).padding(.horizontal, 2)
+                    }
                 }
                 ForEach(Array(parts.enumerated()), id: \.offset) { index, part in
-                    switch part {
-                    case .prose(let segments):
-                        messageRow(style: style) {
-                            proseBubble(
-                                segments,
-                                entry: entry,
-                                style: style,
-                                // Named once per turn, on the first thing it
-                                // says. Repeating it on every bubble of a split
-                                // reply is what makes a thread look like a log.
-                                showsHeader: index == 0
-                            )
-                        }
-                    case .block(let segment):
-                        // Its own message, with no bubble around it: a table and
-                        // a fenced block each already have a border, a fill and
-                        // their own sideways scroll, and a bubble around that is
-                        // a second frame that says nothing.
-                        messageRow(style: style) { blockView(segment) }
+                    messageRow(style: style) {
+                        partView(part, entry: entry, style: style, index: index)
                     }
                 }
             }
         }
     }
 
-    private func startsWithProse(_ parts: [MessagePart]) -> Bool {
-        if case .prose = parts.first { return true }
-        return false
+    /// One box, with its own copy button in the top-right corner.
+    ///
+    /// Per box rather than per turn: a reply that split into prose, a table and
+    /// a command is three things you might want separately, and the command on
+    /// its own is the one you actually paste.
+    @ViewBuilder
+    private func partView(
+        _ part: MessagePart,
+        entry: TranscriptEntry,
+        style: MessageBubbleStyle,
+        index: Int
+    ) -> some View {
+        let box = BoxID(entry: entry.id, index: index)
+        Group {
+            switch part {
+            case .prose(let segments):
+                proseBubble(
+                    segments,
+                    entry: entry,
+                    style: style,
+                    // Only your own bubble carries a header now, and only on the
+                    // first box of the turn.
+                    showsHeader: style.isMine && index == 0
+                )
+            case .block(let segment):
+                // Its own message, with no bubble around it: a table and a
+                // fenced block each already have a border, a fill and their own
+                // sideways scroll, and a bubble around that is a second frame
+                // that says nothing.
+                blockView(segment)
+            }
+        }
+        .overlay(alignment: .topTrailing) {
+            if style.showsCopyButton, hoveredBox == box {
+                copyButton(text: copyText(of: part), box: box)
+                    .padding(4)
+            }
+        }
+        // Hover, not always: a button on every box at rest is three buttons in
+        // a three-box answer, and none of them are what you came to read.
+        .onHover { inside in
+            if inside {
+                hoveredBox = box
+            } else if hoveredBox == box {
+                hoveredBox = nil
+            }
+        }
+    }
+
+    /// Which box the pointer is over. One value, not a flag per box: the pointer
+    /// is only ever in one place, and a flag each is a set of them that can all
+    /// be true at once after a fast drag.
+    struct BoxID: Equatable {
+        let entry: UUID
+        let index: Int
     }
 
     /// One line of the thread, tucked against this speaker's edge.
@@ -703,60 +742,52 @@ struct ChatPanelView: View {
         }
     }
 
-    /// Who said it and when, and — on the Secretary's side — the copy button.
+    /// Who said it and when.
     ///
-    /// Both are `secondaryFontSize`: the header is there to be found, not read,
-    /// and at message size it competes with the message.
+    /// `secondaryFontSize`: the header is there to be found, not read, and at
+    /// message size it competes with the message.
     private func header(_ entry: TranscriptEntry, style: MessageBubbleStyle) -> some View {
         HStack(spacing: 5) {
             Text(style.isMine ? "Me" : secretary.profile.displayName)
                 .font(.system(size: appearance.settings.secondaryFontSize, weight: .bold))
             Text(MessageTime.label(for: entry.timestamp))
                 .font(.system(size: appearance.settings.secondaryFontSize))
-            if style.showsCopyButton {
-                copyButton(for: entry)
-            }
         }
         .foregroundStyle(.secondary)
     }
 
-    /// Copies the whole answer, markers and all removed — the text as it is on
-    /// screen, not the raw reply.
+    /// Copies this box, and says so.
     ///
-    /// One button per turn rather than one per bubble: a reply split around a
-    /// table is still one answer, and picking which third of it you meant is
-    /// not a decision worth asking for.
-    private func copyButton(for entry: TranscriptEntry) -> some View {
-        HStack(spacing: 3) {
-            Button {
-                let body = LoopBlock.parse(MessageChoices.parse(entry.text).body).body
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(body, forType: .string)
-                confirmCopy(of: entry.id)
-            } label: {
-                Image(systemName: "doc.on.doc")
-                    .font(.system(size: appearance.settings.secondaryFontSize))
-            }
-            .buttonStyle(.plain)
-            .help("Copy this answer")
-            // A tick beside the button, never instead of it. Swapping the icon
-            // for a tick left the answer looking as though its copy button had
-            // gone — the confirmation ate the thing it was confirming.
-            if copiedEntry == entry.id {
-                Image(systemName: "checkmark")
-                    .font(.system(size: appearance.settings.secondaryFontSize))
-            }
+    /// It sits over the corner of the box, so it is given the panel's own
+    /// background behind it — over a line of text with no backing, an icon is
+    /// unreadable and looks like a rendering fault.
+    private func copyButton(text: String, box: BoxID) -> some View {
+        Button {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+            confirmCopy(of: box)
+        } label: {
+            // A tick in place of the icon is fine *here*, unlike in the header:
+            // the button only exists while the pointer is on the box, so it
+            // can't be left looking as though it went away.
+            Image(systemName: copiedBox == box ? "checkmark" : "doc.on.doc")
+                .font(.system(size: appearance.settings.secondaryFontSize))
+                .foregroundStyle(.secondary)
+                .padding(4)
+                .background(.background.opacity(0.75), in: RoundedRectangle(cornerRadius: 5))
         }
+        .buttonStyle(.plain)
+        .help("Copy this box")
     }
 
     /// Shows the tick, then takes it away again. Held only briefly: it says
     /// "that press worked", and a tick still sitting there ten minutes later
     /// says something else.
-    private func confirmCopy(of id: UUID) {
-        copiedEntry = id
+    private func confirmCopy(of box: BoxID) {
+        copiedBox = box
         Task {
             try? await Task.sleep(for: .seconds(1.5))
-            if copiedEntry == id { copiedEntry = nil }
+            if copiedBox == box { copiedBox = nil }
         }
     }
 
@@ -801,7 +832,7 @@ struct ChatPanelView: View {
                 }
             }
             .padding(.horizontal, Self.bubbleTextInset)
-            .padding(.vertical, 7)
+            .padding(.vertical, 10)
             .background(bubbleFill(style), in: RoundedRectangle(cornerRadius: 12))
     }
 
@@ -809,7 +840,7 @@ struct ChatPanelView: View {
     /// bubble starts at the edge of the thread, how far in from the thread the
     /// Secretary's words begin. The activity line is indented by the same amount
     /// so the two start in one column.
-    private static let bubbleTextInset: Double = 10
+    private static let bubbleTextInset: Double = 14
 
     /// Yours is tinted with the accent, the Secretary's with the same neutral
     /// the rest of the panel uses. Both are faint: the text has to stay the
