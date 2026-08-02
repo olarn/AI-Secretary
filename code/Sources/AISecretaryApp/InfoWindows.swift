@@ -9,10 +9,13 @@ import SecretaryCore
 /// to keep a table in view while the conversation moves on, so closing the
 /// bubble must not take them with it.
 ///
-/// Close and hide are deliberately different. The close button removes the pane
-/// for good — it is gone from the menu too. Esc only puts it away, and the
-/// status bar menu brings it back. Both are destructive-looking actions with
-/// very different costs, so they are not the same gesture.
+/// Nothing here throws a pane away except the user saying so. The close button
+/// and Esc both only put a window away; the pane stays in the menu and comes
+/// back from it. Losing pinned text to a stray click on a red dot was the wrong
+/// trade — the whole point of pinning is that the text survives.
+///
+/// `Clear all`, and dropping the oldest past the limit, are the only ways a
+/// pane is destroyed.
 @MainActor
 @Observable
 final class InfoWindows: NSObject, NSWindowDelegate {
@@ -106,7 +109,7 @@ final class InfoWindows: NSObject, NSWindowDelegate {
         return true
     }
 
-    /// The close button: gone for good.
+    /// Explicit removal, from `Clear all` or from the limit being reached.
     func remove(_ id: UUID) {
         destroyPanel(id)
         set = set.removing(id)
@@ -137,11 +140,12 @@ final class InfoWindows: NSObject, NSWindowDelegate {
 
     // MARK: - NSWindowDelegate
 
-    /// The window's own close button. Removing rather than hiding is the
-    /// documented behaviour, so the menu never lists a pane the user has closed.
+    /// The window's own close button, which puts the pane away without
+    /// destroying it — the same thing Esc does. It stays in the status bar menu
+    /// and one click brings it back, text and all.
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         guard let id = panels.first(where: { $0.value === sender })?.key else { return true }
-        remove(id)
+        hide(id)
         return false
     }
 }

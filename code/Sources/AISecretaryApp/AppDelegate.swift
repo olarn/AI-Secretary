@@ -115,7 +115,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
                 appearance: appearance,
                 profiles: profiles,
                 layout: chatLayout,
-                onClose: { [weak self] in self?.hideChatPanel() }
+                onClose: { [weak self] in self?.hideChatPanel() },
+                onPin: { [weak self] spec in self?.infoWindows.open(spec) }
             )
         )
         chatHost.frame = NSRect(origin: .zero, size: chatSize)

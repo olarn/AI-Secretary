@@ -19,6 +19,10 @@ struct ChatPanelView: View {
     let profiles: ProfileLibrary
     let layout: ChatBubbleLayout
     let onClose: () -> Void
+    /// Pins one box into its own floating window. The same door the ```window
+    /// marker goes through, so a pane the user pins by hand behaves exactly
+    /// like one the assistant asked to pin.
+    let onPin: (InfoWindowSpec) -> Void
 
     @State private var draft: String = ""
     /// Which configuration section is open, if any.
@@ -691,7 +695,7 @@ struct ChatPanelView: View {
         }
         .overlay(alignment: .topTrailing) {
             if style.showsCopyButton, hoveredBox == box {
-                copyButton(text: copyText(of: part), box: box)
+                boxButtons(text: copyText(of: part), box: box, entry: entry)
                     // Straddling the corner rather than sitting inside it: over
                     // the text, the button hid the end of the first line — and
                     // the one thing a copy button must not do is cover the words
@@ -768,6 +772,48 @@ struct ChatPanelView: View {
                 .font(.system(size: appearance.settings.secondaryFontSize))
         }
         .foregroundStyle(style.isFailure ? Color.orange : Color.secondary)
+    }
+
+    /// Pin and copy, in that order left to right.
+    ///
+    /// One hover target for both, so moving between them can't make the pair
+    /// flicker, and so the pointer leaving either one is the same event.
+    private func boxButtons(text: String, box: BoxID, entry: TranscriptEntry) -> some View {
+        HStack(spacing: 2) {
+            pinButton(text: text, entry: entry)
+            copyButton(text: text, box: box)
+        }
+        .onHover { inside in
+            if inside {
+                hoveredBox = box
+            } else if hoveredBox == box {
+                hoveredBox = nil
+            }
+        }
+    }
+
+    /// Pulls this box out into its own floating window, which then survives the
+    /// chat being closed and the conversation moving on.
+    ///
+    /// The title is the speaker and the time, which is what tells two pinned
+    /// panes apart in the menu — the body is already visible in the window.
+    private func pinButton(text: String, entry: TranscriptEntry) -> some View {
+        Button {
+            onPin(
+                InfoWindowSpec(
+                    title: "\(secretary.profile.displayName) · \(MessageTime.label(for: entry.timestamp))",
+                    body: text
+                )
+            )
+        } label: {
+            Image(systemName: "pin")
+                .font(.system(size: appearance.settings.secondaryFontSize))
+                .foregroundStyle(.secondary)
+                .padding(4)
+                .background(.background.opacity(0.75), in: RoundedRectangle(cornerRadius: 5))
+        }
+        .buttonStyle(.plain)
+        .help("Pin this box into its own window")
     }
 
     /// Copies this box, and says so.
