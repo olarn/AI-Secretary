@@ -233,11 +233,19 @@ The current phase for version-bumping purposes (`AppVersion.swift`,
   - กฎอยู่ใน `footerSlots` ที่ `SecretaryCore` มีเทสคุมทั้งสองด้าน ไม่ใช่ array ตายตัวในไฟล์ view
 - [x] ตอนนี้ปลายแถวมีปุ่มทั้งสองข้าง กริป resize จึงหลบด้วยการย้ายปุ่มไม่ได้อีก ต้องเว้นที่ให้ที่มุมล่างที่กริปอยู่แทน
 
-## Phase 8: Multi-session
+## Phase 8: เลือก Skills ที่ติดตั้งใน Claude Code ได้
+- [ ] เพิ่มปุ่ม Skills อยู่ระหว่าง Profile และ Settings
+- [ ] เมื่อกดปุ่ม Skills App จะแสดงหน้าจอเหมือน settings
+- [ ] ในหน้าจอจะมี list ของ Skills ที่มี 
+- [ ] สามารถ check เพื่อเลือกใช้ Skills ใน session นั้นได้
+
+## Phase 9: Multi-session
 - [ ] สามารถเปิด chat bubble ได้มากกว่า 1 window โดยที่แต่ละ window จะแยก Claude Session ออกจากกัน
 - [ ] การแสดง chat bubble ให้แสดง on top window เดิท แต่ให้ซ้อนทับแบบแหลื่อมกันฃ
 - [ ] ถ้า drag ตัวละคร, ให้ลากเอา chat bubble ทั้งหมดไปด้วย โดยซ้อนกับเป็นชั้นแบบเหลื่อมๆ แล้วลากไปด้วยกัน 
-- [ ] มีเมนูใน Menu icon ชื่อ Chats และลอกเอา feature มาจาก Windows เลย
+- [ ] มีเมนูใน Menu icon ชื่อ Chats และลอกเอา feature มาจาก Windows เลย 
+- [ ] โดย default ใน Chats จะมี 1 session เสมอ คือ session ปัจจุบัน ถ้าปิด app แล้วเกิดใหม่ จะขึ้น session ใหม่ แต่ user สามารถกด session เก่าเพื่อเปิด chat เดิมที่คุยกันอยู่ได้
+- [ ] เมื่อเปิด chat เก่า จะขึ้น chat window ใหม่ ไม่ทับ chat ปัจจุบัน (ยกเว้นว่าเป็น session เดียวกัน)
 - [ ] แยก settings ตาม chat window ของใครของมัน แปลว่า แต่ละ chat จะแยก model, effort ได้
 - [ ] ถ้ามี Project อยู่แล้ว แล้วขึ้น session ใหม่ ให้ใช้ project เดิมเลย แต่สามารถเพิ่ม project ได้ 
 - [ ] project ที่เพิ่มใหมม่ใน session ใหม่ จะไม่เห็นใน session เดิม
