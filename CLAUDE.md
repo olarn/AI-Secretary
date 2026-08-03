@@ -202,8 +202,16 @@ items. The current phase for version-bumping purposes is **6**.
   indistinguishable from a feature breaking. The bundle is stamped with the
   commit and branch it was built from (`AISecretaryBuild`), shown in About and in
   the status bar menu, so "which build is this?" never needs a terminal.
-- Delete a worktree once its branch is merged. A stale checkout is a stale build
-  waiting to be launched.
+- **จบงานแล้วต้องรัน `./scripts/package-app.sh` เสมอ และรันจาก `~/Desktop/AI-Secretary/code`
+  เท่านั้น** — หลัง merge เข้า `main` แล้ว ไม่ใช่จากใน worktree
+  - รันจาก worktree เมื่อไหร่ `.app` ตัวเดียวที่เหลือจะไปอยู่ใน worktree นั้น ส่วน `code/`
+    ที่ root กลายเป็นไม่มี build เลย ซึ่งเกิดขึ้นมาแล้วหลายรอบ (สาเหตุคือ `cd` ที่ค้างมาจาก
+    คำสั่งก่อนหน้า — ให้ `cd` ให้ครบทุกครั้ง ไม่ใช่พึ่ง cwd ปัจจุบัน)
+  - สคริปต์ลบ `AISecretary.app` ตัวอื่นในรีโปทิ้งเอง worktree จึงสะอาดโดยอัตโนมัติ
+    ไม่ต้องไปตามลบเอง
+  - เช็คได้ที่บรรทัดสุดท้ายของ output ต้องอ่านว่า `on main` และไม่มี `-dirty`
+- Fast-forward a worktree once its branch is merged, so its `code/` matches
+  `main`. A stale checkout is a stale build waiting to be launched.
 - Avoid broad filesystem access and unbounded shell execution in tests.
 - Add structured logs and task correlation IDs.
 - Document setup, architecture decisions, permission model, and how to run tests.
