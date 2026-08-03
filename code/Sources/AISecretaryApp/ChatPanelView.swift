@@ -1309,7 +1309,7 @@ struct ChatPanelView: View {
             }
 
             if secretary.availableSkills.isEmpty {
-                Text("None found under ~/.claude/skills or this project's .claude/skills.")
+                Text("None found — checked ~/.claude/skills, this project's .claude/skills, and your enabled plugins.")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }

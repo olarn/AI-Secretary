@@ -236,7 +236,8 @@ The current phase for version-bumping purposes (`AppVersion.swift`,
 ## Phase 8: เลือก Skills ที่ติดตั้งใน Claude Code ได้
 - [x] เพิ่มปุ่ม Skills อยู่ระหว่าง Profile และ Settings
 - [x] เมื่อกดปุ่ม Skills App จะแสดงหน้าจอเหมือน settings
-- [x] ในหน้าจอจะมี list ของ Skills ที่มี — สแกน `~/.claude/skills` และ `.claude/skills` ของทุก project ที่ลงทะเบียนไว้โดยตรง (`SkillDiscovery`) เพราะ `claude` CLI ไม่มีคำสั่ง list skills จริง (`claude plugin list` มีแต่ plugin ที่ลงทะเบียนผ่าน marketplace เท่านั้น ไม่เห็น skill folder เปล่าๆ)
+- [x] ในหน้าจอจะมี list ของ Skills ที่มี — สแกน `~/.claude/skills`, `.claude/skills` ของทุก project ที่ลงทะเบียนไว้โดยตรง, และ skill ที่มากับ plugin ที่ enable อยู่ (`SkillDiscovery`) เพราะ `claude` CLI ไม่มีคำสั่ง list skills จริง (`claude plugin list` มีแต่ plugin ที่ลงทะเบียนผ่าน marketplace เท่านั้น ไม่เห็น skill folder เปล่าๆ หรือ skill ข้างในแต่ละ plugin)
+  - plugin skill อ่านจาก `enabledPlugins` ใน `~/.claude/settings.json` (ไม่ใช้ plugin ที่ถูก disable แม้จะยังมีไฟล์ cache ค้างอยู่) แสดงชื่อแบบ namespaced เช่น `superpowers:brainstorming` กันชนกับ skill จาก plugin อื่น
 - [x] สามารถ check เพื่อเลือกใช้ Skills ใน session นั้นได้ — session-only เหมือน `activeLoop` (ไม่เขียนลง disk) ผลของการเลือกคือ soft hint ใน system prompt ("only use these skills…") ไม่ใช่ hard limit เพราะไม่มี flag ของ CLI ที่ enforce ระดับ skill ได้จริง (มีแต่ `claude plugin enable/disable` ซึ่ง global/persist ข้าม session ไม่ตรงกับที่ต้องการ)
 
 ## Phase 9: Multi-session

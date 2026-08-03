@@ -82,4 +82,121 @@ final class SkillDiscoveryTests: XCTestCase {
 
         XCTAssertEqual(found, [])
     }
+
+    // MARK: - Plugin skills
+
+    private func writeSettings(enabledPlugins: [String: Bool], under claudeHome: URL) {
+        try? FileManager.default.createDirectory(at: claudeHome, withIntermediateDirectories: true)
+        let pairs = enabledPlugins.map { "\"\($0.key)\": \($0.value)" }.joined(separator: ", ")
+        let json = "{\"enabledPlugins\": {\(pairs)}}"
+        try? json.write(to: claudeHome.appendingPathComponent("settings.json"), atomically: true, encoding: .utf8)
+    }
+
+    func testDiscoversSkillsFromAnEnabledPluginsCache() {
+        let home = tempRoot.appendingPathComponent("home")
+        let claudeHome = home.appendingPathComponent(".claude")
+        writeSettings(enabledPlugins: ["superpowers@claude-plugins-official": true], under: claudeHome)
+        writeSkill(
+            named: "brainstorming",
+            under: claudeHome.appendingPathComponent("plugins/cache/claude-plugins-official/superpowers/6.2.0/skills"),
+            frontmatter: "name: brainstorming\ndescription: Explore intent before building."
+        )
+
+        let found = SkillDiscovery.discover(projectPaths: [], homeDirectory: home)
+
+        XCTAssertEqual(found, [
+            SkillInfo(
+                id: "superpowers@claude-plugins-official:brainstorming",
+                name: "superpowers:brainstorming",
+                summary: "Explore intent before building.",
+                scope: .plugin(id: "superpowers@claude-plugins-official")
+            )
+        ])
+    }
+
+    func testIgnoresDisabledPlugins() {
+        let home = tempRoot.appendingPathComponent("home")
+        let claudeHome = home.appendingPathComponent(".claude")
+        writeSettings(enabledPlugins: ["superpowers@claude-plugins-official": false], under: claudeHome)
+        writeSkill(
+            named: "brainstorming",
+            under: claudeHome.appendingPathComponent("plugins/cache/claude-plugins-official/superpowers/6.2.0/skills"),
+            frontmatter: "name: brainstorming\ndescription: Explore intent before building."
+        )
+
+        XCTAssertEqual(SkillDiscovery.discover(projectPaths: [], homeDirectory: home), [])
+    }
+
+    func testFallsBackToTheMarketplaceRootForASinglePluginMarketplace() {
+        let home = tempRoot.appendingPathComponent("home")
+        let claudeHome = home.appendingPathComponent(".claude")
+        writeSettings(enabledPlugins: ["fable@fable-method": true], under: claudeHome)
+        // No plugins/cache entry at all — only the marketplace clone itself,
+        // the layout a single-plugin marketplace actually uses.
+        writeSkill(
+            named: "fable-loop",
+            under: claudeHome.appendingPathComponent("plugins/marketplaces/fable-method/skills"),
+            frontmatter: "name: fable-loop\ndescription: Orchestrated end-to-end workflow."
+        )
+
+        let found = SkillDiscovery.discover(projectPaths: [], homeDirectory: home)
+
+        XCTAssertEqual(found, [
+            SkillInfo(
+                id: "fable@fable-method:fable-loop",
+                name: "fable:fable-loop",
+                summary: "Orchestrated end-to-end workflow.",
+                scope: .plugin(id: "fable@fable-method")
+            )
+        ])
+    }
+
+    func testDoesNotPullInOtherPluginsSharingTheSameMarketplace() {
+        let home = tempRoot.appendingPathComponent("home")
+        let claudeHome = home.appendingPathComponent(".claude")
+        writeSettings(enabledPlugins: ["fable@fable-method": true], under: claudeHome)
+        writeSkill(
+            named: "fable-loop",
+            under: claudeHome.appendingPathComponent("plugins/marketplaces/fable-method/skills"),
+            frontmatter: "name: fable-loop\ndescription: Orchestrated workflow."
+        )
+        // A second, unrelated plugin hosted by the same marketplace, not
+        // itself enabled — must not show up just because the marketplace
+        // root was scanned as a fallback for "fable".
+        writeSkill(
+            named: "other-thing",
+            under: claudeHome.appendingPathComponent("plugins/marketplaces/fable-method/plugins/unrelated-plugin/skills"),
+            frontmatter: "name: other-thing\ndescription: Not enabled."
+        )
+
+        let found = SkillDiscovery.discover(projectPaths: [], homeDirectory: home)
+
+        XCTAssertEqual(found.map(\.id), ["fable@fable-method:fable-loop"])
+    }
+
+    func testCombinesStandaloneAndPluginSkills() {
+        let home = tempRoot.appendingPathComponent("home")
+        let claudeHome = home.appendingPathComponent(".claude")
+        writeSettings(enabledPlugins: ["superpowers@claude-plugins-official": true], under: claudeHome)
+        writeSkill(named: "grilling", under: claudeHome.appendingPathComponent("skills"), frontmatter: "name: grilling\ndescription: Grill the user.")
+        writeSkill(
+            named: "brainstorming",
+            under: claudeHome.appendingPathComponent("plugins/cache/claude-plugins-official/superpowers/6.2.0/skills"),
+            frontmatter: "name: brainstorming\ndescription: Explore intent."
+        )
+
+        let found = SkillDiscovery.discover(projectPaths: [], homeDirectory: home)
+
+        XCTAssertEqual(Set(found.map(\.id)), ["grilling", "superpowers@claude-plugins-official:brainstorming"])
+    }
+
+    func testNoSettingsFileYieldsNoPluginSkillsRatherThanFailing() {
+        let home = tempRoot.appendingPathComponent("home")
+        writeSkill(named: "grilling", under: home.appendingPathComponent(".claude/skills"), frontmatter: nil)
+
+        // No .claude/settings.json written at all.
+        let found = SkillDiscovery.discover(projectPaths: [], homeDirectory: home)
+
+        XCTAssertEqual(found.map(\.id), ["grilling"])
+    }
 }
