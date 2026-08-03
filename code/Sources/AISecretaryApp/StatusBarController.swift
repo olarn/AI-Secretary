@@ -31,7 +31,7 @@ final class StatusBarController {
         self.onToggleCharacter = onToggleCharacter
         self.onShowUsage = onShowUsage
         self.windows = windows
-        self.windowsMenuItem = NSMenuItem(title: "Windows", action: nil, keyEquivalent: "")
+        self.windowsMenuItem = NSMenuItem(title: "Pinned Messages", action: nil, keyEquivalent: "")
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         self.characterMenuItem = NSMenuItem(
             title: "Hide Character",
@@ -82,7 +82,7 @@ final class StatusBarController {
         usageItem.target = target
         menu.addItem(usageItem)
 
-        windowsMenuItem.submenu = NSMenu(title: "Windows")
+        windowsMenuItem.submenu = NSMenu(title: "Pinned Messages")
         menu.addItem(windowsMenuItem)
         menu.delegate = target
 
@@ -130,7 +130,7 @@ final class StatusBarController {
     /// bring a pane back and delete one, and an action hidden behind a modifier
     /// key is an action most people never find.
     fileprivate func rebuildWindowsMenu() {
-        let submenu = NSMenu(title: "Windows")
+        let submenu = NSMenu(title: "Pinned Messages")
         guard let windows = windows() else {
             windowsMenuItem.submenu = submenu
             windowsMenuItem.isEnabled = false
