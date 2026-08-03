@@ -31,6 +31,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     private var chatPanel: FloatingPanel!
     private var statusBar: StatusBarController!
     private var hotKeys: GlobalHotKeys?
+    /// Watches this app's own key events for ⌘H; see `watchForHideShortcut`.
+    private var hideKeyMonitor: Any?
     private lazy var usageWindow = UsageWindow(secretary: secretary, appearance: appearance, backend: backend)
     private lazy var infoWindows = InfoWindows(appearance: appearance)
     private var isChatVisible = false
@@ -163,8 +165,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
             }
         ])
         refreshHotKeyClaim()
+        watchForHideShortcut()
 
         showCharacter()
+    }
+
+    /// ⌘H, taken from this app's own event stream while one of its windows has
+    /// the keyboard.
+    ///
+    /// The menu item can't do it alone. The chat bubble is a non-activating
+    /// panel: it takes the keyboard without making the app frontmost, and a menu
+    /// key equivalent is only searched in the *active* app's menu — so pressing
+    /// ⌘H while typing in the bubble hid whatever was behind it instead. A local
+    /// monitor sees the event because the key window is ours, which is exactly
+    /// the condition under which the shortcut should be ours.
+    ///
+    /// Local, not a Carbon hot key: taking ⌘H from the whole system broke Hide
+    /// in every other app once already, and this claim ends the moment the
+    /// keyboard does.
+    private func watchForHideShortcut() {
+        hideKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self else { return event }
+            let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            guard handlesHideLocally(
+                isOurWindowKey: NSApp.keyWindow != nil,
+                key: event.charactersIgnoringModifiers ?? "",
+                hasOnlyCommand: flags == .command
+            ) else { return event }
+            self.hideEverything()
+            return nil
+        }
+    }
+
+    /// What ⌘H does: the character and the chat both go away, which is what the
+    /// menu item has always done. An accessory app has no Dock tile to come back
+    /// from, so `NSApplication.hide` would leave nothing to click.
+    private func hideEverything() {
+        if isCharacterVisible { toggleCharacterVisibility() }
     }
 
     /// Esc is worth claiming only while something is on screen to dismiss —
