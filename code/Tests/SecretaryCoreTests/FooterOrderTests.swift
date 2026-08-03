@@ -1,15 +1,15 @@
 import XCTest
 @testable import SecretaryCore
 
-/// How the three panel buttons are arranged along the bottom of the chat.
+/// How the four panel buttons are arranged along the bottom of the chat.
 ///
-/// Not one cluster: Projects sits alone against one edge and the other two sit
+/// Not one cluster: Projects sits alone against one edge and the other three sit
 /// together against the opposite edge, with the window's width between them.
 final class FooterOrderTests: XCTestCase {
-    func testProjectsSitsAloneAndTheOtherTwoAreTogether() {
+    func testProjectsSitsAloneAndTheOthersAreTogether() {
         XCTAssertEqual(
             footerSlots(tailOnRight: true),
-            [.button(.projects), .gap, .button(.profile), .button(.settings)]
+            [.button(.projects), .gap, .button(.profile), .button(.skills), .button(.settings)]
         )
     }
 
@@ -20,7 +20,7 @@ final class FooterOrderTests: XCTestCase {
     func testMirroringReversesEverythingIncludingTheGap() {
         XCTAssertEqual(
             footerSlots(tailOnRight: false),
-            [.button(.settings), .button(.profile), .gap, .button(.projects)]
+            [.button(.settings), .button(.skills), .button(.profile), .gap, .button(.projects)]
         )
     }
 
@@ -33,7 +33,7 @@ final class FooterOrderTests: XCTestCase {
         XCTAssertEqual(footerSlots(tailOnRight: false).last, .button(.projects))
     }
 
-    func testExactlyOneGapAndAllThreeButtons() {
+    func testExactlyOneGapAndAllButtons() {
         for tailOnRight in [true, false] {
             let slots = footerSlots(tailOnRight: tailOnRight)
             XCTAssertEqual(slots.filter { $0 == FooterSlot.gap }.count, 1, "tailOnRight=\(tailOnRight)")
@@ -48,6 +48,7 @@ final class FooterOrderTests: XCTestCase {
     func testTitlesAreTheOnesShown() {
         XCTAssertEqual(FooterButton.projects.title, "Projects")
         XCTAssertEqual(FooterButton.profile.title, "Profile")
+        XCTAssertEqual(FooterButton.skills.title, "Skills")
         XCTAssertEqual(FooterButton.settings.title, "Settings")
     }
 }

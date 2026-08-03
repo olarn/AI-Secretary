@@ -131,6 +131,15 @@ public final class Secretary {
     /// Claude Code that's the model and effort from the user's own settings.
     public private(set) var model: Option<ChatModel> = .none()
     public private(set) var effort: Option<Effort> = .none()
+    /// Skills found under `~/.claude/skills` and each registered project's
+    /// `.claude/skills`. Refreshed on demand rather than watched, since a
+    /// skill installed mid-session is the rare case, not the one to optimise.
+    public private(set) var availableSkills: [SkillInfo] = []
+    /// Which of `availableSkills` this session is restricted to. Empty means
+    /// no restriction — the ordinary, unconstrained case. Session-only, like
+    /// `activeLoop`: a restriction that outlived the session that asked for
+    /// it would apply itself to a conversation nobody chose it for.
+    public private(set) var selectedSkills: Set<String> = []
 
     /// Who the assistant is. The user can switch profiles while a conversation
     /// is open, so this changes at runtime — see `apply(profile:)`.
@@ -151,6 +160,10 @@ public final class Secretary {
     @ObservationIgnored private let chatProvider: ChatProvider
     @ObservationIgnored private let activityPreference: ActivityPreferenceStoring
     @ObservationIgnored private let browserPreference: BrowserPreferenceStoring
+    /// How installed skills are found. A parameter rather than a hardcoded
+    /// call to `SkillDiscovery.discover`, so a test can supply a fixed list
+    /// instead of whatever happens to be installed on the machine running it.
+    @ObservationIgnored private let discoverSkills: ([String]) -> [SkillInfo]
 
     @ObservationIgnored private var activeTaskID: Option<String> = .none()
     /// The user's own words for the request in flight, so a completed tool run
@@ -203,7 +216,8 @@ public final class Secretary {
         audit: AuditLogging = AuditLog(),
         activityPreference: ActivityPreferenceStoring = UserDefaultsActivityPreference(),
         browserPreference: BrowserPreferenceStoring = UserDefaultsBrowserPreference(),
-        chatProvider: ChatProvider
+        chatProvider: ChatProvider,
+        discoverSkills: @escaping ([String]) -> [SkillInfo] = { SkillDiscovery.discover(projectPaths: $0) }
     ) {
         self.profile = profile
         self.stateMachine = stateMachine
@@ -218,9 +232,29 @@ public final class Secretary {
         self.browserPreference = browserPreference
         self.browserEnabled = browserPreference.browserEnabled
         self.chatProvider = chatProvider
+        self.discoverSkills = discoverSkills
         // The provider is told at startup, not only when the switch is flipped:
         // a preference that survives quitting has to survive relaunching too.
         (chatProvider as? WorkspaceScopedProvider)?.setBrowserEnabled(self.browserEnabled)
+        self.availableSkills = discoverSkills(registry.projects.map(\.path))
+    }
+
+    // MARK: - Skills
+
+    /// Re-scans for installed skills, and drops any selection that no longer
+    /// names a real one — a skill can be removed on disk while its session is
+    /// still open.
+    public func refreshAvailableSkills() {
+        availableSkills = discoverSkills(registry.projects.map(\.path))
+        selectedSkills.formIntersection(Set(availableSkills.map(\.id)))
+    }
+
+    public func toggleSkill(_ id: String) {
+        if selectedSkills.contains(id) {
+            selectedSkills.remove(id)
+        } else {
+            selectedSkills.insert(id)
+        }
     }
 
     public var auditEntries: [AuditEntry] { audit.entries }
@@ -1527,7 +1561,24 @@ public final class Secretary {
         \(permissionNote) If something is refused, say so plainly instead of \
         pretending it worked — the user will be offered the chance to allow it. \
         Never claim to have done something you didn't do.
-        """ + alsoOpen
+        """ + alsoOpen + skillsNote
+    }
+
+    /// A restriction the user set by checking skills in the Skills panel.
+    /// There is no CLI flag that gates which skills a session can invoke —
+    /// skills are self-invoked from their own descriptions — so this is a
+    /// request in the prompt, not an enforced limit; empty when nothing is
+    /// checked, so the ordinary case adds nothing to read.
+    private var skillsNote: String {
+        guard !selectedSkills.isEmpty else { return "" }
+        let chosen = availableSkills.filter { selectedSkills.contains($0.id) }.map(\.name)
+        guard !chosen.isEmpty else { return "" }
+        return """
+
+
+        For this session, only use these skills: \(chosen.joined(separator: ", ")). \
+        Don't invoke any other installed skill this session, even if it seems to fit.
+        """
     }
 
     /// What the assistant can and can't see of the web, and — when it can't —

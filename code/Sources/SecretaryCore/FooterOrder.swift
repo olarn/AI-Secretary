@@ -1,13 +1,15 @@
-/// The three panel buttons along the bottom of the chat.
+/// The panel buttons along the bottom of the chat.
 public enum FooterButton: String, CaseIterable, Sendable {
     case projects
     case profile
+    case skills
     case settings
 
     public var title: String {
         switch self {
         case .projects: "Projects"
         case .profile: "Profile"
+        case .skills: "Skills"
         case .settings: "Settings"
         }
     }
@@ -37,14 +39,14 @@ public enum FooterSlot: Equatable, Sendable {
 /// first version of this shipped with the two arrangements the wrong way round.
 ///
 /// ```text
-/// | [Projects]                        [Profile] [Settings] |
+/// | [Projects]                [Profile] [Skills] [Settings] |
 /// ```
 ///
 /// Mirrored, the whole sequence reverses — gap included — so the arrangement is
 /// the mirror image of itself rather than a different layout:
 ///
 /// ```text
-/// | [Settings] [Profile]                        [Projects] |
+/// | [Settings] [Skills] [Profile]                [Projects] |
 /// ```
 ///
 /// Reversing everything is what keeps each button the same distance from the
@@ -55,6 +57,7 @@ public func footerSlots(tailOnRight: Bool) -> [FooterSlot] {
         .button(.projects),
         .gap,
         .button(.profile),
+        .button(.skills),
         .button(.settings)
     ]
     return tailOnRight ? usual : usual.reversed()

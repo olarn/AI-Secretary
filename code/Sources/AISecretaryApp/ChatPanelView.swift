@@ -33,13 +33,14 @@ struct ChatPanelView: View {
     /// transcript off the top and the Save button off the bottom. The state
     /// simply isn't representable now.
     enum Panel: String, Identifiable {
-        case settings, profile, projects
+        case settings, profile, projects, skills
         var id: String { rawValue }
         var title: String {
             switch self {
             case .settings: return "Settings"
             case .profile: return "Profile"
             case .projects: return "Projects"
+            case .skills: return "Skills"
             }
         }
 
@@ -50,6 +51,7 @@ struct ChatPanelView: View {
             case .settings: self = .settings
             case .profile: self = .profile
             case .projects: self = .projects
+            case .skills: self = .skills
             }
         }
     }
@@ -1288,6 +1290,61 @@ struct ChatPanelView: View {
         .background(Color.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
     }
 
+    /// Checkboxes rather than a menu: unlike Model/Effort, this is a
+    /// multi-select, and a `Menu` closes after every tap — wrong for checking
+    /// several boxes in one visit.
+    private var skillsSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Skills").font(.caption.bold())
+                Spacer()
+                Button {
+                    secretary.refreshAvailableSkills()
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("Rescan for installed skills")
+            }
+
+            if secretary.availableSkills.isEmpty {
+                Text("None found under ~/.claude/skills or this project's .claude/skills.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            ForEach(secretary.availableSkills) { skill in
+                Toggle(isOn: Binding(
+                    get: { secretary.selectedSkills.contains(skill.id) },
+                    set: { _ in secretary.toggleSkill(skill.id) }
+                )) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(skill.name).font(.caption2.bold())
+                        if !skill.summary.isEmpty {
+                            Text(skill.summary)
+                                .font(.system(size: 9))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                        }
+                    }
+                }
+                .toggleStyle(.checkbox)
+            }
+
+            Text(
+                secretary.selectedSkills.isEmpty
+                    ? "Nothing checked — no restriction; I can use any installed skill."
+                    : "Checked skills are a request, not a hard limit — I may still fall back if none of them fit."
+            )
+            .font(.system(size: 9))
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(10)
+        .background(Color.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+    }
+
     /// The open configuration section, held to a share of the window and given
     /// its own scroll.
     ///
@@ -1311,6 +1368,7 @@ struct ChatPanelView: View {
                 case .settings: settingsSection
                 case .profile: ProfileSettingsView(profiles: profiles, appearance: appearance)
                 case .projects: projectsSection
+                case .skills: skillsSection
                 }
             }
             .frame(maxHeight: appearance.settings.chatHeight * Self.panelHeightShare)
