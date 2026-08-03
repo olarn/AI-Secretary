@@ -163,6 +163,7 @@ private struct InfoWindowView: View {
     let appearance: Appearance
 
     @State private var copied = false
+    @State private var hovering = false
 
     var body: some View {
         ScrollView {
@@ -174,10 +175,13 @@ private struct InfoWindowView: View {
             .padding(16)
         }
         .frame(minWidth: 300, minHeight: 160)
-        // Always there, unlike the one in the chat: a pane is a window you
-        // opened on purpose to keep one thing, so there is nothing here for a
-        // resting button to get in the way of.
-        .overlay(alignment: .topTrailing) { copyButton }
+        // Only while the pointer is on the window, the same rule as in the
+        // chat: a pane is pinned to be looked at, and a button sitting on it
+        // permanently is in the way of the one thing it holds.
+        .overlay(alignment: .topTrailing) {
+            if hovering { copyButton }
+        }
+        .onHover { hovering = $0 }
     }
 
     private var copyButton: some View {
