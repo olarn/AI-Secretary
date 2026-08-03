@@ -30,16 +30,23 @@ struct ProfileSettingsView: View {
                 .font(.caption.bold())
 
             profilePicker
-            nameField
-            genderRow
-            ageRow
-            personalityField
+            // A Grid, not a stack of HStacks with a fixed label column: the
+            // labels have to line up, and the width they need changes with the
+            // longest word and with the app size. "Personality" broke a 52pt
+            // column the day it replaced "Style" — it wrapped mid-word — and
+            // any number picked to fit it would break again at size L.
+            Grid(alignment: .leading, horizontalSpacing: 6, verticalSpacing: 6) {
+                nameField
+                genderRow
+                ageRow
+                personalityField
 
-            Divider()
-            pictureRow
+                dividerRow
+                pictureRow
 
-            Divider()
-            appSizeRow
+                dividerRow
+                appSizeRow
+            }
 
             HStack(spacing: 6) {
                 Button("Save") { save() }
@@ -100,7 +107,7 @@ struct ProfileSettingsView: View {
     }
 
     private var nameField: some View {
-        HStack(spacing: 6) {
+        GridRow {
             fieldLabel("Name")
             TextField("Miku", text: $draft.name)
                 .textFieldStyle(.roundedBorder)
@@ -109,8 +116,9 @@ struct ProfileSettingsView: View {
     }
 
     private var genderRow: some View {
-        HStack(spacing: 6) {
+        GridRow {
             fieldLabel("Gender")
+            HStack(spacing: 6) {
             Menu {
                 Button("Female") { draft.genderChoice = .female }
                 Button("Male") { draft.genderChoice = .male }
@@ -128,13 +136,15 @@ struct ProfileSettingsView: View {
                     .font(.caption2)
             }
             Spacer(minLength: 0)
+            }
         }
         .font(.caption2)
     }
 
     private var ageRow: some View {
-        HStack(spacing: 6) {
+        GridRow {
             fieldLabel("Age")
+            HStack(spacing: 6) {
             Menu {
                 Button("Child") { draft.ageChoice = .child }
                 Button("Teenager") { draft.ageChoice = .teenager }
@@ -152,21 +162,22 @@ struct ProfileSettingsView: View {
                     .frame(width: 44)
             }
             Spacer(minLength: 0)
+            }
         }
         .font(.caption2)
     }
 
     private var personalityField: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 6) {
-                fieldLabel("Personality")
+        GridRow {
+            fieldLabel("Personality")
+            VStack(alignment: .leading, spacing: 2) {
                 TextField(SecretaryProfile.defaultPersonality, text: $draft.personality)
                     .textFieldStyle(.roundedBorder)
                     .font(.caption2)
+                Text("Free text — who she is, in your words. Blank means \(SecretaryProfile.defaultPersonality).")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.secondary)
             }
-            Text("Free text — who she is, in your words. Blank means \(SecretaryProfile.defaultPersonality).")
-                .font(.system(size: 9))
-                .foregroundStyle(.secondary)
         }
     }
 
@@ -176,9 +187,10 @@ struct ProfileSettingsView: View {
         let id = profiles.activeID
         let hasPicture = profiles.hasArtwork(for: id)
 
-        return VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 6) {
-                fieldLabel("Picture")
+        return GridRow {
+            fieldLabel("Picture")
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
                 Menu {
                     Button(hasPicture ? "Replace picture…" : "Choose picture…") {
                         choosePicture()
@@ -201,22 +213,25 @@ struct ProfileSettingsView: View {
                 // Read from disk, so a change has to invalidate the label.
                 .id("picture-\(profiles.artworkRevision)-\(id)")
                 Spacer(minLength: 0)
+                }
+                Text("Shown in every state — the colour and badge say what she's doing.")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.secondary)
             }
-            Text("Shown in every state — the colour and badge say what she's doing.")
-                .font(.system(size: 9))
-                .foregroundStyle(.secondary)
         }
     }
 
     private var appSizeRow: some View {
-        HStack(spacing: 6) {
+        GridRow {
             fieldLabel("App size")
+            HStack(spacing: 6) {
             Spacer(minLength: 4)
             ForEach(AppScale.allCases, id: \.rawValue) { scale in
                 Button(scale.label) { appearance.selectAppScale(scale) }
                     .buttonStyle(.bordered)
                     .font(.caption2)
                     .disabled(appearance.settings.appScale == scale)
+            }
             }
         }
     }
@@ -225,7 +240,18 @@ struct ProfileSettingsView: View {
         Text(text)
             .font(.caption2)
             .foregroundStyle(.secondary)
-            .frame(width: 52, alignment: .leading)
+            // The grid gives the column the width of the widest label; this
+            // only says the label itself must not be the thing that wraps.
+            .lineLimit(1)
+            .fixedSize()
+    }
+
+    /// A rule across both columns. `Divider()` on its own would sit inside the
+    /// label column and draw a stub.
+    private var dividerRow: some View {
+        GridRow {
+            Divider().gridCellColumns(2)
+        }
     }
 
     // MARK: - Actions
