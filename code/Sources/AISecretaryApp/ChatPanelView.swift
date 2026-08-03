@@ -767,7 +767,7 @@ struct ChatPanelView: View {
                 Label("Couldn't reply", systemImage: "exclamationmark.triangle.fill")
                     .font(.system(size: appearance.settings.secondaryFontSize, weight: .bold))
             } else {
-                Text(style.isMine ? "Me" : secretary.profile.displayName)
+                Text(speakerLabel(isMine: style.isMine, speakerName: entry.speakerName))
                     .font(.system(size: appearance.settings.secondaryFontSize, weight: .bold))
             }
             Text(MessageTime.label(for: entry.timestamp))
@@ -803,7 +803,7 @@ struct ChatPanelView: View {
         Button {
             onPin(
                 InfoWindowSpec(
-                    title: "\(secretary.profile.displayName) · \(MessageTime.label(for: entry.timestamp))",
+                    title: "\(speakerLabel(isMine: false, speakerName: entry.speakerName)) · \(MessageTime.label(for: entry.timestamp))",
                     body: text
                 )
             )

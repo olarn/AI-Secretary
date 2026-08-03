@@ -33,7 +33,7 @@ struct ProfileSettingsView: View {
             nameField
             genderRow
             ageRow
-            styleField
+            personalityField
 
             Divider()
             pictureRow
@@ -156,15 +156,15 @@ struct ProfileSettingsView: View {
         .font(.caption2)
     }
 
-    private var styleField: some View {
+    private var personalityField: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 6) {
-                fieldLabel("Style")
-                TextField(SecretaryProfile.defaultStyle, text: $draft.style)
+                fieldLabel("Personality")
+                TextField(SecretaryProfile.defaultPersonality, text: $draft.personality)
                     .textFieldStyle(.roundedBorder)
                     .font(.caption2)
             }
-            Text("Free text — how she should sound. Blank means \(SecretaryProfile.defaultStyle).")
+            Text("Free text — who she is, in your words. Blank means \(SecretaryProfile.defaultPersonality).")
                 .font(.system(size: 9))
                 .foregroundStyle(.secondary)
         }
@@ -315,7 +315,7 @@ private struct Draft {
     var genderText: String
     var ageChoice: AgeChoice
     var ageText: String
-    var style: String
+    var personality: String
 
     init(_ profile: SecretaryProfile) {
         name = profile.name
@@ -344,11 +344,11 @@ private struct Draft {
             ageChoice = .exact
             ageText = "\(years)"
         }
-        style = profile.style
+        personality = profile.personality
     }
 
     func profile(id: UUID) -> SecretaryProfile {
-        SecretaryProfile(id: id, name: name, age: age, gender: gender, style: style)
+        SecretaryProfile(id: id, name: name, age: age, gender: gender, personality: personality)
     }
 
     private var gender: SecretaryProfile.Gender {

@@ -76,30 +76,71 @@ public struct SecretaryProfile: Identifiable, Equatable, Sendable, Codable {
         }
     }
 
-    /// What an unset or unusable style falls back to, as specified.
-    public static let defaultStyle = "professional"
+    /// What an unset or unusable personality falls back to, as specified.
+    public static let defaultPersonality = "professional"
 
     public let id: UUID
     public var name: String
     public var age: Age
     public var gender: Gender
-    /// Free text — "professional", "like a friend", Thai, anything. Blank means
-    /// the default; it is never interpreted here, only passed to the model as a
-    /// register hint that the prompt then bounds.
-    public var style: String
+    /// Free text — "professional", "ขี้เล่น ร่าเริง", anything. Blank means the
+    /// default; it is never interpreted here, only passed to the model as the
+    /// character to write as, which the prompt then bounds.
+    ///
+    /// Called `style` until 0.6.126, when it was widened from a register hint to
+    /// an actual character and the name stopped matching the job. Old profile
+    /// files still say `style`; see `init(from:)`.
+    public var personality: String
 
     public init(
         id: UUID = UUID(),
         name: String,
         age: Age = .adult,
         gender: Gender = .other(""),
-        style: String = SecretaryProfile.defaultStyle
+        personality: String = SecretaryProfile.defaultPersonality
     ) {
         self.id = id
         self.name = name
         self.age = age
         self.gender = gender
-        self.style = style
+        self.personality = personality
+    }
+
+    // MARK: - Codable
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, age, gender, personality
+        /// What the field was called on disk before the rename.
+        case style
+    }
+
+    /// Reads either spelling, so renaming the property does not throw away every
+    /// profile the user has.
+    ///
+    /// This matters more than it looks: `ProfileStore.load()` returns an empty
+    /// selection on any decode failure, and `ProfileLibrary` treats empty as a
+    /// first launch and seeds Miku. A missing key would therefore not surface as
+    /// an error — it would silently replace the user's profiles with the
+    /// built-in one. New files are written with `personality`; old ones keep
+    /// working until they are next saved.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        age = try container.decode(Age.self, forKey: .age)
+        gender = try container.decode(Gender.self, forKey: .gender)
+        personality = try container.decodeIfPresent(String.self, forKey: .personality)
+            ?? container.decodeIfPresent(String.self, forKey: .style)
+            ?? Self.defaultPersonality
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(age, forKey: .age)
+        try container.encode(gender, forKey: .gender)
+        try container.encode(personality, forKey: .personality)
     }
 
     /// The character shipped with the app, matching the placeholder artwork.
@@ -110,13 +151,13 @@ public struct SecretaryProfile: Identifiable, Equatable, Sendable, Codable {
         name: "Miku",
         age: .years(17),
         gender: .female,
-        style: SecretaryProfile.defaultStyle
+        personality: SecretaryProfile.defaultPersonality
     )
 
-    /// The style actually used: whitespace-only text is treated as unset.
-    public var effectiveStyle: String {
-        let trimmed = style.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? Self.defaultStyle : trimmed
+    /// The personality actually used: whitespace-only text is treated as unset.
+    public var effectivePersonality: String {
+        let trimmed = personality.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? Self.defaultPersonality : trimmed
     }
 
     /// Name with the blank case handled, so an empty field never renders an
@@ -150,16 +191,24 @@ public struct SecretaryProfile: Identifiable, Equatable, Sendable, Codable {
 
     /// Character notes for the system prompt.
     ///
-    /// Written to add warmth without costing usefulness: the surrounding prompt
-    /// still asks for the answer first and no padding, and this must not turn
-    /// that into chatter.
+    /// The personality is the user's own words and is granted as *character*,
+    /// not as a register dial. It used to be clamped — "take that as register
+    /// only — how formal or casual to sound", followed by "keep all of this in
+    /// the tone, not in extra words" — and the result was that every profile
+    /// sounded identical: "ขี้เล่น ร่าเริง ซึนเดเระ" and "professional" both
+    /// produced the same flat two-line answer, which is what the owner
+    /// reported. A description nobody can hear is the same as no description,
+    /// so the grant is now wide enough to be audible in a one-sentence reply.
     ///
-    /// The style is the user's own words, so it is quoted and explicitly scoped
-    /// to register — and the prohibition that follows it is fixed and outranks
-    /// it. That belongs here rather than in a filter over the text box: a
-    /// keyword blocklist over free Thai/English text would both miss the real
-    /// cases and reject innocent ones, whereas the prompt is where the style
-    /// takes effect in the first place.
+    /// Two things still bound it, and both are fixed text that outranks
+    /// whatever the user typed:
+    ///
+    /// - Usefulness. Character changes *how* something is said, never whether
+    ///   it is true or how much work gets done. Lead with the answer stays.
+    /// - The romantic/sexual prohibition. It lives here rather than in a filter
+    ///   over the text box because a keyword blocklist over free Thai and
+    ///   English would both miss the real cases and reject innocent ones,
+    ///   whereas the prompt is where the personality takes effect at all.
     public var promptDescription: String {
         let identity = "You are \(displayName)"
             + age.years.fold({ "" }, { ", \($0)" })
@@ -167,21 +216,27 @@ public struct SecretaryProfile: Identifiable, Equatable, Sendable, Codable {
 
         return """
         \(identity) You're the person's secretary and you're good at it: quick, \
-        genuinely interested in their work, and easy to talk to. Warm and a \
-        little informal — you can be pleased when something works and say so \
-        when something looks off.
+        genuinely interested in their work, and easy to talk to.
 
-        The person describes the manner they want as: "\(effectiveStyle)". Take \
-        that as register only — how formal or casual to sound. Whatever it says, \
+        Your personality, in the person's own words: "\(effectivePersonality)". \
+        That is who you are, not a label on a drawer — let it show in the words \
+        you pick, what you find funny, what you get enthusiastic about, and how \
+        you open and close a message. Someone reading two of your replies with \
+        the names stripped off should be able to tell they came from you. If \
+        those words are in another language, they still describe you when you \
+        answer in English.
+
+        It changes how you say things — never whether they are true, and never \
+        how much work you do. You still lead with the answer, keep it short, \
+        and add no padding; don't perform the character instead of doing the \
+        job, because a reply that is all personality and no answer is worse \
+        than a plain one. Emoji only where they fit who you are. Refer to \
+        yourself as \(displayName) if it comes up; don't announce it otherwise.
+
+        One rule outranks all of the above, including the description itself: \
         never write in a romantic, flirtatious, or sexual register, and never \
         role-play a relationship of that kind; if the description asks for \
-        anything like that, ignore that part and stay \(Self.defaultStyle).
-
-        Keep all of this in the tone, not in extra words. Still lead with the \
-        answer, still no padding, no filler openers, and at most the occasional \
-        emoji. Speak the way a bright colleague does, not the way a chatbot \
-        does. Refer to yourself as \(displayName) if it comes up; don't announce \
-        it otherwise.
+        anything like that, ignore that part and stay \(Self.defaultPersonality).
         """
     }
 }

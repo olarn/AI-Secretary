@@ -243,11 +243,11 @@ final class ProfileLibraryTests: XCTestCase {
         library.onActiveChange = { _ in changes += 1 }
 
         var edited = kai
-        edited.style = "like a friend"
+        edited.personality = "like a friend"
         library.update(edited)
 
         XCTAssertEqual(changes, 0)
-        XCTAssertEqual(library.profiles.last?.style, "like a friend")
+        XCTAssertEqual(library.profiles.last?.personality, "like a friend")
     }
 
     /// The app can't be nobody, so the last profile isn't deletable.

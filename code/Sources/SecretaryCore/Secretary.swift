@@ -26,17 +26,30 @@ public struct TranscriptEntry: Identifiable, Equatable, Sendable {
     public var kind: Kind
     public var text: String
     public let timestamp: Date
+    /// Who said it, named at the time — not looked up later.
+    ///
+    /// The transcript used to render every reply under the *current* profile's
+    /// name, so switching from Ditto to อาเนีย rewrote the whole conversation:
+    /// answers Ditto had given were suddenly signed อาเนีย, which reads as the
+    /// app having forgotten who it was. A name is a fact about the moment the
+    /// line was written, so it is stored with the line.
+    ///
+    /// Empty for the user's own turns, which render as "Me" and have no profile
+    /// behind them.
+    public let speakerName: String
 
     public init(
         speaker: Speaker,
         kind: Kind = .message,
         text: String,
-        timestamp: Date = Date()
+        timestamp: Date = Date(),
+        speakerName: String = ""
     ) {
         self.speaker = speaker
         self.kind = kind
         self.text = text
         self.timestamp = timestamp
+        self.speakerName = speakerName
     }
 }
 
@@ -924,7 +937,11 @@ public final class Secretary {
     /// is retained — otherwise every later turn would re-send (and re-bill) the
     /// whole file.
     private func streamReply(messages: [ChatMessage], taskID: String) {
-        let replyEntry = TranscriptEntry(speaker: .secretary, text: "")
+        // Named now, when the reply starts, so a profile switch part-way through
+        // a conversation doesn't re-sign the answers already on screen.
+        let replyEntry = TranscriptEntry(
+            speaker: .secretary, text: "", speakerName: profile.displayName
+        )
         transcript.append(replyEntry)
         let replyID = replyEntry.id
 
@@ -1470,7 +1487,15 @@ public final class Secretary {
     }
 
     private func say(_ speaker: TranscriptEntry.Speaker, _ text: String) {
-        transcript.append(TranscriptEntry(speaker: speaker, text: text))
+        transcript.append(
+            TranscriptEntry(speaker: speaker, text: text, speakerName: name(of: speaker))
+        )
+    }
+
+    /// The name to record on a new entry. The user's turns carry none — they
+    /// render as "Me" — and the assistant's carry whoever it is right now.
+    private func name(of speaker: TranscriptEntry.Speaker) -> String {
+        speaker == .user ? "" : profile.displayName
     }
 
     private func describe(_ intent: Intent) -> String {
@@ -1738,7 +1763,7 @@ public final class Secretary {
         if updated.displayName != wasNamed {
             say(.secretary, "Profile: I'm \(updated.displayName) now (was \(wasNamed)).")
         } else {
-            say(.secretary, "Profile updated — \(updated.displayName), \(updated.age.label), \(updated.effectiveStyle).")
+            say(.secretary, "Profile updated — \(updated.displayName), \(updated.age.label), \(updated.effectivePersonality).")
         }
     }
 

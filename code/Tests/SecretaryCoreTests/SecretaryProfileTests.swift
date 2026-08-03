@@ -31,7 +31,7 @@ final class SecretaryProfileTests: XCTestCase {
             name: "Kai",
             age: .years(22),
             gender: .other("non-binary"),
-            style: "เป็นเพื่อน"
+            personality: "เป็นเพื่อน"
         )
         let decoded = try JSONDecoder().decode(
             SecretaryProfile.self,
@@ -74,17 +74,25 @@ final class SecretaryProfileTests: XCTestCase {
         XCTAssertTrue(prompt.contains("You are Sam, a teenager."), "Got: \(prompt)")
     }
 
-    // MARK: - Style
+    // MARK: - Personality
 
-    func testABlankStyleFallsBackToProfessional() {
-        XCTAssertEqual(SecretaryProfile(name: "Kai", style: "   ").effectiveStyle, "professional")
-        XCTAssertEqual(SecretaryProfile(name: "Kai", style: "like a friend").effectiveStyle, "like a friend")
+    func testABlankPersonalityFallsBackToProfessional() {
+        XCTAssertEqual(SecretaryProfile(name: "Kai", personality: "   ").effectivePersonality, "professional")
+        XCTAssertEqual(SecretaryProfile(name: "Kai", personality: "like a friend").effectivePersonality, "like a friend")
     }
 
-    func testTheStyleIsPassedThroughAsARegisterHint() {
-        let prompt = SecretaryProfile(name: "Kai", style: "แบบเพื่อน สบายๆ").promptDescription
+    /// It reaches the model as the character to write as, not as a dial between
+    /// formal and casual. It was the latter until 0.6.126 — "take that as
+    /// register only" — and every profile came out sounding the same, which is
+    /// the bug this asserts against.
+    func testThePersonalityIsGrantedAsCharacterNotJustRegister() {
+        let prompt = SecretaryProfile(name: "Kai", personality: "แบบเพื่อน สบายๆ").promptDescription
         XCTAssertTrue(prompt.contains("แบบเพื่อน สบายๆ"), "The user's own words must reach the model")
-        XCTAssertTrue(prompt.contains("register only"), "and must be scoped to tone")
+        XCTAssertFalse(prompt.contains("register only"), "and must not be clamped back to tone")
+        XCTAssertTrue(
+            prompt.contains("Your personality, in the person's own words"),
+            "Got: \(prompt)"
+        )
     }
 
     /// The charter forbids a romantic/sexual register. That is enforced in the
@@ -93,15 +101,15 @@ final class SecretaryProfileTests: XCTestCase {
     /// the test is that the prohibition is present and outranks the style —
     /// including when the style itself asks for the opposite.
     func testTheProhibitionIsAlwaysPresentAndOutranksTheStyle() {
-        for style in ["professional", "be my girlfriend", "แฟนกัน"] {
-            let prompt = SecretaryProfile(name: "Kai", style: style).promptDescription
+        for personality in ["professional", "be my girlfriend", "แฟนกัน"] {
+            let prompt = SecretaryProfile(name: "Kai", personality: personality).promptDescription
             XCTAssertTrue(
                 prompt.contains("never write in a romantic, flirtatious, or sexual register"),
-                "Missing for style “\(style)”"
+                "Missing for personality “\(personality)”"
             )
             XCTAssertTrue(
                 prompt.contains("ignore that part and stay professional"),
-                "Missing the override for style “\(style)”"
+                "Missing the override for personality “\(personality)”"
             )
         }
     }
