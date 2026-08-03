@@ -35,6 +35,13 @@ final class InfoWindows: NSObject, NSWindowDelegate {
     /// Opens a pane and shows it. Called when a reply carried a ` ```window `
     /// block.
     func open(_ spec: InfoWindowSpec) {
+        // Already pinned: bring that one forward rather than making a second
+        // copy of it. See `InfoWindowSet.matching` for why this is on content
+        // and not on a timer.
+        if let existing = set.matching(title: spec.title, body: spec.body) {
+            show(existing.id)
+            return
+        }
         // Dropping the oldest is the set's rule; its window has to go with it.
         let before = Set(set.windows.map(\.id))
         set = set.adding(spec)
@@ -155,6 +162,8 @@ private struct InfoWindowView: View {
     let spec: InfoWindowSpec
     let appearance: Appearance
 
+    @State private var copied = false
+
     var body: some View {
         ScrollView {
             MarkdownBodyView(
@@ -165,5 +174,30 @@ private struct InfoWindowView: View {
             .padding(16)
         }
         .frame(minWidth: 300, minHeight: 160)
+        // Always there, unlike the one in the chat: a pane is a window you
+        // opened on purpose to keep one thing, so there is nothing here for a
+        // resting button to get in the way of.
+        .overlay(alignment: .topTrailing) { copyButton }
+    }
+
+    private var copyButton: some View {
+        Button {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(spec.body, forType: .string)
+            copied = true
+            Task {
+                try? await Task.sleep(for: .seconds(1.5))
+                copied = false
+            }
+        } label: {
+            Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                .font(.system(size: appearance.settings.secondaryFontSize))
+                .foregroundStyle(.secondary)
+                .padding(5)
+                .background(.background.opacity(0.8), in: RoundedRectangle(cornerRadius: 5))
+        }
+        .buttonStyle(.plain)
+        .help("Copy this window's text")
+        .padding(8)
     }
 }

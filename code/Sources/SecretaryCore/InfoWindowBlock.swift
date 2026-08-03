@@ -140,4 +140,17 @@ public struct InfoWindowSet: Equatable, Sendable {
     public func window(_ id: UUID) -> InfoWindowSpec? {
         windows.first { $0.id == id }
     }
+
+    /// A pane already showing exactly this, if there is one.
+    ///
+    /// Pinning the same box twice should hand back the window you already have,
+    /// not a second copy of it. That is what a reader means by "pin this", and
+    /// it also absorbs a duplicated click: a non-activating panel can deliver
+    /// the press that activates the app *and* the press itself, which turned one
+    /// press of the pin button into two identical panes cascaded across the
+    /// screen. Matching on what the pane holds rather than on timing means the
+    /// answer doesn't depend on how fast the second one arrived.
+    public func matching(title: String, body: String) -> InfoWindowSpec? {
+        windows.first { $0.title == title && $0.body == body }
+    }
 }
