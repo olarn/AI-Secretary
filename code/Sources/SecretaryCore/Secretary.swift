@@ -66,6 +66,9 @@ public enum PlannedOperation: Equatable, Sendable {
     /// `understand`, and asked every time for the same reason — plus the plan
     /// it produces is shown before any of it runs.
     case followInstructions(InstructionRequest)
+    /// Watch a path and say when it changes. `.readOnly` — repeated local
+    /// reading, nothing written and nothing sent.
+    case watch(WatchRequest)
     /// Let Claude Code work inside a project, then answer this prompt. Approved
     /// once per project — asking before every message would make the assistant
     /// unusable, so the prompt has to be explicit about what the grant covers.
@@ -81,6 +84,7 @@ public enum PlannedOperation: Equatable, Sendable {
         case .file(let op): return op.actionClass
         case .understand(let op): return op.actionClass
         case .followInstructions(let op): return op.actionClass
+        case .watch(let op): return op.actionClass
         // Approve-once: the grant is per project, and the prompt says so.
         case .startAgent: return .readOnly
         case .widenAgentTools: return .localWrite
@@ -93,6 +97,7 @@ public enum PlannedOperation: Equatable, Sendable {
         case .file(let op): return op.humanDescription
         case .understand(let op): return op.humanDescription
         case .followInstructions(let op): return op.humanDescription
+        case .watch(let op): return op.humanDescription
         case .startAgent: return "Let Claude Code read and work in this project"
         case .widenAgentTools(let rules, _):
             return "Allow \(rules.joined(separator: ", ")) for the rest of this session"
@@ -184,6 +189,14 @@ public final class Secretary {
     /// reply is treated as a plan to confirm rather than as an answer.
     @ObservationIgnored private var awaitingPlan: Option<InstructionRequest> = .none()
 
+    /// The folder or file being watched, when one is. Observed for the same
+    /// reason as `activeLoop`: something that speaks without being spoken to
+    /// has to be visible while it's armed, with one click to stop it.
+    public private(set) var activeWatch: FolderWatch?
+    /// Which project the watched path belongs to. Context, kept beside the
+    /// value rather than inside it.
+    @ObservationIgnored private var watchProject: Option<Project> = .none()
+
     /// Who the assistant is. The user can switch profiles while a conversation
     /// is open, so this changes at runtime — see `apply(profile:)`.
     public private(set) var profile: SecretaryProfile
@@ -222,6 +235,8 @@ public final class Secretary {
     @ObservationIgnored private var activityEntryID: Option<UUID> = .none()
     @ObservationIgnored private var conversation: [ChatMessage] = []
     @ObservationIgnored private var streamingTask: Task<Void, Never>?
+    /// The transcript entry the current reply is being written into.
+    @ObservationIgnored private var streamingEntryID: Option<UUID> = .none()
     /// Wakes up to see whether a loop check is due. Lives here rather than in
     /// the view so a loop keeps running with the chat window closed — the
     /// person who asked for it is looking at a room, not at the screen.
@@ -230,6 +245,10 @@ public final class Secretary {
     /// interval, so a check lands within seconds of when it was due, and cheap
     /// because looking is a comparison.
     @ObservationIgnored private static let loopPollInterval: Duration = .seconds(5)
+    /// Looks at the watched path. Its own timer rather than the loop's: the two
+    /// are unrelated, and one running must not depend on the other.
+    @ObservationIgnored private var watchTask: Task<Void, Never>?
+    @ObservationIgnored private static let watchPollInterval: Duration = .seconds(4)
 
     private let chatMaxTokens = 4096
     /// Largest file, in bytes, that may be sent to the model in one turn. Well
@@ -451,9 +470,163 @@ public final class Secretary {
         case "run", "follow":
             handleRunCommand(argument?.trimmingCharacters(in: .whitespaces) ?? "")
 
+        case "watch":
+            handleWatchCommand(argument?.trimmingCharacters(in: .whitespaces) ?? "")
+
         default:
-            say(.secretary, "Unknown command “/\(command)”. Try /model, /effort, /usage, /loop or /run.")
+            say(.secretary, "Unknown command “/\(command)”. Try /model, /effort, /usage, /loop, /run or /watch.")
         }
+    }
+
+    // MARK: - Watching a folder or a file
+
+    /// `/watch <path>` — say when something under a path changes.
+    ///
+    /// Only when asked, and only one at a time. Watching is a standing
+    /// instruction that produces messages nobody typed for, so like the loop it
+    /// is announced when it starts, visible while it runs, and stoppable in one
+    /// click.
+    private func handleWatchCommand(_ argument: String) {
+        if argument.isEmpty {
+            guard let watch = activeWatch, let project = watchProject.toOptional() else {
+                say(.secretary, """
+                    Nothing is being watched.
+                    `/watch <path>` — tell me when a file or folder in the current project changes. \
+                    `/watch .` watches the project folder itself.
+                    `/watch stop` — stop watching.
+                    """)
+                return
+            }
+            let reports = watch.reportCount == 1 ? "1 report" : "\(watch.reportCount) reports"
+            say(.secretary, """
+                👁 Watching \(watch.displayName(inProject: project.name)) — \
+                \(watch.snapshot.count) file\(watch.snapshot.count == 1 ? "" : "s"), \(reports) so far.
+                `/watch stop` to stop.
+                """)
+            return
+        }
+
+        if LoopCommand.stopWords.contains(argument.lowercased()) {
+            stopWatching(because: "you asked me to")
+            return
+        }
+
+        let taskID = String(UUID().uuidString.prefix(8).lowercased())
+        activeTaskID = .some(taskID)
+        activeRequestText = .some("/watch \(argument)")
+        audit.record(AuditEntry(taskID: taskID, kind: .requestReceived, detail: "watch \(argument)"))
+        stateMachine.send(.userBeganInput, reason: "user asked to watch a path", taskID: .some(taskID))
+        stateMachine.send(.beginInterpreting, reason: "resolving the path to watch", taskID: .some(taskID))
+
+        // Through the ordinary project resolution and approval, and classed
+        // `.readOnly`: nothing is sent anywhere and nothing is written, but it
+        // is still repeated reading of the person's files and belongs to a
+        // project they approved.
+        handleTool(
+            operation: .watch(WatchRequest(relativePath: argument)),
+            projectQuery: .none()
+        )
+    }
+
+    /// Takes the first look and starts the timer.
+    private func beginWatching(_ request: WatchRequest, in project: Project) {
+        let taskID = activeTaskID.getOrElse("-")
+
+        guard let url = fileAdapter.resolve(request.relativePath, in: project).toOption().toOptional() else {
+            finish(
+                success: false,
+                message: "I can't watch \(request.relativePath) — it isn't inside \(project.name).",
+                reason: "watch path outside project",
+                toolStatus: "refused"
+            )
+            return
+        }
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            finish(
+                success: false,
+                message: "There's no \(request.relativePath) in \(project.name).",
+                reason: "watch path missing",
+                toolStatus: "error"
+            )
+            return
+        }
+
+        let snapshot = WatchScan.snapshot(of: url)
+        let watch = FolderWatch(relativePath: request.displayPath, snapshot: snapshot)
+        activeWatch = watch
+        watchProject = .some(project)
+        audit.record(AuditEntry(taskID: taskID, kind: .executionStarted, detail: "watching \(url.path)"))
+
+        // The cap is stated when it bites. "Watching this folder" and "watching
+        // the first 500 files of it" are different promises, and the person has
+        // to know which one they got.
+        let scope = snapshot.wasTruncated
+            ? "the first \(snapshot.count) files (it's bigger than that — I stop there to stay out of your way)"
+            : "\(snapshot.count) file\(snapshot.count == 1 ? "" : "s")"
+
+        finish(
+            success: true,
+            message: """
+            👁 Watching \(watch.displayName(inProject: project.name)) — \(scope). \
+            I'll say when something changes. `/watch stop` to stop.
+            """,
+            reason: "watch started"
+        )
+        startWatchTimer()
+    }
+
+    /// Stops watching. Safe when nothing is running, so a button can call it.
+    public func stopWatching(because reason: String) {
+        guard let watch = activeWatch, let project = watchProject.toOptional() else {
+            say(.secretary, "I'm not watching anything. `/watch <path>` to start.")
+            return
+        }
+        activeWatch = nil
+        watchProject = .none()
+        watchTask?.cancel()
+        watchTask = nil
+        let reports = watch.reportCount == 1 ? "1 change reported" : "\(watch.reportCount) changes reported"
+        let because = reason.isEmpty ? "" : " — \(reason)"
+        say(
+            .secretary,
+            "👁 Stopped watching \(watch.displayName(inProject: project.name)) — \(reports)\(because)."
+        )
+    }
+
+    private func startWatchTimer() {
+        watchTask?.cancel()
+        watchTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: Self.watchPollInterval)
+                guard !Task.isCancelled, let self else { return }
+                self.tickWatch()
+            }
+        }
+    }
+
+    /// One look. Separate from the timer so a test can drive it directly
+    /// instead of waiting for real seconds.
+    func tickWatch() {
+        guard let watch = activeWatch, let project = watchProject.toOptional() else { return }
+        guard let url = fileAdapter.resolve(watch.relativePath, in: project).toOption().toOptional() else { return }
+
+        let latest = WatchScan.snapshot(of: url)
+        let changes = watch.snapshot.changes(to: latest)
+        guard !changes.isEmpty else {
+            // Still advanced, so a change that comes and goes between looks
+            // isn't reported twice.
+            activeWatch = watch.advancing(to: latest, reported: false)
+            return
+        }
+
+        activeWatch = watch.advancing(to: latest, reported: true)
+        say(
+            .secretary,
+            """
+            👁 \(WatchReport.headline(changes)) in \(watch.displayName(inProject: project.name)):
+            \(WatchReport.describe(changes))
+            """
+        )
     }
 
     // MARK: - Following a file's instructions
@@ -1033,6 +1206,11 @@ public final class Secretary {
         )
         transcript.append(replyEntry)
         let replyID = replyEntry.id
+        // Remembered so that stopping a run mid-reply can close off the entry
+        // it interrupted. A cancelled stream never reaches `.completed`, so
+        // without this the half-written bubble just sits there, indistinguishable
+        // from a reply still arriving.
+        streamingEntryID = .some(replyID)
 
         audit.record(AuditEntry(taskID: taskID, kind: .executionStarted, detail: "chat model=\(modelDescription) effort=\(effortDescription)"))
 
@@ -1116,6 +1294,7 @@ public final class Secretary {
     }
 
     private func finishChat(entryID: UUID, taskID: String, success: Bool, finalText: String) {
+        streamingEntryID = .none()
         // A loop the assistant asked for is acted on once, here, when the reply
         // is whole — not while it streams, where a half-written block would read
         // as a different interval every few characters.
@@ -1352,6 +1531,10 @@ public final class Secretary {
             executeInstructionRead(request, in: project)
             return
         }
+        if case .watch(let request) = operation {
+            beginWatching(request, in: project)
+            return
+        }
         if case .startAgent(let prompt) = operation {
             lastProject = .some(project)
             beginAgentSession(prompt: prompt, in: project)
@@ -1444,7 +1627,7 @@ public final class Secretary {
             </file>
             """ + (wasTruncated ? "\n(Only the first \(readContextMaxBytes / 1024) KB is shown here.)" : "")
 
-        case .understand, .followInstructions, .startAgent, .widenAgentTools:
+        case .understand, .followInstructions, .watch, .startAgent, .widenAgentTools:
             // These write their own history: the model's reply is the record.
             return
         }
@@ -1703,6 +1886,8 @@ public final class Secretary {
         let stopped = run.halting(reason: reason)
         activeInstructionRun = stopped
         streamingTask?.cancel()
+        streamingTask = nil
+        closeOffInterruptedReply()
         say(.secretary, "■ \(stopped.progressDescription).")
     }
 
@@ -1771,6 +1956,24 @@ public final class Secretary {
         )
     }
 
+    /// Marks the reply a cancelled stream left half-written.
+    ///
+    /// An empty one is removed outright — an anonymous blank bubble is worse
+    /// than no bubble — and a partial one is kept and labelled, because words
+    /// the person already read must not vanish from the transcript.
+    private func closeOffInterruptedReply() {
+        guard let id = streamingEntryID.toOptional(),
+              let index = transcript.firstIndex(where: { $0.id == id })
+        else { return }
+        streamingEntryID = .none()
+
+        if transcript[index].text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            transcript.remove(at: index)
+        } else {
+            transcript[index].text += "\n\n(stopped part-way)"
+        }
+    }
+
     /// Called when a turn finishes. Moves a run on by one, or stops it.
     private func advanceInstructionRun(success: Bool) {
         guard let run = activeInstructionRun, run.isRunning else { return }
@@ -1800,7 +2003,7 @@ public final class Secretary {
         // Understanding reads through the same adapter, so it is gated by the
         // same project allowlist entry. What makes it stricter is its action
         // class, not a second allowlist token — see FileUnderstanding.
-        case .file, .understand, .followInstructions: return fileAdapter.toolID
+        case .file, .understand, .followInstructions, .watch: return fileAdapter.toolID
         }
     }
 
@@ -1812,6 +2015,8 @@ public final class Secretary {
             return "read \(op.relativePath) and send it to Claude (\(modelDescription)) to \(op.task.rawValue)"
         case .followInstructions(let op):
             return "read \(op.relativePath) and send it to Claude (\(modelDescription)) to work out its steps"
+        case .watch(let op):
+            return "watch \(op.displayPath.isEmpty ? "this project folder" : op.displayPath) for changes"
         case .startAgent: return "run Claude Code here"
         case .widenAgentTools(let rules, _): return rules.joined(separator: ", ")
         }
@@ -1825,6 +2030,8 @@ public final class Secretary {
             return fileAdapter.run(.readFile(relativePath: op.relativePath), in: project)
         case .followInstructions(let op):
             return fileAdapter.run(.readFile(relativePath: op.relativePath), in: project)
+        case .watch:
+            preconditionFailure("watching is handled before adapter dispatch")
         case .startAgent, .widenAgentTools:
             preconditionFailure("agent operations are handled before adapter dispatch")
         }
@@ -1933,6 +2140,13 @@ public final class Secretary {
         question with a small set of answers; an ordinary list of steps, \
         findings or suggestions is just prose and must not be marked this way. \
         If the answer is free-form, ask normally instead.
+
+        Two things the app does that you cannot do yourself, so offer them rather \
+        than attempting them: `/run <file>` makes the app read a file of \
+        instructions, show the person the steps, and carry them out once they \
+        agree; `/watch <path>` makes it tell them when a file or folder changes. \
+        If they ask for either in their own words, say the command back to them \
+        — they type it, not you.
 
         \(Self.resumePrompt)
 
@@ -2216,6 +2430,8 @@ public final class Secretary {
         • /loop stop — stop checking · /loop — show what's running
         • /run <file> — read a file of steps and do what it says, after you've
           seen the steps and said go. `/run stop` stops part-way.
+        • /watch <path> — tell you when a file or folder changes. `/watch stop`
+          stops watching.
 
         Or just ask me to keep track of something as it happens and I'll set the
         timer up myself.

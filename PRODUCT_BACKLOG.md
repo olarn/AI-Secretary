@@ -241,9 +241,17 @@ The current phase for version-bumping purposes (`AppVersion.swift`,
 - [x] สามารถ check เพื่อเลือกใช้ Skills ใน session นั้นได้ — session-only เหมือน `activeLoop` (ไม่เขียนลง disk) ผลของการเลือกคือ soft hint ใน system prompt ("only use these skills…") ไม่ใช่ hard limit เพราะไม่มี flag ของ CLI ที่ enforce ระดับ skill ได้จริง (มีแต่ `claude plugin enable/disable` ซึ่ง global/persist ข้าม session ไม่ตรงกับที่ต้องการ)
 
 ## Phase 9.1: Monitor files and folders changed
-- [ ] App สามารถ monitor ความเปลี่ยนแปลงของ folder ได้เมื่อสั่งให้ทำ
-- [ ] App สามารถ monitor ความเปลี่ยนแปลงเนื้อหาของ file ได้เมื่อสั่งให้ทำ
-- [ ] App จะยกเลิกการ monitr เมื่อสั่ง
+- [x] App สามารถ monitor ความเปลี่ยนแปลงของ folder ได้เมื่อสั่งให้ทำ — `/watch <path>`
+  (`.` คือโฟลเดอร์โปรเจกต์) ดูทุก 4 วินาทีด้วยการเทียบ snapshot บอกว่าอะไร เพิ่ม/หาย/แก้
+  ต้องสั่งเท่านั้น ไม่มีการ watch เองอัตโนมัติ
+  - มีเพดานโดยตั้งใจ: 500 entry / ลึก 4 ชั้น / ข้าม `.git` `.build` `node_modules` ฯลฯ
+    เพราะโปรเจกต์ที่ลงทะเบียนมักเป็นทั้งรีโป **และจะบอกเมื่อชนเพดาน** ("the first 500 files")
+    เพราะ "ดูโฟลเดอร์นี้" กับ "ดู 500 ไฟล์แรกของโฟลเดอร์นี้" เป็นคำสัญญาคนละอัน
+- [x] App สามารถ monitor ความเปลี่ยนแปลงเนื้อหาของ file ได้เมื่อสั่งให้ทำ — ไฟล์เดี่ยวใช้
+  hash ของ *เนื้อไฟล์* ไม่ใช่ size+mtime (ซึ่งใช้กับ entry ในโฟลเดอร์) เพราะกด save ทับ
+  โดยไม่แก้อะไรก็ขยับ mtime ถ้ารายงานก็จะเป็นการร้องหมาป่าทุกครั้งที่ ⌘S
+- [x] App จะยกเลิกการ monitr เมื่อสั่ง — `/watch stop` หรือกด × ที่ badge รูปตาบน header
+  (badge มีไว้เพราะของที่พูดเองต้องมองเห็นได้ตลอดว่าเปิดอยู่ และปิดได้ในคลิกเดียว)
 
 ## Phase 9.2: Follow instruction from file
 - [x] App สามารถทำงานได้ตาม flow หรือ instruction ที่ถูกเขียนใน file — `/run <file>` อ่านไฟล์

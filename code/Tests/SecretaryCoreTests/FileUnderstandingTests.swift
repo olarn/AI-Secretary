@@ -17,6 +17,12 @@ final class SpyFileAdapter: FileToolAdapter {
 
     func summary(for operation: FileOperation) -> String { operation.humanDescription }
 
+    /// The real adapter refuses anything outside the project; the spy answers
+    /// with the naive join so a test can watch a path without a real one.
+    func resolve(_ relativePath: String, in project: Project) -> Either<ToolError, URL> {
+        .right(project.url.appendingPathComponent(relativePath))
+    }
+
     func run(_ operation: FileOperation, in project: Project) -> Either<ToolError, ToolResult> {
         runCalls.append(operation)
         return Option.fromOptional(stubbedError).fold(

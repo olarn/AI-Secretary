@@ -45,6 +45,13 @@ public protocol FileToolAdapter: AnyObject {
     var toolID: String { get }
     func summary(for operation: FileOperation) -> String
     func run(_ operation: FileOperation, in project: Project) -> Either<ToolError, ToolResult>
+    /// Where a relative path actually points, or a refusal if it leaves the
+    /// project.
+    ///
+    /// Exposed because watching a folder needs the same answer as reading one,
+    /// and the only alternative is a second copy of the escape check somewhere
+    /// else — which is how one of the two copies ends up subtly weaker.
+    func resolve(_ relativePath: String, in project: Project) -> Either<ToolError, URL>
 }
 
 /// Reads directory listings and text files, constrained by construction:
@@ -203,6 +210,13 @@ public final class FileReadOnlyAdapter: FileToolAdapter {
 
     /// Resolves a user-supplied relative path against the project root and refuses
     /// anything that escapes it, after resolving symlinks and `..` components.
+    public func resolve(
+        _ relativePath: String,
+        in project: Project
+    ) -> Either<ToolError, URL> {
+        requireProjectDirectory(project).flatMap { _ in self.resolveTarget(relativePath, in: project) }^
+    }
+
     private func resolveTarget(
         _ relativePath: String,
         in project: Project

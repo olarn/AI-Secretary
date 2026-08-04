@@ -525,6 +525,7 @@ struct ChatPanelView: View {
                 .foregroundStyle(.secondary)
             loopBadge
             runBadge
+            watchBadge
             Spacer()
         }
         // A top corner is taken by the widen/restore/close row, and can be taken
@@ -588,6 +589,31 @@ struct ChatPanelView: View {
             }
             .buttonStyle(.plain)
             .help("\(run.progressDescription) — click to stop")
+        }
+    }
+
+    /// Shows that a path is being watched, and stops it in one click. Third of
+    /// the three standing things that speak on their own; all three sit in the
+    /// header for the same reason.
+    @ViewBuilder
+    private var watchBadge: some View {
+        if let watch = secretary.activeWatch {
+            Button {
+                secretary.stopWatching(because: "")
+            } label: {
+                HStack(spacing: 3) {
+                    Image(systemName: "eye")
+                    Image(systemName: "xmark")
+                        .font(.system(size: appearance.settings.secondaryFontSize * 0.7))
+                }
+                .font(.system(size: appearance.settings.secondaryFontSize, weight: .semibold))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Color.accentColor.opacity(0.22), in: Capsule())
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .help("Watching \(watch.relativePath.isEmpty ? "the project folder" : watch.relativePath) — click to stop")
         }
     }
 
