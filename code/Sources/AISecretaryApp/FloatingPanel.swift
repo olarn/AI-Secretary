@@ -31,7 +31,13 @@ final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
 /// character and its chat panel. Stays above normal windows without stealing
 /// focus from the frontmost app, and can be dragged by its background.
 final class FloatingPanel: NSPanel {
-    init(contentRect: NSRect, content: NSView) {
+    /// Whether a click anywhere in this panel should hand it the keyboard.
+    ///
+    /// Off for the character, on for the chat — see `sendEvent`.
+    private let takesKeyOnClick: Bool
+
+    init(contentRect: NSRect, content: NSView, takesKeyOnClick: Bool = false) {
+        self.takesKeyOnClick = takesKeyOnClick
         super.init(
             contentRect: contentRect,
             styleMask: [.nonactivatingPanel, .borderless, .resizable],
@@ -67,4 +73,30 @@ final class FloatingPanel: NSPanel {
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
+
+    /// Takes the keyboard when clicked, for the panel that asked for it.
+    ///
+    /// `becomesKeyOnlyIfNeeded` above means a click only hands over the keyboard
+    /// when the clicked view insists — which the text field does and nothing else
+    /// in the chat does. So clicking the transcript, a message, or a button left
+    /// the keyboard wherever it was, and ⌘H went to the app behind and hid *that*.
+    /// The chat looked focused and wasn't; the only tell was whether a caret was
+    /// blinking.
+    ///
+    /// Driven check behind this: with the field clicked (panel key) but the app
+    /// inactive, ⌘H already hid our own windows and left Finder frontmost — so
+    /// key status while inactive is enough, and this only widens which clicks
+    /// grant it.
+    ///
+    /// In `sendEvent` rather than in a view or the flag above, for two reasons:
+    /// the window sees every click regardless of which view swallows it, and
+    /// leaving `becomesKeyOnlyIfNeeded` alone means this can't bring back the
+    /// regression that flag prevents — a first click spent on focusing the window
+    /// instead of pressing the button under the pointer.
+    override func sendEvent(_ event: NSEvent) {
+        if takesKeyOnClick, event.type == .leftMouseDown, !isKeyWindow {
+            makeKey()
+        }
+        super.sendEvent(event)
+    }
 }

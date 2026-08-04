@@ -118,7 +118,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
 
         chatPanel = FloatingPanel(
             contentRect: NSRect(origin: .zero, size: chatSize),
-            content: chatHost
+            content: chatHost,
+            // The chat is where the keyboard belongs once you click into it —
+            // typing, Esc, the arrow keys and ⌘H all read as "to the chat".
+            // The character isn't: clicking it opens or closes this panel, and
+            // taking the keyboard from the app behind to do that would be rude.
+            takesKeyOnClick: true
         )
         chatPanel.alphaValue = 0
 
