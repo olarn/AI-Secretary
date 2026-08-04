@@ -286,7 +286,11 @@ The current phase for version-bumping purposes (`AppVersion.swift`,
 - [x] ขอด้วยภาษาคนได้เช่นกัน ผ่าน block ```run — ปลอดภัยเพราะ "ขอ" ไม่ใช่ "ทำ": ไปได้ไกลสุด
   แค่การ์ดยืนยัน step ซึ่งเป็นด่านเดียวกับที่พิมพ์ `/run` เอง
 
-## Phase 9.3: App ทำงานร่วมกันได้
+## Phase 10: Liquid Glass Theme
+
+
+
+## Phase 11: App ทำงานร่วมกันได้
 - [ ] User สามารถ start app พร้อมกันได้มากกว่า 1 app
 - [ ] Two or more app be able to talk to each other.
 - [ ] การทำงานร่วมกัน
@@ -300,7 +304,7 @@ The current phase for version-bumping purposes (`AppVersion.swift`,
   - [ ] ถ้า step ไหนช่วยกันทำได้ app ต้องรู้ว่า parallel ได้กี่ app, ต้องรออะไรจึงจะรู้ว่าทำแล้ว, และทำเสร็จแล้ว โดย update กันใน task log
   - [ ] prevent เรื่อง lock file และ race condition (ทำซ้ำกัน, เข้าใจว่า app อื่นทำเลยไม่ได้ทำ, ลำดับงานผิด, ข้ามลำดับงาน, infinite loog) 
 
-## Phase 10: Multi-session
+## Phase 12: Multi-session
 - Before Start : อ่าน requirement ทั้งหมดใน phase นี้ก่อน เพราะต้อง re-architecture app และต้องจัดกลุ่ม feature ที่อยู่ใน Setting, Profile, Skills ใหม่ 
 - Requirements
   - [ ] สามารถเปิด chat bubble ได้มากกว่า 1 window โดยที่แต่ละ window จะแยก Claude Session ออกจากกัน
@@ -320,12 +324,12 @@ The current phase for version-bumping purposes (`AppVersion.swift`,
     - [ ] แต่ละ session ใน menu มีปุ่มปิด ถ้าปิดก็ลบ history ไปเลย
 - Expected App Architecture
 
-## Phase 11: Loop & Notification
+## Phase 13: Loop & Notification
 - [ ] สั่งให้ loop ได้ เช่น นับถอยหลัง 5 นาทีแล้วแจ้งเตือน หรือ long run แล้วแจ้งเตือนได้
 - [ ] มี local notification เมื่อทำงานเสร็จ (notification settings ตาม macOS)
 - [ ] เมื่อ click ที่กล่อง notication, จะเปิด app และ chat window ขึ้นมา
 
-## Phase 12: Voice
+## Phase 14: Voice
 - [ ] Push-to-talk or explicit voice activation.
 - [ ] Speech-to-text, text-to-speech, interruption behavior, and privacy controls.
 - [ ] Voice must follow the same approval and auditing model as chat.
