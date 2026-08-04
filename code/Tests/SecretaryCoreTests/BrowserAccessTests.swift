@@ -161,7 +161,7 @@ final class BrowserAccessTests: XCTestCase {
         secretary.submit("scroll down the page")
         await waitUntilIdle()
 
-        guard case .approval(let request, _) = secretary.pendingDecision else {
+        guard case .approval(let request, _) = secretary.pendingDecision.toOptional() else {
             return XCTFail("Expected to be asked. Got: \(String(describing: secretary.pendingDecision))")
         }
         XCTAssertEqual(request.actionClass, .browserAction)
@@ -184,7 +184,7 @@ final class BrowserAccessTests: XCTestCase {
         secretary.submit("scroll down the page")
         await waitUntilIdle()
 
-        guard case .approval(let request, _) = secretary.pendingDecision else {
+        guard case .approval(let request, _) = secretary.pendingDecision.toOptional() else {
             return XCTFail("Expected to be asked")
         }
         XCTAssertFalse(request.commandSummary.contains("mcp__"), "Got: \(request.commandSummary)")

@@ -132,7 +132,7 @@ public enum PendingDecision: Equatable, Sendable {
 @Observable
 public final class Secretary {
     public private(set) var transcript: [TranscriptEntry] = []
-    public private(set) var pendingDecision: PendingDecision?
+    public private(set) var pendingDecision: Option<PendingDecision> = .none()
     /// What the assistant is doing this turn, newest last. Collected whether or
     /// not it is being shown, so switching it on mid-turn isn't blank.
     public private(set) var activity: [AgentActivity] = []
@@ -145,7 +145,7 @@ public final class Secretary {
     /// Secretary asks itself the question the user left standing, and answers
     /// into the conversation. Observed so the panel can show that it is on and
     /// offer one click to stop it — a timer that talks must be visible.
-    public private(set) var activeLoop: LoopSchedule?
+    public private(set) var activeLoop: Option<LoopSchedule> = .none()
     /// Tokens and cost so far. Observed, so the usage window can be left open
     /// and follow along instead of showing a figure from whenever it was opened.
     ///
@@ -177,7 +177,7 @@ public final class Secretary {
     /// The instruction file being carried out, when one is. Observed so the
     /// panel can show which step it is on and offer one click to stop — a run
     /// that keeps sending turns on its own has to be visible while it does.
-    public private(set) var activeInstructionRun: InstructionRun?
+    public private(set) var activeInstructionRun: Option<InstructionRun> = .none()
     /// What each instruction file said the last time it was run this session,
     /// so a second run can point out that the steps have changed. Session-only,
     /// like the run itself.
@@ -377,8 +377,8 @@ public final class Secretary {
     // MARK: - Decisions
 
     public func resolvePendingApproval(granted: Bool) {
-        guard case .approval(let request, let operation) = pendingDecision else { return }
-        pendingDecision = nil
+        guard case .approval(let request, let operation) = pendingDecision.toOptional() else { return }
+        pendingDecision = .none()
 
         guard granted else {
             audit.record(AuditEntry(taskID: request.taskID, kind: .approvalDenied, detail: request.commandSummary))
@@ -402,16 +402,16 @@ public final class Secretary {
     }
 
     public func choose(project: Project) {
-        guard case .projectChoice(_, let operation) = pendingDecision else { return }
-        pendingDecision = nil
+        guard case .projectChoice(_, let operation) = pendingDecision.toOptional() else { return }
+        pendingDecision = .none()
         lastProject = .some(project)
         proceed(operation: operation, project: project)
     }
 
     /// Clears a waiting card and records that it never happened.
     private func dropPendingDecision() {
-        guard let decision = pendingDecision else { return }
-        pendingDecision = nil
+        guard let decision = pendingDecision.toOptional() else { return }
+        pendingDecision = .none()
 
         let what: String
         switch decision {
@@ -427,8 +427,8 @@ public final class Secretary {
     }
 
     public func cancelPendingDecision() {
-        guard let decision = pendingDecision else { return }
-        pendingDecision = nil
+        guard let decision = pendingDecision.toOptional() else { return }
+        pendingDecision = .none()
         // A plan turned down has no tool in flight to fail — the turn that
         // produced it already finished — so it says so and leaves the state
         // machine where it is.
@@ -755,11 +755,11 @@ public final class Secretary {
     private func applyRunRequest(_ request: RunBlock.Request) {
         switch request {
         case .stop:
-            if activeInstructionRun?.isRunning == true {
+            if activeInstructionRun.toOptional()?.isRunning == true {
                 stopInstructionRun(because: "the assistant asked to stop")
             }
         case .start(let path):
-            guard activeInstructionRun?.isRunning != true else { return }
+            guard activeInstructionRun.toOptional()?.isRunning != true else { return }
             beginInstructionRead(path: path, askedByAssistant: true)
         }
     }
@@ -774,7 +774,7 @@ public final class Secretary {
     /// that is about to become work.
     private func handleRunCommand(_ argument: String) {
         if argument.isEmpty {
-            guard let run = activeInstructionRun, run.isRunning else {
+            guard let run = activeInstructionRun.toOptional(), run.isRunning else {
                 say(.secretary, """
                     Nothing is running.
                     `/run <file>` — read a file in the current project and do what it says. \
@@ -792,9 +792,9 @@ public final class Secretary {
             return
         }
 
-        guard activeInstructionRun?.isRunning != true else {
+        guard activeInstructionRun.toOptional()?.isRunning != true else {
             say(.secretary, """
-                I'm already working through \(activeInstructionRun?.plan.relativePath ?? "a file"). \
+                I'm already working through \(activeInstructionRun.toOptional()?.plan.relativePath ?? "a file"). \
                 `/run stop` first if you want to start something else.
                 """)
             return
@@ -831,7 +831,7 @@ public final class Secretary {
             { request in
                 switch request {
                 case .status:
-                    guard let loop = activeLoop else {
+                    guard let loop = activeLoop.toOptional() else {
                         say(
                             .secretary,
                             """
@@ -882,7 +882,7 @@ public final class Secretary {
     /// typed `/loop` or the assistant set it up from what they asked for.
     public func startLoop(interval: TimeInterval, note: String, now: Date = Date()) {
         let loop = LoopSchedule.starting(interval: interval, note: note, now: now)
-        activeLoop = loop
+        activeLoop = .some(loop)
         say(
             .secretary,
             """
@@ -898,11 +898,11 @@ public final class Secretary {
     /// Stops the loop. Safe to call when nothing is running, so the view can
     /// wire a button to it without asking first.
     public func stopLoop(because reason: String? = nil) {
-        guard let loop = activeLoop else {
+        guard let loop = activeLoop.toOptional() else {
             say(.secretary, "No loop is running. Start one with `/loop 10m <what to report>`.")
             return
         }
-        activeLoop = nil
+        activeLoop = .none()
         loopTask?.cancel()
         loopTask = nil
         let checks = loop.firedCount == 1 ? "1 check" : "\(loop.firedCount) checks"
@@ -923,7 +923,7 @@ public final class Secretary {
     /// One look at the clock. Separate from the timer so a test can drive it
     /// with any date it likes instead of waiting for real minutes.
     func tickLoop(now: Date) {
-        guard let loop = activeLoop else { return }
+        guard let loop = activeLoop.toOptional() else { return }
 
         if loop.hasRunTooLong(at: now) {
             stopLoop(because: "it had been running for hours; start another if you still need it")
@@ -935,12 +935,12 @@ public final class Secretary {
         // reply is streaming would interleave two answers in one transcript and
         // cancel the first — `streamingTask` is single-flight. It waits for the
         // next look instead, and the delay costs one poll, not one interval.
-        guard stateMachine.state == .idle, streamingTask == nil, pendingDecision == nil else {
-            activeLoop = loop.postponed(to: now.addingTimeInterval(5))
+        guard stateMachine.state == .idle, streamingTask == nil, !pendingDecision.isDefined else {
+            activeLoop = .some(loop.postponed(to: now.addingTimeInterval(5)))
             return
         }
 
-        activeLoop = loop.fired(at: now)
+        activeLoop = .some(loop.fired(at: now))
         fireCheck(loop, now: now)
     }
 
@@ -978,7 +978,7 @@ public final class Secretary {
         case .start(let interval, let note):
             startLoop(interval: interval, note: note)
         case .stop:
-            if activeLoop != nil { stopLoop(because: "the assistant asked to stop it") }
+            if activeLoop.isDefined { stopLoop(because: "the assistant asked to stop it") }
         case .status:
             break
         }
@@ -1046,10 +1046,10 @@ public final class Secretary {
             }
             if !primary.isDefined, registry.projects.count > 1 {
                 say(.secretary, "Which project should I start in? I'll be able to see the others once you've approved them too.")
-                pendingDecision = .projectChoice(
+                pendingDecision = .some(.projectChoice(
                     candidates: registry.projects,
                     operation: .startAgent(prompt: text)
-                )
+                ))
                 return
             }
 
@@ -1117,7 +1117,7 @@ public final class Secretary {
             \(scope)Shall I go ahead? This allows it for the rest of this \
             session only, and I'll try your request again.
             """)
-        pendingDecision = .approval(request, operation: .widenAgentTools(rules: rules, prompt: prompt))
+        pendingDecision = .some(.approval(request, operation: .widenAgentTools(rules: rules, prompt: prompt)))
     }
 
     /// The set of projects changed while a conversation was going.
@@ -1156,7 +1156,7 @@ public final class Secretary {
     /// loop follows. Skipped while the assistant is busy — cancelling a reply
     /// the user is reading to re-ask an older question is worse than waiting.
     private func resumeLastRequest() {
-        guard stateMachine.state == .idle, streamingTask == nil, pendingDecision == nil else { return }
+        guard stateMachine.state == .idle, streamingTask == nil, !pendingDecision.isDefined else { return }
         guard let request = conversation.last(where: { $0.role == .user })?.content,
               !request.isEmpty
         else { return }
@@ -1304,7 +1304,7 @@ public final class Secretary {
             web. I'll ask again before anything that writes or changes files. \
             Approving covers this project from now on.
             """)
-        pendingDecision = .approval(request, operation: .startAgent(prompt: prompt))
+        pendingDecision = .some(.approval(request, operation: .startAgent(prompt: prompt)))
     }
 
     /// Persists the grant, points the backend at the project, and runs the turn
@@ -1600,7 +1600,7 @@ public final class Secretary {
 
         case .ambiguous(let query, let candidates):
             say(.secretary, "Several projects match “\(query)”. Which one?")
-            pendingDecision = .projectChoice(candidates: candidates, operation: operation)
+            pendingDecision = .some(.projectChoice(candidates: candidates, operation: operation))
 
         case .needsSelection(let candidates):
             if candidates.isEmpty {
@@ -1611,7 +1611,7 @@ public final class Secretary {
                 )
             } else {
                 say(.secretary, "Which project should I look at?")
-                pendingDecision = .projectChoice(candidates: candidates, operation: operation)
+                pendingDecision = .some(.projectChoice(candidates: candidates, operation: operation))
             }
         }
     }
@@ -1676,7 +1676,7 @@ public final class Secretary {
             caveat = ""
         }
         say(.secretary, "May I run `\(request.commandSummary)` in \(project.name)?" + caveat)
-        pendingDecision = .approval(request, operation: operation)
+        pendingDecision = .some(.approval(request, operation: operation))
     }
 
     private func execute(_ operation: PlannedOperation, in project: Project) {
@@ -2013,19 +2013,19 @@ public final class Secretary {
             ))
         }
 
-        pendingDecision = .instructionPlan(plan, risks: risks, changedSinceLastRun: changed)
+        pendingDecision = .some(.instructionPlan(plan, risks: risks, changedSinceLastRun: changed))
     }
 
     /// The user confirmed the steps. From here each one runs as its own turn.
     public func startPlannedInstructions() {
-        guard case .instructionPlan(let plan, _, _) = pendingDecision else { return }
-        pendingDecision = nil
+        guard case .instructionPlan(let plan, _, _) = pendingDecision.toOptional() else { return }
+        pendingDecision = .none()
 
         instructionMemory = instructionMemory.recording(
             path: plan.relativePath,
             fingerprint: plan.fingerprint
         )
-        activeInstructionRun = InstructionRun(plan: plan)
+        activeInstructionRun = .some(InstructionRun(plan: plan))
         say(.secretary, """
             ▶ Following \(plan.relativePath) — \(plan.steps.count) \
             step\(plan.steps.count == 1 ? "" : "s"). `/run stop` to stop at any point.
@@ -2036,12 +2036,12 @@ public final class Secretary {
     /// Stops a run. Safe to call when nothing is going, so a button can be
     /// wired to it without asking first.
     public func stopInstructionRun(because reason: String) {
-        guard let run = activeInstructionRun, run.isRunning else {
+        guard let run = activeInstructionRun.toOptional(), run.isRunning else {
             say(.secretary, "Nothing is running. `/run <file>` to start something.")
             return
         }
         let stopped = run.halting(reason: reason)
-        activeInstructionRun = stopped
+        activeInstructionRun = .some(stopped)
         streamingTask?.cancel()
         streamingTask = nil
         closeOffInterruptedReply()
@@ -2055,9 +2055,9 @@ public final class Secretary {
     /// step three, and picking up the new wording halfway would be the app
     /// choosing which version of the person's mind to act on.
     private func runNextInstructionStep() {
-        guard let run = activeInstructionRun, run.isRunning else { return }
+        guard let run = activeInstructionRun.toOptional(), run.isRunning else { return }
         guard let step = run.currentStep.toOptional() else {
-            activeInstructionRun = InstructionRun(plan: run.plan, stepIndex: run.stepIndex, status: .finished)
+            activeInstructionRun = .some(InstructionRun(plan: run.plan, stepIndex: run.stepIndex, status: .finished))
             say(.secretary, "✓ Finished all \(run.totalSteps) steps of \(run.plan.relativePath).")
             return
         }
@@ -2067,7 +2067,7 @@ public final class Secretary {
             .map(InstructionFingerprint.of)^
         guard current.toOptional() == run.plan.fingerprint else {
             let halted = run.halting(reason: "\(run.plan.relativePath) changed while I was working through it")
-            activeInstructionRun = halted
+            activeInstructionRun = .some(halted)
             say(.secretary, """
                 ■ \(halted.progressDescription).
 
@@ -2133,17 +2133,17 @@ public final class Secretary {
 
     /// Called when a turn finishes. Moves a run on by one, or stops it.
     private func advanceInstructionRun(success: Bool) {
-        guard let run = activeInstructionRun, run.isRunning else { return }
+        guard let run = activeInstructionRun.toOptional(), run.isRunning else { return }
 
         guard success else {
             let halted = run.halting(reason: "step \(run.stepNumber) didn't finish")
-            activeInstructionRun = halted
+            activeInstructionRun = .some(halted)
             say(.secretary, "■ \(halted.progressDescription). `/run \(run.plan.relativePath)` to start again.")
             return
         }
 
         let next = run.advancing()
-        activeInstructionRun = next
+        activeInstructionRun = .some(next)
         guard next.isRunning else {
             say(.secretary, "✓ Finished all \(next.totalSteps) steps of \(next.plan.relativePath).")
             return

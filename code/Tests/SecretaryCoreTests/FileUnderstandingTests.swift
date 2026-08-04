@@ -215,7 +215,7 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
         let secretary = makeSecretary(chat: chat)
         secretary.submit("summarize README.md in Fixture")
 
-        guard case .approval(let request, _) = secretary.pendingDecision else {
+        guard case .approval(let request, _) = secretary.pendingDecision.toOptional() else {
             return XCTFail("Expected an approval request")
         }
         XCTAssertEqual(request.actionClass, .externalNetwork)
@@ -288,7 +288,7 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
         await waitUntilIdle()
 
         secretary.submit("summarize Package.swift in Fixture")
-        guard case .approval = secretary.pendingDecision else {
+        guard case .approval = secretary.pendingDecision.toOptional() else {
             return XCTFail("Sending a second file must ask again")
         }
         XCTAssertEqual(chat.callCount, 1, "The second file must not be sent yet")
@@ -306,7 +306,7 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
         await waitUntilIdle()
 
         secretary.submit("read Package.swift in Fixture")
-        guard case .approval = secretary.pendingDecision else {
+        guard case .approval = secretary.pendingDecision.toOptional() else {
             return XCTFail("A plain read must still ask; the send approval is not a read grant")
         }
         XCTAssertEqual(fileAdapter.runCalls.count, 1, "Only the approved read has run")
@@ -477,7 +477,7 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
         // and ask which one.
         secretary.submit("read notes.md")
 
-        if case .projectChoice = secretary.pendingDecision {
+        if case .projectChoice = secretary.pendingDecision.toOptional() {
             return XCTFail("Should have reused Fixture instead of asking again")
         }
         XCTAssertEqual(fileAdapter.runCalls.count, 2)
@@ -495,7 +495,7 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
 
         secretary.submit("list files in Nonexistent")
 
-        XCTAssertNil(secretary.pendingDecision)
+        XCTAssertEqual(secretary.pendingDecision, .none())
         XCTAssertEqual(fileAdapter.runCalls.count, 1, "Nothing may run against the remembered project")
         XCTAssertTrue(secretary.transcript.last?.text.contains("No registered project") == true,
                       "Got: \(secretary.transcript.last?.text ?? "-")")

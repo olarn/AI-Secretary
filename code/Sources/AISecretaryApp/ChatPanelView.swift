@@ -544,7 +544,7 @@ struct ChatPanelView: View {
     /// anywhere on screen.
     @ViewBuilder
     private var loopBadge: some View {
-        if let loop = secretary.activeLoop {
+        if let loop = secretary.runningLoop {
             Button {
                 secretary.stopLoop()
             } label: {
@@ -571,7 +571,7 @@ struct ChatPanelView: View {
     /// switch, not just the message that announced them three screens ago.
     @ViewBuilder
     private var runBadge: some View {
-        if let run = secretary.activeInstructionRun, run.isRunning {
+        if let run = secretary.runningInstructions, run.isRunning {
             Button {
                 secretary.stopInstructionRun(because: "you stopped it")
             } label: {
@@ -1109,7 +1109,7 @@ struct ChatPanelView: View {
 
     @ViewBuilder
     private var pendingDecisionView: some View {
-        switch secretary.pendingDecision {
+        switch secretary.awaitingDecision {
         case .approval(let request, _):
             // Anything that isn't read-only leaves a mark somewhere — currently
             // that means sending a file off this Mac. Give it a louder colour so

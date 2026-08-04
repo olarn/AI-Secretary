@@ -120,7 +120,7 @@ final class AgentSessionTests: XCTestCase {
         let secretary = makeSecretary(projects: [project(grantingAgent: false)])
         secretary.submit("what does this project do?")
 
-        guard case .approval(let request, let operation) = secretary.pendingDecision else {
+        guard case .approval(let request, let operation) = secretary.pendingDecision.toOptional() else {
             return XCTFail("Expected an approval request")
         }
         XCTAssertEqual(request.toolID, Secretary.claudeCodeToolID)
@@ -170,7 +170,7 @@ final class AgentSessionTests: XCTestCase {
         secretary.submit("hello")
         await waitUntilIdle()
 
-        XCTAssertNil(secretary.pendingDecision)
+        XCTAssertEqual(secretary.pendingDecision, .none())
         XCTAssertEqual(provider.callCount, 1)
         XCTAssertEqual(provider.preparedDirectories.last??.path, projectPath)
     }
@@ -184,7 +184,7 @@ final class AgentSessionTests: XCTestCase {
         secretary.submit("second")
         await waitUntilIdle()
 
-        XCTAssertNil(secretary.pendingDecision, "The second message must not ask again")
+        XCTAssertEqual(secretary.pendingDecision, .none(), "The second message must not ask again")
         XCTAssertEqual(provider.callCount, 2)
     }
 
@@ -371,7 +371,7 @@ final class AgentSessionTests: XCTestCase {
         secretary.submit("create out.txt")
         await waitUntilIdle()
 
-        guard case .approval(let request, let operation) = secretary.pendingDecision else {
+        guard case .approval(let request, let operation) = secretary.pendingDecision.toOptional() else {
             return XCTFail("Expected an offer to widen, got: \(String(describing: secretary.pendingDecision))")
         }
         XCTAssertEqual(operation, .widenAgentTools(rules: ["Write"], prompt: "create out.txt"))
@@ -454,7 +454,7 @@ final class AgentSessionTests: XCTestCase {
         secretary.submit("set the project up")
         await waitUntilIdle()
 
-        guard case .approval(_, let operation) = secretary.pendingDecision,
+        guard case .approval(_, let operation) = secretary.pendingDecision.toOptional(),
               case .widenAgentTools(let rules, _) = operation else {
             return XCTFail("Expected one combined offer")
         }
@@ -466,7 +466,7 @@ final class AgentSessionTests: XCTestCase {
         secretary.submit("just tell me about it")
         await waitUntilIdle()
 
-        XCTAssertNil(secretary.pendingDecision)
+        XCTAssertEqual(secretary.pendingDecision, .none())
     }
 
     // MARK: - Choosing a model from the settings panel
@@ -732,7 +732,7 @@ final class AgentSessionTests: XCTestCase {
         ])
         secretary.submit("hello")
 
-        guard case .projectChoice(let candidates, let operation) = secretary.pendingDecision else {
+        guard case .projectChoice(let candidates, let operation) = secretary.pendingDecision.toOptional() else {
             return XCTFail("Expected a project choice, got: \(String(describing: secretary.pendingDecision))")
         }
         XCTAssertEqual(candidates.count, 2)
@@ -747,12 +747,12 @@ final class AgentSessionTests: XCTestCase {
             Project(name: "Other", path: "/tmp/other", allowedTools: [])
         ])
         secretary.submit("hello")
-        guard case .projectChoice(let candidates, _) = secretary.pendingDecision else {
+        guard case .projectChoice(let candidates, _) = secretary.pendingDecision.toOptional() else {
             return XCTFail("Expected a project choice")
         }
         secretary.choose(project: candidates[0])
 
-        guard case .approval(let request, _) = secretary.pendingDecision else {
+        guard case .approval(let request, _) = secretary.pendingDecision.toOptional() else {
             return XCTFail("Expected an approval request after choosing")
         }
         XCTAssertEqual(request.toolID, Secretary.claudeCodeToolID)

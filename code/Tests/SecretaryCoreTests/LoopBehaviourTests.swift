@@ -45,7 +45,7 @@ final class LoopBehaviourTests: XCTestCase {
         let secretary = makeSecretary()
         secretary.startLoop(interval: 600, note: "where are we", now: Date())
 
-        XCTAssertNotNil(secretary.activeLoop)
+        XCTAssertTrue(secretary.activeLoop.isDefined)
         let said = secretary.transcript.last?.text ?? ""
         XCTAssertTrue(said.contains("10m"), "Got: \(said)")
         XCTAssertTrue(said.contains("/loop stop"), "Must say how to stop it. Got: \(said)")
@@ -58,7 +58,7 @@ final class LoopBehaviourTests: XCTestCase {
         secretary.startLoop(interval: 600, note: "", now: start)
         secretary.stopLoop()
 
-        XCTAssertNil(secretary.activeLoop)
+        XCTAssertEqual(secretary.activeLoop, .none())
         XCTAssertTrue(secretary.transcript.last?.text.contains("0 checks") == true,
                       "Got: \(secretary.transcript.last?.text ?? "")")
     }
@@ -68,7 +68,7 @@ final class LoopBehaviourTests: XCTestCase {
     func testStoppingWhenNothingRunsSaysSoRatherThanCrashing() {
         let secretary = makeSecretary()
         secretary.stopLoop()
-        XCTAssertNil(secretary.activeLoop)
+        XCTAssertEqual(secretary.activeLoop, .none())
         XCTAssertTrue(secretary.transcript.last?.text.contains("No loop") == true)
     }
 
@@ -80,14 +80,14 @@ final class LoopBehaviourTests: XCTestCase {
         XCTAssertTrue(secretary.transcript.last?.text.contains("No loop is running") == true)
 
         secretary.submit("/loop 10m ถึงหัวข้อไหนแล้ว")
-        XCTAssertEqual(secretary.activeLoop?.interval, 600)
-        XCTAssertEqual(secretary.activeLoop?.note, "ถึงหัวข้อไหนแล้ว")
+        XCTAssertEqual(secretary.activeLoop.toOptional()?.interval, 600)
+        XCTAssertEqual(secretary.activeLoop.toOptional()?.note, "ถึงหัวข้อไหนแล้ว")
 
         secretary.submit("/loop")
         XCTAssertTrue(secretary.transcript.last?.text.contains("next at") == true)
 
         secretary.submit("/loop stop")
-        XCTAssertNil(secretary.activeLoop)
+        XCTAssertEqual(secretary.activeLoop, .none())
     }
 
     /// A refused interval must leave nothing running — the failure mode to avoid
@@ -95,7 +95,7 @@ final class LoopBehaviourTests: XCTestCase {
     func testARefusedIntervalStartsNothing() {
         let secretary = makeSecretary()
         secretary.submit("/loop 5s")
-        XCTAssertNil(secretary.activeLoop)
+        XCTAssertEqual(secretary.activeLoop, .none())
         XCTAssertTrue(secretary.transcript.last?.text.contains("too often") == true,
                       "Got: \(secretary.transcript.last?.text ?? "")")
     }
@@ -121,7 +121,7 @@ final class LoopBehaviourTests: XCTestCase {
 
         secretary.tickLoop(now: start.addingTimeInterval(599))
         XCTAssertEqual(chat.callCount, 0)
-        XCTAssertEqual(secretary.activeLoop?.firedCount, 0)
+        XCTAssertEqual(secretary.activeLoop.toOptional()?.firedCount, 0)
     }
 
     func testADueCheckAsksTheModelAndSaysWhyItSpoke() async {
@@ -137,7 +137,7 @@ final class LoopBehaviourTests: XCTestCase {
         await waitUntilIdle()
 
         XCTAssertEqual(chat.callCount, 1, "The check must reach the model")
-        XCTAssertEqual(secretary.activeLoop?.firedCount, 1)
+        XCTAssertEqual(secretary.activeLoop.toOptional()?.firedCount, 1)
         // The prompt has to carry the clock: the model has none of its own.
         let sent = chat.lastMessages.last?.content ?? ""
         XCTAssertTrue(sent.contains("Loop check"), "Got: \(sent)")
@@ -163,8 +163,8 @@ final class LoopBehaviourTests: XCTestCase {
         secretary.tickLoop(now: start.addingTimeInterval(600))
 
         XCTAssertEqual(chat.callCount, callsBefore, "Nothing may be sent while busy")
-        XCTAssertEqual(secretary.activeLoop?.firedCount, 0, "A postponed check is not a delivered one")
-        XCTAssertNotNil(secretary.activeLoop, "Being busy must not cancel the loop")
+        XCTAssertEqual(secretary.activeLoop.toOptional()?.firedCount, 0, "A postponed check is not a delivered one")
+        XCTAssertTrue(secretary.activeLoop.isDefined, "Being busy must not cancel the loop")
     }
 
     /// A loop nobody stopped must not still be running tomorrow, spending the
@@ -177,7 +177,7 @@ final class LoopBehaviourTests: XCTestCase {
 
         secretary.tickLoop(now: start.addingTimeInterval(LoopSchedule.maximumDuration))
 
-        XCTAssertNil(secretary.activeLoop)
+        XCTAssertEqual(secretary.activeLoop, .none())
         XCTAssertEqual(chat.callCount, 0, "It must stop rather than fire one more")
         XCTAssertTrue(secretary.transcript.last?.text.contains("Loop stopped") == true)
     }
@@ -195,8 +195,8 @@ final class LoopBehaviourTests: XCTestCase {
         secretary.submit("ช่วย track ให้หน่อยว่าถึงหัวข้อไหนแล้ว ตามเวลาจริง")
         await waitUntilIdle()
 
-        XCTAssertEqual(secretary.activeLoop?.interval, 600)
-        XCTAssertEqual(secretary.activeLoop?.note, "ถึงหัวข้อไหนแล้ว")
+        XCTAssertEqual(secretary.activeLoop.toOptional()?.interval, 600)
+        XCTAssertEqual(secretary.activeLoop.toOptional()?.note, "ถึงหัวข้อไหนแล้ว")
         XCTAssertFalse(
             secretary.transcript.contains { $0.text.contains("```loop") },
             "The block must never reach the screen as text"

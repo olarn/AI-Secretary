@@ -156,7 +156,7 @@ final class SecretaryTests: XCTestCase {
         let secretary = makeSecretary(projects: [project])
         secretary.submit("git status")
 
-        guard case .approval(let request, _) = secretary.pendingDecision else {
+        guard case .approval(let request, _) = secretary.pendingDecision.toOptional() else {
             return XCTFail("Expected an approval prompt, got \(String(describing: secretary.pendingDecision))")
         }
         XCTAssertEqual(request.project, project)
@@ -180,7 +180,7 @@ final class SecretaryTests: XCTestCase {
         secretary.resolvePendingApproval(granted: false)
 
         XCTAssertTrue(adapter.runCalls.isEmpty)
-        XCTAssertNil(secretary.pendingDecision)
+        XCTAssertEqual(secretary.pendingDecision, .none())
         XCTAssertEqual(machine.state, .idle)
     }
 
@@ -191,7 +191,7 @@ final class SecretaryTests: XCTestCase {
 
         secretary.submit("git status")
 
-        XCTAssertNil(secretary.pendingDecision, "Approved project/tool should not re-prompt")
+        XCTAssertEqual(secretary.pendingDecision, .none(), "Approved project/tool should not re-prompt")
         XCTAssertEqual(adapter.runCalls.count, 2)
     }
 
@@ -200,7 +200,7 @@ final class SecretaryTests: XCTestCase {
         secretary.submit("git status in nonexistent-project")
 
         XCTAssertTrue(adapter.runCalls.isEmpty)
-        XCTAssertNil(secretary.pendingDecision)
+        XCTAssertEqual(secretary.pendingDecision, .none())
         XCTAssertTrue(secretary.transcript.last?.text.contains("No registered project") ?? false)
     }
 
@@ -211,7 +211,7 @@ final class SecretaryTests: XCTestCase {
 
         secretary.submit("git status in alph")
 
-        guard case .projectChoice(let candidates, _) = secretary.pendingDecision else {
+        guard case .projectChoice(let candidates, _) = secretary.pendingDecision.toOptional() else {
             return XCTFail("Expected a project choice prompt")
         }
         XCTAssertEqual(candidates.count, 2)
@@ -226,7 +226,7 @@ final class SecretaryTests: XCTestCase {
         secretary.submit("git status in alph")
         secretary.choose(project: b)
 
-        guard case .approval(let request, _) = secretary.pendingDecision else {
+        guard case .approval(let request, _) = secretary.pendingDecision.toOptional() else {
             return XCTFail("Expected approval after choosing a project")
         }
         XCTAssertEqual(request.project, b)
@@ -238,7 +238,7 @@ final class SecretaryTests: XCTestCase {
 
         secretary.submit("git status")
 
-        XCTAssertNil(secretary.pendingDecision, "A denial must not offer an approval prompt")
+        XCTAssertEqual(secretary.pendingDecision, .none(), "A denial must not offer an approval prompt")
         XCTAssertTrue(adapter.runCalls.isEmpty)
         XCTAssertTrue(secretary.transcript.last?.text.contains("not in the allowlist") ?? false)
     }
@@ -333,7 +333,7 @@ final class SecretaryTests: XCTestCase {
 
         secretary.submit("git status")
 
-        guard case .approval = secretary.pendingDecision else {
+        guard case .approval = secretary.pendingDecision.toOptional() else {
             return XCTFail("git command should still reach the approval prompt")
         }
         XCTAssertEqual(chat.callCount, 0, "A git command must not go to chat")

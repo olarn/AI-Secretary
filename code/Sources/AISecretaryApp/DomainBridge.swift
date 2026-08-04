@@ -56,4 +56,13 @@ extension Secretary {
     /// `nil` means "go back to inheriting".
     func chooseModel(_ chosen: ChatModel?) { selectModel(Option.fromOptional(chosen)) }
     func chooseEffort(_ chosen: Effort?) { selectEffort(Option.fromOptional(chosen)) }
+
+    /// The three pieces of "something is in flight" the panel draws: a question
+    /// waiting on the user, a standing check-back, and an instruction file being
+    /// worked through. Each is an `Option` on the Secretary and a plain optional
+    /// here, for the same reason as the two above — the views that read them are
+    /// full of `@State`, so they can never see Bow's `Option`.
+    var awaitingDecision: PendingDecision? { pendingDecision.toOptional() }
+    var runningLoop: LoopSchedule? { activeLoop.toOptional() }
+    var runningInstructions: InstructionRun? { activeInstructionRun.toOptional() }
 }

@@ -131,7 +131,7 @@ final class DroppedDecisionTests: XCTestCase {
             chatProvider: SpyWorkspaceProvider()
         )
         secretary.submit("watch something")   // no project registered → nothing pending
-        XCTAssertNil(secretary.pendingDecision)
+        XCTAssertEqual(secretary.pendingDecision, .none())
 
         // Nothing was waiting, so nothing is announced: the note must appear
         // only when a real decision is dropped, not on every message.
