@@ -1440,10 +1440,19 @@ struct ChatPanelView: View {
     /// section buttons — the larger share at every text size.
     private static let panelHeightShare: Double = 0.55
 
-    /// How much of each end of the footer row belongs to the resize grip. The
-    /// grip is 9pt of glyph inside 14pt of padding, and this is that plus the
-    /// gap that keeps the two from reading as one control.
-    private static let gripClearance: Double = 26
+    /// The strip along the bottom of the window that belongs to the resize
+    /// grip, and to nothing else.
+    ///
+    /// The grip is 9pt of glyph inside 14pt of padding, so it stands about 40pt
+    /// tall in whichever bottom corner it is in; this is what the footer row
+    /// gives up below itself to leave that corner free, plus a few points so the
+    /// two don't read as one control.
+    ///
+    /// Kept whether or not the grip is currently down here. The row's job is to
+    /// be the one thing in this window that doesn't move, and a strip that
+    /// appears only when the bubble flips is a row that jumps whenever the
+    /// character wanders too near the top of the screen.
+    private static let gripStrip: Double = 26
 
     /// The section toggles grow with the text size like everything else in the
     /// panel: left at a fixed caption size they became unreadable specks next to
@@ -1471,15 +1480,12 @@ struct ChatPanelView: View {
                 }
             }
         }
-        // Both ends of this row hold a button, so the resize grip can't be
-        // dodged by moving them — room is left for it. Left at both ends and in
-        // every placement, though the grip only ever occupies one of them: the
-        // alternative reserved it only where the grip actually was, which meant
-        // Projects slid inward the moment the bubble flipped below the
-        // character. A row that shifts under the pointer costs more than the
-        // gap this spends, and the gap comes out of the empty middle rather
-        // than out of any button.
-        .padding(.horizontal, Self.gripClearance)
+        // Both ends of this row hold a button, so the grip can't be dodged
+        // sideways — it is given the strip underneath instead. Projects stays
+        // against the left edge and Settings against the right, which is the
+        // row as drawn; indenting whichever end the grip was in moved a button
+        // every time the bubble flipped.
+        .padding(.bottom, Self.gripStrip)
         // Not `.toggleStyle(.button)`: an accent-tinted control loses its colour
         // whenever the window isn't key, and this window is never key. See
         // `PanelToggleStyle`, which keeps the bordered metrics and changes only
