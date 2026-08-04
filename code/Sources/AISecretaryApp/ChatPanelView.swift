@@ -1425,7 +1425,14 @@ struct ChatPanelView: View {
                 case .skills: skillsSection
                 }
             }
+            // A ScrollView takes every point it is offered, so a short panel —
+            // Projects with nothing registered, Settings at a small text size —
+            // claimed the whole allowance and left dead space between the box
+            // and the buttons. Asking for the content's own height first, then
+            // capping, makes the panel as tall as it needs and no taller, and
+            // it still scrolls once the content passes the cap.
             .frame(maxHeight: appearance.settings.chatHeight * Self.panelHeightShare)
+            .fixedSize(horizontal: false, vertical: true)
         }
     }
 

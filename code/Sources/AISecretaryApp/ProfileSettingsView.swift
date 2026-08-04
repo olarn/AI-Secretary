@@ -169,7 +169,10 @@ struct ProfileSettingsView: View {
 
     private var personalityField: some View {
         GridRow {
+            // Beside two lines of content, a centred label floats between them
+            // and stops reading as the name of the field above it.
             fieldLabel("Personality")
+                .gridCellAnchor(.topLeading)
             VStack(alignment: .leading, spacing: appearance.settings.panelSpacing * 0.35) {
                 TextField(SecretaryProfile.defaultPersonality, text: $draft.personality)
                     .textFieldStyle(.roundedBorder)
@@ -189,6 +192,7 @@ struct ProfileSettingsView: View {
 
         return GridRow {
             fieldLabel("Picture")
+                .gridCellAnchor(.topLeading)
             VStack(alignment: .leading, spacing: appearance.settings.panelSpacing * 0.35) {
                 HStack(spacing: appearance.settings.panelSpacing) {
                 Menu {
