@@ -524,6 +524,7 @@ struct ChatPanelView: View {
                 .font(.caption2.bold())
                 .foregroundStyle(.secondary)
             loopBadge
+            runBadge
             Spacer()
         }
         // A top corner is taken by the widen/restore/close row, and can be taken
@@ -560,6 +561,33 @@ struct ChatPanelView: View {
             }
             .buttonStyle(.plain)
             .help("Checking back every \(loop.intervalDescription) — click to stop")
+        }
+    }
+
+    /// Shows that a file's steps are being worked through, and stops them in
+    /// one click. Same reasoning as `loopBadge`: turns that keep arriving
+    /// without anyone typing must have a visible cause and a visible off
+    /// switch, not just the message that announced them three screens ago.
+    @ViewBuilder
+    private var runBadge: some View {
+        if let run = secretary.activeInstructionRun, run.isRunning {
+            Button {
+                secretary.stopInstructionRun(because: "you stopped it")
+            } label: {
+                HStack(spacing: 3) {
+                    Image(systemName: "list.bullet.rectangle")
+                    Text("\(run.stepNumber)/\(run.totalSteps)")
+                    Image(systemName: "xmark")
+                        .font(.system(size: appearance.settings.secondaryFontSize * 0.7))
+                }
+                .font(.system(size: appearance.settings.secondaryFontSize, weight: .semibold))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Color.accentColor.opacity(0.22), in: Capsule())
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .help("\(run.progressDescription) — click to stop")
         }
     }
 
@@ -1100,6 +1128,18 @@ struct ChatPanelView: View {
             }
             .padding(10)
             .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+
+        case .instructionPlan(let plan, let risks, let changed):
+            InstructionPlanCard(
+                plan: plan,
+                risks: risks,
+                changedSinceLastRun: changed,
+                start: { secretary.startPlannedInstructions() },
+                cancel: { secretary.cancelPendingDecision() }
+            )
+            // A new plan is a new decision: the acknowledgement inside must not
+            // carry over from the last one the user waved through.
+            .id(plan.fingerprint)
 
         case nil:
             EmptyView()

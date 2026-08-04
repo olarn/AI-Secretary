@@ -13,10 +13,9 @@ import Foundation
 /// called:
 ///
 /// - **major** — `0` until the app is published. The owner says when.
-/// - **phase** — which phase of the charter the work belongs to, currently 6.
-///   Moved by hand when the work moves on, not derived: the charter lists
-///   phases 7 and 8 that nobody has started, so the highest heading is not the
-///   current one.
+/// - **phase** — which phase of the charter the work belongs to, currently 9.
+///   Moved by hand when the work moves on, not derived: the backlog lists
+///   phases nobody has started, so the highest heading is not the current one.
 /// - **change** — one per completed change, five for five. It never resets, so
 ///   it only ever counts up and two builds can't share a number.
 ///
@@ -26,7 +25,7 @@ import Foundation
 public struct AppVersion: Equatable, Comparable, Sendable, CustomStringConvertible {
     /// The current version. Keep the literal on one line and in this shape —
     /// `scripts/package-app.sh` parses it to fill in `CFBundleShortVersionString`.
-    public static let current = AppVersion(major: 0, minor: 6, patch: 129)
+    public static let current = AppVersion(major: 0, minor: 9, patch: 130)
 
     public let major: Int
     public let minor: Int
