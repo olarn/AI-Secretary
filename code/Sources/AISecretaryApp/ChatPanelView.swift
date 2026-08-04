@@ -1492,6 +1492,7 @@ struct ChatPanelView: View {
         // `PanelToggleStyle`, which keeps the bordered metrics and changes only
         // how "this one is open" is drawn.
         .toggleStyle(PanelToggleStyle(
+            fontSize: appearance.settings.secondaryFontSize,
             controlSize: appearance.settings.fontSize > 16 ? .regular : .small
         ))
         .font(.system(size: appearance.settings.secondaryFontSize))

@@ -1,23 +1,32 @@
 import SwiftUI
 
-/// The Projects / Profile / Skills / Settings buttons, and whether one is open.
+/// The Projects / Profile / Skills / Settings buttons: how big they are, and
+/// which one is open.
 ///
-/// It exists for one reason: AppKit strips the accent colour from a tinted
-/// control whenever its window isn't key. Reasonable for an ordinary app, wrong
-/// for this one, because this window is *designed* never to take focus. The
-/// result was a pane sitting open with nothing in the footer saying so — open
-/// Projects, then click anything else (the Add Project dialog, Finder, a
-/// browser) and the button went grey while the pane stayed exactly where it
-/// was. A fill we draw ourselves stays put whether or not the app is frontmost,
-/// which is the only honest way to answer "is a panel open?" in a window that
-/// spends its life in the background.
+/// Two things `.toggleStyle(.button)` got wrong, both of them quiet.
 ///
-/// Everything else is deliberately still `.bordered` with the same control
-/// size: the first attempt drew the whole button by hand and, because a plain
-/// `Button` inherits the surrounding `.font` while `.toggleStyle(.button)`
-/// quietly ignores it, the labels jumped to the chat's text size and wrapped
-/// mid-word — "Projec / ts" at 28pt. Only the colour was meant to change.
+/// **The colour.** AppKit strips the accent from a tinted control whenever its
+/// window isn't key. Reasonable for an ordinary app, wrong for this one, whose
+/// window is *designed* never to take focus — so an open pane had nothing in
+/// the footer saying so. Open Projects, then click the Add Project dialog, or
+/// Finder, or a browser, and the button went grey while the pane stayed
+/// exactly where it was. The fill is drawn here instead, and stays put whether
+/// or not the app is frontmost, which is the only honest answer in a window
+/// that spends its life in the background.
+///
+/// **The size.** That style also ignores the surrounding `.font`, so the
+/// footer never actually grew with the app's text size — the row looked the
+/// same at 10pt as at 28pt, which is what the old comment about "unreadable
+/// specks next to 32pt replies" was trying to prevent and didn't. The label's
+/// size is set explicitly here.
+///
+/// Growing has a limit the window imposes rather than a number picked here:
+/// four labels plus their padding stop fitting a narrow panel somewhere above
+/// 20pt, and the first attempt at this wrapped them mid-word — "Projec / ts".
+/// So each label stays on one line and shrinks to fit instead. Widen the
+/// window and they grow back.
 struct PanelToggleStyle: ToggleStyle {
+    let fontSize: Double
     let controlSize: ControlSize
 
     func makeBody(configuration: Configuration) -> some View {
@@ -25,15 +34,22 @@ struct PanelToggleStyle: ToggleStyle {
             configuration.isOn.toggle()
         } label: {
             configuration.label
+                .font(.system(size: fontSize))
+                .lineLimit(1)
+                // Never a broken word. Below this the label would be smaller
+                // than the secondary text around it, at which point the row is
+                // too cramped to read at all and shrinking further doesn't
+                // help.
+                .minimumScaleFactor(0.55)
         }
         .buttonStyle(.bordered)
         .controlSize(controlSize)
-        // Behind the bezel rather than instead of it, so the metrics, corner
-        // radius and hit area stay exactly what the bordered style gives every
-        // other button in the row.
+        // Behind the bezel rather than instead of it, so the corner radius and
+        // hit area stay whatever the bordered style gives every other button
+        // in the row.
         .background(
             configuration.isOn ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(Color.clear),
-            in: RoundedRectangle(cornerRadius: 5)
+            in: RoundedRectangle(cornerRadius: fontSize * 0.4)
         )
         .foregroundStyle(configuration.isOn ? AnyShapeStyle(Color.white) : AnyShapeStyle(Color.primary))
     }
