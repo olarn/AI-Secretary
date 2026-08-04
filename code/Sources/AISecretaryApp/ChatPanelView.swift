@@ -1446,11 +1446,14 @@ struct ChatPanelView: View {
     /// The strip along the bottom of the window that belongs to the resize
     /// grip, on the placements where the grip is down here at all.
     ///
-    /// The grip is 9pt of glyph inside 10pt of padding, so its hit area stands
-    /// about 30pt up from the bottom edge; with the window's own 18pt of padding
-    /// underneath the row already, this is the rest of what keeps the two from
-    /// overlapping. Sized off the grip rather than by eye, so shrinking one and
-    /// not the other can't quietly put a corner of Projects inside the grip.
+    /// The grip is 9pt of glyph inside 10pt of padding, and that padding is its
+    /// hit area, not just air: it reaches about 30pt up from the bottom edge.
+    /// The window's own 18pt sits under the row already, so this is the rest of
+    /// what holds the row above it — and the margin is only a few points, which
+    /// is why it is written down. Shrink either number and the corner of
+    /// Projects lands inside the grip, where a click resizes the window instead
+    /// of opening the pane and no screenshot shows it. Both bottom corners were
+    /// checked by clicking the outermost pixel of the button in them.
     private static let gripStrip: Double = 12
 
     /// The section toggles grow with the text size like everything else in the
