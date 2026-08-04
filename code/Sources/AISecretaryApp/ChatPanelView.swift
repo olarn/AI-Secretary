@@ -291,8 +291,11 @@ struct ChatPanelView: View {
             .font(.system(size: 9, weight: .bold))
             .foregroundStyle(.secondary)
             // Enough to sit clear of the bubble's rounded corner rather than
-            // tucked into it, and to match the inset of the button row opposite.
-            .padding(14)
+            // tucked into it. This is also the grip's hit area, and at a bottom
+            // corner it is what the footer row has to stay above — so it is as
+            // small as a corner target can be and no smaller, rather than sized
+            // for looks alone.
+            .padding(10)
             .contentShape(Rectangle())
             .help("Drag to resize")
             .gesture(
@@ -1441,18 +1444,14 @@ struct ChatPanelView: View {
     private static let panelHeightShare: Double = 0.55
 
     /// The strip along the bottom of the window that belongs to the resize
-    /// grip, and to nothing else.
+    /// grip, on the placements where the grip is down here at all.
     ///
-    /// The grip is 9pt of glyph inside 14pt of padding, so it stands about 40pt
-    /// tall in whichever bottom corner it is in; this is what the footer row
-    /// gives up below itself to leave that corner free, plus a few points so the
-    /// two don't read as one control.
-    ///
-    /// Kept whether or not the grip is currently down here. The row's job is to
-    /// be the one thing in this window that doesn't move, and a strip that
-    /// appears only when the bubble flips is a row that jumps whenever the
-    /// character wanders too near the top of the screen.
-    private static let gripStrip: Double = 26
+    /// The grip is 9pt of glyph inside 10pt of padding, so its hit area stands
+    /// about 30pt up from the bottom edge; with the window's own 18pt of padding
+    /// underneath the row already, this is the rest of what keeps the two from
+    /// overlapping. Sized off the grip rather than by eye, so shrinking one and
+    /// not the other can't quietly put a corner of Projects inside the grip.
+    private static let gripStrip: Double = 12
 
     /// The section toggles grow with the text size like everything else in the
     /// panel: left at a fixed caption size they became unreadable specks next to
@@ -1485,7 +1484,10 @@ struct ChatPanelView: View {
         // against the left edge and Settings against the right, which is the
         // row as drawn; indenting whichever end the grip was in moved a button
         // every time the bubble flipped.
-        .padding(.bottom, Self.gripStrip)
+        //
+        // Only when the grip is actually down here: with it at a top corner the
+        // strip would be a gap under the row holding nothing.
+        .padding(.bottom, gripCorner.isBottom ? Self.gripStrip : 0)
         // Not `.toggleStyle(.button)`: an accent-tinted control loses its colour
         // whenever the window isn't key, and this window is never key. See
         // `PanelToggleStyle`, which keeps the bordered metrics and changes only
