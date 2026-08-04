@@ -1446,9 +1446,9 @@ struct ChatPanelView: View {
     /// stays mini around text that isn't.
     private var footer: some View {
         HStack(spacing: 10) {
-            ForEach(Array(// `isMirrored` means the tail is on the right, which is the usual
-                // placement rather than the exceptional one.
-                footerSlots(tailOnRight: layout.isMirrored).enumerated()), id: \.offset) { _, slot in
+            // The one row in the window that doesn't follow the bubble: these
+            // four stay put so they can be aimed at without looking.
+            ForEach(Array(footerSlots().enumerated()), id: \.offset) { _, slot in
                 switch slot {
                 case .gap:
                     Spacer(minLength: 12)
