@@ -44,7 +44,12 @@ final class WatchBlockTests: XCTestCase {
     }
 
     func testItCanAskToStop() {
-        XCTAssertEqual(WatchBlock.parse("Done.\n\n```watch\nstop\n```").request, .stop)
+        XCTAssertEqual(WatchBlock.parse("Done.\n\n```watch\nstop\n```").request, .stop(path: nil))
+    }
+
+    /// With several running, "stop" has to be able to mean one of them.
+    func testItCanAskToStopJustOne() {
+        XCTAssertEqual(WatchBlock.parse("```watch\nstop docs\n```").request, .stop(path: "docs"))
     }
 
     /// An empty block asks for nothing, and must not leave a hole in the reply.

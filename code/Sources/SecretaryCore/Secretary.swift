@@ -189,13 +189,14 @@ public final class Secretary {
     /// reply is treated as a plan to confirm rather than as an answer.
     @ObservationIgnored private var awaitingPlan: Option<InstructionRequest> = .none()
 
-    /// The folder or file being watched, when one is. Observed for the same
-    /// reason as `activeLoop`: something that speaks without being spoken to
-    /// has to be visible while it's armed, with one click to stop it.
-    public private(set) var activeWatch: FolderWatch?
-    /// Which project the watched path belongs to. Context, kept beside the
-    /// value rather than inside it.
-    @ObservationIgnored private var watchProject: Option<Project> = .none()
+    /// The folders and files being watched. Observed for the same reason as
+    /// `activeLoop`: something that speaks without being spoken to has to be
+    /// visible while it's armed, with one click to stop it.
+    ///
+    /// A list, because the two useful cases run together — a folder for files
+    /// appearing, a document for edits — and making them exclusive meant
+    /// starting the second silently replaced the first.
+    public private(set) var activeWatches: [FolderWatch] = []
 
     /// Who the assistant is. The user can switch profiles while a conversation
     /// is open, so this changes at runtime — see `apply(profile:)`.
@@ -506,37 +507,49 @@ public final class Secretary {
     // MARK: - Watching a folder or a file
 
     /// `/watch <path>` — say when something under a path changes.
+    /// `/watch stop [path]` — stop one, or all of them.
     ///
-    /// Only when asked, and only one at a time. Watching is a standing
-    /// instruction that produces messages nobody typed for, so like the loop it
-    /// is announced when it starts, visible while it runs, and stoppable in one
-    /// click.
+    /// Only when asked. Watching is a standing instruction that produces
+    /// messages nobody typed for, so like the loop each one is announced when
+    /// it starts, visible while it runs, and stoppable in one click.
     private func handleWatchCommand(_ argument: String) {
         if argument.isEmpty {
-            guard let watch = activeWatch, let project = watchProject.toOptional() else {
-                say(.secretary, """
-                    Nothing is being watched.
-                    `/watch <path>` — tell me when a file or folder in the current project changes. \
-                    `/watch .` watches the project folder itself.
-                    `/watch stop` — stop watching.
-                    """)
-                return
-            }
-            let reports = watch.reportCount == 1 ? "1 report" : "\(watch.reportCount) reports"
-            say(.secretary, """
-                👁 Watching \(watch.displayName(inProject: project.name)) — \
-                \(watch.snapshot.count) file\(watch.snapshot.count == 1 ? "" : "s"), \(reports) so far.
-                `/watch stop` to stop.
-                """)
+            reportWatches()
             return
         }
 
-        if LoopCommand.stopWords.contains(argument.lowercased()) {
-            stopWatching(because: "you asked me to")
+        // `stop`, or `stop docs` for one of several.
+        let words = argument.split(separator: " ", maxSplits: 1).map(String.init)
+        if let first = words.first, LoopCommand.stopWords.contains(first.lowercased()) {
+            let target = words.count > 1 ? words[1].trimmingCharacters(in: .whitespaces) : ""
+            stopWatching(matching: target, because: "you asked me to")
             return
         }
 
         beginWatch(path: argument, askedByAssistant: false)
+    }
+
+    /// What is being watched, or how to start.
+    private func reportWatches() {
+        guard !activeWatches.isEmpty else {
+            say(.secretary, """
+                Nothing is being watched.
+                `/watch <path>` — tell me when a file or folder in the current project changes. \
+                `/watch .` watches the project folder itself.
+                `/watch stop` — stop watching; `/watch stop <path>` stops just one.
+                """)
+            return
+        }
+        let lines = activeWatches.map { watch -> String in
+            let reports = watch.reportCount == 1 ? "1 report" : "\(watch.reportCount) reports"
+            let files = watch.snapshot.count == 1 ? "1 file" : "\(watch.snapshot.count) files"
+            return "• \(watch.displayName) — \(files), \(reports) so far"
+        }
+        say(.secretary, """
+            👁 Watching \(activeWatches.count == 1 ? "one thing" : "\(activeWatches.count) things"):
+            \(lines.joined(separator: "\n"))
+            `/watch stop` stops all of them; `/watch stop <path>` stops one.
+            """)
     }
 
     /// Shared by the typed `/watch` and by the assistant's own ```watch block.
@@ -566,30 +579,11 @@ public final class Secretary {
     /// Acts on a ```watch block, once the reply that carried it is whole.
     private func applyWatchRequest(_ request: WatchBlock.Request) {
         switch request {
-        case .stop:
-            if activeWatch != nil { stopWatching(because: "the assistant asked to stop") }
+        case .stop(let path):
+            guard !activeWatches.isEmpty else { return }
+            stopWatching(matching: path ?? "", because: "the assistant asked to stop")
         case .start(let path):
-            // One at a time, and replacing one silently would leave the person
-            // watching something they didn't choose.
-            guard activeWatch == nil else {
-                say(.secretary, "I'm already watching something — `/watch stop` first if you want to swap.")
-                return
-            }
             beginWatch(path: path, askedByAssistant: true)
-        }
-    }
-
-    /// Acts on a ```run block. Gets as far as the confirmation card and no
-    /// further, exactly like the typed command.
-    private func applyRunRequest(_ request: RunBlock.Request) {
-        switch request {
-        case .stop:
-            if activeInstructionRun?.isRunning == true {
-                stopInstructionRun(because: "the assistant asked to stop")
-            }
-        case .start(let path):
-            guard activeInstructionRun?.isRunning != true else { return }
-            beginInstructionRead(path: path, askedByAssistant: true)
         }
     }
 
@@ -616,50 +610,102 @@ public final class Secretary {
             return
         }
 
-        let snapshot = WatchScan.snapshot(of: url)
-        let watch = FolderWatch(relativePath: request.displayPath, snapshot: snapshot)
-        activeWatch = watch
-        watchProject = .some(project)
+        let watch = FolderWatch(
+            relativePath: request.displayPath,
+            project: project,
+            snapshot: WatchScan.snapshot(of: url)
+        )
+
+        // Asking twice for the same thing is a no-op, not a second watch that
+        // reports everything in duplicate.
+        if let existing = activeWatches.first(where: { $0.id == watch.id }) {
+            finish(
+                success: true,
+                message: "👁 Already watching \(existing.displayName) — nothing to change.",
+                reason: "watch already running"
+            )
+            return
+        }
+        // Refuses the new one and leaves the running ones alone: dropping one
+        // of them to make room would stop something nobody asked to stop.
+        guard activeWatches.count < maxConcurrentWatches else {
+            finish(
+                success: false,
+                message: """
+                I'm already watching \(maxConcurrentWatches) things, which is as many as I can \
+                keep up with. `/watch stop <path>` to free one up.
+                """,
+                reason: "watch limit reached",
+                toolStatus: "refused"
+            )
+            return
+        }
+
+        activeWatches.append(watch)
         audit.record(AuditEntry(taskID: taskID, kind: .executionStarted, detail: "watching \(url.path)"))
 
         // The cap is stated when it bites. "Watching this folder" and "watching
         // the first 500 files of it" are different promises, and the person has
         // to know which one they got.
-        let scope = snapshot.wasTruncated
-            ? "the first \(snapshot.count) files (it's bigger than that — I stop there to stay out of your way)"
-            : "\(snapshot.count) file\(snapshot.count == 1 ? "" : "s")"
+        let scope = watch.snapshot.wasTruncated
+            ? "the first \(watch.snapshot.count) files (it's bigger than that — I stop there to stay out of your way)"
+            : "\(watch.snapshot.count) file\(watch.snapshot.count == 1 ? "" : "s")"
+        let alongside = activeWatches.count > 1
+            ? " That's \(activeWatches.count) things I'm watching now."
+            : ""
 
         finish(
             success: true,
             message: """
-            👁 Watching \(watch.displayName(inProject: project.name)) — \(scope). \
-            I'll say when something changes. `/watch stop` to stop.
+            👁 Watching \(watch.displayName) — \(scope). I'll say when something changes.\
+            \(alongside) `/watch stop` to stop.
             """,
             reason: "watch started"
         )
         startWatchTimer()
     }
 
-    /// Stops watching. Safe when nothing is running, so a button can call it.
-    public func stopWatching(because reason: String) {
-        guard let watch = activeWatch, let project = watchProject.toOptional() else {
+    /// Stops one watch, or all of them when `path` is empty. Safe when nothing
+    /// is running, so a button can call it.
+    public func stopWatching(matching path: String = "", because reason: String) {
+        guard !activeWatches.isEmpty else {
             say(.secretary, "I'm not watching anything. `/watch <path>` to start.")
             return
         }
-        activeWatch = nil
-        watchProject = .none()
-        watchTask?.cancel()
-        watchTask = nil
-        let reports = watch.reportCount == 1 ? "1 change reported" : "\(watch.reportCount) changes reported"
+
+        let wanted = path.trimmingCharacters(in: .whitespaces)
+        let stopping = wanted.isEmpty
+            ? activeWatches
+            : activeWatches.filter { $0.matches(path: wanted) }
+
+        guard !stopping.isEmpty else {
+            say(.secretary, """
+                I'm not watching “\(wanted)”. \
+                \(activeWatches.map(\.displayName).joined(separator: ", ")) — those are the ones running.
+                """)
+            return
+        }
+
+        let stoppingIDs = Set(stopping.map(\.id))
+        activeWatches.removeAll { stoppingIDs.contains($0.id) }
+        if activeWatches.isEmpty {
+            watchTask?.cancel()
+            watchTask = nil
+        }
+
         let because = reason.isEmpty ? "" : " — \(reason)"
-        say(
-            .secretary,
-            "👁 Stopped watching \(watch.displayName(inProject: project.name)) — \(reports)\(because)."
-        )
+        let names = stopping.map { watch -> String in
+            let reports = watch.reportCount == 1 ? "1 change reported" : "\(watch.reportCount) changes reported"
+            return "\(watch.displayName) (\(reports))"
+        }
+        let remaining = activeWatches.isEmpty
+            ? ""
+            : " Still watching \(activeWatches.map(\.displayName).joined(separator: ", "))."
+        say(.secretary, "👁 Stopped watching \(names.joined(separator: ", "))\(because).\(remaining)")
     }
 
     private func startWatchTimer() {
-        watchTask?.cancel()
+        guard watchTask == nil else { return }
         watchTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: Self.watchPollInterval)
@@ -669,29 +715,53 @@ public final class Secretary {
         }
     }
 
-    /// One look. Separate from the timer so a test can drive it directly
-    /// instead of waiting for real seconds.
+    /// One look at every watch. Separate from the timer so a test can drive it
+    /// directly instead of waiting for real seconds.
+    ///
+    /// Each is reported in its own message rather than merged: they are
+    /// different questions the person asked at different times, and "3 changes"
+    /// spanning two unrelated folders would answer neither.
     func tickWatch() {
-        guard let watch = activeWatch, let project = watchProject.toOptional() else { return }
-        guard let url = fileAdapter.resolve(watch.relativePath, in: project).toOption().toOptional() else { return }
+        for (index, watch) in activeWatches.enumerated() {
+            guard index < activeWatches.count else { return }
+            guard let url = fileAdapter.resolve(watch.relativePath, in: watch.project)
+                .toOption().toOptional()
+            else { continue }
 
-        let latest = WatchScan.snapshot(of: url)
-        let changes = watch.snapshot.changes(to: latest)
-        guard !changes.isEmpty else {
-            // Still advanced, so a change that comes and goes between looks
-            // isn't reported twice.
-            activeWatch = watch.advancing(to: latest, reported: false)
-            return
+            let latest = WatchScan.snapshot(of: url)
+            let changes = watch.snapshot.changes(to: latest)
+            guard !changes.isEmpty else {
+                // Still advanced, so a change that comes and goes between looks
+                // isn't reported twice.
+                activeWatches[index] = watch.advancing(to: latest, reported: false)
+                continue
+            }
+
+            activeWatches[index] = watch.advancing(to: latest, reported: true)
+            say(
+                .secretary,
+                """
+                👁 \(WatchReport.headline(changes)) in \(watch.displayName):
+                \(WatchReport.describe(changes))
+                """
+            )
         }
+    }
 
-        activeWatch = watch.advancing(to: latest, reported: true)
-        say(
-            .secretary,
-            """
-            👁 \(WatchReport.headline(changes)) in \(watch.displayName(inProject: project.name)):
-            \(WatchReport.describe(changes))
-            """
-        )
+    // MARK: - Following a file's instructions
+
+    /// Acts on a ```run block. Gets as far as the confirmation card and no
+    /// further, exactly like the typed command.
+    private func applyRunRequest(_ request: RunBlock.Request) {
+        switch request {
+        case .stop:
+            if activeInstructionRun?.isRunning == true {
+                stopInstructionRun(because: "the assistant asked to stop")
+            }
+        case .start(let path):
+            guard activeInstructionRun?.isRunning != true else { return }
+            beginInstructionRead(path: path, askedByAssistant: true)
+        }
     }
 
     // MARK: - Following a file's instructions
@@ -2506,10 +2576,12 @@ public final class Secretary {
     Use the path relative to the project, or `.` for the project folder itself. \
     The app checks every few seconds and says what was added, removed or \
     changed; it announces the watch when it starts and the person stops it with \
-    `/watch stop` or the eye in the corner. One at a time. Put `stop` in the \
-    block on its own to stop it. Ask for it when they wanted it — don't set one \
-    up to check your own work, and don't say you'll keep an eye on something \
-    unless you put the block in.
+    `/watch stop` or the eye in the corner. Several can run at once — a folder \
+    for new files and a document for edits are different questions — so ask for \
+    another rather than swapping, up to five. Put `stop` in the block on its \
+    own to stop them all, or `stop the/path` for one. Ask for it when they \
+    wanted it — don't set one up to check your own work, and don't say you'll \
+    keep an eye on something unless you put the block in.
     """
 
     /// Same reasoning as `watchPrompt`, and safe for the same reason the typed
@@ -2558,8 +2630,8 @@ public final class Secretary {
         • /loop stop — stop checking · /loop — show what's running
         • /run <file> — read a file of steps and do what it says, after you've
           seen the steps and said go. `/run stop` stops part-way.
-        • /watch <path> — tell you when a file or folder changes. `/watch stop`
-          stops watching.
+        • /watch <path> — tell you when a file or folder changes; several at
+          once is fine. `/watch stop` stops all, `/watch stop <path>` stops one.
 
         Or just ask me to keep track of something as it happens and I'll set the
         timer up myself.

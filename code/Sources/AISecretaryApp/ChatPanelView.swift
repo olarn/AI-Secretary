@@ -597,12 +597,17 @@ struct ChatPanelView: View {
     /// header for the same reason.
     @ViewBuilder
     private var watchBadge: some View {
-        if let watch = secretary.activeWatch {
+        if let first = secretary.activeWatches.first {
+            let count = secretary.activeWatches.count
             Button {
                 secretary.stopWatching(because: "")
             } label: {
                 HStack(spacing: 3) {
                     Image(systemName: "eye")
+                    // The number only appears when there is more than one:
+                    // a "1" beside the eye reads as a badge count of unread
+                    // things rather than as how many are being watched.
+                    if count > 1 { Text("\(count)") }
                     Image(systemName: "xmark")
                         .font(.system(size: appearance.settings.secondaryFontSize * 0.7))
                 }
@@ -613,7 +618,11 @@ struct ChatPanelView: View {
                 .contentShape(Capsule())
             }
             .buttonStyle(.plain)
-            .help("Watching \(watch.relativePath.isEmpty ? "the project folder" : watch.relativePath) — click to stop")
+            .help(
+                count == 1
+                    ? "Watching \(first.displayName) — click to stop"
+                    : "Watching \(secretary.activeWatches.map(\.displayName).joined(separator: ", ")) — click to stop all"
+            )
         }
     }
 

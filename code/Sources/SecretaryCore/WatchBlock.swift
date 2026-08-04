@@ -20,7 +20,9 @@ import Foundation
 public struct WatchBlock: Equatable, Sendable {
     public enum Request: Equatable, Sendable {
         case start(path: String)
-        case stop
+        /// A bare `stop` stops all of them; naming a path stops that one, now
+        /// that several can run together.
+        case stop(path: String?)
     }
 
     /// The message with the block taken out, ready to render.
@@ -39,8 +41,10 @@ public struct WatchBlock: Equatable, Sendable {
             return WatchBlock(body: text, request: nil)
         }
 
-        if LoopCommand.stopWords.contains(first.lowercased()) {
-            return WatchBlock(body: body, request: .stop)
+        let words = first.split(separator: " ", maxSplits: 1).map(String.init)
+        if let head = words.first, LoopCommand.stopWords.contains(head.lowercased()) {
+            let named = words.count > 1 ? words[1].trimmingCharacters(in: .whitespaces) : ""
+            return WatchBlock(body: body, request: .stop(path: named.isEmpty ? nil : named))
         }
 
         // `path: docs` reads better in a prompt than a bare `docs`, so the

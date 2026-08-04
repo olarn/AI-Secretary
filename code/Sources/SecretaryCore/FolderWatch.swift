@@ -1,6 +1,7 @@
 import Foundation
 
 import Permissions
+import ProjectRegistry
 
 /// A path the person asked to be told about.
 ///
@@ -41,6 +42,15 @@ public enum WatchChange: Equatable, Sendable {
         }
     }
 }
+
+/// The most that can be watched at once.
+///
+/// Each one costs a walk of up to `WatchLimits.maxEntries` every few seconds,
+/// so this is the same argument as those caps, one level up: several watches
+/// are genuinely useful — a folder for new files and a document for edits —
+/// but an unbounded list is an unbounded amount of work on a timer. Hitting it
+/// refuses the new one and leaves everything already running alone.
+public let maxConcurrentWatches = 5
 
 /// How much of a folder is worth looking at.
 ///
@@ -234,29 +244,49 @@ public enum WatchScan {
 }
 
 /// A path being watched, and what it looked like last time.
-public struct FolderWatch: Equatable, Sendable {
+///
+/// Carries its own project rather than borrowing one from beside it: several
+/// of these run at once and they need not be in the same project, so a single
+/// "the project being watched" would be a value that is right for one of them
+/// and wrong for the rest.
+public struct FolderWatch: Equatable, Sendable, Identifiable {
     /// Relative to the project. Empty means the project folder itself.
     public let relativePath: String
+    public let project: Project
     public let snapshot: WatchSnapshot
     /// How many times something has been reported. Shown when it stops, so the
     /// person can tell "nothing happened" from "I wasn't looking".
     public let reportCount: Int
 
-    public init(relativePath: String, snapshot: WatchSnapshot, reportCount: Int = 0) {
+    /// A path inside a project. Two watches on the same path in the same
+    /// project are the same watch, which is what makes "already watching that"
+    /// answerable.
+    public var id: String { "\(project.id)/\(relativePath)" }
+
+    public init(relativePath: String, project: Project, snapshot: WatchSnapshot, reportCount: Int = 0) {
         self.relativePath = relativePath
+        self.project = project
         self.snapshot = snapshot
         self.reportCount = reportCount
     }
 
     /// The name to use in a message. The project's own folder has no relative
     /// path, and "watching “”" reads as a bug.
-    public func displayName(inProject project: String) -> String {
-        relativePath.isEmpty ? project : relativePath
+    public var displayName: String {
+        relativePath.isEmpty ? project.name : relativePath
+    }
+
+    /// Whether the person meant this one when they typed a path. They type
+    /// what they see in the messages, so both spellings have to answer.
+    public func matches(path: String) -> Bool {
+        let wanted = WatchRequest(relativePath: path).displayPath
+        return relativePath == wanted || displayName == path
     }
 
     public func advancing(to snapshot: WatchSnapshot, reported: Bool) -> FolderWatch {
         FolderWatch(
             relativePath: relativePath,
+            project: project,
             snapshot: snapshot,
             reportCount: reportCount + (reported ? 1 : 0)
         )

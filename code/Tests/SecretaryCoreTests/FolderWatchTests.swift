@@ -1,4 +1,5 @@
 import XCTest
+import ProjectRegistry
 @testable import SecretaryCore
 
 final class WatchSnapshotTests: XCTestCase {
@@ -137,23 +138,48 @@ final class WatchScanTests: XCTestCase {
 }
 
 final class FolderWatchTests: XCTestCase {
+    private let project = Project(name: "AI-Secretary", path: "/tmp/ai-secretary")
+
+    private func watch(_ path: String, in project: Project? = nil) -> FolderWatch {
+        FolderWatch(
+            relativePath: path,
+            project: project ?? self.project,
+            snapshot: WatchSnapshot(stamps: [:])
+        )
+    }
+
     func testTheProjectFolderIsNamedAfterTheProject() {
-        let watch = FolderWatch(relativePath: "", snapshot: WatchSnapshot(stamps: [:]))
-        XCTAssertEqual(watch.displayName(inProject: "AI-Secretary"), "AI-Secretary")
+        XCTAssertEqual(watch("").displayName, "AI-Secretary")
     }
 
     func testASubfolderIsNamedByItsPath() {
-        let watch = FolderWatch(relativePath: "docs", snapshot: WatchSnapshot(stamps: [:]))
-        XCTAssertEqual(watch.displayName(inProject: "AI-Secretary"), "docs")
+        XCTAssertEqual(watch("docs").displayName, "docs")
     }
 
     /// Counting only what was actually said tells "nothing happened" apart from
     /// "I wasn't looking" when the watch is stopped.
     func testOnlyReportedLooksAreCounted() {
-        let watch = FolderWatch(relativePath: "docs", snapshot: WatchSnapshot(stamps: [:]))
-        let quiet = watch.advancing(to: WatchSnapshot(stamps: [:]), reported: false)
+        let quiet = watch("docs").advancing(to: WatchSnapshot(stamps: [:]), reported: false)
         XCTAssertEqual(quiet.reportCount, 0)
         XCTAssertEqual(quiet.advancing(to: WatchSnapshot(stamps: ["a": "1"]), reported: true).reportCount, 1)
+    }
+
+    /// Identity is the path *inside a project*, so the same folder name in two
+    /// projects is two watches and the same one twice is one.
+    func testAWatchIsIdentifiedByItsPathAndProject() {
+        let other = Project(name: "Other", path: "/tmp/other")
+        XCTAssertEqual(watch("docs").id, watch("docs").id)
+        XCTAssertNotEqual(watch("docs").id, watch("src").id)
+        XCTAssertNotEqual(watch("docs").id, watch("docs", in: other).id)
+    }
+
+    /// `/watch stop <path>` has to answer to what the person sees in the
+    /// messages, which for the project folder is the project's name.
+    func testStoppingByNameMatchesWhatTheMessagesShow() {
+        XCTAssertTrue(watch("docs").matches(path: "docs"))
+        XCTAssertTrue(watch("").matches(path: "."), "`.` is how the project folder was started")
+        XCTAssertTrue(watch("").matches(path: "AI-Secretary"), "and how it is named back")
+        XCTAssertFalse(watch("docs").matches(path: "src"))
     }
 }
 
