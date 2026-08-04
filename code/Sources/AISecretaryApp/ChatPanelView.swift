@@ -1440,6 +1440,11 @@ struct ChatPanelView: View {
     /// section buttons — the larger share at every text size.
     private static let panelHeightShare: Double = 0.55
 
+    /// How much of each end of the footer row belongs to the resize grip. The
+    /// grip is 9pt of glyph inside 14pt of padding, and this is that plus the
+    /// gap that keeps the two from reading as one control.
+    private static let gripClearance: Double = 26
+
     /// The section toggles grow with the text size like everything else in the
     /// panel: left at a fixed caption size they became unreadable specks next to
     /// 32pt replies. `controlSize` follows suit, or the button's own padding
@@ -1466,13 +1471,15 @@ struct ChatPanelView: View {
                 }
             }
         }
-        // Both ends of this row now hold a button, so the resize grip can no
-        // longer be dodged by moving the buttons — it is kept clear by leaving
-        // room at whichever bottom corner it is in.
-        .padding(gripCorner.isLeading ? .leading : .trailing, gripCorner.isBottom ? 26 : 0)
-        // Not `.toggleStyle(.button)`: an accent-tinted control loses its colour
-        // whenever the window isn't key, and this window is never key. See
-        // `PanelToggleStyle`.
+        // Both ends of this row hold a button, so the resize grip can't be
+        // dodged by moving them — room is left for it. Left at both ends and in
+        // every placement, though the grip only ever occupies one of them: the
+        // alternative reserved it only where the grip actually was, which meant
+        // Projects slid inward the moment the bubble flipped below the
+        // character. A row that shifts under the pointer costs more than the
+        // gap this spends, and the gap comes out of the empty middle rather
+        // than out of any button.
+        .padding(.horizontal, Self.gripClearance)
         // Not `.toggleStyle(.button)`: an accent-tinted control loses its colour
         // whenever the window isn't key, and this window is never key. See
         // `PanelToggleStyle`, which keeps the bordered metrics and changes only
