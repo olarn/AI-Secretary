@@ -1484,8 +1484,16 @@ struct ChatPanelView: View {
         // longer be dodged by moving the buttons — it is kept clear by leaving
         // room at whichever bottom corner it is in.
         .padding(gripCorner.isLeading ? .leading : .trailing, gripCorner.isBottom ? 26 : 0)
-        .toggleStyle(.button)
-        .controlSize(appearance.settings.fontSize > 16 ? .regular : .small)
+        // Not `.toggleStyle(.button)`: an accent-tinted control loses its colour
+        // whenever the window isn't key, and this window is never key. See
+        // `PanelToggleStyle`.
+        // Not `.toggleStyle(.button)`: an accent-tinted control loses its colour
+        // whenever the window isn't key, and this window is never key. See
+        // `PanelToggleStyle`, which keeps the bordered metrics and changes only
+        // how "this one is open" is drawn.
+        .toggleStyle(PanelToggleStyle(
+            controlSize: appearance.settings.fontSize > 16 ? .regular : .small
+        ))
         .font(.system(size: appearance.settings.secondaryFontSize))
     }
 
