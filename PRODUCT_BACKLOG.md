@@ -240,7 +240,28 @@ The current phase for version-bumping purposes (`AppVersion.swift`,
   - plugin skill อ่านจาก `enabledPlugins` ใน `~/.claude/settings.json` (ไม่ใช้ plugin ที่ถูก disable แม้จะยังมีไฟล์ cache ค้างอยู่) แสดงชื่อแบบ namespaced เช่น `superpowers:brainstorming` กันชนกับ skill จาก plugin อื่น
 - [x] สามารถ check เพื่อเลือกใช้ Skills ใน session นั้นได้ — session-only เหมือน `activeLoop` (ไม่เขียนลง disk) ผลของการเลือกคือ soft hint ใน system prompt ("only use these skills…") ไม่ใช่ hard limit เพราะไม่มี flag ของ CLI ที่ enforce ระดับ skill ได้จริง (มีแต่ `claude plugin enable/disable` ซึ่ง global/persist ข้าม session ไม่ตรงกับที่ต้องการ)
 
-## Phase 9: Multi-session
+## Phase 9: Monitor files and folders changed
+- [ ] App สามารถ monitor ความเปลี่ยนแปลงของ folder ได้เมื่อสั่งให้ทำ
+- [ ] App สามารถ monitor ความเปลี่ยนแปลงเนื้อหาของ file ได้เมื่อสั่งให้ทำ
+- [ ] App จะยกเลิกการ monitr เมื่อสั่ง
+
+## Phase 9.1: Follow instruction from file
+- [ ] App สามารถทำงานได้ตาม flow หรือ instruction ที่ถูกเขียนใน file 
+- [ ] user จะระบุว่า ไฟล์ไหนเป็น instruction
+- [ ] app สามารถเข้าใจรูปแบบของ file ทั้งแบบภาาาธรรมชาติ, step-by-step, diagram (แบบ markdown หรือที่ AI เข้าใจ), หรือ LangGraph
+- [ ] App จะยืนยัน step กับ user ก่อนเริ่มงานเสมอ
+- [ ] เมื่อเริ่มงานแล้ว ถ้า file มีการเปลี่ยนแปลง app จะไม่ทำจนกว่าจะหยุดแล้วทำใหม่ 
+- [ ] ถ้าขั้นตอนใน file เดิม มีการเปลี่ยนแปลงจากรอบที่แล้วใน session นั้น ให้ถาม confirm ความเปลี่ยนแปลงก่อนเริ่ม
+- [ ] App จะระวังเรื่อง Prompt injection ถ้าเป็นคำสั่งที่อันตรายหรือมีแนวโน้มประสงค์ร้าย ต้องถาม user ก่อนเสมอก่อรเริ่มทำงาน
+- [ ] เมื่อผ่านขั้นตอนการตรวจสอบ App จะเริ่มทำงานจนเสร็จ หรือไม่ก็เมื่อ user สั่งยกเลิก
+
+## Phase 9.2: App ทำงานร่สมกันได้
+- [ ] User สามารถ start app พร้อมกันได้มากกว่า 1 app
+- [ ] Two or more app be able to talk to each other.
+- [ ] First, brainstorm about the feasible that can made 2 or more AI-Secretary app can talk to each other.
+- [ ] Second, its can do the same project (or projects) with different role (configure with .md file in the project somehow)
+
+## Phase 10: Multi-session
 - Before Start : อ่าน requirement ทั้งหมดใน phase นี้ก่อน เพราะต้อง re-architecture app และต้องจัดกลุ่ม feature ที่อยู่ใน Setting, Profile, Skills ใหม่ 
 - Requirements
   - [ ] สามารถเปิด chat bubble ได้มากกว่า 1 window โดยที่แต่ละ window จะแยก Claude Session ออกจากกัน
@@ -260,20 +281,12 @@ The current phase for version-bumping purposes (`AppVersion.swift`,
     - [ ] แต่ละ session ใน menu มีปุ่มปิด ถ้าปิดก็ลบ history ไปเลย
 - Expected App Architecture
 
-
-## Phase 10: Loop & Notification
+## Phase 11: Loop & Notification
 - [ ] สั่งให้ loop ได้ เช่น นับถอยหลัง 5 นาทีแล้วแจ้งเตือน หรือ long run แล้วแจ้งเตือนได้
 - [ ] มี local notification เมื่อทำงานเสร็จ (notification settings ตาม macOS)
 - [ ] เมื่อ click ที่กล่อง notication, จะเปิด app และ chat window ขึ้นมา
 
-## Phase 11: Talk to each other
-
-- [ ] Two or more app be able to talk to each other.
-- [ ] First, brainstorm about the feasible that can made 2 or more AI-Secretary app can talk to each other.
-- [ ] Second, its can do the same project (or projects) with different role (configure with .md file in the project somehow)
-
 ## Phase 12: Voice
-
 - [ ] Push-to-talk or explicit voice activation.
 - [ ] Speech-to-text, text-to-speech, interruption behavior, and privacy controls.
 - [ ] Voice must follow the same approval and auditing model as chat.
