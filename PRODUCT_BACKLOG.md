@@ -286,7 +286,7 @@ The current phase for version-bumping purposes (`AppVersion.swift`,
 - [x] ขอด้วยภาษาคนได้เช่นกัน ผ่าน block ```run — ปลอดภัยเพราะ "ขอ" ไม่ใช่ "ทำ": ไปได้ไกลสุด
   แค่การ์ดยืนยัน step ซึ่งเป็นด่านเดียวกับที่พิมพ์ `/run` เอง
 
-## Phase 9.3: App ทำงานร่สมกันได้
+## Phase 9.3: App ทำงานร่วมกันได้
 - [ ] User สามารถ start app พร้อมกันได้มากกว่า 1 app
 - [ ] Two or more app be able to talk to each other.
 - [ ] First, brainstorm about the feasible that can made 2 or more AI-Secretary app can talk to each other.
