@@ -173,7 +173,6 @@ public enum ChatStreamEvent: Equatable, Sendable {
 }
 
 public enum ChatError: Error, Equatable, Sendable, LocalizedError {
-    case missingAPIKey
     case http(status: Int, message: String)
     case network(String)
     /// Claude Code isn't installed, or we couldn't find it.
@@ -183,8 +182,6 @@ public enum ChatError: Error, Equatable, Sendable, LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .missingAPIKey:
-            return "No Claude API key is set. Add one in Settings to start chatting."
         case .http(let status, let message):
             return "Claude API error (\(status)): \(message)"
         case .network(let detail):

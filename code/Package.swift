@@ -42,10 +42,6 @@ let package = Package(
             dependencies: ["FunctionalCore"]
         ),
         .target(
-            name: "Credentials",
-            dependencies: ["FunctionalCore"]
-        ),
-        .target(
             name: "SecretaryCore",
             dependencies: ["FunctionalCore", "AssistantState", "ProjectRegistry", "Permissions", "ToolAdapters", "LLMProvider"]
         ),
@@ -53,7 +49,7 @@ let package = Package(
             name: "AISecretaryApp",
             dependencies: [
                 "FunctionalCore", "AssistantState", "SecretaryCore", "ProjectRegistry",
-                "Permissions", "ToolAdapters", "LLMProvider", "Credentials"
+                "Permissions", "ToolAdapters", "LLMProvider"
             ]
         ),
         .testTarget(
@@ -75,10 +71,6 @@ let package = Package(
         .testTarget(
             name: "LLMProviderTests",
             dependencies: ["LLMProvider", "FunctionalCore"]
-        ),
-        .testTarget(
-            name: "CredentialsTests",
-            dependencies: ["Credentials", "FunctionalCore"]
         ),
         .testTarget(
             name: "SecretaryCoreTests",

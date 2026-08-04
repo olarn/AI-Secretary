@@ -3,7 +3,6 @@ import SwiftUI
 import AssistantState
 import ProjectRegistry
 import SecretaryCore
-import Credentials
 import LLMProvider
 
 /// The conversation panel, rendered as a manga-style speech bubble anchored to
@@ -13,7 +12,6 @@ struct ChatPanelView: View {
     let machine: AssistantStateMachine
     let secretary: Secretary
     let registry: ProjectRegistry
-    let credentials: any CredentialStore
     let backendStatus: BackendStatus
     let appearance: Appearance
     let profiles: ProfileLibrary
@@ -58,7 +56,6 @@ struct ChatPanelView: View {
 
     @State private var openPanel: Panel?
     @State private var addProjectNote: String?
-    @State private var apiKeyDraft: String = ""
     @State private var settingsNote: String?
     @State private var scrollPin = TranscriptScrollPin()
     @State private var dragOrigin: DragOrigin?
@@ -1240,28 +1237,6 @@ struct ChatPanelView: View {
             Text("Settings")
                 .font(.system(size: appearance.settings.footnoteFontSize, weight: .semibold))
 
-            Text("Claude API key")
-                .font(.system(size: appearance.settings.footnoteFontSize))
-                .foregroundStyle(.secondary)
-            HStack(spacing: appearance.settings.panelSpacing) {
-                SecureField(credentials.hasAPIKey ? "•••• stored in Keychain" : "sk-ant-…", text: $apiKeyDraft)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(size: appearance.settings.footnoteFontSize))
-                Button("Save") { saveAPIKey() }
-                    .buttonStyle(.bordered)
-                    .font(.system(size: appearance.settings.footnoteFontSize))
-                    .disabled(apiKeyDraft.trimmingCharacters(in: .whitespaces).isEmpty)
-                if credentials.hasAPIKey {
-                    Button("Clear") { clearAPIKey() }
-                        .buttonStyle(.plain)
-                        .font(.system(size: appearance.settings.footnoteFontSize))
-                        .foregroundStyle(.secondary)
-                }
-            }
-            Text("Stored only in your macOS Keychain — never logged or committed.")
-                .font(.system(size: appearance.settings.hintFontSize))
-                .foregroundStyle(.secondary)
-
             HStack(spacing: appearance.settings.panelSpacing * 1.6) {
                 modelPicker
                 effortPicker
@@ -1699,19 +1674,6 @@ struct ChatPanelView: View {
         stashedDraft = ""
         scrollPin.follow()
         secretary.submit(text)
-    }
-
-    private func saveAPIKey() {
-        if let problem = credentials.saveAPIKeyReportingProblem(text: apiKeyDraft) {
-            settingsNote = problem
-        } else {
-            apiKeyDraft = ""
-            settingsNote = "API key saved."
-        }
-    }
-
-    private func clearAPIKey() {
-        settingsNote = credentials.clearAPIKeyReportingProblem() ?? "API key cleared."
     }
 
 }

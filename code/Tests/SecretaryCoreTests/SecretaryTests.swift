@@ -293,14 +293,14 @@ final class SecretaryTests: XCTestCase {
     }
 
     func testChatNetworkErrorIsReportedNotCrashed() async {
-        let chat = FakeChatProvider(.failure(ChatError.missingAPIKey))
+        let chat = FakeChatProvider(.failure(ChatError.network("the network went away")))
         let secretary = makeSecretary(projects: [project], chat: chat)
 
         secretary.submit("hello")
         await waitUntilIdle()
 
         XCTAssertTrue(machine.history.contains { $0.to == .error })
-        XCTAssertTrue(secretary.transcript.last?.text.contains("API key") ?? false)
+        XCTAssertTrue(secretary.transcript.last?.text.contains("Network error") ?? false)
     }
 
     func testSlashModelSwitchesModelWithoutHittingTheNetwork() {

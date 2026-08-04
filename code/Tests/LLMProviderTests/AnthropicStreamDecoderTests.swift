@@ -90,6 +90,6 @@ final class ChatErrorMappingTests: XCTestCase {
 
     /// An error that is already typed keeps its own case whichever caller maps it.
     func testAnExistingChatErrorPassesThrough() {
-        XCTAssertEqual(asChatError(ChatError.missingAPIKey, otherwise: ChatError.network), .missingAPIKey)
+        XCTAssertEqual(asChatError(ChatError.claudeCodeNotFound, otherwise: ChatError.network), .claudeCodeNotFound)
     }
 }

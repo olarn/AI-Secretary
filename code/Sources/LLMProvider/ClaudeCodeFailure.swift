@@ -78,8 +78,8 @@ public enum ClaudeCodeFailure: Equatable, Sendable {
         case .usageLimitReached:
             return """
             Can't reach Claude Code — your Claude usage limit has been reached. \
-            It resets on its own; until then, an API key in Settings is the \
-            other way in.
+            It resets on its own; there's no other way in from here, since I \
+            work through your own Claude Code.
             """ + quoted(raw)
         case .offline:
             return """

@@ -4,7 +4,7 @@ A macOS desktop companion: a floating animated character that lives on your
 desktop, talks to you in chat, and gets work done through the Claude Code you
 already have installed.
 
-Version 0.9.140. macOS 14+. Not shipped — this is a working repository.
+Version 0.9.141. macOS 14+. Not shipped — this is a working repository.
 
 ## What it actually is
 
@@ -14,10 +14,10 @@ picks a tool. **Claude Code is one of those tools, not the assistant itself.**
 
 That distinction is the whole design. The app drives the `claude` binary on
 your own machine, under your own account and subscription — so there is no API
-key to manage, and the assistant inherits everything your Claude Code can
-already do: reading files, searching, running approved commands, your MCP
-servers, and your browser. An API key is supported as a fallback and lives only
-in the macOS Keychain.
+key to manage at all, and the assistant inherits everything your Claude Code
+can already do: reading files, searching, running approved commands, your MCP
+servers, and your browser. There is no second path: no Claude Code, no reply,
+and it says so.
 
 ## What it can do today
 
@@ -83,7 +83,7 @@ something the packaging script can do on its own.
 | --- | --- |
 | [`CLAUDE.md`](CLAUDE.md) | The charter: product vision, permission model, phase-by-phase scope, and the engineering rules this code is held to. **Read this first.** |
 | [`code/`](code/) | The Swift package. Its [README](code/README.md) is the detailed guide — architecture, every module, how to run things. |
-| `code/Sources/` | Domain modules (`AssistantState`, `ProjectRegistry`, `Permissions`, `ToolAdapters`, `LLMProvider`, `Credentials`, `SecretaryCore`) and the SwiftUI app. |
+| `code/Sources/` | Domain modules (`AssistantState`, `ProjectRegistry`, `Permissions`, `ToolAdapters`, `LLMProvider`, `SecretaryCore`) and the SwiftUI app. |
 | `code/Tests/` | One suite per module. |
 | `initial-implementation-prompt.md` | The original brief, kept for provenance. |
 

@@ -4,20 +4,14 @@ import AssistantState
 import ProjectRegistry
 import SecretaryCore
 import LLMProvider
-import Credentials
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     private let stateMachine = AssistantStateMachine()
     private let chatLayout = ChatBubbleLayout()
     private let registry = ProjectRegistry()
-    private let credentials = KeychainCredentialStore()
-    /// The API-key path, kept as the fallback for anyone without Claude Code.
-    private lazy var apiProvider = ClaudeChatProvider(
-        apiKeyProvider: { [credentials] in credentials.apiKeyText }
-    )
-    /// Prefers the user's own Claude Code and falls back to the API key.
-    private lazy var backend = ChatBackend(fallback: apiProvider)
+    /// The only backend there is: the person's own Claude Code.
+    private lazy var backend = ChatBackend()
     private let backendStatus = BackendStatus()
     private let appearance = Appearance()
     private let profiles = ProfileLibrary()
@@ -112,7 +106,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
                 machine: stateMachine,
                 secretary: secretary,
                 registry: registry,
-                credentials: credentials,
                 backendStatus: backendStatus,
                 appearance: appearance,
                 profiles: profiles,

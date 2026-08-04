@@ -72,21 +72,19 @@ extension ClaudeCodeProvider: WorkspaceScopedProvider {
     }
 }
 
-/// Picks where a turn runs: the user's own Claude Code if it's installed,
-/// otherwise the API-key provider.
+/// Runs a turn through the person's own Claude Code.
+///
+/// There is no second path. The app used to fall back to a Claude API key kept
+/// in the Keychain, which meant a turn could quietly run on the person's API
+/// billing instead of their Claude Code subscription, and meant two answers to
+/// "where did this reply come from". Now: Claude Code, or an honest refusal.
 ///
 /// Detection is deliberately lazy. Resolving can mean launching a login shell,
 /// which is far too slow to do while the app is starting up, so the first turn
 /// (or an explicit background refresh) pays for it and everything after reads a
 /// cached answer.
 public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, @unchecked Sendable {
-    public enum Kind: Equatable, Sendable {
-        case claudeCode(ClaudeCodeInstallation)
-        case apiKey
-    }
-
     private let locator: ClaudeCodeLocator
-    private let fallback: ChatProvider
     private let lock = NSLock()
     private var _availability: ClaudeCodeAvailability?
     private var _claudeCode: ClaudeCodeProvider?
@@ -95,9 +93,8 @@ public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, @unchecke
     private var _observer: (@Sendable (ClaudeCodeAvailability) -> Void)?
     private var _diskDefaults: ClaudeCodeDefaults?
 
-    public init(locator: ClaudeCodeLocator = ClaudeCodeLocator(), fallback: ChatProvider) {
+    public init(locator: ClaudeCodeLocator = ClaudeCodeLocator()) {
         self.locator = locator
-        self.fallback = fallback
     }
 
     /// Detection result, or nil if we haven't looked yet.
@@ -105,10 +102,9 @@ public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, @unchecke
         lock.withLock { _availability }
     }
 
-    public var kind: Kind? {
-        guard let availability else { return nil }
-        if case .available(let installation) = availability { return .claudeCode(installation) }
-        return .apiKey
+    /// Which copy of Claude Code is in use, once detection has run.
+    public var installation: ClaudeCodeInstallation? {
+        availability?.installation
     }
 
     /// Called on the main thread whenever detection completes, so the UI can
@@ -160,7 +156,14 @@ public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, @unchecke
         system: Option<String>
     ) -> ChatStream {
         resolve()
-        let provider: ChatProvider = lock.withLock { _claudeCode } ?? fallback
+        guard let provider = lock.withLock({ _claudeCode }) else {
+            // Nothing to fall back to, and nothing to pretend: say what is
+            // missing. The onboarding card says the same thing in the panel.
+            return ChatStream { continuation in
+                continuation.yield(.left(.claudeCodeNotFound))
+                continuation.finish()
+            }
+        }
         return provider.stream(
             messages: messages,
             model: model,

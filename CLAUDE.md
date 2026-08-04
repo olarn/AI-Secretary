@@ -99,7 +99,7 @@ Prefer a macOS-native frontend:
 Do not commit to a large multi-language architecture before inspecting the repository and validating MVP needs.
 
 As built (2026-07-28): the domain modules — `AssistantState`, `ProjectRegistry`,
-`Permissions`, `ToolAdapters`, `LLMProvider`, `Credentials` and the support types
+`Permissions`, `ToolAdapters`, `LLMProvider` and the support types
 in `SecretaryCore` — are written in a typed functional style on Bow, imported
 through the `FunctionalCore` target. Failures are the left of an `Either` rather
 than `throws`, and absence is `Option` rather than `?`. SwiftUI views stay

@@ -1,5 +1,4 @@
 import FunctionalCore
-import Credentials
 import Foundation
 import ProjectRegistry
 import LLMProvider
@@ -31,19 +30,6 @@ extension ProjectRegistry {
     }
 }
 
-extension CredentialStore {
-    /// The stored key as a plain optional, for callers that still take one.
-    var apiKeyText: String? { apiKey().toOptional() }
-
-    /// Saves the key. Returns the note to show, or `nil` on success.
-    func saveAPIKeyReportingProblem(text: String) -> String? {
-        setAPIKey(text: text).fold({ "Could not save: \($0.localizedDescription)" }, { nil })
-    }
-
-    func clearAPIKeyReportingProblem() -> String? {
-        setAPIKey(.none()).fold({ "Could not clear: \($0.localizedDescription)" }, { nil })
-    }
-}
 
 @MainActor
 extension ProfileLibrary {
