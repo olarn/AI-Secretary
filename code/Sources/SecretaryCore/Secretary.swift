@@ -326,7 +326,14 @@ public final class Secretary {
     public func submit(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        pendingDecision = nil
+        // Typing instead of answering drops whatever was waiting — but not
+        // silently. It used to vanish, and the next reply then claimed the
+        // thing had been set up: the assistant had asked for a watch, the card
+        // was dropped by this very message, and it answered "เฝ้าอยู่เหมือนเดิมค่ะ"
+        // with nothing watching. The note goes into the conversation as well as
+        // the transcript, because the model's belief is the half that produced
+        // the false claim.
+        dropPendingDecision()
         say(.user, trimmed)
 
         // Local commands first: never hit the network or the state machine.
@@ -398,6 +405,24 @@ public final class Secretary {
         pendingDecision = nil
         lastProject = .some(project)
         proceed(operation: operation, project: project)
+    }
+
+    /// Clears a waiting card and records that it never happened.
+    private func dropPendingDecision() {
+        guard let decision = pendingDecision else { return }
+        pendingDecision = nil
+
+        let what: String
+        switch decision {
+        case .approval(let request, _): what = request.commandSummary
+        case .projectChoice: what = "choosing a project"
+        case .instructionPlan(let plan, _, _): what = "the steps in \(plan.relativePath)"
+        }
+        say(.secretary, "(Didn't do “\(what)” — you moved on before answering.)")
+        conversation.append(ChatMessage(
+            role: .user,
+            content: "[The request to \(what) was dropped without an answer. It did not happen — do not say it did.]"
+        ))
     }
 
     public func cancelPendingDecision() {
@@ -511,21 +536,61 @@ public final class Secretary {
             return
         }
 
+        beginWatch(path: argument, askedByAssistant: false)
+    }
+
+    /// Shared by the typed `/watch` and by the assistant's own ```watch block.
+    ///
+    /// Through the ordinary project resolution and approval, and classed
+    /// `.readOnly`: nothing is sent anywhere and nothing is written, but it is
+    /// still repeated reading of the person's files and belongs to a project
+    /// they approved.
+    private func beginWatch(path: String, askedByAssistant: Bool) {
         let taskID = String(UUID().uuidString.prefix(8).lowercased())
         activeTaskID = .some(taskID)
-        activeRequestText = .some("/watch \(argument)")
-        audit.record(AuditEntry(taskID: taskID, kind: .requestReceived, detail: "watch \(argument)"))
-        stateMachine.send(.userBeganInput, reason: "user asked to watch a path", taskID: .some(taskID))
+        activeRequestText = .some("/watch \(path)")
+        audit.record(AuditEntry(
+            taskID: taskID,
+            kind: .requestReceived,
+            detail: "watch \(path)\(askedByAssistant ? " (assistant asked)" : "")"
+        ))
+        stateMachine.send(.userBeganInput, reason: "watch a path", taskID: .some(taskID))
         stateMachine.send(.beginInterpreting, reason: "resolving the path to watch", taskID: .some(taskID))
 
-        // Through the ordinary project resolution and approval, and classed
-        // `.readOnly`: nothing is sent anywhere and nothing is written, but it
-        // is still repeated reading of the person's files and belongs to a
-        // project they approved.
         handleTool(
-            operation: .watch(WatchRequest(relativePath: argument)),
+            operation: .watch(WatchRequest(relativePath: path)),
             projectQuery: .none()
         )
+    }
+
+    /// Acts on a ```watch block, once the reply that carried it is whole.
+    private func applyWatchRequest(_ request: WatchBlock.Request) {
+        switch request {
+        case .stop:
+            if activeWatch != nil { stopWatching(because: "the assistant asked to stop") }
+        case .start(let path):
+            // One at a time, and replacing one silently would leave the person
+            // watching something they didn't choose.
+            guard activeWatch == nil else {
+                say(.secretary, "I'm already watching something — `/watch stop` first if you want to swap.")
+                return
+            }
+            beginWatch(path: path, askedByAssistant: true)
+        }
+    }
+
+    /// Acts on a ```run block. Gets as far as the confirmation card and no
+    /// further, exactly like the typed command.
+    private func applyRunRequest(_ request: RunBlock.Request) {
+        switch request {
+        case .stop:
+            if activeInstructionRun?.isRunning == true {
+                stopInstructionRun(because: "the assistant asked to stop")
+            }
+        case .start(let path):
+            guard activeInstructionRun?.isRunning != true else { return }
+            beginInstructionRead(path: path, askedByAssistant: true)
+        }
     }
 
     /// Takes the first look and starts the timer.
@@ -665,15 +730,27 @@ public final class Secretary {
             return
         }
 
+        beginInstructionRead(path: argument, askedByAssistant: false)
+    }
+
+    /// Starts the read-and-plan turn. Shared by the typed `/run` and by the
+    /// assistant's own ```run block — one path in, so a request raised by the
+    /// model meets exactly the same approval, the same plan card and the same
+    /// refusals as one the person typed.
+    private func beginInstructionRead(path: String, askedByAssistant: Bool) {
         let taskID = String(UUID().uuidString.prefix(8).lowercased())
         activeTaskID = .some(taskID)
-        activeRequestText = .some("/run \(argument)")
-        audit.record(AuditEntry(taskID: taskID, kind: .requestReceived, detail: "run instructions from \(argument)"))
-        stateMachine.send(.userBeganInput, reason: "user asked to follow a file", taskID: .some(taskID))
+        activeRequestText = .some("/run \(path)")
+        audit.record(AuditEntry(
+            taskID: taskID,
+            kind: .requestReceived,
+            detail: "run instructions from \(path)\(askedByAssistant ? " (assistant asked)" : "")"
+        ))
+        stateMachine.send(.userBeganInput, reason: "follow a file", taskID: .some(taskID))
         stateMachine.send(.beginInterpreting, reason: "resolving the instruction file", taskID: .some(taskID))
 
         handleTool(
-            operation: .followInstructions(InstructionRequest(relativePath: argument)),
+            operation: .followInstructions(InstructionRequest(relativePath: path)),
             projectQuery: .none()
         )
     }
@@ -1311,13 +1388,18 @@ public final class Secretary {
         let planned = success && awaitingPlan.isDefined
             ? PlanBlock.parse(blocked.body)
             : PlanBlock(body: blocked.body, steps: [])
+        // A watch or a run the assistant asked to start itself. Read once the
+        // reply is whole, like the loop: a half-written block would name a
+        // different path every few characters.
+        let watched = success ? WatchBlock.parse(planned.body) : WatchBlock(body: planned.body, request: nil)
+        let asked = success ? RunBlock.parse(watched.body) : RunBlock(body: watched.body, request: nil)
         if let missing = blocked.missing,
            let request = conversation.last(where: { $0.role == .user })?.content {
             outstanding = OutstandingRequest(request: request, missing: missing)
         } else if success {
             outstanding = nil
         }
-        updateEntry(id: entryID, text: planned.body, kind: success ? .message : .failure)
+        updateEntry(id: entryID, text: asked.body, kind: success ? .message : .failure)
         if stateMachine.state != .working {
             stateMachine.send(.beginExecuting, reason: "chat completed", taskID: .some(taskID))
         }
@@ -1339,6 +1421,11 @@ public final class Secretary {
         } else {
             advanceInstructionRun(success: success)
         }
+
+        // Last, so that a step of a run can't start a watch that then reports
+        // into the turn that asked for it.
+        if let request = watched.request { applyWatchRequest(request) }
+        if let request = asked.request { applyRunRequest(request) }
     }
 
     /// Appends a step, collapsing an immediate repeat — several thinking blocks
@@ -2141,12 +2228,9 @@ public final class Secretary {
         findings or suggestions is just prose and must not be marked this way. \
         If the answer is free-form, ask normally instead.
 
-        Two things the app does that you cannot do yourself, so offer them rather \
-        than attempting them: `/run <file>` makes the app read a file of \
-        instructions, show the person the steps, and carry them out once they \
-        agree; `/watch <path>` makes it tell them when a file or folder changes. \
-        If they ask for either in their own words, say the command back to them \
-        — they type it, not you.
+        \(Self.watchPrompt)
+
+        \(Self.runPrompt)
 
         \(Self.resumePrompt)
 
@@ -2401,6 +2485,50 @@ public final class Secretary {
     be kept up to date — never to check your own work, and never more than one at \
     a time, since a new one replaces the old. To stop one, put `stop` in the \
     block on its own. Do not claim to be tracking anything unless you set this up.
+    """
+
+    /// Watching is the app's job, but noticing that they asked for it is the
+    /// assistant's. It used to only be able to point at the command: asked to
+    /// keep an eye on a folder it replied "พิมพ์คำสั่งนี้เองนะคะ: /watch ." —
+    /// having understood the request completely. Telling someone to type what
+    /// you already understood is the opposite of a secretary.
+    private static let watchPrompt = """
+    You are not running between messages, so you cannot notice a file changing \
+    by yourself. The app can, and you can ask it to. When the person wants to be \
+    told about changes to a file or a folder — new files appearing, a document \
+    being edited, a folder being kept an eye on — end your message with a block \
+    like this, and nothing after it:
+
+    ```watch
+    the/path
+    ```
+
+    Use the path relative to the project, or `.` for the project folder itself. \
+    The app checks every few seconds and says what was added, removed or \
+    changed; it announces the watch when it starts and the person stops it with \
+    `/watch stop` or the eye in the corner. One at a time. Put `stop` in the \
+    block on its own to stop it. Ask for it when they wanted it — don't set one \
+    up to check your own work, and don't say you'll keep an eye on something \
+    unless you put the block in.
+    """
+
+    /// Same reasoning as `watchPrompt`, and safe for the same reason the typed
+    /// command is: this only reaches the confirmation card, where the person
+    /// reads every step before anything runs.
+    private static let runPrompt = """
+    When the person wants a file of instructions carried out — a checklist, a \
+    runbook, "do what's in deploy.md" — end your message with a block like \
+    this, and nothing after it:
+
+    ```run
+    the/file.md
+    ```
+
+    The app reads it, works out the steps, and shows them for approval before \
+    anything happens; the person presses Start or Cancel. Only when they named a \
+    file, or when you're sure which file they mean — never guess a filename, and \
+    ask which one if it isn't clear. Don't try to carry out its steps yourself \
+    in this turn.
     """
 
     private var helpText: String {
