@@ -296,3 +296,40 @@ final class AppearanceSettingsTests: XCTestCase {
         XCTAssertEqual(settings.maxWidth, 600)
     }
 }
+
+extension AppearanceSettingsTests {
+    /// Every size in the panels is derived from the one the person set, so
+    /// nothing stays pinned while the rest of the window grows. The hint under
+    /// a control stays smaller than the control's own label, at both ends.
+    func testPanelSizesFollowTheTextSizeAndKeepTheirOrder() {
+        for fontSize in [10.0, 14.0, 20.0, 32.0] {
+            let settings = AppearanceSettings(fontSize: fontSize, chatWidth: 400, chatHeight: 700)
+            // At the smallest setting both clamp to the 8pt floor, which is
+            // deliberate — below that nothing is readable, so the hint stops
+            // shrinking rather than becoming a smaller unreadable thing.
+            XCTAssertLessThanOrEqual(settings.hintFontSize, settings.footnoteFontSize, "at \(fontSize)pt")
+            XCTAssertLessThanOrEqual(settings.footnoteFontSize, settings.fontSize, "at \(fontSize)pt")
+        }
+        let readable = AppearanceSettings(fontSize: 14, chatWidth: 400, chatHeight: 700)
+        XCTAssertLessThan(readable.hintFontSize, readable.footnoteFontSize, "above the floor they differ")
+        let small = AppearanceSettings(fontSize: 10, chatWidth: 400, chatHeight: 700)
+        let large = AppearanceSettings(fontSize: 32, chatWidth: 400, chatHeight: 700)
+        XCTAssertGreaterThan(large.hintFontSize, small.hintFontSize)
+    }
+}
+
+extension AppearanceSettingsTests {
+    /// Spacing grows with the text, or large type reads as a wall — which is
+    /// exactly what shipping the font change without this produced.
+    func testPanelSpacingGrowsWithTheText() {
+        let small = AppearanceSettings(fontSize: 10, chatWidth: 400, chatHeight: 700)
+        let large = AppearanceSettings(fontSize: 32, chatWidth: 400, chatHeight: 700)
+        XCTAssertGreaterThan(large.panelSpacing, small.panelSpacing)
+        XCTAssertGreaterThan(large.panelPadding, small.panelPadding)
+        // The gap between rows stays smaller than the panel's own inset, so
+        // rows group inside the panel rather than floating apart in it.
+        for settings in [small, large] {
+            XCTAssertLessThan(settings.panelSpacing, settings.panelPadding)
+        }
+    }
+}

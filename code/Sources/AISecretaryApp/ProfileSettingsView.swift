@@ -25,9 +25,9 @@ struct ProfileSettingsView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: appearance.settings.panelSpacing) {
             Text("Profile")
-                .font(.caption.bold())
+                .font(.system(size: appearance.settings.footnoteFontSize, weight: .semibold))
 
             profilePicker
             // A Grid, not a stack of HStacks with a fixed label column: the
@@ -35,7 +35,7 @@ struct ProfileSettingsView: View {
             // longest word and with the app size. "Personality" broke a 52pt
             // column the day it replaced "Style" — it wrapped mid-word — and
             // any number picked to fit it would break again at size L.
-            Grid(alignment: .leading, horizontalSpacing: 6, verticalSpacing: 6) {
+            Grid(alignment: .leading, horizontalSpacing: appearance.settings.panelSpacing, verticalSpacing: appearance.settings.panelSpacing) {
                 nameField
                 genderRow
                 ageRow
@@ -48,15 +48,15 @@ struct ProfileSettingsView: View {
                 appSizeRow
             }
 
-            HStack(spacing: 6) {
+            HStack(spacing: appearance.settings.panelSpacing) {
                 Button("Save") { save() }
                     .buttonStyle(.bordered)
-                    .font(.caption2)
+                    .font(.system(size: appearance.settings.footnoteFontSize))
                     .disabled(!draft.hasChanges(from: profiles.active))
                 if profiles.canDelete {
                     Button("Delete") { delete() }
                         .buttonStyle(.plain)
-                        .font(.caption2)
+                        .font(.system(size: appearance.settings.footnoteFontSize))
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -64,11 +64,11 @@ struct ProfileSettingsView: View {
 
             if let note {
                 Text(note)
-                    .font(.system(size: 9))
+                    .font(.system(size: appearance.settings.hintFontSize))
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(10)
+        .padding(appearance.settings.panelPadding)
         .background(Color.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
         // Keeps the fields in step when the active profile changes from anywhere
         // else — a new profile, or a delete that fell back to another one.
@@ -80,7 +80,7 @@ struct ProfileSettingsView: View {
     // MARK: - Rows
 
     private var profilePicker: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: appearance.settings.panelSpacing) {
             Menu {
                 ForEach(profiles.profiles) { profile in
                     Button {
@@ -103,7 +103,7 @@ struct ProfileSettingsView: View {
             .fixedSize()
             Spacer()
         }
-        .font(.caption2)
+        .font(.system(size: appearance.settings.footnoteFontSize))
     }
 
     private var nameField: some View {
@@ -111,14 +111,14 @@ struct ProfileSettingsView: View {
             fieldLabel("Name")
             TextField("Miku", text: $draft.name)
                 .textFieldStyle(.roundedBorder)
-                .font(.caption2)
+                .font(.system(size: appearance.settings.footnoteFontSize))
         }
     }
 
     private var genderRow: some View {
         GridRow {
             fieldLabel("Gender")
-            HStack(spacing: 6) {
+            HStack(spacing: appearance.settings.panelSpacing) {
             Menu {
                 Button("Female") { draft.genderChoice = .female }
                 Button("Male") { draft.genderChoice = .male }
@@ -133,18 +133,18 @@ struct ProfileSettingsView: View {
                 // the user's own words rather than a list they have to fit into.
                 TextField("e.g. non-binary", text: $draft.genderText)
                     .textFieldStyle(.roundedBorder)
-                    .font(.caption2)
+                    .font(.system(size: appearance.settings.footnoteFontSize))
             }
             Spacer(minLength: 0)
             }
         }
-        .font(.caption2)
+        .font(.system(size: appearance.settings.footnoteFontSize))
     }
 
     private var ageRow: some View {
         GridRow {
             fieldLabel("Age")
-            HStack(spacing: 6) {
+            HStack(spacing: appearance.settings.panelSpacing) {
             Menu {
                 Button("Child") { draft.ageChoice = .child }
                 Button("Teenager") { draft.ageChoice = .teenager }
@@ -158,24 +158,24 @@ struct ProfileSettingsView: View {
             if draft.ageChoice == .exact {
                 TextField("17", text: $draft.ageText)
                     .textFieldStyle(.roundedBorder)
-                    .font(.caption2)
+                    .font(.system(size: appearance.settings.footnoteFontSize))
                     .frame(width: 44)
             }
             Spacer(minLength: 0)
             }
         }
-        .font(.caption2)
+        .font(.system(size: appearance.settings.footnoteFontSize))
     }
 
     private var personalityField: some View {
         GridRow {
             fieldLabel("Personality")
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: appearance.settings.panelSpacing * 0.35) {
                 TextField(SecretaryProfile.defaultPersonality, text: $draft.personality)
                     .textFieldStyle(.roundedBorder)
-                    .font(.caption2)
+                    .font(.system(size: appearance.settings.footnoteFontSize))
                 Text("Free text — who she is, in your words. Blank means \(SecretaryProfile.defaultPersonality).")
-                    .font(.system(size: 9))
+                    .font(.system(size: appearance.settings.hintFontSize))
                     .foregroundStyle(.secondary)
             }
         }
@@ -189,8 +189,8 @@ struct ProfileSettingsView: View {
 
         return GridRow {
             fieldLabel("Picture")
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: appearance.settings.panelSpacing * 0.35) {
+                HStack(spacing: appearance.settings.panelSpacing) {
                 Menu {
                     Button(hasPicture ? "Replace picture…" : "Choose picture…") {
                         choosePicture()
@@ -199,12 +199,12 @@ struct ProfileSettingsView: View {
                         Button("Clear") { note = profiles.clearArtworkReportingProblem(for: id) }
                     }
                 } label: {
-                    HStack(spacing: 3) {
+                    HStack(spacing: appearance.settings.panelSpacing * 0.5) {
                         Image(systemName: hasPicture ? "checkmark.circle.fill" : "circle.dashed")
-                            .font(.system(size: 8))
+                            .font(.system(size: appearance.settings.hintFontSize * 0.9))
                             .foregroundStyle(hasPicture ? Color.green : .secondary)
                         Text(hasPicture ? "Chosen" : "None")
-                            .font(.system(size: 10))
+                            .font(.system(size: appearance.settings.hintFontSize + 1))
                     }
                 }
                 .menuStyle(.borderlessButton)
@@ -215,7 +215,7 @@ struct ProfileSettingsView: View {
                 Spacer(minLength: 0)
                 }
                 Text("Shown in every state — the colour and badge say what she's doing.")
-                    .font(.system(size: 9))
+                    .font(.system(size: appearance.settings.hintFontSize))
                     .foregroundStyle(.secondary)
             }
         }
@@ -224,12 +224,12 @@ struct ProfileSettingsView: View {
     private var appSizeRow: some View {
         GridRow {
             fieldLabel("App size")
-            HStack(spacing: 6) {
+            HStack(spacing: appearance.settings.panelSpacing) {
             Spacer(minLength: 4)
             ForEach(AppScale.allCases, id: \.rawValue) { scale in
                 Button(scale.label) { appearance.selectAppScale(scale) }
                     .buttonStyle(.bordered)
-                    .font(.caption2)
+                    .font(.system(size: appearance.settings.footnoteFontSize))
                     .disabled(appearance.settings.appScale == scale)
             }
             }
@@ -238,7 +238,7 @@ struct ProfileSettingsView: View {
 
     private func fieldLabel(_ text: String) -> some View {
         Text(text)
-            .font(.caption2)
+            .font(.system(size: appearance.settings.footnoteFontSize))
             .foregroundStyle(.secondary)
             // The grid gives the column the width of the widest label; this
             // only says the label itself must not be the thing that wraps.

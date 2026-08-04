@@ -171,6 +171,20 @@ public struct AppearanceSettings: Equatable, Sendable {
     /// instead of leaving captions tiny beside 32pt text.
     public var secondaryFontSize: Double { max(9, fontSize - 2) }
     public var footnoteFontSize: Double { max(8, fontSize - 3) }
+    /// The explanatory line under a control — "Stored only in your Keychain",
+    /// "Blank means professional". Smaller than the row it explains, and
+    /// scaled like everything else: these were pinned at 9pt, so the Settings
+    /// and Profile panels stayed the same size whatever the text size said.
+    public var hintFontSize: Double { max(8, fontSize - 5) }
+
+    /// Gap between rows inside a panel, and the panel's own inset.
+    ///
+    /// Scaled for the same reason the text is, and learned the same way: type
+    /// that grew while the spacing stayed at 6 and 10 points made the Settings
+    /// panel read as a wall — "พอขยาย font แล้ว เนื้อหามันแน่น". Rhythm is part
+    /// of the size, not a constant the size happens to sit inside.
+    public var panelSpacing: Double { max(4, fontSize * 0.45) }
+    public var panelPadding: Double { max(8, fontSize * 0.75) }
 }
 
 /// The values worth remembering across launches. The screen limits aren't

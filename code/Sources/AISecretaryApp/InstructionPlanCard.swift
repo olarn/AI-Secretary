@@ -18,6 +18,13 @@ struct InstructionPlanCard: View {
     let plan: InstructionPlan
     let risks: [InstructionRisk]
     let changedSinceLastRun: Bool
+    /// Sizes come from the app's text setting, like everything else the
+    /// person reads — a card pinned at 11pt beside 28pt replies is the same
+    /// bug the panels had.
+    let fontSize: Double
+    let hintSize: Double
+    let spacing: Double
+    let padding: Double
     let start: () -> Void
     let cancel: () -> Void
 
@@ -30,12 +37,12 @@ struct InstructionPlanCard: View {
     private var canStart: Bool { !needsAcknowledgement || acknowledged }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: spacing) {
             Label("Run these steps?", systemImage: "list.bullet.rectangle")
-                .font(.caption.bold())
+                .font(.system(size: fontSize, weight: .semibold))
 
             Text(plan.relativePath)
-                .font(.caption.monospaced())
+                .font(.system(size: fontSize, design: .monospaced))
                 .foregroundStyle(.secondary)
 
             if changedSinceLastRun {
@@ -43,18 +50,18 @@ struct InstructionPlanCard: View {
                     "The steps in this file have changed since you last ran it.",
                     systemImage: "pencil.circle"
                 )
-                .font(.caption2)
+                .font(.system(size: hintSize))
                 .foregroundStyle(.orange)
             }
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: spacing * 0.5) {
                 ForEach(Array(plan.steps.enumerated()), id: \.offset) { index, step in
-                    HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    HStack(alignment: .firstTextBaseline, spacing: spacing * 0.8) {
                         Text("\(index + 1).")
-                            .font(.caption2.monospacedDigit())
+                            .font(.system(size: hintSize, design: .monospaced))
                             .foregroundStyle(.secondary)
                         Text(step)
-                            .font(.caption)
+                            .font(.system(size: fontSize))
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -62,31 +69,31 @@ struct InstructionPlanCard: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             if !risks.isEmpty {
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: spacing * 0.5) {
                     ForEach(risks) { risk in
                         // The words that triggered it, not just the verdict:
                         // a warning you can check is a warning you can weigh.
                         Text("⚠ \(risk.reason) — \(risk.evidence)")
-                            .font(.caption2)
+                            .font(.system(size: hintSize))
                             .foregroundStyle(.red)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     Toggle("I've read these and want to go ahead", isOn: $acknowledged)
                         .toggleStyle(.checkbox)
-                        .font(.caption2)
+                        .font(.system(size: hintSize))
                 }
             }
 
-            HStack(spacing: 8) {
+            HStack(spacing: spacing * 1.3) {
                 Button("Start") { start() }
                     .buttonStyle(.borderedProminent)
                     .disabled(!canStart)
                 Button("Cancel") { cancel() }
                     .buttonStyle(.bordered)
             }
-            .font(.caption)
+            .font(.system(size: fontSize))
         }
-        .padding(10)
+        .padding(padding)
         .background(
             (risks.isEmpty ? Color.accentColor : Color.red).opacity(0.12),
             in: RoundedRectangle(cornerRadius: 8)

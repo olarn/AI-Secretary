@@ -376,20 +376,20 @@ struct ChatPanelView: View {
     /// are both required: a user can have the binary installed but not signed
     /// in, and that failure would otherwise only surface on the first turn.
     private var onboardingCard: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: appearance.settings.panelSpacing) {
             Label("Claude Code isn't set up", systemImage: "exclamationmark.triangle")
-                .font(.caption.bold())
+                .font(.system(size: appearance.settings.footnoteFontSize, weight: .semibold))
             Text("I work by driving your own copy of Claude Code, so it stays on your account. Two steps:")
-                .font(.caption2)
+                .font(.system(size: appearance.settings.footnoteFontSize))
             Text("1. Install it — see claude.com/claude-code\n2. Run `claude` in Terminal once and sign in")
-                .font(.caption2.monospaced())
+                .font(.system(size: appearance.settings.footnoteFontSize, design: .monospaced))
                 .textSelection(.enabled)
             Text("Then reopen this panel. If it's installed somewhere unusual, I also check your login shell's PATH.")
-                .font(.caption2)
+                .font(.system(size: appearance.settings.footnoteFontSize))
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(10)
+        .padding(appearance.settings.panelPadding)
         .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
     }
 
@@ -473,7 +473,7 @@ struct ChatPanelView: View {
             Text("Browser:").foregroundStyle(.secondary)
             browserMenu
         }
-        .font(.caption2)
+        .font(.system(size: appearance.settings.footnoteFontSize))
     }
 
     private var browserMenu: some View {
@@ -498,16 +498,16 @@ struct ChatPanelView: View {
     /// Shows the real value either way; the dot marks one the app didn't pick,
     /// which can change if the user reconfigures Claude Code.
     private func settingLabel(_ title: String, value: String, inherited: Bool) -> some View {
-        HStack(spacing: 3) {
+        HStack(spacing: appearance.settings.panelSpacing * 0.5) {
             Text("\(title):").foregroundStyle(.secondary)
             Text(value).foregroundStyle(.primary)
             if inherited {
                 Image(systemName: "circle.dashed")
-                    .font(.system(size: 7))
+                    .font(.system(size: appearance.settings.hintFontSize * 0.8))
                     .foregroundStyle(.secondary)
             }
         }
-        .font(.caption2)
+        .font(.system(size: appearance.settings.footnoteFontSize))
     }
 
     /// What the assistant is doing right now.
@@ -517,11 +517,11 @@ struct ChatPanelView: View {
     /// model family), so there is nothing to render for the thought itself.
     /// Which tool it reached for, and with what, is the part that exists.
     private var header: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: appearance.settings.panelSpacing) {
             Text(secretary.profile.displayName)
-                .font(.headline)
+                .font(.system(size: appearance.settings.fontSize, weight: .semibold))
             Text(machine.state.description.uppercased())
-                .font(.caption2.bold())
+                .font(.system(size: appearance.settings.footnoteFontSize, weight: .semibold))
                 .foregroundStyle(.secondary)
             loopBadge
             runBadge
@@ -990,21 +990,21 @@ struct ChatPanelView: View {
         onDecrease: @escaping () -> Void,
         onIncrease: @escaping () -> Void
     ) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: appearance.settings.panelSpacing) {
             Text(label)
-                .font(.caption2)
+                .font(.system(size: appearance.settings.footnoteFontSize))
                 .foregroundStyle(.secondary)
             Spacer(minLength: 4)
             Text(value)
-                .font(.caption2.monospaced())
+                .font(.system(size: appearance.settings.footnoteFontSize, design: .monospaced))
                 .frame(minWidth: 38, alignment: .trailing)
             Button("−", action: onDecrease)
                 .buttonStyle(.bordered)
-                .font(.caption2)
+                .font(.system(size: appearance.settings.footnoteFontSize))
                 .disabled(!canDecrease)
             Button("+", action: onIncrease)
                 .buttonStyle(.bordered)
-                .font(.caption2)
+                .font(.system(size: appearance.settings.footnoteFontSize))
                 .disabled(!canIncrease)
         }
     }
@@ -1119,7 +1119,7 @@ struct ChatPanelView: View {
             // for a click inside the user's own browser — nothing is being
             // sent, something is being done, as them.
             let inBrowser = request.actionClass == .browserAction
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: appearance.settings.panelSpacing) {
                 Label(
                     inBrowser
                         ? "Act in your browser?"
@@ -1128,40 +1128,40 @@ struct ChatPanelView: View {
                         ? "globe"
                         : (leavesTheMachine ? "paperplane.circle" : "lock.shield")
                 )
-                .font(.caption.bold())
+                .font(.system(size: appearance.settings.footnoteFontSize, weight: .semibold))
                 Text(request.commandSummary)
-                    .font(.caption.monospaced())
+                    .font(.system(size: appearance.settings.footnoteFontSize, design: .monospaced))
                 Text("in \(request.project.name) · \(request.actionClass.humanDescription)")
-                    .font(.caption2)
+                    .font(.system(size: appearance.settings.footnoteFontSize))
                     .foregroundStyle(.secondary)
-                HStack(spacing: 8) {
+                HStack(spacing: appearance.settings.panelSpacing * 1.3) {
                     Button("Approve") { secretary.resolvePendingApproval(granted: true) }
                         .buttonStyle(.borderedProminent)
                     Button("Deny") { secretary.resolvePendingApproval(granted: false) }
                         .buttonStyle(.bordered)
                 }
-                .font(.caption)
+                .font(.system(size: appearance.settings.footnoteFontSize))
             }
-            .padding(10)
+            .padding(appearance.settings.panelPadding)
             .background(
                 (leavesTheMachine ? Color.red : Color.orange).opacity(0.12),
                 in: RoundedRectangle(cornerRadius: 8)
             )
 
         case .projectChoice(let candidates, _):
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: appearance.settings.panelSpacing) {
                 Label("Choose a project", systemImage: "folder")
-                    .font(.caption.bold())
+                    .font(.system(size: appearance.settings.footnoteFontSize, weight: .semibold))
                 ForEach(candidates) { candidate in
                     Button(candidate.name) { secretary.choose(project: candidate) }
                         .buttonStyle(.bordered)
-                        .font(.caption)
+                        .font(.system(size: appearance.settings.footnoteFontSize))
                 }
                 Button("Cancel") { secretary.cancelPendingDecision() }
                     .buttonStyle(.plain)
-                    .font(.caption2)
+                    .font(.system(size: appearance.settings.footnoteFontSize))
             }
-            .padding(10)
+            .padding(appearance.settings.panelPadding)
             .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
 
         case .instructionPlan(let plan, let risks, let changed):
@@ -1169,6 +1169,10 @@ struct ChatPanelView: View {
                 plan: plan,
                 risks: risks,
                 changedSinceLastRun: changed,
+                fontSize: appearance.settings.footnoteFontSize,
+                hintSize: appearance.settings.hintFontSize,
+                spacing: appearance.settings.panelSpacing,
+                padding: appearance.settings.panelPadding,
                 start: { secretary.startPlannedInstructions() },
                 cancel: { secretary.cancelPendingDecision() }
             )
@@ -1232,39 +1236,39 @@ struct ChatPanelView: View {
     private var canSend: Bool { !draft.trimmingCharacters(in: .whitespaces).isEmpty }
 
     private var settingsSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: appearance.settings.panelSpacing) {
             Text("Settings")
-                .font(.caption.bold())
+                .font(.system(size: appearance.settings.footnoteFontSize, weight: .semibold))
 
             Text("Claude API key")
-                .font(.caption2)
+                .font(.system(size: appearance.settings.footnoteFontSize))
                 .foregroundStyle(.secondary)
-            HStack(spacing: 6) {
+            HStack(spacing: appearance.settings.panelSpacing) {
                 SecureField(credentials.hasAPIKey ? "•••• stored in Keychain" : "sk-ant-…", text: $apiKeyDraft)
                     .textFieldStyle(.roundedBorder)
-                    .font(.caption)
+                    .font(.system(size: appearance.settings.footnoteFontSize))
                 Button("Save") { saveAPIKey() }
                     .buttonStyle(.bordered)
-                    .font(.caption2)
+                    .font(.system(size: appearance.settings.footnoteFontSize))
                     .disabled(apiKeyDraft.trimmingCharacters(in: .whitespaces).isEmpty)
                 if credentials.hasAPIKey {
                     Button("Clear") { clearAPIKey() }
                         .buttonStyle(.plain)
-                        .font(.caption2)
+                        .font(.system(size: appearance.settings.footnoteFontSize))
                         .foregroundStyle(.secondary)
                 }
             }
             Text("Stored only in your macOS Keychain — never logged or committed.")
-                .font(.system(size: 9))
+                .font(.system(size: appearance.settings.hintFontSize))
                 .foregroundStyle(.secondary)
 
-            HStack(spacing: 10) {
+            HStack(spacing: appearance.settings.panelSpacing * 1.6) {
                 modelPicker
                 effortPicker
             }
-            .font(.caption2)
+            .font(.system(size: appearance.settings.footnoteFontSize))
             Text("Change with /model <id> or /effort <level> in the chat.")
-                .font(.system(size: 9))
+                .font(.system(size: appearance.settings.hintFontSize))
                 .foregroundStyle(.secondary)
 
             browserPicker
@@ -1272,7 +1276,7 @@ struct ChatPanelView: View {
                 "Reads pages in your Chrome, including sites you're signed in to. "
                 + "Needs the Claude in Chrome extension. Clicking and typing still ask first."
             )
-            .font(.system(size: 9))
+            .font(.system(size: appearance.settings.hintFontSize))
             .foregroundStyle(.secondary)
             // Two lines rather than one truncated one: the sentence about
             // reading signed-in sites is the part a person needs before they
@@ -1298,36 +1302,36 @@ struct ChatPanelView: View {
                 onIncrease: appearance.increaseHeight
             )
             Text("Or drag the grip in the corner away from the tail to size it freely — the tail stays on \(secretary.profile.displayName) either way.")
-                .font(.system(size: 9))
+                .font(.system(size: appearance.settings.hintFontSize))
                 .foregroundStyle(.secondary)
 
             if let settingsNote {
                 Text(settingsNote)
-                    .font(.system(size: 9))
+                    .font(.system(size: appearance.settings.hintFontSize))
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(10)
+        .padding(appearance.settings.panelPadding)
         .background(Color.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
     }
 
     private var projectsSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: appearance.settings.panelSpacing) {
             Text("Projects")
-                .font(.caption.bold())
+                .font(.system(size: appearance.settings.footnoteFontSize, weight: .semibold))
 
             if registry.projects.isEmpty {
                 Text("None registered. Add one to let me work in it.")
-                    .font(.caption2)
+                    .font(.system(size: appearance.settings.footnoteFontSize))
                     .foregroundStyle(.secondary)
             }
 
             ForEach(registry.projects) { project in
-                HStack(spacing: 6) {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(project.name).font(.caption2.bold())
+                HStack(spacing: appearance.settings.panelSpacing) {
+                    VStack(alignment: .leading, spacing: appearance.settings.panelSpacing * 0.25) {
+                        Text(project.name).font(.system(size: appearance.settings.footnoteFontSize, weight: .semibold))
                         Text(project.path)
-                            .font(.system(size: 9).monospaced())
+                            .font(.system(size: appearance.settings.hintFontSize, design: .monospaced))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                             .truncationMode(.head)
@@ -1353,15 +1357,15 @@ struct ChatPanelView: View {
                 secretary.projectsDidChange()
             }
             .buttonStyle(.bordered)
-            .font(.caption2)
+            .font(.system(size: appearance.settings.footnoteFontSize))
 
             if let addProjectNote {
                 Text(addProjectNote)
-                    .font(.system(size: 9))
+                    .font(.system(size: appearance.settings.hintFontSize))
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(10)
+        .padding(appearance.settings.panelPadding)
         .background(Color.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
     }
 
@@ -1369,9 +1373,9 @@ struct ChatPanelView: View {
     /// multi-select, and a `Menu` closes after every tap — wrong for checking
     /// several boxes in one visit.
     private var skillsSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: appearance.settings.panelSpacing) {
             HStack {
-                Text("Skills").font(.caption.bold())
+                Text("Skills").font(.system(size: appearance.settings.footnoteFontSize, weight: .semibold))
                 Spacer()
                 Button {
                     secretary.refreshAvailableSkills()
@@ -1385,7 +1389,7 @@ struct ChatPanelView: View {
 
             if secretary.availableSkills.isEmpty {
                 Text("None found — checked ~/.claude/skills, this project's .claude/skills, and your enabled plugins.")
-                    .font(.caption2)
+                    .font(.system(size: appearance.settings.footnoteFontSize))
                     .foregroundStyle(.secondary)
             }
 
@@ -1394,11 +1398,11 @@ struct ChatPanelView: View {
                     get: { secretary.selectedSkills.contains(skill.id) },
                     set: { _ in secretary.toggleSkill(skill.id) }
                 )) {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(skill.name).font(.caption2.bold())
+                    VStack(alignment: .leading, spacing: appearance.settings.panelSpacing * 0.25) {
+                        Text(skill.name).font(.system(size: appearance.settings.footnoteFontSize, weight: .semibold))
                         if !skill.summary.isEmpty {
                             Text(skill.summary)
-                                .font(.system(size: 9))
+                                .font(.system(size: appearance.settings.hintFontSize))
                                 .foregroundStyle(.secondary)
                                 .lineLimit(2)
                         }
@@ -1412,11 +1416,11 @@ struct ChatPanelView: View {
                     ? "Nothing checked — no restriction; I can use any installed skill."
                     : "Checked skills are a request, not a hard limit — I may still fall back if none of them fit."
             )
-            .font(.system(size: 9))
+            .font(.system(size: appearance.settings.hintFontSize))
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(10)
+        .padding(appearance.settings.panelPadding)
         .background(Color.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
     }
 
