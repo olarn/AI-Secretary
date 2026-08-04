@@ -289,8 +289,16 @@ The current phase for version-bumping purposes (`AppVersion.swift`,
 ## Phase 9.3: App ทำงานร่วมกันได้
 - [ ] User สามารถ start app พร้อมกันได้มากกว่า 1 app
 - [ ] Two or more app be able to talk to each other.
-- [ ] First, brainstorm about the feasible that can made 2 or more AI-Secretary app can talk to each other.
-- [ ] Second, its can do the same project (or projects) with different role (configure with .md file in the project somehow)
+- [ ] การทำงานร่วมกัน
+  - [ ] ให้ app มากกว่า 1 ตัว monitor instruction เดียวกัน
+  - [ ] ให้ app มากกว่า 1 ตัว monitor task log เดียวกัน เพื่อให้แต่ละตัวเห็นความคืบหน้าของงาน
+  - [ ] ให้ app แต่ละตัว ทำตาม instruction ตามขั้นตอนของตัวเอง โดยดูจากชื่อ profile ว่า step ไหน app ตัวไหนจะทำ
+  - [ ] ก่อนเริ่ม app ต้องเช็คว่า 
+      1) มีชื่อ profile ตัวเองใน instruction นั้นไหม (จะได้รู้ว่า step ไหนที่ตัวเองต้องทำ)
+      2) ถาม user ว่าใช้ file ไหนเพื่อบอก progress ระหว่าง app (app ไหนทำอะไร ต้องมา write log เพื่อบอก app ตัวอื่นว่าทำ step ไหนไปแล้ว)
+  - [ ] เมื่อ app เริ่มทำงาน app ไหนทำอะไร ต้องมา write log เพื่อบอก app ตัวอื่นว่าทำ step ไหนไปแล้ว
+  - [ ] ถ้า step ไหนช่วยกันทำได้ app ต้องรู้ว่า parallel ได้กี่ app, ต้องรออะไรจึงจะรู้ว่าทำแล้ว, และทำเสร็จแล้ว โดย update กันใน task log
+  - [ ] prevent เรื่อง lock file และ race condition (ทำซ้ำกัน, เข้าใจว่า app อื่นทำเลยไม่ได้ทำ, ลำดับงานผิด, ข้ามลำดับงาน, infinite loog) 
 
 ## Phase 10: Multi-session
 - Before Start : อ่าน requirement ทั้งหมดใน phase นี้ก่อน เพราะต้อง re-architecture app และต้องจัดกลุ่ม feature ที่อยู่ใน Setting, Profile, Skills ใหม่ 
