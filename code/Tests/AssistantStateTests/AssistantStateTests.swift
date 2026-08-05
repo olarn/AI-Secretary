@@ -103,3 +103,30 @@ final class AssistantStateMachineTests: XCTestCase {
         XCTAssertEqual(machine.history.count, 5)
     }
 }
+
+/// What the character is called on screen.
+final class CharacterStatusLabelTests: XCTestCase {
+    /// Idle is where the character spends nearly all its life, and a word that
+    /// is always there is a word nobody reads. The name is the useful half.
+    func testIdleIsJustTheName() {
+        XCTAssertNil(characterStatusTag(for: .idle))
+        XCTAssertEqual(characterStatusLabel(name: "Miku", state: .idle), "Miku")
+    }
+
+    func testAnythingElseIsNameThenState() {
+        XCTAssertEqual(characterStatusLabel(name: "Miku", state: .working), "Miku - WORKING")
+        XCTAssertEqual(characterStatusLabel(name: "อาเนีย", state: .error), "อาเนีย - ERROR")
+    }
+
+    /// Every state that isn't idle says something, including any added later —
+    /// the rule is "not idle", not a list that a new case can fall off.
+    func testOnlyIdleIsSilent() {
+        for state in [AssistantState.listening, .thinking, .working, .success, .error] {
+            XCTAssertEqual(
+                characterStatusLabel(name: "N", state: state),
+                "N - \(state.description.uppercased())",
+                "\(state) should be named"
+            )
+        }
+    }
+}

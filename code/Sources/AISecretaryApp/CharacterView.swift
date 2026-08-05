@@ -57,7 +57,10 @@ struct CharacterView: View {
             }
             .shadow(radius: 6)
 
-            Text(machine.state.description.uppercased())
+            // Who this is, and what they're doing when that's anything. It read
+            // "IDLE" almost always, which named a state nobody was waiting on
+            // and never said whose desktop companion it was.
+            Text(characterStatusLabel(name: secretary.profile.displayName, state: machine.state))
                 .font(.caption2.bold())
                 .foregroundStyle(.secondary)
         }

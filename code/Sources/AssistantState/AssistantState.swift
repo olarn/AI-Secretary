@@ -15,6 +15,25 @@ public enum AssistantState: String, Equatable, Sendable, CustomStringConvertible
     public var description: String { rawValue }
 }
 
+/// The state worth saying out loud, or nothing when there is none.
+///
+/// Idle is the answer most of the time, and "IDLE" printed under a character
+/// standing on the desktop is a label that never varies and so never tells you
+/// anything. The states that mean something are the ones that don't last.
+public func characterStatusTag(for state: AssistantState) -> String? {
+    state == .idle ? nil : state.description.uppercased()
+}
+
+/// What to call the character on screen: their name, and what they are doing
+/// when that is anything.
+///
+/// One rule in one place because it is shown twice — under the character on the
+/// desktop and at the top of the chat — and two copies would drift the first
+/// time a state was added.
+public func characterStatusLabel(name: String, state: AssistantState) -> String {
+    characterStatusTag(for: state).map { "\(name) - \($0)" } ?? name
+}
+
 /// Events that can drive a state transition. Carries no UI or tool details;
 /// callers attach a reason/taskID/toolStatus when submitting the event.
 public enum AssistantEvent: Equatable, Sendable {

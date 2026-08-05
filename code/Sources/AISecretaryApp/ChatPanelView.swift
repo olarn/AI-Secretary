@@ -530,9 +530,14 @@ struct ChatPanelView: View {
         HStack(spacing: appearance.settings.panelSpacing) {
             Text(secretary.profile.displayName)
                 .font(.system(size: appearance.settings.fontSize, weight: .semibold))
-            Text(machine.state.description.uppercased())
-                .font(.system(size: appearance.settings.footnoteFontSize, weight: .semibold))
-                .foregroundStyle(.secondary)
+            // Two Texts rather than the whole label from `characterStatusLabel`,
+            // so the name keeps its weight and the state stays secondary — but
+            // the same rule decides whether there is a state to show at all.
+            if let tag = characterStatusTag(for: machine.state) {
+                Text("- \(tag)")
+                    .font(.system(size: appearance.settings.footnoteFontSize, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
             loopBadge
             runBadge
             watchBadge
