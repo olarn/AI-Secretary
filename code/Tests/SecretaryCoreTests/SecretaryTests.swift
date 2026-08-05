@@ -320,6 +320,59 @@ final class SecretaryTests: XCTestCase {
         )
     }
 
+    /// The tick is where an approved outside folder could quietly stop working.
+    ///
+    /// The loop re-resolves through the adapter every time rather than reusing
+    /// a URL from the start, so the escape check keeps running. That is the
+    /// point — and it also means a throwaway project that resolves once at
+    /// approval but not afterwards would leave a watch that reports nothing and
+    /// says nothing, because a failed resolve is a `continue`. Silence is the
+    /// failure mode, which is why this asserts a report rather than an absence
+    /// of errors.
+    func testAnApprovedOutsideFolderKeepsResolvingOnEveryLook() throws {
+        let outside = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("outside-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: outside) }
+
+        let secretary = makeSecretary(projects: [Project(name: "Registered", path: "/tmp/registered")])
+        secretary.submit("/watch \(outside.path)")
+        secretary.resolvePendingApproval(granted: true)
+        XCTAssertEqual(secretary.activeWatches.count, 1)
+
+        try "hello".write(
+            to: outside.appendingPathComponent("new.txt"),
+            atomically: true,
+            encoding: .utf8
+        )
+        secretary.tickWatch()
+
+        XCTAssertTrue(
+            secretary.transcript.last?.text.contains("new.txt") ?? false,
+            "The look after approval has to see the folder. Got: \(secretary.transcript.last?.text ?? "nothing")"
+        )
+    }
+
+    /// A symlink inside the approved folder still can't lead out of it. The
+    /// boundary moved to the folder that was agreed to; it did not disappear.
+    func testTheEscapeCheckNowGuardsTheApprovedFolder() throws {
+        let outside = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("outside-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: outside) }
+
+        let folder = watchOnlyProject(at: outside)
+        let adapter = FileReadOnlyAdapter()
+        XCTAssertTrue(
+            adapter.resolve("", in: folder).toOption().toOptional() != nil,
+            "the folder itself resolves, or the watch would go silent"
+        )
+        XCTAssertNil(
+            adapter.resolve("../elsewhere", in: folder).toOption().toOptional(),
+            "and climbing out of it does not"
+        )
+    }
+
     func testNonGitMessageIsRoutedToChatAndStreamsAReply() async {
         let chat = FakeChatProvider(.events([
             .thinking,
