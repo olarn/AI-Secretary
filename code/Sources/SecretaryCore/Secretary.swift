@@ -1434,6 +1434,13 @@ public final class Secretary {
         // without this the half-written bubble just sits there, indistinguishable
         // from a reply still arriving.
         streamingEntryID = .some(replyID)
+        // A reply is one bubble per stretch of talking, split wherever a tool
+        // ran. `reply` is still the whole thing — that is what the conversation
+        // remembers and what the fenced blocks are read out of — while
+        // `segmentText` is only what belongs in the bubble being written now.
+        var segmentID: UUID? = replyID
+        var segmentText = ""
+        let speakerName = profile.displayName
 
         audit.record(AuditEntry(taskID: taskID, kind: .executionStarted, detail: "chat model=\(modelDescription) effort=\(effortDescription)"))
 
@@ -1472,7 +1479,10 @@ public final class Secretary {
                     let message = outcome.swap().toOption().toOptional()
                         .map { $0.errorDescription ?? "\($0)" } ?? "Chat failed."
                     self.audit.record(AuditEntry(taskID: taskID, kind: .failed, detail: "chat error"))
-                    self.finishChat(entryID: replyID, taskID: taskID, success: false, finalText: message)
+                    self.finishChat(
+                        entryID: segmentID, taskID: taskID, success: false,
+                        displayText: message, fullText: message
+                    )
                     break
                 }
 
@@ -1480,9 +1490,25 @@ public final class Secretary {
                     case .thinking:
                         break // stay in THINKING until the first token
                     case .activity(let step):
+                        // A tool ran, so whatever was said before it is finished
+                        // being said. Left in one bubble, an answer to the person
+                        // ran straight into the model's note to itself and then
+                        // into the report of what it did — three things, one
+                        // block, no seam. The seam is here.
+                        //
+                        // Only when something was actually said: a turn that
+                        // reaches for a tool before speaking keeps its empty
+                        // placeholder rather than gaining a blank bubble.
+                        if let id = segmentID,
+                           !segmentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            self.updateEntry(id: id, text: self.strippedForDisplay(segmentText))
+                            segmentID = nil
+                            segmentText = ""
+                            self.streamingEntryID = .none()
+                        }
                         // Kept even when the user has the panel closed: turning
                         // it on mid-turn should show what already happened.
-                        self.recordActivity(step, before: replyID)
+                        self.recordActivity(step, before: Option.fromOptional(segmentID))
                     case .toolDenied(let tool):
                         // Collected rather than acted on immediately: the turn
                         // keeps going and may be refused several things, and one
@@ -1491,7 +1517,19 @@ public final class Secretary {
                     case .textDelta(let chunk):
                         ensureWorking()
                         reply += chunk
-                        self.updateEntry(id: replyID, text: reply)
+                        segmentText += chunk
+                        if segmentID == nil {
+                            // Speaking again after a tool: a new bubble, named
+                            // with the profile this reply started under, so a
+                            // profile switch mid-turn can't re-sign it.
+                            let entry = TranscriptEntry(
+                                speaker: .secretary, text: "", speakerName: speakerName
+                            )
+                            self.transcript.append(entry)
+                            segmentID = entry.id
+                            self.streamingEntryID = .some(entry.id)
+                        }
+                        if let id = segmentID { self.updateEntry(id: id, text: segmentText) }
                     case .completed(let stopReason, let usage):
                         ensureWorking()
                         let reason = stopReason.getOrElse("end_turn")
@@ -1502,12 +1540,18 @@ public final class Secretary {
                             detail: "stop=\(reason) tokens=\(self.sessionUsage.totalTokens)"
                         ))
                         if reason == "refusal" {
-                            self.finishChat(entryID: replyID, taskID: taskID, success: false,
-                                            finalText: reply.isEmpty ? "(The model declined to respond.)" : reply)
+                            self.finishChat(
+                                entryID: segmentID, taskID: taskID, success: false,
+                                displayText: segmentText.isEmpty ? "(The model declined to respond.)" : segmentText,
+                                fullText: reply.isEmpty ? "(The model declined to respond.)" : reply
+                            )
                         } else {
                             self.conversation.append(ChatMessage(role: .assistant, content: reply))
                             self.trimConversation()
-                            self.finishChat(entryID: replyID, taskID: taskID, success: true, finalText: reply)
+                            self.finishChat(
+                                entryID: segmentID, taskID: taskID, success: true,
+                                displayText: segmentText, fullText: reply
+                            )
                             self.offerToWiden(denied, taskID: taskID)
                         }
                 }
@@ -1516,7 +1560,26 @@ public final class Secretary {
         }
     }
 
-    private func finishChat(entryID: UUID, taskID: String, success: Bool, finalText: String) {
+    /// Ends the turn: reads the fenced blocks out of the reply, and writes what
+    /// is left into the bubble that was being written.
+    ///
+    /// Two texts, because a reply can be several bubbles now. The blocks are
+    /// read from `fullText` — the whole turn, however many tools split it —
+    /// since a `watch` or `loop` block asked for before a tool call still has
+    /// to be acted on. Only `displayText` is written, because the earlier
+    /// bubbles are already on screen and finished; writing the whole reply here
+    /// is what used to glue three separate things back into one.
+    ///
+    /// `entryID` is absent when the turn ended on a tool rather than a word.
+    /// There is then nothing left to say and no bubble to say it in.
+    private func finishChat(
+        entryID: UUID?,
+        taskID: String,
+        success: Bool,
+        displayText: String,
+        fullText: String
+    ) {
+        let finalText = fullText
         streamingEntryID = .none()
         // A loop the assistant asked for is acted on once, here, when the reply
         // is whole — not while it streams, where a half-written block would read
@@ -1545,7 +1608,15 @@ public final class Secretary {
         } else if success {
             outstanding = nil
         }
-        updateEntry(id: entryID, text: asked.body, kind: success ? .message : .failure)
+        // The blocks came out of the whole turn above; what goes on screen is
+        // this bubble's share of it, stripped the same way.
+        if let entryID {
+            updateEntry(
+                id: entryID,
+                text: strippedForDisplay(displayText),
+                kind: success ? .message : .failure
+            )
+        }
         if stateMachine.state != .working {
             stateMachine.send(.beginExecuting, reason: "chat completed", taskID: .some(taskID))
         }
@@ -1576,7 +1647,25 @@ public final class Secretary {
 
     /// Appends a step, collapsing an immediate repeat — several thinking blocks
     /// in a row are one "thinking", not five identical lines.
-    private func recordActivity(_ step: AgentActivity, before replyID: UUID) {
+    /// A bubble's text with every fenced block taken out of it.
+    ///
+    /// Display only — nothing here acts on what it finds. The requests are read
+    /// once, from the whole turn, in `finishChat`; this exists so a block that
+    /// happened to be written before a tool call doesn't sit on screen as raw
+    /// text in the bubble that was closed off around it.
+    private func strippedForDisplay(_ text: String) -> String {
+        let loop = LoopBlock.parse(text)
+        let pinned = InfoWindowBlock.parse(loop.body)
+        let blocked = BlockedBlock.parse(pinned.body)
+        let planned = PlanBlock.parse(blocked.body)
+        let watched = WatchBlock.parse(planned.body)
+        return RunBlock.parse(watched.body).body
+    }
+
+    /// - Parameter replyID: the bubble being written, when there is one. With
+    ///   none — a tool ran straight after a finished bubble — the commentary
+    ///   goes at the end, which is where it happened.
+    private func recordActivity(_ step: AgentActivity, before replyID: Option<UUID>) {
         guard activity.last != step else { return }
         activity.append(step)
         guard showsActivity else { return }
@@ -1590,12 +1679,15 @@ public final class Secretary {
 
         if let index = existing.toOptional() {
             transcript[index].text = text
-        } else if let replyIndex = transcript.firstIndex(where: { $0.id == replyID }) {
-            // Inserted ahead of the reply: the work happened before the answer,
-            // and the transcript should read in that order.
+        } else {
             let entry = TranscriptEntry(speaker: .secretary, kind: .activity, text: text)
             activityEntryID = .some(entry.id)
-            transcript.insert(entry, at: replyIndex)
+            // Ahead of the bubble being written, when one is: the work happened
+            // before that answer and should read in that order. With no bubble
+            // open, the last one is already finished and this goes after it.
+            let anchor = replyID
+                .flatMap { id in Option.fromOptional(self.transcript.firstIndex { $0.id == id }) }^
+            transcript.insert(entry, at: anchor.getOrElse(transcript.count))
         }
     }
 

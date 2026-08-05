@@ -23,6 +23,10 @@ final class SpyWorkspaceProvider: ChatProvider, WorkspaceScopedProvider, @unchec
     var activityForNextTurn: [AgentActivity] = []
     /// Scripted text for the next turn, then cleared.
     var replyForNextTurn: String?
+    /// A whole turn, event by event, for when the order matters — text, then a
+    /// tool, then more text. The convenience fields above always put every tool
+    /// before every word, which is the one shape that can't show a seam.
+    var eventsForNextTurn: [ChatStreamEvent]?
 
     private(set) var preparedExtras: [[URL]] = []
 
@@ -55,6 +59,13 @@ final class SpyWorkspaceProvider: ChatProvider, WorkspaceScopedProvider, @unchec
         activityForNextTurn = []
         let text = replyForNextTurn ?? "ok"
         replyForNextTurn = nil
+        if let scripted = eventsForNextTurn {
+            eventsForNextTurn = nil
+            return AsyncStream { continuation in
+                for event in scripted { continuation.yield(.right(event)) }
+                continuation.finish()
+            }
+        }
         return AsyncStream { continuation in
             for step in steps { continuation.yield(.right(.activity(step))) }
             for denial in denials { continuation.yield(.right(.toolDenied(denial))) }
@@ -757,6 +768,86 @@ final class AgentSessionTests: XCTestCase {
         }
         XCTAssertEqual(request.toolID, Secretary.claudeCodeToolID)
         XCTAssertEqual(provider.callCount, 0)
+    }
+
+    // MARK: - One bubble per stretch of talking
+
+    /// Three things arrived as one block: the answer to the person, the model's
+    /// note to itself on the way to a tool, and the report of what it did. They
+    /// are three things and read as three; a tool ran between each pair.
+    func testAToolBetweenTwoSentencesSplitsThemIntoTwoBubbles() async {
+        let secretary = makeSecretary(projects: [
+            Project(name: "Second-Brain", path: "/tmp/second-brain", allowedTools: [Secretary.claudeCodeToolID])
+        ])
+        provider.eventsForNextTurn = [
+            .textDelta("Type /grill-with-docs yourself."),
+            .activity(AgentActivity(kind: .tool, detail: "Read notes.md")),
+            .textDelta("No existing note on this, so I'll capture it."),
+            .activity(AgentActivity(kind: .tool, detail: "Write notes.md")),
+            .textDelta("Saved, and the daily note is updated."),
+            .completed(stopReason: .none(), usage: .none())
+        ]
+
+        secretary.submit("do the thing")
+        await waitUntilIdle()
+
+        let said = secretary.transcript
+            .filter { $0.speaker == .secretary && $0.kind != .activity }
+            .map(\.text)
+            .filter { !$0.isEmpty }
+        XCTAssertEqual(said.count, 3, "one bubble per stretch of talking. Got: \(said)")
+        XCTAssertEqual(said.first, "Type /grill-with-docs yourself.")
+        XCTAssertEqual(said.last, "Saved, and the daily note is updated.")
+        XCTAssertFalse(
+            said.contains { $0.contains("yourself.No existing") },
+            "the seam is the whole point"
+        )
+    }
+
+    /// The conversation still remembers the turn as one answer. Splitting is
+    /// what the person sees, not what the model is told it said.
+    func testTheSplitIsOnlyOnScreen() async {
+        let secretary = makeSecretary(projects: [
+            Project(name: "Second-Brain", path: "/tmp/second-brain", allowedTools: [Secretary.claudeCodeToolID])
+        ])
+        provider.eventsForNextTurn = [
+            .textDelta("First half."),
+            .activity(AgentActivity(kind: .tool, detail: "Read x")),
+            .textDelta(" Second half."),
+            .completed(stopReason: .none(), usage: .none())
+        ]
+
+        secretary.submit("go")
+        await waitUntilIdle()
+        provider.replyForNextTurn = "ok"
+        secretary.submit("and again")
+        await waitUntilIdle()
+
+        let assistantTurns = provider.lastMessages.filter { $0.role == .assistant }
+        XCTAssertTrue(
+            assistantTurns.contains { $0.content == "First half. Second half." },
+            "the model is told it said one thing. Got: \(assistantTurns.map(\.content))"
+        )
+    }
+
+    /// A turn that reaches for a tool before saying anything keeps its one
+    /// placeholder rather than gaining an empty bubble above it.
+    func testATurnThatStartsWithAToolGainsNoBlankBubble() async {
+        let secretary = makeSecretary(projects: [
+            Project(name: "Second-Brain", path: "/tmp/second-brain", allowedTools: [Secretary.claudeCodeToolID])
+        ])
+        provider.eventsForNextTurn = [
+            .activity(AgentActivity(kind: .tool, detail: "Read x")),
+            .textDelta("Only one thing said."),
+            .completed(stopReason: .none(), usage: .none())
+        ]
+
+        secretary.submit("go")
+        await waitUntilIdle()
+
+        let said = secretary.transcript.filter { $0.speaker == .secretary && $0.kind != .activity }
+        XCTAssertEqual(said.count, 1, "Got: \(said.map(\.text))")
+        XCTAssertEqual(said.first?.text, "Only one thing said.")
     }
 }
 
