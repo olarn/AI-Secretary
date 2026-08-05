@@ -576,11 +576,74 @@ public final class Secretary {
         stateMachine.send(.userBeganInput, reason: "watch a path", taskID: .some(taskID))
         stateMachine.send(.beginInterpreting, reason: "resolving the path to watch", taskID: .some(taskID))
 
-        handleTool(
-            operation: .watch(WatchRequest(relativePath: path)),
-            projectQuery: .none()
-        )
+        let request = WatchRequest(relativePath: path)
+        // A full path names a place rather than something to look for inside a
+        // project, so it is asked about directly. Sending it through project
+        // resolution first would ask "may I watch /Users/…/aaa in Second-Brain?"
+        // — a question about the wrong folder — and only then discover it was
+        // somewhere else entirely.
+        if let outside = request.absoluteTarget.toOptional() {
+            askToWatchOutsideProjects(outside, taskID: taskID)
+            return
+        }
+
+        handleTool(operation: .watch(request), projectQuery: .none())
     }
+
+    /// Asks about a folder that no registered project contains.
+    ///
+    /// It used to be refused: "it isn't inside <project>", and that was the end
+    /// of it. Watching is reading, so it does need a yes — but a yes was never
+    /// possible to give, which left the person with a rule instead of a choice.
+    ///
+    /// The yes is carried by a project made here and never registered. That is
+    /// what makes the rest of the machinery work unchanged, and it keeps the one
+    /// property that matters: the watch loop re-resolves through the adapter
+    /// every tick, so the escape check still runs — around this folder now,
+    /// which is exactly the boundary that was just agreed to. A symlink inside
+    /// it still cannot lead anywhere else.
+    ///
+    /// Nothing is written to the registry, and the throwaway project is a new
+    /// identity each time, so a grant recorded on the way through can never be
+    /// matched again. Watching the same folder tomorrow asks again.
+    private func askToWatchOutsideProjects(_ url: URL, taskID: String) {
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) else {
+            finish(
+                success: false,
+                message: "There's nothing at \(url.path).",
+                reason: "watch path missing",
+                toolStatus: "error"
+            )
+            return
+        }
+
+        let folder = watchOnlyProject(at: url)
+        let request = ApprovalRequest(
+            taskID: taskID,
+            toolID: fileAdapter.toolID,
+            actionClass: .readOnly,
+            project: folder,
+            commandSummary: "watch \(url.path)",
+            rationale: "Watch a folder outside your projects"
+        )
+        audit.record(AuditEntry(taskID: taskID, kind: .approvalRequested, detail: request.commandSummary))
+        // The resolved path, spelled out. "May I watch aaa?" is not a question
+        // anyone can answer — `..` and symlinks are precisely where the folder
+        // you typed and the folder you get come apart.
+        say(.secretary, """
+            \(url.path) isn't inside any project you've added. May I watch it?
+
+            I'd be reading the names of files there every few seconds and telling \
+            you what changed — nothing else, and only until you stop me or quit. \
+            This is for this one time; I won't add it to your projects.
+            """)
+        pendingDecision = .some(.approval(
+            request,
+            operation: .watch(WatchRequest(relativePath: ""))
+        ))
+    }
+
 
     /// Acts on a ```watch block, once the reply that carried it is whole.
     private func applyWatchRequest(_ request: WatchBlock.Request) {
@@ -598,11 +661,17 @@ public final class Secretary {
         let taskID = activeTaskID.getOrElse("-")
 
         guard let url = fileAdapter.resolve(request.relativePath, in: project).toOption().toOptional() else {
-            finish(
-                success: false,
-                message: "I can't watch \(request.relativePath) — it isn't inside \(project.name).",
-                reason: "watch path outside project",
-                toolStatus: "refused"
+            // Climbed out of the project with `..`, or followed a link that led
+            // outside it. Where it landed is a real folder the person can be
+            // asked about, so it is — the same question a full path gets, since
+            // it is the same situation arrived at by a different spelling.
+            askToWatchOutsideProjects(
+                project.url
+                    .appendingPathComponent(request.displayPath)
+                    .standardizedFileURL
+                    .resolvingSymlinksInPath()
+                    .standardizedFileURL,
+                taskID: taskID
             )
             return
         }
@@ -619,6 +688,7 @@ public final class Secretary {
         let watch = FolderWatch(
             relativePath: request.displayPath,
             project: project,
+            resolvedPath: url.path,
             snapshot: WatchScan.snapshot(of: url)
         )
 

@@ -1,7 +1,28 @@
 import Foundation
+import FunctionalCore
 
 import Permissions
 import ProjectRegistry
+import ToolAdapters
+
+/// A project that exists only to name one folder somebody approved watching.
+///
+/// Never registered and never saved. It is the smallest thing that carries
+/// "this folder, read-only, right now" through code that expects a project —
+/// and rooting it *at* that folder is what keeps the adapter's escape check
+/// working every tick, now around the boundary that was just agreed to.
+///
+/// A new identity each time it is called, deliberately: a grant recorded
+/// against it can never be matched again, so the same folder is asked about
+/// afresh rather than quietly inheriting yesterday's yes.
+public func watchOnlyProject(at url: URL) -> Project {
+    Project(
+        name: url.lastPathComponent,
+        path: url.path,
+        allowedTools: [FileReadOnlyAdapter.toolIdentifier],
+        allowedActions: ["read"]
+    )
+}
 
 /// A path the person asked to be told about.
 ///
@@ -27,6 +48,34 @@ public struct WatchRequest: Equatable, Sendable {
 
     public var humanDescription: String {
         "Keep an eye on \(displayPath.isEmpty ? "this project folder" : displayPath) and say when it changes"
+    }
+
+    /// Where this points when it names somewhere outright rather than somewhere
+    /// inside a project — an absolute path, or one starting at the home folder.
+    ///
+    /// Answered here, without a project, because it decides which way the
+    /// request is routed *before* a project has been resolved: a full path is
+    /// not a thing to look for inside a project and then refuse, it is a place
+    /// the person named and can be asked about.
+    ///
+    /// Symlinks and `..` are resolved, so what the card shows is where the
+    /// reading will actually happen. That is the whole point of showing it.
+    public var absoluteTarget: Option<URL> {
+        let trimmed = relativePath.trimmingCharacters(in: .whitespaces)
+        let expanded: String
+        if trimmed.hasPrefix("/") {
+            expanded = trimmed
+        } else if trimmed == "~" || trimmed.hasPrefix("~/") {
+            expanded = NSString(string: trimmed).expandingTildeInPath
+        } else {
+            return .none()
+        }
+        return .some(
+            URL(fileURLWithPath: expanded)
+                .standardizedFileURL
+                .resolvingSymlinksInPath()
+                .standardizedFileURL
+        )
     }
 }
 
@@ -253,19 +302,38 @@ public struct FolderWatch: Equatable, Sendable, Identifiable {
     /// Relative to the project. Empty means the project folder itself.
     public let relativePath: String
     public let project: Project
+    /// The folder this actually landed on, symlinks resolved.
+    ///
+    /// Identity, and only identity. The loop deliberately re-resolves through
+    /// the adapter on every tick instead of reusing this, so the escape check
+    /// keeps running rather than being answered once at the start.
+    public let resolvedPath: String
     public let snapshot: WatchSnapshot
     /// How many times something has been reported. Shown when it stops, so the
     /// person can tell "nothing happened" from "I wasn't looking".
     public let reportCount: Int
 
-    /// A path inside a project. Two watches on the same path in the same
-    /// project are the same watch, which is what makes "already watching that"
-    /// answerable.
-    public var id: String { "\(project.id)/\(relativePath)" }
+    /// The folder itself, which is what "already watching that" is really
+    /// asking about.
+    ///
+    /// It used to be the project's id plus the relative path. That answered the
+    /// question only while every watch came through a registered project: a
+    /// folder named outright is carried by a throwaway project made on the spot,
+    /// so a second `/watch` of the same folder arrived with a different id and
+    /// would have started a second watch reporting everything twice. The folder
+    /// on disk can't drift like that.
+    public var id: String { resolvedPath }
 
-    public init(relativePath: String, project: Project, snapshot: WatchSnapshot, reportCount: Int = 0) {
+    public init(
+        relativePath: String,
+        project: Project,
+        resolvedPath: String,
+        snapshot: WatchSnapshot,
+        reportCount: Int = 0
+    ) {
         self.relativePath = relativePath
         self.project = project
+        self.resolvedPath = resolvedPath
         self.snapshot = snapshot
         self.reportCount = reportCount
     }
@@ -287,6 +355,7 @@ public struct FolderWatch: Equatable, Sendable, Identifiable {
         FolderWatch(
             relativePath: relativePath,
             project: project,
+            resolvedPath: resolvedPath,
             snapshot: snapshot,
             reportCount: reportCount + (reported ? 1 : 0)
         )

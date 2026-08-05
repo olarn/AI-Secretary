@@ -25,7 +25,7 @@ import Foundation
 public struct AppVersion: Equatable, Comparable, Sendable, CustomStringConvertible {
     /// The current version. Keep the literal on one line and in this shape —
     /// `scripts/package-app.sh` parses it to fill in `CFBundleShortVersionString`.
-    public static let current = AppVersion(major: 0, minor: 9, patch: 151)
+    public static let current = AppVersion(major: 0, minor: 9, patch: 152)
 
     public let major: Int
     public let minor: Int

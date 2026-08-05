@@ -1,5 +1,6 @@
 import XCTest
 import ProjectRegistry
+import ToolAdapters
 @testable import SecretaryCore
 
 final class WatchSnapshotTests: XCTestCase {
@@ -141,9 +142,11 @@ final class FolderWatchTests: XCTestCase {
     private let project = Project(name: "AI-Secretary", path: "/tmp/ai-secretary")
 
     private func watch(_ path: String, in project: Project? = nil) -> FolderWatch {
-        FolderWatch(
+        let owner = project ?? self.project
+        return FolderWatch(
             relativePath: path,
-            project: project ?? self.project,
+            project: owner,
+            resolvedPath: path.isEmpty ? owner.path : "\(owner.path)/\(path)",
             snapshot: WatchSnapshot(stamps: [:])
         )
     }
@@ -164,13 +167,21 @@ final class FolderWatchTests: XCTestCase {
         XCTAssertEqual(quiet.advancing(to: WatchSnapshot(stamps: ["a": "1"]), reported: true).reportCount, 1)
     }
 
-    /// Identity is the path *inside a project*, so the same folder name in two
-    /// projects is two watches and the same one twice is one.
-    func testAWatchIsIdentifiedByItsPathAndProject() {
+    /// Identity is the folder on disk. Two projects each with a `docs` are two
+    /// folders and so two watches; the same folder reached twice is one, however
+    /// it was named — which is what stops a folder named by full path, carried
+    /// by a throwaway project with a fresh id, from being watched twice over.
+    func testAWatchIsIdentifiedByTheFolderItLandsOn() {
         let other = Project(name: "Other", path: "/tmp/other")
         XCTAssertEqual(watch("docs").id, watch("docs").id)
         XCTAssertNotEqual(watch("docs").id, watch("src").id)
         XCTAssertNotEqual(watch("docs").id, watch("docs", in: other).id)
+
+        // Same folder, two throwaway projects — one watch, not two.
+        let once = watchOnlyProject(at: URL(fileURLWithPath: "/tmp/aaa"))
+        let again = watchOnlyProject(at: URL(fileURLWithPath: "/tmp/aaa"))
+        XCTAssertNotEqual(once.id, again.id, "a throwaway project is a new identity each time")
+        XCTAssertEqual(watch("", in: once).id, watch("", in: again).id)
     }
 
     /// `/watch stop <path>` has to answer to what the person sees in the
@@ -180,6 +191,54 @@ final class FolderWatchTests: XCTestCase {
         XCTAssertTrue(watch("").matches(path: "."), "`.` is how the project folder was started")
         XCTAssertTrue(watch("").matches(path: "AI-Secretary"), "and how it is named back")
         XCTAssertFalse(watch("docs").matches(path: "src"))
+    }
+}
+
+final class WatchAbsoluteTargetTests: XCTestCase {
+    private func target(_ path: String) -> String? {
+        WatchRequest(relativePath: path).absoluteTarget.toOptional()?.path
+    }
+
+    /// A path inside a project is not this: it has to go through the project so
+    /// the escape check applies to it.
+    func testARelativePathIsNotAnOutrightPlace() {
+        XCTAssertNil(target("docs"))
+        XCTAssertNil(target("."))
+        XCTAssertNil(target("../sibling"), "climbing out is caught later, against the real project root")
+    }
+
+    func testAFullPathNamesItsPlace() {
+        XCTAssertEqual(target("/tmp"), URL(fileURLWithPath: "/tmp").resolvingSymlinksInPath().path)
+    }
+
+    func testHomeIsSpelledOutRatherThanLeftAsATilde() {
+        XCTAssertEqual(target("~"), NSHomeDirectory())
+        XCTAssertEqual(target(" ~/Desktop "), "\(NSHomeDirectory())/Desktop")
+    }
+
+    /// The card shows this string, so it has to be where the reading will
+    /// actually happen — on macOS `/tmp` is a link to `/private/tmp`, and a card
+    /// that says the former while reading the latter is the failure mode.
+    func testSymlinksAreResolvedBeforeAnyoneIsAsked() {
+        XCTAssertEqual(target("/tmp/../tmp"), URL(fileURLWithPath: "/tmp").resolvingSymlinksInPath().path)
+    }
+}
+
+final class FolderProjectTests: XCTestCase {
+    private let url = URL(fileURLWithPath: "/tmp/watch-me")
+
+    func testItIsRootedAtTheApprovedFolder() {
+        let project = watchOnlyProject(at: url)
+        XCTAssertEqual(project.path, url.path)
+        XCTAssertEqual(project.name, "watch-me", "the card and the badge call it by its own name")
+    }
+
+    /// Read-only and nothing else. It exists to carry one yes about one folder,
+    /// not to become a project by the back door.
+    func testItCanOnlyRead() {
+        let project = watchOnlyProject(at: url)
+        XCTAssertEqual(project.allowedTools, [FileReadOnlyAdapter.toolIdentifier])
+        XCTAssertEqual(project.allowedActions, ["read"])
     }
 }
 

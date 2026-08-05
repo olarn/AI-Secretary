@@ -253,6 +253,73 @@ final class SecretaryTests: XCTestCase {
         XCTAssertTrue(secretary.transcript.last?.text.contains("allowed-tools list") ?? false)
     }
 
+    /// A folder no project contains is a question, not a wall.
+    ///
+    /// It used to end the turn: "it isn't inside <project>". Watching is reading,
+    /// so it does need a yes — but there was no way to give one, which left a
+    /// rule where a choice belonged.
+    func testWatchingAFolderOutsideEveryProjectAsksInsteadOfRefusing() throws {
+        let outside = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("outside-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: outside) }
+
+        let registered = Project(name: "Registered", path: "/tmp/registered")
+        let secretary = makeSecretary(projects: [registered])
+
+        secretary.submit("/watch \(outside.path)")
+
+        guard case .approval(let request, _) = secretary.pendingDecision.toOptional() else {
+            return XCTFail("Expected a card, not a refusal")
+        }
+        // The resolved path, because `/tmp` is a link to `/private/tmp` and a
+        // card naming the one while reading the other is the failure worth
+        // guarding.
+        let resolved = outside.resolvingSymlinksInPath().standardizedFileURL.path
+        XCTAssertTrue(
+            request.commandSummary.contains(resolved),
+            "The card has to name where the reading happens. Got: \(request.commandSummary)"
+        )
+        XCTAssertTrue(secretary.activeWatches.isEmpty, "nothing is watched before the answer")
+    }
+
+    /// Saying yes covers the folder, and nothing else. It is not added to the
+    /// registry, so it does not come back tomorrow as a project the assistant
+    /// may work in.
+    func testApprovingAnOutsideFolderDoesNotRegisterIt() throws {
+        let outside = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("outside-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: outside) }
+
+        let registered = Project(name: "Registered", path: "/tmp/registered")
+        let store = InMemoryProjectStore(projects: [registered])
+        let registry = ProjectRegistry(store: store)
+        let secretary = Secretary(
+            stateMachine: machine,
+            registry: registry,
+            adapter: adapter,
+            classifier: RuleBasedIntentClassifier(),
+            audit: AuditLog(),
+            chatProvider: FakeChatProvider(.events([.completed(stopReason: .none(), usage: .none())]))
+        )
+
+        secretary.submit("/watch \(outside.path)")
+        secretary.resolvePendingApproval(granted: true)
+
+        XCTAssertEqual(secretary.activeWatches.count, 1, "the yes started the watch")
+        XCTAssertEqual(registry.projects.map(\.name), ["Registered"], "and added nothing to the registry")
+        XCTAssertEqual(
+            store.load().toOption().toOptional()?.map(\.name),
+            ["Registered"],
+            "nor to what gets written back to disk"
+        )
+        XCTAssertFalse(
+            registry.projects.contains { $0.path == outside.path },
+            "the approved folder is carried in memory, not registered"
+        )
+    }
+
     func testNonGitMessageIsRoutedToChatAndStreamsAReply() async {
         let chat = FakeChatProvider(.events([
             .thinking,
