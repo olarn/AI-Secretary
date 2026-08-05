@@ -168,6 +168,15 @@ public enum ChatStreamEvent: Equatable, Sendable {
     case thinking
     /// A chunk of assistant text.
     case textDelta(String)
+    /// The model began a fresh block of text.
+    ///
+    /// A turn is not one piece of writing: the model says something, reaches
+    /// for a tool, says something else, and each of those is its own content
+    /// block. The deltas carry no hint of where one ends, so joining them gave
+    /// `…/grill-with-docs เองได้เลยนะNo existing note on this.` — two thoughts
+    /// with not even a space between them, because there was never a character
+    /// there to begin with. This is that missing character.
+    case textBlockBegan
     /// The turn finished. `stopReason == "refusal"` means the model declined.
     case completed(stopReason: Option<String>, usage: Option<ChatUsage>)
 }

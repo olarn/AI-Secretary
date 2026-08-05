@@ -1441,6 +1441,20 @@ public final class Secretary {
         var segmentID: UUID? = replyID
         var segmentText = ""
         let speakerName = profile.displayName
+        // Finishes the bubble being written, if anything was written in it. The
+        // empty case matters: a turn that reaches for a tool before saying
+        // anything keeps its placeholder instead of gaining a blank bubble, and
+        // the block boundary that opens the very first block arrives before any
+        // text at all.
+        let closeSegment = { [weak self] in
+            guard let self, let id = segmentID,
+                  !segmentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            else { return }
+            self.updateEntry(id: id, text: self.strippedForDisplay(segmentText))
+            segmentID = nil
+            segmentText = ""
+            self.streamingEntryID = .none()
+        }
 
         audit.record(AuditEntry(taskID: taskID, kind: .executionStarted, detail: "chat model=\(modelDescription) effort=\(effortDescription)"))
 
@@ -1489,23 +1503,19 @@ public final class Secretary {
                 switch event {
                     case .thinking:
                         break // stay in THINKING until the first token
+                    case .textBlockBegan:
+                        // The model started saying a new thing. Whatever it was
+                        // saying before is finished — left joined, an answer to
+                        // the person ran into its note to itself and then into
+                        // the report of what it did, three things in one block
+                        // with not even a space between them.
+                        closeSegment()
                     case .activity(let step):
-                        // A tool ran, so whatever was said before it is finished
-                        // being said. Left in one bubble, an answer to the person
-                        // ran straight into the model's note to itself and then
-                        // into the report of what it did — three things, one
-                        // block, no seam. The seam is here.
-                        //
-                        // Only when something was actually said: a turn that
-                        // reaches for a tool before speaking keeps its empty
-                        // placeholder rather than gaining a blank bubble.
-                        if let id = segmentID,
-                           !segmentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            self.updateEntry(id: id, text: self.strippedForDisplay(segmentText))
-                            segmentID = nil
-                            segmentText = ""
-                            self.streamingEntryID = .none()
-                        }
+                        // A tool between two things said ends the first of them
+                        // too. In practice a block boundary follows anyway, but
+                        // not every backend sends one and the seam belongs
+                        // wherever the turn actually turns.
+                        closeSegment()
                         // Kept even when the user has the panel closed: turning
                         // it on mid-turn should show what already happened.
                         self.recordActivity(step, before: Option.fromOptional(segmentID))

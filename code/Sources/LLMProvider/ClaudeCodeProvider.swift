@@ -362,9 +362,18 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
             // happening; its deltas carry no text to show.
             if let event = object["event"] as? [String: Any],
                event["type"] as? String == "content_block_start",
-               let block = event["content_block"] as? [String: Any],
-               block["type"] as? String == "thinking" {
-                return [.activity(AgentActivity(kind: .thinking, detail: "Thinking"))]
+               let block = event["content_block"] as? [String: Any] {
+                switch block["type"] as? String {
+                case "thinking":
+                    return [.activity(AgentActivity(kind: .thinking, detail: "Thinking"))]
+                case "text":
+                    // Where one thing the model said ends and the next begins.
+                    // The deltas alone can't say — they are just characters, and
+                    // the last of one block butts against the first of the next.
+                    return [.textBlockBegan]
+                default:
+                    return []
+                }
             }
             guard let event = object["event"] as? [String: Any],
                   event["type"] as? String == "content_block_delta",

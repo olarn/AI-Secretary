@@ -830,6 +830,58 @@ final class AgentSessionTests: XCTestCase {
         )
     }
 
+    /// The seam the app was actually missing.
+    ///
+    /// Claude Code sends a turn as several content blocks; the deltas inside
+    /// them are just characters, so joining every delta ran the last word of
+    /// one block into the first of the next with nothing between — which is
+    /// what "README.mdไม่มีอะไรต้องบันทึกค่ะ" was. No tool call sits at that
+    /// join, so splitting on tools alone would not have found it.
+    func testANewBlockOfTextIsANewBubbleEvenWithNoToolBetween() async {
+        let secretary = makeSecretary(projects: [
+            Project(name: "Second-Brain", path: "/tmp/second-brain", allowedTools: [Secretary.claudeCodeToolID])
+        ])
+        provider.eventsForNextTurn = [
+            .textBlockBegan,
+            .textDelta("The files are CLAUDE.md, Home.md, README.md"),
+            .textBlockBegan,
+            .textDelta("Nothing here worth capturing."),
+            .completed(stopReason: .none(), usage: .none())
+        ]
+
+        secretary.submit("count them")
+        await waitUntilIdle()
+
+        let said = secretary.transcript
+            .filter { $0.speaker == .secretary && $0.kind != .activity }
+            .map(\.text)
+            .filter { !$0.isEmpty }
+        XCTAssertEqual(said.count, 2, "Got: \(said)")
+        XCTAssertFalse(
+            said.contains { $0.contains("README.mdNothing") },
+            "this exact join is the bug"
+        )
+    }
+
+    /// The boundary that opens the first block arrives before any text, and
+    /// must not leave an empty bubble above the answer.
+    func testTheOpeningBlockBoundaryAddsNoBlankBubble() async {
+        let secretary = makeSecretary(projects: [
+            Project(name: "Second-Brain", path: "/tmp/second-brain", allowedTools: [Secretary.claudeCodeToolID])
+        ])
+        provider.eventsForNextTurn = [
+            .textBlockBegan,
+            .textDelta("Just the one thing."),
+            .completed(stopReason: .none(), usage: .none())
+        ]
+
+        secretary.submit("hi")
+        await waitUntilIdle()
+
+        let said = secretary.transcript.filter { $0.speaker == .secretary && $0.kind != .activity }
+        XCTAssertEqual(said.count, 1, "Got: \(said.map(\.text))")
+    }
+
     /// A turn that reaches for a tool before saying anything keeps its one
     /// placeholder rather than gaining an empty bubble above it.
     func testATurnThatStartsWithAToolGainsNoBlankBubble() async {
