@@ -94,7 +94,14 @@ struct ChatPanelView: View {
         .onDisappear { stopWatchingArrowKeys() }
         // Not `onAppear`: this view is built once and then shown and hidden by
         // the window's alpha, so appearing happens exactly one time.
-        .onChange(of: layout.focusRequests) { messageBoxFocused = true }
+        //
+        // Only into an empty box. Taking focus selects whatever is already
+        // there, so re-opening on a half-written message armed the next
+        // keystroke to wipe it — the box is where their words live, and this
+        // was meant to save a click, not cost a sentence.
+        .onChange(of: layout.focusRequests) {
+            if draft.isEmpty { messageBoxFocused = true }
+        }
         .frame(width: appearance.settings.chatWidth)
         .frame(maxHeight: .infinity, alignment: .top)
         .background(
