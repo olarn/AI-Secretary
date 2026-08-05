@@ -18,6 +18,7 @@ final class StatusBarController {
     /// Panes pulled out of the chat. Read when the menu opens rather than kept
     /// in step with every change: a menu only has to be right at the moment it
     /// is shown, and rebuilding then means no stale rows.
+    private let onNewConversation: () -> Void
     private let windows: () -> InfoWindows?
     private let windowsMenuItem: NSMenuItem
 
@@ -25,11 +26,13 @@ final class StatusBarController {
         onOpenChat: @escaping () -> Void,
         onToggleCharacter: @escaping () -> Bool,
         onShowUsage: @escaping () -> Void,
+        onNewConversation: @escaping () -> Void,
         windows: @escaping () -> InfoWindows?
     ) {
         self.onOpenChat = onOpenChat
         self.onToggleCharacter = onToggleCharacter
         self.onShowUsage = onShowUsage
+        self.onNewConversation = onNewConversation
         self.windows = windows
         self.windowsMenuItem = NSMenuItem(title: "Pinned Messages", action: nil, keyEquivalent: "")
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -62,6 +65,17 @@ final class StatusBarController {
         let openItem = NSMenuItem(title: "Open Chat", action: #selector(Target.openChat(_:)), keyEquivalent: "")
         openItem.target = target
         menu.addItem(openItem)
+
+        // Reachable from here as well as from `/new`, because the reason to
+        // want it is often that the chat is in a state you'd rather not type
+        // into.
+        let newItem = NSMenuItem(
+            title: "New Conversation",
+            action: #selector(Target.newConversation(_:)),
+            keyEquivalent: ""
+        )
+        newItem.target = target
+        menu.addItem(newItem)
 
         // ⌘H matches the shortcut in the (undrawn) main menu, and showing it here
         // is how the user finds out the shortcut exists at all.
@@ -109,6 +123,7 @@ final class StatusBarController {
     private var target: Target?
 
     fileprivate func handleOpenChat() { onOpenChat() }
+    fileprivate func handleNewConversation() { onNewConversation() }
 
     fileprivate func handleToggleCharacter() {
         setCharacterVisible(onToggleCharacter())
@@ -199,6 +214,7 @@ final class StatusBarController {
         @objc func openChat(_ sender: Any?) { controller.handleOpenChat() }
         @objc func toggleCharacter(_ sender: Any?) { controller.handleToggleCharacter() }
         @objc func showUsage(_ sender: Any?) { controller.handleShowUsage() }
+        @objc func newConversation(_ sender: Any?) { controller.handleNewConversation() }
 
         @objc func showWindow(_ sender: Any?) {
             guard let id = (sender as? NSMenuItem)?.representedObject as? UUID else { return }

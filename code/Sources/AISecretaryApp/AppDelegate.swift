@@ -143,6 +143,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
             onOpenChat: { [weak self] in self?.openChatFromMenu() },
             onToggleCharacter: { [weak self] in self?.toggleCharacterVisibility() ?? true },
             onShowUsage: { [weak self] in self?.usageWindow.toggle() },
+            onNewConversation: { [weak self] in self?.secretary.newConversation() },
             windows: { [weak self] in self?.infoWindows }
         )
 

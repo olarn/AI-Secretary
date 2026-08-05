@@ -17,7 +17,10 @@ public struct TranscriptEntry: Identifiable, Equatable, Sendable {
     /// UI renders it differently. A failure is not an answer either — it is the
     /// app reporting that it couldn't get one — and looking like one is how
     /// "Can't reach Claude Code" gets read as something the Secretary said.
-    public enum Kind: Sendable, Equatable { case message, activity, failure }
+    /// `divider` marks where one conversation ended and the next began. It is
+    /// not a message — nobody said it — and it is the only kind that exists to
+    /// be a line rather than words.
+    public enum Kind: Sendable, Equatable { case message, activity, failure, divider }
 
     public let id = UUID()
     public let speaker: Speaker
@@ -412,6 +415,56 @@ public final class Secretary {
     /// pause there is: nothing new starts until it is let go.
     public private(set) var queuePaused = false
 
+    /// Ends this conversation and starts a fresh one.
+    ///
+    /// The session-level cancel. Stopping a turn only ends what is running;
+    /// this ends everything that is standing — the queue, the loop, the run,
+    /// the watches — and drops the context the model has been answering from,
+    /// which is the part that has no other way out. Without it, a conversation
+    /// that had gone wrong could only be escaped by quitting the app.
+    ///
+    /// What is on screen stays on screen. Those words were read; clearing them
+    /// would look like the conversation never happened, and the point is to say
+    /// where it ended, not to deny it.
+    public func newConversation() {
+        stopCurrentTurn(because: "starting a new conversation")
+        pendingDecision = .none()
+        awaitingPlan = .none()
+        outstanding = nil
+
+        var ended: [String] = []
+        if !queuedMessages.isEmpty {
+            ended.append("\(queuedMessages.count) waiting message\(queuedMessages.count == 1 ? "" : "s")")
+            queuedMessages.removeAll()
+        }
+        queuePaused = false
+        if activeLoop.isDefined { stopLoop(because: nil); ended.append("the loop") }
+        if activeInstructionRun.isDefined {
+            stopInstructionRun(because: "starting a new conversation")
+            ended.append("the run")
+        }
+        if !activeWatches.isEmpty {
+            ended.append("\(activeWatches.count) watch\(activeWatches.count == 1 ? "" : "es")")
+            stopWatching(because: "starting a new conversation")
+        }
+
+        conversation.removeAll()
+        activity = []
+        activityEntryID = .none()
+        sessionAgentTools = []
+        instructionMemory = InstructionMemory()
+        // The backend keeps its own thread; ours going quiet is not enough.
+        (chatProvider as? WorkspaceScopedProvider)?.resetConversation()
+
+        transcript.append(TranscriptEntry(
+            speaker: .secretary,
+            kind: .divider,
+            text: ended.isEmpty
+                ? "New conversation — I've forgotten what we were talking about."
+                : "New conversation — I've forgotten what we were talking about, and stopped \(ended.joined(separator: ", "))."
+        ))
+    }
+
     /// Answers the card that appears when something is typed mid-flight.
     public func resolveInterruption(queue: Bool) {
         guard case .interruption(let text) = pendingDecision.toOptional() else { return }
@@ -627,8 +680,11 @@ public final class Secretary {
         case "watch":
             handleWatchCommand(argument?.trimmingCharacters(in: .whitespaces) ?? "")
 
+        case "new", "reset":
+            newConversation()
+
         default:
-            say(.secretary, "Unknown command “/\(command)”. Try /model, /effort, /usage, /loop, /run or /watch.")
+            say(.secretary, "Unknown command “/\(command)”. Try /model, /effort, /usage, /loop, /run, /watch or /new.")
         }
     }
 
@@ -2937,6 +2993,8 @@ public final class Secretary {
           seen the steps and said go. `/run stop` stops part-way.
         • /watch <path> — tell you when a file or folder changes; several at
           once is fine. `/watch stop` stops all, `/watch stop <path>` stops one.
+        • /new — start over: forget the conversation and stop everything
+          standing. What's on screen stays there.
 
         Or just ask me to keep track of something as it happens and I'll set the
         timer up myself.

@@ -894,6 +894,71 @@ final class AgentSessionTests: XCTestCase {
         XCTAssertEqual(text, "second extra")
     }
 
+    // MARK: - Starting over
+
+    /// The session-level cancel. Stopping a turn ends what is running; this
+    /// ends what is standing, and drops the context — the part that had no
+    /// other way out but quitting the app.
+    func testNewConversationForgetsTheContextAndStopsWhatWasStanding() async {
+        let secretary = await busySecretary()
+        secretary.submit("something for later")
+        secretary.resolveInterruption(queue: true)
+        XCTAssertEqual(secretary.queuedMessages.count, 1)
+
+        secretary.newConversation()
+
+        XCTAssertTrue(secretary.queuedMessages.isEmpty, "nothing waiting survives")
+        XCTAssertFalse(secretary.queuePaused)
+        XCTAssertFalse(machine.state.isBusy, "and nothing is still running")
+
+        // The context is gone where it counts: the next turn carries only the
+        // new message, not the thread it interrupted.
+        provider.eventsForNextTurn = [
+            .textDelta("ok"),
+            .completed(stopReason: .none(), usage: .none())
+        ]
+        secretary.submit("a fresh question")
+        await waitUntilIdle()
+        XCTAssertFalse(
+            provider.lastMessages.contains { $0.content.contains("the first thing") },
+            "the old thread must not follow it. Got: \(provider.lastMessages.map(\.content))"
+        )
+    }
+
+    /// What was read stays read. Clearing the screen would make the
+    /// conversation look like it never happened; the divider says where it
+    /// ended instead.
+    func testNewConversationLeavesWhatIsOnScreenAlone() async {
+        let secretary = await busySecretary()
+        let before = secretary.transcript.count
+
+        secretary.newConversation()
+
+        XCTAssertGreaterThan(secretary.transcript.count, before, "it adds, never removes")
+        XCTAssertTrue(
+            secretary.transcript.contains { $0.kind == .divider },
+            "the line has to be findable, not just words that look like one"
+        )
+        XCTAssertTrue(
+            secretary.transcript.contains { $0.text.contains("the first thing") },
+            "what was said is still there to read"
+        )
+    }
+
+    func testClearingTheQueueDropsItRatherThanHoldingIt() async {
+        let secretary = await busySecretary()
+        secretary.submit("never mind this one")
+        secretary.resolveInterruption(queue: true)
+
+        secretary.clearQueue()
+
+        XCTAssertTrue(secretary.queuedMessages.isEmpty)
+        XCTAssertTrue(
+            secretary.transcript.contains { $0.text.contains("Dropped 1 message") },
+            "a queue disappearing quietly reads the same as one that ran"
+        )
+    }
+
     // MARK: - One bubble per stretch of talking
 
     /// Three things arrived as one block: the answer to the person, the model's

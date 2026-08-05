@@ -661,6 +661,20 @@ struct ChatPanelView: View {
                     ? "\(waiting) waiting, held — click to let them go"
                     : "\(waiting) waiting — click to hold"
             )
+            // Holding something for ever is not the same as changing your mind
+            // about it. Without this, a message queued by mistake could only be
+            // paused, never dropped.
+            if waiting > 0 {
+                Button { secretary.clearQueue() } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: appearance.settings.secondaryFontSize * 0.8, weight: .semibold))
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Drop what's waiting")
+            }
         }
     }
 

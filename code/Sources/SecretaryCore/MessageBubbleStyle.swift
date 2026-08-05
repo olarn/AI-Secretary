@@ -40,7 +40,10 @@ public func messageBubbleStyle(
     kind: TranscriptEntry.Kind
 ) -> MessageBubbleStyle {
     switch kind {
-    case .activity:
+    // A divider is drawn like the running commentary — plain, unattributed, no
+    // bubble — because it is the same sort of thing: the app saying where it
+    // is, not the persona saying anything.
+    case .activity, .divider:
         return MessageBubbleStyle(
             side: .leading,
             isMine: false,
