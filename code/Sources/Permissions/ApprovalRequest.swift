@@ -11,6 +11,12 @@ public struct ApprovalRequest: Equatable, Sendable {
     /// Exact command that will run, for display. Never re-parsed to execute.
     public let commandSummary: String
     public let rationale: String
+    /// Whether the project's allowlist covers this tool.
+    ///
+    /// It used to be the difference between asking and refusing. Now it is
+    /// something the card has to *say*, because agreeing to this is agreeing to
+    /// more than the one action: the person is stepping past a list they set.
+    public let outsideAllowlist: Bool
 
     public init(
         taskID: String,
@@ -18,7 +24,8 @@ public struct ApprovalRequest: Equatable, Sendable {
         actionClass: ActionClass,
         project: Project,
         commandSummary: String,
-        rationale: String
+        rationale: String,
+        outsideAllowlist: Bool = false
     ) {
         self.taskID = taskID
         self.toolID = toolID
@@ -26,5 +33,19 @@ public struct ApprovalRequest: Equatable, Sendable {
         self.project = project
         self.commandSummary = commandSummary
         self.rationale = rationale
+        self.outsideAllowlist = outsideAllowlist
+    }
+
+    /// The same request, marked as reaching past the project's allowlist.
+    public func steppingOutsideAllowlist() -> ApprovalRequest {
+        ApprovalRequest(
+            taskID: taskID,
+            toolID: toolID,
+            actionClass: actionClass,
+            project: project,
+            commandSummary: commandSummary,
+            rationale: rationale,
+            outsideAllowlist: true
+        )
     }
 }

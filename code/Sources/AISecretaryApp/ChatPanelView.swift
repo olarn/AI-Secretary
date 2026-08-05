@@ -92,6 +92,9 @@ struct ChatPanelView: View {
         .padding(18)
         .onAppear { startWatchingArrowKeys() }
         .onDisappear { stopWatchingArrowKeys() }
+        // Not `onAppear`: this view is built once and then shown and hidden by
+        // the window's alpha, so appearing happens exactly one time.
+        .onChange(of: layout.focusRequests) { messageBoxFocused = true }
         .frame(width: appearance.settings.chatWidth)
         .frame(maxHeight: .infinity, alignment: .top)
         .background(

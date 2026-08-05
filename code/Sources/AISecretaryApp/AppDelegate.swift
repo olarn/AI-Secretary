@@ -422,6 +422,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
         NSApp.activate(ignoringOtherApps: true)
         chatPanel.makeKeyAndOrderFront(nil)
         chatPanel.animator().alphaValue = 1
+        // Clicking the character is someone starting to say something. Landing
+        // in the box means they can just type; without it the bubble opened with
+        // the caret nowhere and the first keystroke went into the void.
+        chatLayout.requestInputFocus()
     }
 
     private func hideChatPanel() {

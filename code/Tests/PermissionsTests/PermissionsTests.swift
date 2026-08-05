@@ -66,15 +66,17 @@ final class PermissionGrantsTests: XCTestCase {
 // MARK: - The rails, tested one at a time
 
 final class PermissionRailTests: XCTestCase {
-    func testAllowlistRailPassesAnAllowListedTool() {
+    func testAllowlistRailLeavesAnAllowListedToolAlone() {
         let req = request(project: allowed)
-        XCTAssertEqual(requireAllowlistedTool(req), .right(req))
+        XCTAssertEqual(noteToolOutsideAllowlist(req), .right(req))
     }
 
-    func testAllowlistRailFailsWithATypedError() {
+    /// The miss is carried, not fatal. What used to be a refusal the person
+    /// couldn't answer is now a mark on the request that forces a question.
+    func testAllowlistRailMarksAMissInsteadOfRefusing() {
         XCTAssertEqual(
-            requireAllowlistedTool(request(project: notAllowed)),
-            .left(.toolNotAllowlisted(toolID: "git.readOnly", projectName: "NotAllowed"))
+            noteToolOutsideAllowlist(request(project: notAllowed)),
+            .right(request(project: notAllowed).steppingOutsideAllowlist())
         )
     }
 
@@ -88,6 +90,19 @@ final class PermissionRailTests: XCTestCase {
         let grants = PermissionGrants().granting(projectID: allowed.id, toolID: "git.readOnly")
         XCTAssertEqual(requireApproval(grants)(req), .right(.allowed))
     }
+
+    /// The one assertion the whole change turns on.
+    ///
+    /// A grant is remembered per project and tool for read-only work. If the
+    /// allowlist mark were checked after the grants, a tool the list never
+    /// covered would run unattended on the strength of one earlier yes — the
+    /// hole that opens the moment an allowlist miss stops being fatal.
+    func testAGrantCannotStandInForTheAllowlist() {
+        let req = request(project: notAllowed).steppingOutsideAllowlist()
+        XCTAssertEqual(req.actionClass, .readOnly, "the risky combination is the unattended one")
+        let grants = PermissionGrants().granting(projectID: notAllowed.id, toolID: "git.readOnly")
+        XCTAssertEqual(requireApproval(grants)(req), .right(.needsApproval(req)))
+    }
 }
 
 // MARK: - The whole decision
@@ -100,10 +115,25 @@ final class PermissionDecisionTests: XCTestCase {
         decidePermission(grants)(req)
     }
 
-    func testToolMissingFromProjectAllowlistIsDeniedNotPrompted() {
+    /// Nothing is refused outright any more: a tool the project never listed is
+    /// a question, and the request says so, so the card can too.
+    func testToolMissingFromProjectAllowlistIsPromptedNotDenied() {
+        let asked = decision(request(project: notAllowed))
         XCTAssertEqual(
-            decision(request(project: notAllowed)),
-            .left(.toolNotAllowlisted(toolID: "git.readOnly", projectName: "NotAllowed"))
+            asked,
+            .right(.needsApproval(request(project: notAllowed).steppingOutsideAllowlist()))
+        )
+        XCTAssertFalse(asked.isLeft, "a refusal the person can't answer is what this replaced")
+    }
+
+    /// And answering it doesn't quietly become a standing permission: the same
+    /// request a second time, with the read-only grant that a yes would record,
+    /// still asks.
+    func testSayingYesOnceDoesNotSettleIt() {
+        let grants = PermissionGrants().granting(projectID: notAllowed.id, toolID: "git.readOnly")
+        XCTAssertEqual(
+            decision(request(project: notAllowed), grants: grants),
+            .right(.needsApproval(request(project: notAllowed).steppingOutsideAllowlist()))
         )
     }
 

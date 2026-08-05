@@ -17,16 +17,26 @@ public typealias PermissionDecision = Either<PermissionError, PermissionOutcome>
 
 // MARK: - The rails
 
-/// First rail: the tool must be allow-listed on the project. Failing here is a
-/// refusal, not a prompt — per the "accessing a new directory" rule, an
-/// allowlist miss is answered by editing the allowlist, not by asking a human
-/// to wave it through.
-public func requireAllowlistedTool(
+/// First rail: notice when the tool isn't on the project's allowlist.
+///
+/// This used to refuse, on the reasoning that an allowlist miss is answered by
+/// editing the allowlist rather than by asking a human to wave it through. In
+/// the app that came out as a red *"denied by policy"* and no way forward from
+/// the chat — the person couldn't even say yes to something they wanted. The
+/// scratch project makes it worse: it allows only the agent, so with no project
+/// registered, `/watch` and `/run` were refused outright rather than asked.
+///
+/// So the miss is now carried forward rather than fatal. It doesn't vanish:
+/// `requireApproval` turns it into a question no grant can skip, and the card
+/// says which list is being stepped past.
+public func noteToolOutsideAllowlist(
     _ request: ApprovalRequest
 ) -> Either<PermissionError, ApprovalRequest> {
-    request.project.allows(tool: request.toolID)
-        ? .right(request)
-        : .left(.toolNotAllowlisted(toolID: request.toolID, projectName: request.project.name))
+    .right(
+        request.project.allows(tool: request.toolID)
+            ? request
+            : request.steppingOutsideAllowlist()
+    )
 }
 
 /// Second rail: decide whether this request can run unattended.
@@ -39,6 +49,13 @@ public func requireApproval(
     _ grants: PermissionGrants
 ) -> (ApprovalRequest) -> Either<PermissionError, PermissionOutcome> {
     { request in
+        // Before the grants, not after. A grant is remembered per project and
+        // tool for read-only work, so checking it first would let a tool the
+        // allowlist never covered run unattended on the strength of one earlier
+        // yes — which is the hole this rail exists to close.
+        guard !request.outsideAllowlist else {
+            return .right(.needsApproval(request))
+        }
         guard request.actionClass.canRunUnattended else {
             return .right(.needsApproval(request))
         }
@@ -57,5 +74,5 @@ public func requireApproval(
 /// Curried so the grants can be bound once and the resulting
 /// `(ApprovalRequest) -> PermissionDecision` passed around point-free.
 public func decidePermission(_ grants: PermissionGrants) -> (ApprovalRequest) -> PermissionDecision {
-    requireAllowlistedTool >>> { $0.flatMap(requireApproval(grants))^ }
+    noteToolOutsideAllowlist >>> { $0.flatMap(requireApproval(grants))^ }
 }

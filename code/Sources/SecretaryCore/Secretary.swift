@@ -392,7 +392,13 @@ public final class Secretary {
         // unattended local reads off the back of a one-off "send this to Claude"
         // — a grant the user never asked for. Non-read-only classes re-prompt
         // anyway, so there is nothing to record.
-        if request.actionClass == .readOnly {
+        //
+        // Never for a tool outside the project's allowlist, even a read-only
+        // one. `requireApproval` would ask again anyway — it checks that before
+        // the grants — so recording it would only leave the session holding a
+        // permission that policy ignores, which is the kind of state that reads
+        // as "already agreed" the next time someone looks.
+        if request.actionClass == .readOnly, !request.outsideAllowlist {
             grants = grants |> PermissionGrants.granting(
                 projectID: request.project.id,
                 toolID: request.toolID
@@ -1675,7 +1681,14 @@ public final class Secretary {
         } else {
             caveat = ""
         }
-        say(.secretary, "May I run `\(request.commandSummary)` in \(project.name)?" + caveat)
+        // Stepping past the project's own allowlist is a different kind of yes
+        // from the ordinary one, so it is said rather than left to be inferred
+        // from the tool name. It is also asked every time: this grant is never
+        // remembered, and never written back to the project on disk.
+        let beyond = request.outsideAllowlist
+            ? " This isn't on \(project.name)'s allowed-tools list — saying yes covers this one time only."
+            : ""
+        say(.secretary, "May I run `\(request.commandSummary)` in \(project.name)?" + caveat + beyond)
         pendingDecision = .some(.approval(request, operation: operation))
     }
 

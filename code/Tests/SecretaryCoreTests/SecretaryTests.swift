@@ -232,15 +232,25 @@ final class SecretaryTests: XCTestCase {
         XCTAssertEqual(request.project, b)
     }
 
-    func testToolNotAllowlistedOnProjectIsDeniedWithoutPrompting() {
+    /// A tool the project never listed is asked about, not refused.
+    ///
+    /// This used to assert the opposite — no prompt, a red "denied by policy",
+    /// nothing the person could do from the chat. The rule now is that nothing
+    /// is blocked outright; what changes with the allowlist is how loudly the
+    /// card speaks, not whether there is one. What must stay true either way is
+    /// the second assertion: nothing ran on the way to asking.
+    func testToolNotAllowlistedOnProjectAsksInsteadOfRefusing() {
         let locked = Project(name: "Locked", path: "/tmp/locked", allowedTools: [])
         let secretary = makeSecretary(projects: [locked])
 
         secretary.submit("git status")
 
-        XCTAssertEqual(secretary.pendingDecision, .none(), "A denial must not offer an approval prompt")
-        XCTAssertTrue(adapter.runCalls.isEmpty)
-        XCTAssertTrue(secretary.transcript.last?.text.contains("not in the allowlist") ?? false)
+        guard case .approval(let request, _) = secretary.pendingDecision.toOptional() else {
+            return XCTFail("Expected a card, not a refusal")
+        }
+        XCTAssertTrue(request.outsideAllowlist, "the card has to be able to say which list this steps past")
+        XCTAssertTrue(adapter.runCalls.isEmpty, "still nothing runs before the answer")
+        XCTAssertTrue(secretary.transcript.last?.text.contains("allowed-tools list") ?? false)
     }
 
     func testNonGitMessageIsRoutedToChatAndStreamsAReply() async {
