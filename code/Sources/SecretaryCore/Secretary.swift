@@ -2399,21 +2399,15 @@ public final class Secretary {
         """ + alsoOpen + skillsNote
     }
 
-    /// A restriction the user set by checking skills in the Skills panel.
+    /// What the user checked in the Skills panel, handed to the model.
+    ///
     /// There is no CLI flag that gates which skills a session can invoke —
     /// skills are self-invoked from their own descriptions — so this is a
-    /// request in the prompt, not an enforced limit; empty when nothing is
-    /// checked, so the ordinary case adds nothing to read.
+    /// request in the prompt, not an enforced limit. Empty when nothing is
+    /// checked, so the ordinary case adds nothing to read. The wording, and why
+    /// the descriptions travel with the names, is in `skillsPrompt`.
     private var skillsNote: String {
-        guard !selectedSkills.isEmpty else { return "" }
-        let chosen = availableSkills.filter { selectedSkills.contains($0.id) }.map(\.name)
-        guard !chosen.isEmpty else { return "" }
-        return """
-
-
-        For this session, only use these skills: \(chosen.joined(separator: ", ")). \
-        Don't invoke any other installed skill this session, even if it seems to fit.
-        """
+        skillsPrompt(for: availableSkills.filter { selectedSkills.contains($0.id) })
     }
 
     /// What the assistant can and can't see of the web, and — when it can't —

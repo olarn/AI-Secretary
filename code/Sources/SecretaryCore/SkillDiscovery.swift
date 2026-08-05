@@ -35,6 +35,60 @@ public struct SkillInfo: Equatable, Sendable, Identifiable {
     }
 }
 
+/// What to tell the model about the skills someone checked in the Skills panel.
+///
+/// Two things this had wrong, and both came out as "I checked it and it never
+/// gets used".
+///
+/// **It only ever subtracted.** The note used to say "only use these; don't
+/// invoke any other" — which turns other skills off and does nothing at all to
+/// turn the checked ones on. Whether a skill loads is decided inside Claude
+/// Code by matching the request against the skill's own description, and
+/// checking a box does not change that description. So the box could lose you
+/// skills and never gain you one. It now asks for them to be preferred, which
+/// is what checking something is understood to mean.
+///
+/// **It sent names only.** The panel shows each description; the prompt didn't
+/// pass it on, leaving the model a bare `superpowers:brainstorming` with no way
+/// to tell whether it fitted. The descriptions are the part it can actually
+/// match against, so they go too.
+///
+/// What this still can't do is force a load — that happens in the child
+/// process, out of reach. This makes the match likelier; naming a skill in the
+/// message is still the only certainty.
+public func skillsPrompt(for skills: [SkillInfo]) -> String {
+    guard !skills.isEmpty else { return "" }
+    let lines = skills.map { skill -> String in
+        let summary = skill.summary.trimmingCharacters(in: .whitespacesAndNewlines)
+        return summary.isEmpty
+            ? "- \(skill.name)"
+            : "- \(skill.name) — \(truncatedSkillSummary(summary))"
+    }
+    return """
+
+
+    The user has picked these skills for this session. Prefer them: when one \
+    fits what is being asked, use it rather than working without it.
+
+    \(lines.joined(separator: "\n"))
+
+    Other installed skills are still there if none of these fit — this is a \
+    preference, not a wall.
+    """
+}
+
+/// Long enough to tell skills apart, short enough that checking twenty of them
+/// doesn't quietly become the largest thing in the request.
+let maxSkillSummaryLength = 160
+
+func truncatedSkillSummary(_ summary: String) -> String {
+    let collapsed = summary.split(whereSeparator: \.isNewline)
+        .map { $0.trimmingCharacters(in: .whitespaces) }
+        .joined(separator: " ")
+    guard collapsed.count > maxSkillSummaryLength else { return collapsed }
+    return collapsed.prefix(maxSkillSummaryLength).trimmingCharacters(in: .whitespaces) + "…"
+}
+
 /// Finds installed skills by reading directories directly, the same way
 /// Claude Code itself resolves them — there is no `claude` subcommand that
 /// lists skills (only `claude plugin list`, which only shows plugins

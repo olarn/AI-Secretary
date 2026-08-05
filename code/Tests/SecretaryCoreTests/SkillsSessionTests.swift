@@ -76,7 +76,7 @@ final class SkillsSessionTests: XCTestCase {
         XCTAssertEqual(secretary.availableSkills, [skills[1]])
     }
 
-    func testNoSkillsCheckedAddsNoRestrictionToThePrompt() async {
+    func testNoSkillsCheckedSaysNothingAboutSkills() async {
         let secretary = makeSecretary(projects: [
             Project(name: "Fixture", path: "/tmp/skills-fixture", allowedTools: [Secretary.claudeCodeToolID])
         ])
@@ -84,10 +84,13 @@ final class SkillsSessionTests: XCTestCase {
         secretary.submit("hello there")
         await waitUntilIdle()
 
-        XCTAssertFalse(provider.lastSystem?.contains("only use these skills") ?? true)
+        XCTAssertFalse(provider.lastSystem?.contains("picked these skills") ?? true)
     }
 
-    func testCheckedSkillsBecomeARestrictionInThePrompt() async {
+    /// Checking asks for a skill to be *preferred*. It used to ask for the
+    /// others to be avoided, which is the opposite operation and is why a
+    /// checked skill could sit there never being used.
+    func testCheckedSkillsAreAskedForRatherThanTheOthersBanned() async {
         let secretary = makeSecretary(projects: [
             Project(name: "Fixture", path: "/tmp/skills-fixture", allowedTools: [Secretary.claudeCodeToolID])
         ])
@@ -97,7 +100,12 @@ final class SkillsSessionTests: XCTestCase {
         await waitUntilIdle()
 
         let system = provider.lastSystem ?? ""
-        XCTAssertTrue(system.contains("only use these skills: grilling"), system)
+        XCTAssertTrue(system.contains("Prefer them"), system)
+        XCTAssertFalse(
+            system.contains("Don't invoke any other"),
+            "Checking must not turn into a ban on everything else"
+        )
+        XCTAssertTrue(system.contains("grilling"), system)
         XCTAssertFalse(system.contains("brainstorming"), "Unselected skills must not be named as chosen")
     }
 }

@@ -200,3 +200,53 @@ final class SkillDiscoveryTests: XCTestCase {
         XCTAssertEqual(found.map(\.id), ["grilling"])
     }
 }
+
+/// What the checked skills turn into in the prompt.
+final class SkillsPromptTests: XCTestCase {
+    private func skill(_ name: String, _ summary: String = "") -> SkillInfo {
+        SkillInfo(id: name, name: name, summary: summary, scope: .user)
+    }
+
+    func testNothingCheckedSaysNothing() {
+        XCTAssertEqual(skillsPrompt(for: []), "")
+    }
+
+    /// The description is the part the model can match a request against. The
+    /// panel shows it; not passing it on left a bare name to guess from, which
+    /// is why a checked skill could never come up.
+    func testTheDescriptionTravelsWithTheName() {
+        let prompt = skillsPrompt(for: [skill("grilling", "Use when cooking over fire")])
+        XCTAssertTrue(prompt.contains("grilling"), prompt)
+        XCTAssertTrue(prompt.contains("Use when cooking over fire"), prompt)
+    }
+
+    /// Checking asks for something, it does not forbid the rest — the opposite
+    /// operation, and the one that made the checkbox feel broken.
+    func testItAsksRatherThanForbids() {
+        let prompt = skillsPrompt(for: [skill("grilling")])
+        XCTAssertTrue(prompt.contains("Prefer them"), prompt)
+        XCTAssertFalse(prompt.lowercased().contains("only use these"), prompt)
+        XCTAssertTrue(prompt.contains("still there if none of these fit"), prompt)
+    }
+
+    func testASkillWithNoDescriptionIsStillListed() {
+        let prompt = skillsPrompt(for: [skill("bare")])
+        XCTAssertTrue(prompt.contains("- bare"), prompt)
+        XCTAssertFalse(prompt.contains("bare —"), "no dangling dash where a description isn't")
+    }
+
+    /// Twenty checked skills must not become the largest thing in the request.
+    func testALongDescriptionIsCutShort() {
+        let long = String(repeating: "x", count: 400)
+        let prompt = skillsPrompt(for: [skill("verbose", long)])
+        XCTAssertTrue(prompt.contains("…"), prompt)
+        XCTAssertFalse(prompt.contains(String(repeating: "x", count: maxSkillSummaryLength + 1)))
+    }
+
+    /// A description written over several lines would otherwise break the list
+    /// into items that aren't skills.
+    func testAMultiLineDescriptionStaysOnOneLine() {
+        let prompt = skillsPrompt(for: [skill("wrapped", "first line\n  second line")])
+        XCTAssertTrue(prompt.contains("first line second line"), prompt)
+    }
+}

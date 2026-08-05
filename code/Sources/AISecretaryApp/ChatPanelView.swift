@@ -1404,10 +1404,14 @@ struct ChatPanelView: View {
                 .toggleStyle(.checkbox)
             }
 
+            // Says what checking does now, which is the opposite of what it used
+            // to do: it asks for these to be preferred rather than shutting the
+            // others off. The old wording promised a limit, which was both
+            // unenforceable and not the thing anyone wanted from a checkbox.
             Text(
                 secretary.selectedSkills.isEmpty
-                    ? "Nothing checked — no restriction; I can use any installed skill."
-                    : "Checked skills are a request, not a hard limit — I may still fall back if none of them fit."
+                    ? "Nothing checked — I'll reach for whichever installed skill fits."
+                    : "I'll prefer these when they fit. Others stay available, and naming one in your message is still the sure way."
             )
             .font(.system(size: appearance.settings.hintFontSize))
             .foregroundStyle(.secondary)
