@@ -338,6 +338,7 @@ The current phase for version-bumping purposes (`AppVersion.swift`,
   เป็น shape เฉพาะเพราะมีหางชี้ตัวละคร ซึ่งเป็นเอกลักษณ์ของแอปนี้ ไม่ยุบรวม
 - [ ] **#10 Focus ด้วย Glass** — หน้าต่างนี้ไม่เคยเป็น key window จึงพึ่ง focus state ของระบบไม่ได้
   ต้องวาดสถานะเอง ซึ่งเป็นเหตุผลเดียวกับที่ `PanelToggleStyle` มีอยู่ทุกวันนี้
+
 ## Phase 11: App ทำงานร่วมกันได้
 - [ ] User สามารถ start app พร้อมกันได้มากกว่า 1 app
 - [ ] Two or more app be able to talk to each other.
