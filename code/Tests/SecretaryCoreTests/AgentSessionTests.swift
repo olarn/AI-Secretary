@@ -770,6 +770,130 @@ final class AgentSessionTests: XCTestCase {
         XCTAssertEqual(provider.callCount, 0)
     }
 
+    // MARK: - Typing while something is running
+
+    /// A Secretary mid-turn: the reply has begun and will never finish, so the
+    /// next message really does arrive in flight. Waits for the first words to
+    /// land — `submit` returns before the stream has run at all.
+    private func busySecretary() async -> Secretary {
+        let secretary = makeSecretary(projects: [
+            Project(name: "Fixture", path: projectPath, allowedTools: [Secretary.claudeCodeToolID])
+        ])
+        provider.eventsForNextTurn = [.textDelta("working on it")]
+        secretary.submit("the first thing")
+        let deadline = Date().addingTimeInterval(2)
+        while !secretary.transcript.contains(where: { $0.text.contains("working on it") }),
+              Date() < deadline {
+            try? await Task.sleep(nanoseconds: 5_000_000)
+        }
+        return secretary
+    }
+
+    /// It used to take over silently: the running turn was killed and the new
+    /// message ran in its place. Both answers are reasonable and only the person
+    /// knows which, so both are offered.
+    func testTypingMidFlightAsksRatherThanTakingOver() async {
+        let secretary = await busySecretary()
+        secretary.submit("and another thing")
+
+        guard case .interruption(let text) = secretary.pendingDecision.toOptional() else {
+            return XCTFail("Expected to be asked. Got: \(secretary.pendingDecision)")
+        }
+        XCTAssertEqual(text, "and another thing")
+        XCTAssertEqual(provider.callCount, 1, "nothing new may start before the answer")
+    }
+
+    func testWaitingItsTurnQueuesRatherThanRuns() async {
+        let secretary = await busySecretary()
+        secretary.submit("and another thing")
+        secretary.resolveInterruption(queue: true)
+
+        XCTAssertEqual(secretary.queuedMessages, ["and another thing"])
+        XCTAssertEqual(provider.callCount, 1)
+    }
+
+    /// Replacing costs the running turn, which is the whole reason it is asked
+    /// about rather than assumed.
+    func testReplacingStopsTheRunningTurnAndStartsTheNewOne() async {
+        let secretary = await busySecretary()
+        secretary.submit("actually do this instead")
+        provider.eventsForNextTurn = [
+            .textDelta("done"),
+            .completed(stopReason: .none(), usage: .none())
+        ]
+        secretary.resolveInterruption(queue: false)
+        await waitUntilIdle()
+
+        XCTAssertEqual(provider.callCount, 2)
+        XCTAssertEqual(provider.lastMessages.last?.content, "actually do this instead")
+        XCTAssertTrue(secretary.queuedMessages.isEmpty)
+    }
+
+    /// The stopped reply is labelled rather than left looking finished, and what
+    /// was already said joins the conversation — the person can see those words,
+    /// so the model has to know it said them.
+    func testStoppingLabelsTheHalfWrittenReplyAndOwnsUpToIt() async {
+        let secretary = await busySecretary()
+        secretary.stopCurrentTurn(because: "you stopped it")
+
+        XCTAssertTrue(
+            secretary.transcript.contains { $0.text.contains("stopped part-way") },
+            "Got: \(secretary.transcript.map(\.text))"
+        )
+        XCTAssertFalse(machine.state.isBusy)
+
+        // Checked where it matters: in what the next turn is actually told, not
+        // in a variable. The person can read those words on screen, so a model
+        // that doesn't know it said them will contradict the screen.
+        provider.eventsForNextTurn = [
+            .textDelta("ok"),
+            .completed(stopReason: .none(), usage: .none())
+        ]
+        secretary.submit("carry on")
+        await waitUntilIdle()
+        XCTAssertTrue(
+            provider.lastMessages.contains { $0.role == .assistant && $0.content.contains("working on it") },
+            "Got: \(provider.lastMessages.map { "\($0.role): \($0.content)" })"
+        )
+    }
+
+    /// Holding is the only pause there is: the running turn is one invocation of
+    /// a CLI and cannot be suspended, so pausing acts on what hasn't started.
+    func testAHeldQueueDoesNotStartWhenTheTurnEnds() async {
+        let secretary = await busySecretary()
+        secretary.submit("later, please")
+        secretary.resolveInterruption(queue: true)
+        secretary.toggleQueuePause()
+
+        secretary.stopCurrentTurn(because: "you stopped it")
+        await waitUntilIdle()
+        XCTAssertEqual(secretary.queuedMessages, ["later, please"], "held means held")
+        XCTAssertEqual(provider.callCount, 1)
+
+        provider.eventsForNextTurn = [
+            .textDelta("ok"),
+            .completed(stopReason: .none(), usage: .none())
+        ]
+        secretary.toggleQueuePause()
+        await waitUntilIdle()
+        XCTAssertTrue(secretary.queuedMessages.isEmpty, "letting go runs it")
+        XCTAssertEqual(provider.callCount, 2)
+    }
+
+    /// Typing again instead of answering must not lose what was typed — the one
+    /// outcome neither button would have produced.
+    func testTypingAgainInsteadOfAnsweringKeepsTheMessage() async {
+        let secretary = await busySecretary()
+        secretary.submit("first extra")
+        secretary.submit("second extra")
+
+        XCTAssertEqual(secretary.queuedMessages, ["first extra"])
+        guard case .interruption(let text) = secretary.pendingDecision.toOptional() else {
+            return XCTFail("the newest one is the question now")
+        }
+        XCTAssertEqual(text, "second extra")
+    }
+
     // MARK: - One bubble per stretch of talking
 
     /// Three things arrived as one block: the answer to the person, the model's

@@ -538,6 +538,8 @@ struct ChatPanelView: View {
                     .font(.system(size: appearance.settings.footnoteFontSize, weight: .semibold))
                     .foregroundStyle(.secondary)
             }
+            stopBadge
+            queueBadge
             loopBadge
             runBadge
             watchBadge
@@ -610,6 +612,58 @@ struct ChatPanelView: View {
     /// Shows that a path is being watched, and stops it in one click. Third of
     /// the three standing things that speak on their own; all three sit in the
     /// header for the same reason.
+    /// Stops what is running. Only there while something is.
+    ///
+    /// The running turn is one invocation of the CLI, so this is the only
+    /// interruption that exists for it — there is nothing to pause and resume.
+    /// Pausing belongs to the queue, on the badge beside this.
+    @ViewBuilder
+    private var stopBadge: some View {
+        if machine.state.isBusy {
+            Button { secretary.stopCurrentTurn(because: "you stopped it") } label: {
+                HStack(spacing: 3) {
+                    Image(systemName: "stop.fill")
+                    Text("Stop")
+                }
+                .font(.system(size: appearance.settings.secondaryFontSize, weight: .semibold))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Color.red.opacity(0.22), in: Capsule())
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .help("Stop what I'm doing. Whatever it had done is lost.")
+        }
+    }
+
+    /// What is waiting, and whether it is being held.
+    @ViewBuilder
+    private var queueBadge: some View {
+        let waiting = secretary.queuedMessages.count
+        if waiting > 0 || secretary.queuePaused {
+            Button { secretary.toggleQueuePause() } label: {
+                HStack(spacing: 3) {
+                    Image(systemName: secretary.queuePaused ? "pause.fill" : "list.bullet")
+                    if waiting > 0 { Text("\(waiting)") }
+                }
+                .font(.system(size: appearance.settings.secondaryFontSize, weight: .semibold))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(
+                    (secretary.queuePaused ? Color.orange : Color.accentColor).opacity(0.22),
+                    in: Capsule()
+                )
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .help(
+                secretary.queuePaused
+                    ? "\(waiting) waiting, held — click to let them go"
+                    : "\(waiting) waiting — click to hold"
+            )
+        }
+    }
+
     @ViewBuilder
     private var watchBadge: some View {
         if let first = secretary.activeWatches.first {
@@ -1162,6 +1216,31 @@ struct ChatPanelView: View {
                 (leavesTheMachine ? Color.red : Color.orange).opacity(0.12),
                 in: RoundedRectangle(cornerRadius: 8)
             )
+
+        case .interruption(let text):
+            VStack(alignment: .leading, spacing: appearance.settings.panelSpacing) {
+                Label("I'm still on the last one", systemImage: "clock.arrow.circlepath")
+                    .font(.system(size: appearance.settings.footnoteFontSize, weight: .semibold))
+                Text(text)
+                    .font(.system(size: appearance.settings.footnoteFontSize))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: appearance.settings.panelSpacing * 1.3) {
+                    Button("Wait its turn") { secretary.resolveInterruption(queue: true) }
+                        .buttonStyle(.borderedProminent)
+                    // Says what it costs. The running turn is a CLI invocation
+                    // that can't be paused or resumed, so replacing it throws
+                    // away whatever it had done.
+                    Button("Replace — drop what's running") {
+                        secretary.resolveInterruption(queue: false)
+                    }
+                    .buttonStyle(.bordered)
+                }
+                .font(.system(size: appearance.settings.footnoteFontSize))
+            }
+            .padding(appearance.settings.panelPadding)
+            .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
 
         case .projectChoice(let candidates, _):
             VStack(alignment: .leading, spacing: appearance.settings.panelSpacing) {

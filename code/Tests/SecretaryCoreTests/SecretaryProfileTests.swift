@@ -124,12 +124,14 @@ final class SecretaryProfileTests: XCTestCase {
 
 @MainActor
 final class ProfileInConversationTests: XCTestCase {
+    private let machine = AssistantStateMachine()
+
     private func makeSecretary(
         profile: SecretaryProfile,
         provider: SpyWorkspaceProvider
     ) -> Secretary {
         Secretary(
-            stateMachine: AssistantStateMachine(),
+            stateMachine: machine,
             registry: ProjectRegistry(store: InMemoryProjectStore(projects: [])),
             profile: profile,
             activityPreference: InMemoryActivityPreference(),
@@ -140,6 +142,16 @@ final class ProfileInConversationTests: XCTestCase {
     private func waitForCall(_ provider: SpyWorkspaceProvider, count: Int) async {
         let deadline = Date().addingTimeInterval(2)
         while provider.callCount < count && Date() < deadline {
+            try? await Task.sleep(nanoseconds: 5_000_000)
+        }
+    }
+
+    /// The call landing is not the turn ending. A message sent between the two
+    /// is an interruption now, and gets asked about rather than run — so a test
+    /// that means "the next turn" has to wait for the turn, not the call.
+    private func waitUntilSettled() async {
+        let deadline = Date().addingTimeInterval(2)
+        while machine.state.isBusy && Date() < deadline {
             try? await Task.sleep(nanoseconds: 5_000_000)
         }
     }
@@ -172,6 +184,7 @@ final class ProfileInConversationTests: XCTestCase {
         secretary.submit("hello")
         await waitForCall(provider, count: 1)
         XCTAssertTrue(provider.lastSystem?.contains("Miku") == true)
+        await waitUntilSettled()
 
         secretary.apply(profile: SecretaryProfile(name: "Kai", age: .adult, gender: .male))
         XCTAssertEqual(secretary.profile.displayName, "Kai")

@@ -118,6 +118,14 @@ public enum PendingDecision: Equatable, Sendable {
         risks: [InstructionRisk],
         changedSinceLastRun: Bool
     )
+    /// Something was typed while a request was still in flight.
+    ///
+    /// It used to just take over: the running turn was killed and the new
+    /// message ran in its place, with no warning and nothing said about the
+    /// work thrown away. Both answers are reasonable — wait your turn, or drop
+    /// that and do this — and which one is right depends on what the person
+    /// meant, which only they know.
+    case interruption(text: String)
 }
 
 /// Orchestration layer. Interprets a message, resolves context, applies policy,
@@ -347,6 +355,23 @@ public final class Secretary {
             return
         }
 
+        // Slash commands are above this on purpose: `/watch stop` and `/run
+        // stop` are how you call something off, and they have to work while
+        // that something is running.
+        if stateMachine.state.isBusy {
+            say(.secretary, """
+                I'm still on the last one. Shall this wait its turn, or does it \
+                replace what I'm doing?
+                """)
+            pendingDecision = .some(.interruption(text: trimmed))
+            return
+        }
+
+        beginTurn(trimmed)
+    }
+
+    /// Everything `submit` does once it is settled that this message runs now.
+    private func beginTurn(_ trimmed: String) {
         let taskID = String(UUID().uuidString.prefix(8).lowercased())
         activeTaskID = .some(taskID)
         activeRequestText = .some(trimmed)
@@ -375,6 +400,92 @@ public final class Secretary {
     }
 
     // MARK: - Decisions
+
+    /// Messages typed while something was running, waiting their turn.
+    ///
+    /// Session-only, like the grants and the watches: a queue that survived a
+    /// relaunch would fire work nobody was there to see asked for.
+    public private(set) var queuedMessages: [String] = []
+
+    /// Whether the queue is held. The running turn can't be paused — it is one
+    /// invocation of a CLI and there is nothing to pause — so this is the only
+    /// pause there is: nothing new starts until it is let go.
+    public private(set) var queuePaused = false
+
+    /// Answers the card that appears when something is typed mid-flight.
+    public func resolveInterruption(queue: Bool) {
+        guard case .interruption(let text) = pendingDecision.toOptional() else { return }
+        pendingDecision = .none()
+
+        if queue {
+            queuedMessages.append(text)
+            say(.secretary, "Noted — I'll come to that when this one's done.")
+        } else {
+            stopCurrentTurn(because: "you replaced it")
+            beginTurn(text)
+        }
+    }
+
+    public func toggleQueuePause() {
+        queuePaused.toggle()
+        say(.secretary, queuePaused
+            ? "Holding the queue. Nothing new starts until you let it go."
+            : "Queue running again.")
+        if !queuePaused { dispatchNextQueued() }
+    }
+
+    /// Drops everything waiting. Said out loud, because a queue disappearing
+    /// quietly is indistinguishable from a queue that ran.
+    public func clearQueue() {
+        guard !queuedMessages.isEmpty else { return }
+        let count = queuedMessages.count
+        queuedMessages.removeAll()
+        say(.secretary, "Dropped \(count) message\(count == 1 ? "" : "s") that were waiting.")
+    }
+
+    /// Stops whatever is in flight.
+    ///
+    /// The half-written bubble is closed off here rather than left looking like
+    /// a finished answer, and what was said before the stop joins the
+    /// conversation: the person can see those words, so the model has to know
+    /// it said them or the next turn will contradict the screen.
+    public func stopCurrentTurn(because reason: String) {
+        guard stateMachine.state.isBusy || streamingTask != nil else { return }
+        streamingTask?.cancel()
+        streamingTask = nil
+
+        let partial = streamingEntryID.toOptional()
+            .flatMap { id in transcript.first { $0.id == id }?.text }?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        closeOffInterruptedReply()
+        if let partial, !partial.isEmpty {
+            conversation.append(ChatMessage(role: .assistant, content: partial))
+            conversation.append(ChatMessage(
+                role: .user,
+                content: "[That reply was stopped part-way — \(reason). Don't claim you finished it.]"
+            ))
+        }
+
+        let taskID = activeTaskID.getOrElse("-")
+        audit.record(AuditEntry(taskID: taskID, kind: .failed, detail: "stopped: \(reason)"))
+        say(.secretary, "Stopped — \(reason).")
+        if stateMachine.state != .working {
+            stateMachine.send(.beginExecuting, reason: "stopping", taskID: .some(taskID))
+        }
+        stateMachine.send(.failed, reason: "stopped by user", taskID: .some(taskID))
+        stateMachine.send(.acknowledge, reason: "stop acknowledged", taskID: .some(taskID))
+        activeTaskID = .none()
+    }
+
+    /// Starts the next waiting message, if this is a moment to start one.
+    private func dispatchNextQueued() {
+        guard !queuePaused, !queuedMessages.isEmpty,
+              !stateMachine.state.isBusy, !pendingDecision.isDefined
+        else { return }
+        let next = queuedMessages.removeFirst()
+        say(.secretary, "Now, the one that was waiting:")
+        beginTurn(next)
+    }
 
     public func resolvePendingApproval(granted: Bool) {
         guard case .approval(let request, let operation) = pendingDecision.toOptional() else { return }
@@ -419,11 +530,22 @@ public final class Secretary {
         guard let decision = pendingDecision.toOptional() else { return }
         pendingDecision = .none()
 
+        // Typing again while being asked "wait or replace?" answers nothing, so
+        // the message that raised the question is put in the queue rather than
+        // dropped. Losing what someone typed is the one outcome neither answer
+        // would have produced.
+        if case .interruption(let text) = decision {
+            queuedMessages.append(text)
+            say(.secretary, "(Kept “\(text)” in the queue — you typed again before choosing.)")
+            return
+        }
+
         let what: String
         switch decision {
         case .approval(let request, _): what = request.commandSummary
         case .projectChoice: what = "choosing a project"
         case .instructionPlan(let plan, _, _): what = "the steps in \(plan.relativePath)"
+        case .interruption: return
         }
         say(.secretary, "(Didn't do “\(what)” — you moved on before answering.)")
         conversation.append(ChatMessage(
@@ -1637,6 +1759,10 @@ public final class Secretary {
         // a settled conversation and a loop asked for mid-reply can't fire into
         // the reply that asked for it.
         if let request = parsed.request { applyLoopRequest(request) }
+        // Last of all: whatever was typed while this was running goes now, with
+        // the finished turn behind it in the conversation — which is what makes
+        // "wait its turn" different from "ask me again later".
+        defer { dispatchNextQueued() }
         for pane in pinned.requests { onPinWindow?(pane) }
 
         // After the state machine has settled, for the same reason as the loop:

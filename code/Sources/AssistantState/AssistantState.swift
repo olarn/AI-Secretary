@@ -13,6 +13,19 @@ public enum AssistantState: String, Equatable, Sendable, CustomStringConvertible
     case error
 
     public var description: String { rawValue }
+
+    /// Whether a request is in flight — something is being worked out or done,
+    /// and a new message arriving now has to be decided about rather than just
+    /// run.
+    ///
+    /// `listening` is not busy: it means the person is typing, which is exactly
+    /// when the next message is being written.
+    public var isBusy: Bool {
+        switch self {
+        case .thinking, .working: true
+        case .idle, .listening, .success, .error: false
+        }
+    }
 }
 
 /// The state worth saying out loud, or nothing when there is none.
