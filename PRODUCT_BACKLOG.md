@@ -299,9 +299,10 @@ The current phase for version-bumping purposes (`AppVersion.swift`,
 - [ ] user จะส่ง url ให้ทาง chat แล้ว app จะเริ่มขอ permission 
 - [ ] app ตรวจสอบว่า web app นั้นคืออะไร และทำความเข้าใจ context ของ user 
 - [ ] user จะส่งข้อมูลให้ app ได้ ในกรณีที่ app ต้อง submit ข้อมูลลง web (data entry) โดยข้อมูลที่รองรับคือ 
-  - text ใน chat เป็นภาษาธรรมชาติ, AI จะตีความเพื่อ map เข้ากับ web
-  - text ใน chat ด้วย markdown, หรือ CSV (เมื่อ paste ลงไปใน chat, content ใน chat window จะแสดงเป็น read format) 
-  - upload file ได้ support :- .md, .csv, JSON, key:value
+  - [] text ใน chat เป็นภาษาธรรมชาติ, AI จะตีความเพื่อ map เข้ากับ web
+  - [] text ใน chat ด้วย markdown, หรือ CSV (เมื่อ paste ลงไปใน chat, content ใน chat window จะแสดงเป็น read format) 
+  - [] upload file ได้ ด้วยการ drag/drop ใน text box หรือบอก AI ว่าจะ upload แล้ว AI จะส่ง open file button ให้ user กดเปิด open file dialog
+  - [] รองรับ .md, .csv, JSON, key:value, รูปภาพที่เป็น text และ AI แกะ content ออกมา
 - [ ] AI จะตีความและ confirm user ถ้าเนื้อหากำกวม
 
 ## Phase 12: Liquid Glass Theme
