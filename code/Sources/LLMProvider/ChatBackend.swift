@@ -45,11 +45,6 @@ public protocol WorkspaceScopedProvider: AnyObject, Sendable {
 public extension WorkspaceScopedProvider {
     var supportsBrowser: Bool { false }
     func setBrowserEnabled(_ enabled: Bool) {}
-    /// A backend with no session of its own has nothing to hand back and
-    /// nothing to take: reopening a conversation with one restores the words
-    /// and honestly restores nothing else.
-    var currentSessionID: String? { nil }
-    func adoptSession(_ id: String?) {}
 }
 
 extension ClaudeCodeProvider: WorkspaceScopedProvider {
@@ -116,6 +111,13 @@ public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, @unchecke
     private var _claudeCode: ClaudeCodeProvider?
     private var _pending: (workingDirectory: URL?, additionalDirectories: [URL], allowedTools: [String]?)?
     private var _pendingBrowser = false
+    /// A session adopted before Claude Code had been found yet.
+    ///
+    /// Reopening a conversation straight after launch is the ordinary case —
+    /// it is why the menu exists — and detection has usually not finished by
+    /// then. Held here and applied the moment the provider appears, the same
+    /// way the working directory is.
+    private var _pendingSession: String?
     private var _observer: (@Sendable (ClaudeCodeAvailability) -> Void)?
     private var _diskDefaults: ClaudeCodeDefaults?
 
@@ -163,6 +165,7 @@ public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, @unchecke
                 )
             }
             provider.setBrowserEnabled(_pendingBrowser)
+            if let session = _pendingSession { provider.adopt(session: session) }
             _claudeCode = provider
         }
         observer = _observer
@@ -215,7 +218,28 @@ public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, @unchecke
         )
     }
 
+    /// Forwarded, not defaulted.
+    ///
+    /// These had default implementations on the protocol for a while, and this
+    /// wrapper — the only conformer the app actually runs — silently inherited
+    /// them. Every conversation was archived with no session, so reopening one
+    /// restored the words and nothing else, while the tests passed because the
+    /// test double implemented them properly. No defaults now: a new backend
+    /// has to say what it does here.
+    public var currentSessionID: String? {
+        lock.withLock { _claudeCode?.currentSessionID ?? _pendingSession }
+    }
+
+    public func adoptSession(_ id: String?) {
+        let provider: ClaudeCodeProvider? = lock.withLock {
+            _pendingSession = id
+            return _claudeCode
+        }
+        provider?.adoptSession(id)
+    }
+
     public func resetConversation() {
+        lock.withLock { _pendingSession = nil }
         lock.withLock { _claudeCode }?.resetConversation()
     }
 

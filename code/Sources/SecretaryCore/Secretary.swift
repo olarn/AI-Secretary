@@ -302,7 +302,14 @@ public final class Secretary {
         activityPreference: ActivityPreferenceStoring = UserDefaultsActivityPreference(),
         browserPreference: BrowserPreferenceStoring = UserDefaultsBrowserPreference(),
         chatProvider: ChatProvider,
-        conversationStore: ConversationStoring = FileConversationStore(),
+        // In memory unless told otherwise, and the app says otherwise.
+        //
+        // The default used to be the real file, and the first run of the suite
+        // wrote nine test conversations into the owner's own history. A default
+        // that reaches the user's data is a default that a test has to remember
+        // to override, and the ones that forgot were the ones that had nothing
+        // to do with history.
+        conversationStore: ConversationStoring = InMemoryConversationStore(),
         discoverSkills: @escaping ([String]) -> [SkillInfo] = { SkillDiscovery.discover(projectPaths: $0) }
     ) {
         self.profile = profile

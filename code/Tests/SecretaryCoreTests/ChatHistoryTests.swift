@@ -303,6 +303,33 @@ final class ChatHistoryTests: XCTestCase {
         XCTAssertTrue(relaunched.historyRows().first?.label.hasPrefix("yesterday's question") == true)
     }
 
+    /// A Secretary built without being told where to keep history must not
+    /// reach the person's own file.
+    ///
+    /// It did, and the first full run of this suite wrote nine test
+    /// conversations into it. The tests that caused it were about queues and
+    /// interruptions and had no idea a history existed — which is the point: a
+    /// default that reaches real data is one every future test has to remember
+    /// to override.
+    func testTheDefaultStoreIsNotTheOwnersOwnFile() async {
+        let before = try? Data(contentsOf: FileConversationStore.defaultURL)
+
+        let secretary = Secretary(
+            stateMachine: machine,
+            registry: ProjectRegistry(store: InMemoryProjectStore(projects: [])),
+            activityPreference: InMemoryActivityPreference(),
+            chatProvider: SpyWorkspaceProvider()
+        )
+        await exchange(secretary, "a test conversation")
+        secretary.newConversation()
+
+        XCTAssertEqual(secretary.history.count, 1, "it still keeps history, just not there")
+        XCTAssertEqual(
+            try? Data(contentsOf: FileConversationStore.defaultURL), before,
+            "the file on disk must be byte-for-byte what it was"
+        )
+    }
+
     // MARK: - /history
 
     func testTheSlashCommandListsAndReopens() async {

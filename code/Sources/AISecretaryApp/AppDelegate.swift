@@ -19,7 +19,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
         stateMachine: stateMachine,
         registry: registry,
         profile: profiles.active,
-        chatProvider: backend
+        chatProvider: backend,
+        // The one place that should touch the real file. Everywhere else —
+        // every test — gets the in-memory default and cannot reach it.
+        conversationStore: FileConversationStore()
     )
     private var characterPanel: FloatingPanel!
     private var chatPanel: FloatingPanel!
