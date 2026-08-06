@@ -135,6 +135,31 @@ Nesting is the other way a body becomes unreadable. A function whose closing bra
 
 **And don't overdo it:** a two-line `if` is already flat. Inverting it buys nothing and costs a reader one more negation to hold.
 
+### 9. Every domain function is deterministic
+
+Same arguments in, same value out, every time, on any machine, at any hour. A function that reads the clock, mints an id, touches the disk or asks the environment is not one function — it is a different function every time you call it, and no test pins it down.
+
+**The four ways it leaks in, and what to do about each:**
+
+| Source | Instead of | Write |
+|---|---|---|
+| The clock | `Date()` inside the body | `now: Date = Date()` as the **last** parameter — the caller passes a fixed date in tests, nobody types it in production |
+| Identity | `UUID()` inside a decision | take the id as a parameter, or let the impure caller mint it and hand it in |
+| The world | `FileManager`, `Process`, `ProcessInfo.environment` | keep them in the adapter; the decision receives what was read, as a value |
+| Randomness | `Int.random`, `shuffled()` | pass the choice in; a domain function should not be able to surprise you twice |
+
+This repo's idiom is the defaulted parameter, and it is already everywhere: `conversationMenuLabel(title:savedAt:now:)`, `conversationMenuRows(_:current:now:)`, `historyRows(now:)`, `tickLoop(now:)`. Call sites stay short, tests pass `Date(timeIntervalSince1970: 1_800_000_000)` and assert an exact string.
+
+**Signals you have lost it:**
+
+- A test that passes in the morning and fails after midnight, or one that needed `XCTAssertTrue(x.contains(…))` because the exact value couldn't be predicted.
+- A function you can't call twice in a test and compare the two results.
+- A parameter list that looks pure while the body says `Date()` three lines down — this is the one that hides, because the signature lies.
+
+**How to check, in one line:** call it twice with the same arguments and assert the results are equal. If that assertion can't be written, the function isn't deterministic yet.
+
+**Where determinism stops.** The orchestrator (`Secretary`), the adapters and the stores are impure by design — they read the disk, spawn Claude Code, and stamp `Date()`. That is their job: they gather the inputs, call the pure function, and apply the answer. Don't thread a clock through six layers to keep a log line honest, and don't invent a `Clock` protocol for one `Date` — a defaulted parameter is the whole mechanism.
+
 ## The boundary rule
 
 Bow types live in the domain core. Swift-native types live at three edges, with an explicit conversion function at each. **This is not stylistic — `Option` in a `Codable` struct does not compile.**
@@ -277,6 +302,7 @@ Reach for point-free on `Option`/`Either` and on functions you want to pass arou
 - No `.toOptional()` / `if let` / `getOrElse` in the middle of a domain chain; the unwrap is the last step.
 - No new `Bool` parameter that switches behaviour — that is two functions.
 - No `for` where `map`/`filter`/`reduce`/`traverse` says it; no `if let`/`guard let` chain where one `flatMap` chain or a `fold` says it.
+- No `Date()`, `UUID()`, `FileManager` or `random` inside a domain function — the clock arrives as `now: Date = Date()`, everything else as a value the caller already read.
 - No function body wrapped in one big `if` — invert it to a `guard` and return early, and check the negation, the old `else`, the code after the block, and the return value before calling it done.
 - …and none of the above turned into a combinator nobody asked for: if the functional version is harder to read, the plain one wins.
 - No `throws` in a domain function; failures are on the left of `Either`.

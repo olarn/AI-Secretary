@@ -168,6 +168,27 @@ final class SkillExampleTests: XCTestCase {
         }
     }
 
+    /// §9: the clock arrives as a defaulted last parameter, so the function is
+    /// the same function twice — and the test can name the answer exactly
+    /// instead of asserting that it merely contains something.
+    func testTheClockIsAParameterSoTheAnswerIsPinnable() {
+        func age(of moment: Date, now: Date = Date()) -> String {
+            let days = Calendar.current.dateComponents([.day], from: moment, to: now).day ?? 0
+            return switch days {
+            case ..<1: "today"
+            case 1: "yesterday"
+            default: "\(days) days ago"
+            }
+        }
+
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let threeDaysBefore = now.addingTimeInterval(-3 * 24 * 60 * 60)
+
+        XCTAssertEqual(age(of: threeDaysBefore, now: now), "3 days ago")
+        // Called twice with the same arguments — the one-line check for §9.
+        XCTAssertEqual(age(of: threeDaysBefore, now: now), age(of: threeDaysBefore, now: now))
+    }
+
     // MARK: - The railway recipe
 
     /// `^` is required after `flatMap` — without it the result is
