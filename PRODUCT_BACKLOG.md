@@ -286,13 +286,30 @@ The current phase for version-bumping purposes (`AppVersion.swift`,
 - [x] ขอด้วยภาษาคนได้เช่นกัน ผ่าน block ```run — ปลอดภัยเพราะ "ขอ" ไม่ใช่ "ทำ": ไปได้ไกลสุด
   แค่การ์ดยืนยัน step ซึ่งเป็นด่านเดียวกับที่พิมพ์ `/run` เอง
 
-## Phase 10: 
- - [ ] เพิ่มเมนู Chat History ใน Menu icon, อยู่ระหว่างเมนู New Conversation และ Hide Character
- - [ ] มีเส้นคั่น group ก่อนเมนู Hide Character
- - [ ] เมื่อเริ่ม Chat, app จะเพิ่ม history ในเมนูนั้น (app ตั้งชื่อให้ด้วยจาก context) และ app จะคอยจำ context ที่คุยกันไว้ด้วย
- - [ ] เมื่อ new chat, app จะเก็บ chat เดิมลง history แล้วสร้าง chat sessionใหม่แทนใน chat window เดิม และ clear content ใน window เดิมด้วย
-  - [ ] เมื่อเลือก chat ใน history, chat window จะแสดง content ของ history นั้น และ app จะดึง context เดิมและคุยต่อได้เลย
-  - [ ] Chat History มีสูสงุด 10 รายการ และมี menu Clear all
+## Phase 10: Chat History
+ - [x] เพิ่มเมนู Chat History ใน Menu icon, อยู่ระหว่างเมนู New Conversation และ Hide Character
+ - [x] มีเส้นคั่น group ก่อนเมนู Hide Character
+ - [x] เมื่อเริ่ม Chat, app จะเพิ่ม history ในเมนูนั้น (app ตั้งชื่อให้ด้วยจาก context) และ app จะคอยจำ context ที่คุยกันไว้ด้วย
+ - [x] เมื่อ new chat, app จะเก็บ chat เดิมลง history แล้วสร้าง chat sessionใหม่แทนใน chat window เดิม และ clear content ใน window เดิมด้วย
+  - [x] เมื่อเลือก chat ใน history, chat window จะแสดง content ของ history นั้น และ app จะดึง context เดิมและคุยต่อได้เลย
+  - [x] Chat History มีสูงสุด 10 รายการ และมี menu Clear all
+
+ที่ตัดสินใจไว้ระหว่างทำ และคนที่มาต่อควรรู้ (เสร็จ 2026-08-06, v0.10.174):
+- **ชื่อบทสนทนามาจากข้อความแรกของ user ตรงๆ ไม่ได้ให้โมเดลตั้ง** — ให้โมเดลตั้งคือเพิ่ม
+  จุดล้มเหลว + กิน turn + ช้า ในจังหวะที่คนกำลังจะเริ่มเรื่องใหม่ ทั้งหมดนี้เพื่อ label ในเมนู
+- **"คุยต่อได้เลย" คือการเก็บ session id ของ Claude Code ไม่ใช่การยัดประวัติกลับเข้าโมเดล** —
+  แอปส่งเฉพาะข้อความล่าสุดแล้วใช้ `--resume` อยู่แล้ว
+- **วัดจริงกับ Claude Code 2.1.220: `--resume` ข้าม working directory ได้ และข้ามโปรเซสได้**
+  ซึ่งขัดกับที่โค้ดเดิมเชื่อ `prepare()` เคยทิ้ง session ทุกครั้งที่ย้ายไดเรกทอรี ทำให้ resume
+  พังเงียบๆ ตอน resolve project ในเทิร์นแรก **และทำให้เสีย context ของข้อความแรกทุกครั้ง
+  ที่ approve project มาตลอด** เอาออกแล้ว — ถ้า session ตายจริงจะกลายเป็น `.staleSession`
+  ซึ่งเริ่มใหม่ให้พร้อมบอก จึงปลอดภัยกว่าการทิ้งไว้ก่อนโดยไม่ลอง
+- **จอกับความจำแยกกันพังได้** ถ้า Claude Code ลบ session ไปแล้ว บทเก่าจะอยู่ครบบนจอแต่
+  โมเดลไม่เห็นเลย → เพิ่ม event `sessionLost` ให้พูดออกมา ห้ามปล่อยเงียบเด็ดขาด
+- **คำสั่ง `/…` ไม่ใช่บทสนทนา** — เคยได้แถวชื่อ "/history 1" เพราะการเปิดบทเก่าไปเก็บคำสั่ง
+  ที่ใช้เปิดเอาไว้เป็นบทใหม่
+- **default ของ store เป็น in-memory มีแต่ AppDelegate ที่ชี้ไปไฟล์จริง** — ตอนแรก default
+  เป็นไฟล์จริง รันเทสรอบเดียวเขียนบทสนทนาปลอม 9 อันลงไฟล์ของเจ้าของ
 
 ## Phase 11: ทำงานกับ web app ใดๆ แทน user
 - [ ] user สามารถบอก app ได้ ว่าให้ทำงานกับ web ใดๆ ผ่าน chat ได้ 
