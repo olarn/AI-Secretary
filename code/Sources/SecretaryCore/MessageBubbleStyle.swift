@@ -33,6 +33,13 @@ public struct MessageBubbleStyle: Equatable, Sendable {
     /// a copy button on every line you typed is clutter on the side of the
     /// thread that never needs it.
     public let showsCopyButton: Bool
+    /// The "Working" heading over a line of running commentary.
+    ///
+    /// Only activity earns it. A divider shares activity's plain unattributed
+    /// look but is not work in progress, and the heading is a claim about the
+    /// app's state, not a style: "Working / New conversation." says something
+    /// is running when the whole point of the line is that nothing is.
+    public let showsWorkingLabel: Bool
 }
 
 public func messageBubbleStyle(
@@ -50,7 +57,8 @@ public func messageBubbleStyle(
             isBubble: false,
             showsSpeakerName: false,
             isFailure: false,
-            showsCopyButton: false
+            showsCopyButton: false,
+            showsWorkingLabel: kind == .activity
         )
     case .failure:
         // Copyable like an answer: the text of a failure is the thing most
@@ -62,7 +70,8 @@ public func messageBubbleStyle(
             isBubble: true,
             showsSpeakerName: true,
             isFailure: true,
-            showsCopyButton: true
+            showsCopyButton: true,
+            showsWorkingLabel: false
         )
     case .message:
         let mine = speaker == .user
@@ -72,7 +81,8 @@ public func messageBubbleStyle(
             isBubble: true,
             showsSpeakerName: true,
             isFailure: false,
-            showsCopyButton: !mine
+            showsCopyButton: !mine,
+            showsWorkingLabel: false
         )
     }
 }

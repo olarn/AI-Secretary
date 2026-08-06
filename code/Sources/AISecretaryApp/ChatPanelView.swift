@@ -1177,8 +1177,10 @@ struct ChatPanelView: View {
     /// the two can't drift a point apart and leave the thread looking ragged.
     private func activityRow(_ entry: TranscriptEntry) -> some View {
         VStack(alignment: .leading, spacing: 3) {
-            Label("Working", systemImage: "gearshape.2")
-                .font(.system(size: appearance.settings.footnoteFontSize, weight: .semibold))
+            if messageBubbleStyle(speaker: entry.speaker, kind: entry.kind).showsWorkingLabel {
+                Label("Working", systemImage: "gearshape.2")
+                    .font(.system(size: appearance.settings.footnoteFontSize, weight: .semibold))
+            }
             Text(entry.text)
                 .font(.system(size: appearance.settings.secondaryFontSize, design: .monospaced))
                 .textSelection(.enabled)

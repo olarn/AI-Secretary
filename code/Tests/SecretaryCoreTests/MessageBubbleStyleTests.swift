@@ -79,6 +79,26 @@ final class MessageBubbleStyleTests: XCTestCase {
     }
 
 
+    /// A divider borrows activity's plain look but must not borrow its
+    /// heading. "Working / New conversation." was the first thing on screen
+    /// after `/new` cleared it — the app announcing it was busy at the one
+    /// moment it had just stopped everything.
+    func testOnlyActivityIsHeadedWorking() {
+        XCTAssertTrue(messageBubbleStyle(speaker: .secretary, kind: .activity).showsWorkingLabel)
+        XCTAssertFalse(messageBubbleStyle(speaker: .secretary, kind: .divider).showsWorkingLabel)
+        XCTAssertFalse(messageBubbleStyle(speaker: .secretary, kind: .message).showsWorkingLabel)
+        XCTAssertFalse(messageBubbleStyle(speaker: .secretary, kind: .failure).showsWorkingLabel)
+    }
+
+    /// The two still share everything else — the divider is drawn as bare
+    /// unattributed text, not as something anyone said.
+    func testADividerIsStillDrawnLikeCommentaryRatherThanAMessage() {
+        let divider = messageBubbleStyle(speaker: .secretary, kind: .divider)
+        XCTAssertFalse(divider.isBubble)
+        XCTAssertFalse(divider.showsSpeakerName)
+        XCTAssertEqual(divider.side, .leading)
+    }
+
     func testTheGutterGrowsWithThePanel() {
         XCTAssertLessThan(
             messageBubbleGutter(panelWidth: 360),
