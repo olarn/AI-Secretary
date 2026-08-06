@@ -36,7 +36,17 @@ final class SpyWorkspaceProvider: ChatProvider, WorkspaceScopedProvider, @unchec
         preparedTools.append(allowedTools)
     }
 
-    func resetConversation() { resetCount += 1 }
+    func resetConversation() { resetCount += 1; currentSessionID = nil }
+
+    /// Stands in for Claude Code's own thread. A real one appears when a turn
+    /// runs; this one is set by the test, so archiving and resuming can be
+    /// checked without a subprocess.
+    var currentSessionID: String?
+    private(set) var adoptedSessions: [String?] = []
+    func adoptSession(_ id: String?) {
+        adoptedSessions.append(id)
+        currentSessionID = id
+    }
 
     var supportsBrowser = true
     private(set) var browserEnabledCalls: [Bool] = []
@@ -925,23 +935,30 @@ final class AgentSessionTests: XCTestCase {
         )
     }
 
-    /// What was read stays read. Clearing the screen would make the
-    /// conversation look like it never happened; the divider says where it
-    /// ended instead.
-    func testNewConversationLeavesWhatIsOnScreenAlone() async {
+    /// A clean screen, and the old conversation retrievable rather than gone.
+    ///
+    /// This asserted the opposite until Chat History existed, and the reason it
+    /// flipped is worth keeping: clearing was wrong while the words had nowhere
+    /// to go, because wiping something the person had read destroyed it. With a
+    /// history menu behind it the same clear is a clean slate. Neither half of
+    /// this test stands alone — a clear with no archive is data loss, an archive
+    /// with no clear is the old behaviour.
+    func testNewConversationClearsTheScreenAndKeepsWhatWasOnIt() async {
         let secretary = await busySecretary()
-        let before = secretary.transcript.count
 
         secretary.newConversation()
 
-        XCTAssertGreaterThan(secretary.transcript.count, before, "it adds, never removes")
+        XCTAssertFalse(
+            secretary.transcript.contains { $0.text.contains("the first thing") },
+            "the screen belongs to the new conversation"
+        )
         XCTAssertTrue(
             secretary.transcript.contains { $0.kind == .divider },
             "the line has to be findable, not just words that look like one"
         )
         XCTAssertTrue(
-            secretary.transcript.contains { $0.text.contains("the first thing") },
-            "what was said is still there to read"
+            secretary.history.first?.entries.contains { $0.text.contains("the first thing") } == true,
+            "and what was said is still reachable. Got: \(secretary.history.map(\.title))"
         )
     }
 

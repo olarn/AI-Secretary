@@ -177,6 +177,16 @@ public enum ChatStreamEvent: Equatable, Sendable {
     /// with not even a space between them, because there was never a character
     /// there to begin with. This is that missing character.
     case textBlockBegan
+    /// The session we tried to continue is gone, and this turn is starting a
+    /// fresh one instead.
+    ///
+    /// Emitted rather than swallowed because of what it looks like from the
+    /// outside: reopening a conversation from history puts the whole thread
+    /// back on screen, so if the model's memory of it has expired, every
+    /// following answer is written by someone who cannot see what is plainly
+    /// visible to the person reading. Silently starting over is the one
+    /// outcome that is indistinguishable from the app having broken.
+    case sessionLost
     /// The turn finished. `stopReason == "refusal"` means the model declined.
     case completed(stopReason: Option<String>, usage: Option<ChatUsage>)
 }

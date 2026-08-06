@@ -144,6 +144,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
             onToggleCharacter: { [weak self] in self?.toggleCharacterVisibility() ?? true },
             onShowUsage: { [weak self] in self?.usageWindow.toggle() },
             onNewConversation: { [weak self] in self?.secretary.newConversation() },
+            history: { [weak self] in self?.secretary.historyRows() ?? [] },
+            onResumeConversation: { [weak self] id in
+                self?.secretary.resumeConversation(id)
+                // Reopening a conversation from the menu means wanting to look
+                // at it, and the bubble may well be hidden — that is often why
+                // the menu was used at all.
+                self?.openChatFromMenu()
+            },
+            onClearHistory: { [weak self] in self?.secretary.clearHistory() },
             windows: { [weak self] in self?.infoWindows }
         )
 

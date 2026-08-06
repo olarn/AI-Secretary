@@ -12,6 +12,20 @@ public protocol WorkspaceScopedProvider: AnyObject, Sendable {
     func prepare(workingDirectory: URL?, additionalDirectories: [URL], allowedTools: [String]?)
     /// Drops any resumed session so the next turn starts a fresh conversation.
     func resetConversation()
+    /// The backend's own handle on the current thread, if it has one.
+    ///
+    /// Needed to put a conversation away: the words are ours, but what the
+    /// model remembers lives on the other side of this and can only be
+    /// recovered by name.
+    var currentSessionID: String? { get }
+    /// Continues a thread the backend already holds. `nil` starts fresh.
+    ///
+    /// The counterpart to `resetConversation`, and the reason reopening an old
+    /// conversation restores more than its text. A session that has since been
+    /// cleaned up simply fails to resume and the backend starts over, so this
+    /// is a request rather than a guarantee — callers must not promise the
+    /// person their context is back until a turn has actually used it.
+    func adoptSession(_ id: String?)
     /// Whether the backend can actually look at the directory on its own.
     ///
     /// The caller needs this to write the right system prompt. Telling a model
@@ -31,17 +45,25 @@ public protocol WorkspaceScopedProvider: AnyObject, Sendable {
 public extension WorkspaceScopedProvider {
     var supportsBrowser: Bool { false }
     func setBrowserEnabled(_ enabled: Bool) {}
+    /// A backend with no session of its own has nothing to hand back and
+    /// nothing to take: reopening a conversation with one restores the words
+    /// and honestly restores nothing else.
+    var currentSessionID: String? { nil }
+    func adoptSession(_ id: String?) {}
 }
 
 extension ClaudeCodeProvider: WorkspaceScopedProvider {
     /// Changing the directory also drops the session.
     ///
-    /// Claude Code scopes session lookup to the working directory, so resuming
-    /// a session started elsewhere fails with "No conversation found with
-    /// session ID". That is exactly what happens on the normal path here: the
-    /// first message runs in the scratch directory, the user then approves a
-    /// project, and the next turn would try to resume the scratch session from
-    /// inside the project.
+    /// This was written believing Claude Code scoped session lookup to the
+    /// working directory, so that resuming from elsewhere failed with "No
+    /// conversation found with session ID". Measured against 2.1.220 on
+    /// 2026-08-06 that is **not** true: a session created in one directory
+    /// resumes from another and still remembers. The reset stays anyway, for
+    /// the reason that survives the correction — a session carries the tools
+    /// and the directory it was created with, and silently continuing a thread
+    /// that believes it is somewhere else is worse than starting a clean one
+    /// the person can see beginning.
     public func prepare(workingDirectory: URL?, additionalDirectories: [URL], allowedTools: [String]?) {
         var updated = configuration
         let moved = updated.workingDirectory?.standardizedFileURL
@@ -54,6 +76,10 @@ extension ClaudeCodeProvider: WorkspaceScopedProvider {
     }
 
     public func resetConversation() { resetSession() }
+
+    public var currentSessionID: String? { sessionID }
+
+    public func adoptSession(_ id: String?) { adopt(session: id) }
 
     public var hasWorkspaceTools: Bool { true }
 

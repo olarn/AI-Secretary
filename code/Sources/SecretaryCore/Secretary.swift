@@ -143,6 +143,12 @@ public enum PendingDecision: Equatable, Sendable {
 @Observable
 public final class Secretary {
     public private(set) var transcript: [TranscriptEntry] = []
+    /// Conversations that have been put away, newest first.
+    ///
+    /// Survives quitting, unlike the live transcript: the point of a history is
+    /// that it outlasts the session, and one that emptied itself on relaunch
+    /// would be a list of things you could already scroll to.
+    public private(set) var history: [ArchivedConversation] = []
     public private(set) var pendingDecision: Option<PendingDecision> = .none()
     /// What the assistant is doing this turn, newest last. Collected whether or
     /// not it is being shown, so switching it on mid-turn isn't blank.
@@ -246,6 +252,11 @@ public final class Secretary {
     /// starting its own.
     @ObservationIgnored private var activityEntryID: Option<UUID> = .none()
     @ObservationIgnored private var conversation: [ChatMessage] = []
+    @ObservationIgnored private let conversationStore: ConversationStoring
+    /// Which archived conversation the live one *is*, when it was reopened from
+    /// history. Putting it away again updates that row rather than adding a
+    /// second one — reopening a thread and closing it is the same thread.
+    @ObservationIgnored private var resumedConversationID: Option<UUID> = .none()
     @ObservationIgnored private var streamingTask: Task<Void, Never>?
     /// The transcript entry the current reply is being written into.
     @ObservationIgnored private var streamingEntryID: Option<UUID> = .none()
@@ -291,6 +302,7 @@ public final class Secretary {
         activityPreference: ActivityPreferenceStoring = UserDefaultsActivityPreference(),
         browserPreference: BrowserPreferenceStoring = UserDefaultsBrowserPreference(),
         chatProvider: ChatProvider,
+        conversationStore: ConversationStoring = FileConversationStore(),
         discoverSkills: @escaping ([String]) -> [SkillInfo] = { SkillDiscovery.discover(projectPaths: $0) }
     ) {
         self.profile = profile
@@ -306,6 +318,11 @@ public final class Secretary {
         self.browserPreference = browserPreference
         self.browserEnabled = browserPreference.browserEnabled
         self.chatProvider = chatProvider
+        self.conversationStore = conversationStore
+        // A history that failed to load reads as an empty one. The alternative
+        // is refusing to start over a file of old chat, which trades the whole
+        // app for the part of it that remembers.
+        self.history = conversationStore.load().getOrElse([])
         self.discoverSkills = discoverSkills
         // The provider is told at startup, not only when the switch is flipped:
         // a preference that survives quitting has to survive relaunching too.
@@ -423,9 +440,11 @@ public final class Secretary {
     /// which is the part that has no other way out. Without it, a conversation
     /// that had gone wrong could only be escaped by quitting the app.
     ///
-    /// What is on screen stays on screen. Those words were read; clearing them
-    /// would look like the conversation never happened, and the point is to say
-    /// where it ended, not to deny it.
+    /// The screen is cleared, and what was on it goes into the history menu
+    /// first. Until there was a history this cleared nothing — wiping words the
+    /// person had read, with no way back to them, is destroying their work to
+    /// tidy up. Now there is a way back, so the clean slate is a clean slate
+    /// rather than a loss.
     public func newConversation() {
         stopCurrentTurn(because: "starting a new conversation")
         pendingDecision = .none()
@@ -448,7 +467,14 @@ public final class Secretary {
             stopWatching(because: "starting a new conversation")
         }
 
+        // Put the old one away before anything is cleared — including after
+        // `stopCurrentTurn`, so the archived copy carries the "(stopped
+        // part-way)" mark the person last saw rather than a reply that looks
+        // like it finished.
+        archiveCurrentConversation()
+
         conversation.removeAll()
+        transcript.removeAll()
         activity = []
         activityEntryID = .none()
         sessionAgentTools = []
@@ -460,9 +486,133 @@ public final class Secretary {
             speaker: .secretary,
             kind: .divider,
             text: ended.isEmpty
-                ? "New conversation — I've forgotten what we were talking about."
-                : "New conversation — I've forgotten what we were talking about, and stopped \(ended.joined(separator: ", "))."
+                ? "New conversation."
+                : "New conversation — stopped \(ended.joined(separator: ", "))."
         ))
+    }
+
+    // MARK: - Chat history
+
+    /// Files the live conversation under the history menu.
+    ///
+    /// Does nothing when nobody said anything, so opening the app and pressing
+    /// New Conversation twice doesn't push two blank rows in front of ten real
+    /// ones.
+    private func archiveCurrentConversation() {
+        let entries = transcript
+        guard worthArchiving(entries) else { return }
+
+        let id = resumedConversationID.getOrElse(UUID())
+        // Keep the title a reopened conversation already had. It was derived
+        // from its opening message, which hasn't changed, and re-deriving it
+        // would let a menu row rename itself for no reason the person can see.
+        let title = history.first { $0.id == id }?.title ?? conversationTitle(from: entries)
+
+        history = archiving(
+            ArchivedConversation(
+                id: id,
+                title: title,
+                sessionID: Option.fromOptional((chatProvider as? WorkspaceScopedProvider)?.currentSessionID),
+                projectID: lastProject.map(\.id)^,
+                entries: entries
+            ),
+            into: history
+        )
+        resumedConversationID = .none()
+        persistHistory()
+    }
+
+    /// Reopens a conversation: its words back on screen, and Claude Code's own
+    /// thread picked up where it was left.
+    ///
+    /// The two can come apart. The words are ours and always return; the memory
+    /// is Claude Code's and may have been cleaned up since. That is not
+    /// knowable from here — it only shows up when the next turn tries to resume
+    /// — so this promises the transcript and nothing more, and the turn itself
+    /// says if the memory turned out to be gone.
+    public func resumeConversation(_ id: UUID) {
+        guard let target = history.first(where: { $0.id == id }) else { return }
+        guard resumedConversationID.toOptional() != id else { return }
+
+        newConversation()
+        // `newConversation` filed whatever was on screen and left its own note;
+        // this conversation replaces that note rather than following it.
+        transcript = target.entries
+        resumedConversationID = .some(id)
+        (chatProvider as? WorkspaceScopedProvider)?.adoptSession(target.sessionID.toOptional())
+
+        var note = "Picked up “\(target.title)”."
+        if !target.sessionID.isDefined {
+            note += " This one never reached Claude Code, so there's nothing on its side to carry on from — I can read what's above, but I don't remember it."
+        }
+        // The thread ran somewhere else. Its memory is of that project's files,
+        // while any tool now would run in the current one — worth saying before
+        // an answer confidently describes the wrong directory.
+        if let archived = target.projectID.toOptional(),
+           archived != lastProject.toOptional()?.id,
+           let project = registry.projects.first(where: { $0.id == archived }) {
+            note += " It was working in \(project.name)."
+        }
+        transcript.append(TranscriptEntry(speaker: .secretary, kind: .divider, text: note))
+    }
+
+    /// The chat-side way in, for the same reason `/new` exists alongside the
+    /// menu item: the keyboard shouldn't have to reach for the menu bar.
+    ///
+    /// Numbered rather than named — titles are the user's own sentences, and
+    /// matching a typed fragment against them would reopen the wrong
+    /// conversation often enough to be worse than useless.
+    private func handleHistoryCommand(_ argument: String) {
+        guard !history.isEmpty else {
+            say(.secretary, "No past conversations yet. `/new` puts the current one here.")
+            return
+        }
+
+        guard !argument.isEmpty else {
+            let rows = historyRows()
+            let list = rows.enumerated()
+                .map { "\($0.offset + 1). \($0.element.label)\($0.element.isCurrent ? "  ← you're in this one" : "")" }
+                .joined(separator: "\n")
+            say(.secretary, "Chat History:\n\(list)\n\nReopen one with `/history <number>`.")
+            return
+        }
+
+        guard let choice = Int(argument), choice >= 1, choice <= history.count else {
+            say(.secretary, "Pick a number between 1 and \(history.count). `/history` on its own lists them.")
+            return
+        }
+        resumeConversation(history[choice - 1].id)
+    }
+
+    /// The history menu's rows, decided here so the menu only draws them.
+    public func historyRows(now: Date = Date()) -> [ConversationMenuRow] {
+        conversationMenuRows(history, current: resumedConversationID, now: now)
+    }
+
+    /// Empties the history menu. The conversation on screen is not one of them
+    /// and is left alone.
+    public func clearHistory() {
+        guard !history.isEmpty else { return }
+        history = []
+        resumedConversationID = .none()
+        persistHistory()
+    }
+
+    private func persistHistory() {
+        conversationStore.save(history).fold(
+            { error in
+                // Worth a line in the conversation rather than a silent
+                // failure: the person is entitled to know the thread they just
+                // put away won't be there tomorrow.
+                self.transcript.append(TranscriptEntry(
+                    speaker: .secretary,
+                    kind: .failure,
+                    text: "I couldn't save the chat history — \(error.reason)",
+                    speakerName: self.profile.displayName
+                ))
+            },
+            { _ in }
+        )
     }
 
     /// Answers the card that appears when something is typed mid-flight.
@@ -683,8 +833,11 @@ public final class Secretary {
         case "new", "reset":
             newConversation()
 
+        case "history", "chats":
+            handleHistoryCommand(argument?.trimmingCharacters(in: .whitespaces) ?? "")
+
         default:
-            say(.secretary, "Unknown command “/\(command)”. Try /model, /effort, /usage, /loop, /run, /watch or /new.")
+            say(.secretary, "Unknown command “/\(command)”. Try /model, /effort, /usage, /loop, /run, /watch, /new or /history.")
         }
     }
 
@@ -1688,6 +1841,18 @@ public final class Secretary {
                         // the report of what it did, three things in one block
                         // with not even a space between them.
                         closeSegment()
+                    case .sessionLost:
+                        // Said in the transcript, not just logged. The whole
+                        // conversation is sitting above this line, so an answer
+                        // written without it would look like the app ignoring
+                        // what is right there on screen.
+                        closeSegment()
+                        self.transcript.append(TranscriptEntry(
+                            speaker: .secretary,
+                            kind: .divider,
+                            text: "I've lost my memory of everything above — Claude Code no longer has that thread. You can still read it, but I'm answering from this message on."
+                        ))
+                        self.resumedConversationID = .none()
                     case .activity(let step):
                         // A tool between two things said ends the first of them
                         // too. In practice a block boundary follows anyway, but
@@ -2993,8 +3158,10 @@ public final class Secretary {
           seen the steps and said go. `/run stop` stops part-way.
         • /watch <path> — tell you when a file or folder changes; several at
           once is fine. `/watch stop` stops all, `/watch stop <path>` stops one.
-        • /new — start over: forget the conversation and stop everything
-          standing. What's on screen stays there.
+        • /new — start over: forget the conversation, stop everything standing,
+          and clear the screen. The old one goes into Chat History.
+        • /history — list what's in Chat History; `/history <number>` reopens
+          one and carries on where it left off.
 
         Or just ask me to keep track of something as it happens and I'll set the
         timer up myself.

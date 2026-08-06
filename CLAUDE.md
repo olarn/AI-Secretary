@@ -113,7 +113,7 @@ changing domain code.
 Build in phases. The full feature-by-phase checklist (what's shipped and what's
 still open) lives in `PRODUCT_BACKLOG.md`, kept separate from this charter so
 architecture/principles/engineering rules don't get mixed in with backlog
-items. The current phase for version-bumping purposes is **9**.
+items. The current phase for version-bumping purposes is **10**.
 
 ## Security and privacy
 
@@ -182,7 +182,7 @@ items. The current phase for version-bumping purposes is **9**.
   หรือคำถามเรื่อง flag ส่งไม่ได้เลย และห้ามมี flag ตามหลังข้อความ เพราะหลัง `--` เป็น positional ทั้งหมด
 - **ทุกครั้งที่แก้ code ต้อง bump version** ตามแพตเทิร์น `major.phase.change`
   - `major` — 0 ไปจนกว่าจะ public เจ้าของจะเป็นคนบอกเองว่าเมื่อไหร่
-  - `phase` — phase ของ charter ที่กำลังทำอยู่ ตอนนี้คือ **9**
+  - `phase` — phase ของ charter ที่กำลังทำอยู่ ตอนนี้คือ **10**
     ห้าม derive จากหัวข้อที่สูงสุดในไฟล์ เพราะ charter มี Phase 7/8 ที่ยังไม่เริ่ม
     เปลี่ยนด้วยมือเมื่อขยับ phase เท่านั้น
   - `change` — +1 ต่อ 1 เรื่องที่ทำเสร็จ ถ้ารอบนั้นแก้ 5 เรื่องก็ +5

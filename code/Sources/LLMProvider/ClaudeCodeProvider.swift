@@ -109,6 +109,16 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
         stateLock.withLock { _sessionID = nil }
     }
 
+    /// Points the next turn at an existing session, so a conversation reopened
+    /// from history continues rather than restarts.
+    ///
+    /// Whether that session still exists is not knowable from here — it lives
+    /// in Claude Code's own storage and can be cleaned up at any time. A dead
+    /// one comes back as `.staleSession` on the next turn and is handled there.
+    public func adopt(session id: String?) {
+        stateLock.withLock { _sessionID = id }
+    }
+
     public func stream(
         messages: [ChatMessage],
         model: Option<ChatModel>,
@@ -139,6 +149,11 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
                     // user an internal error they can do nothing about.
                     if outcome == .staleSession {
                         self.resetSession()
+                        // Only worth saying when we asked for a specific
+                        // thread. A session that expired between two turns of
+                        // the conversation you are looking at is the same
+                        // event, and just as worth knowing.
+                        if resume != nil { continuation.yield(.right(.sessionLost)) }
                         _ = try await self.runTurn(
                             prompt: prompt, model: model, effort: effort, system: system,
                             resume: nil, configuration: configuration,

@@ -21,18 +21,32 @@ final class StatusBarController {
     private let onNewConversation: () -> Void
     private let windows: () -> InfoWindows?
     private let windowsMenuItem: NSMenuItem
+    /// Read fresh every time the menu opens rather than cached: a conversation
+    /// is put away by `/new` in the chat as well as by this menu, and a copy
+    /// kept here would be a day out of date the first time that happened.
+    private let history: () -> [ConversationMenuRow]
+    private let onResumeConversation: (UUID) -> Void
+    private let onClearHistory: () -> Void
+    private let historyMenuItem: NSMenuItem
 
     init(
         onOpenChat: @escaping () -> Void,
         onToggleCharacter: @escaping () -> Bool,
         onShowUsage: @escaping () -> Void,
         onNewConversation: @escaping () -> Void,
+        history: @escaping () -> [ConversationMenuRow] = { [] },
+        onResumeConversation: @escaping (UUID) -> Void = { _ in },
+        onClearHistory: @escaping () -> Void = {},
         windows: @escaping () -> InfoWindows?
     ) {
         self.onOpenChat = onOpenChat
         self.onToggleCharacter = onToggleCharacter
         self.onShowUsage = onShowUsage
         self.onNewConversation = onNewConversation
+        self.history = history
+        self.onResumeConversation = onResumeConversation
+        self.onClearHistory = onClearHistory
+        self.historyMenuItem = NSMenuItem(title: "Chat History", action: nil, keyEquivalent: "")
         self.windows = windows
         self.windowsMenuItem = NSMenuItem(title: "Pinned Messages", action: nil, keyEquivalent: "")
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -76,6 +90,15 @@ final class StatusBarController {
         )
         newItem.target = target
         menu.addItem(newItem)
+
+        // Directly under New Conversation, because they are two halves of one
+        // idea: that one puts the current thread away, this is where it went.
+        historyMenuItem.submenu = NSMenu(title: "Chat History")
+        menu.addItem(historyMenuItem)
+
+        // Everything above is about the conversation; everything below is about
+        // the app. The line is where that changes.
+        menu.addItem(.separator())
 
         // ⌘H matches the shortcut in the (undrawn) main menu, and showing it here
         // is how the user finds out the shortcut exists at all.
@@ -196,6 +219,47 @@ final class StatusBarController {
         windowsMenuItem.submenu = submenu
     }
 
+    /// Rebuilt on every open, for the same reason the pinned list is: the rows
+    /// change from the chat window, not from here.
+    fileprivate func rebuildHistoryMenu() {
+        let submenu = NSMenu(title: "Chat History")
+        let rows = history()
+        historyMenuItem.isEnabled = !rows.isEmpty
+
+        if rows.isEmpty {
+            let empty = NSMenuItem(title: "No past conversations", action: nil, keyEquivalent: "")
+            empty.isEnabled = false
+            submenu.addItem(empty)
+            historyMenuItem.submenu = submenu
+            return
+        }
+
+        for row in rows {
+            let item = NSMenuItem(
+                title: row.label,
+                action: #selector(Target.resumeConversation(_:)),
+                keyEquivalent: ""
+            )
+            item.target = target
+            item.representedObject = row.id
+            // Which one you are already in. Without it, reopening the
+            // conversation you are looking at is an invisible no-op that reads
+            // as the menu being broken.
+            item.state = row.isCurrent ? .on : .off
+            submenu.addItem(item)
+        }
+
+        submenu.addItem(.separator())
+        let clear = NSMenuItem(title: "Clear All", action: #selector(Target.clearHistory(_:)), keyEquivalent: "")
+        clear.target = target
+        submenu.addItem(clear)
+
+        historyMenuItem.submenu = submenu
+    }
+
+    fileprivate func handleResumeConversation(_ id: UUID) { onResumeConversation(id) }
+    fileprivate func handleClearHistory() { onClearHistory() }
+
     fileprivate func handleShowWindow(_ id: UUID) { windows()?.show(id) }
     fileprivate func handleShowAllWindows() { windows()?.showAll() }
     fileprivate func handleClearWindows() { windows()?.clearAll() }
@@ -225,7 +289,17 @@ final class StatusBarController {
 
         @objc func clearWindows(_ sender: Any?) { controller.handleClearWindows() }
 
-        func menuWillOpen(_ menu: NSMenu) { controller.rebuildWindowsMenu() }
+        @objc func resumeConversation(_ sender: Any?) {
+            guard let id = (sender as? NSMenuItem)?.representedObject as? UUID else { return }
+            controller.handleResumeConversation(id)
+        }
+
+        @objc func clearHistory(_ sender: Any?) { controller.handleClearHistory() }
+
+        func menuWillOpen(_ menu: NSMenu) {
+            controller.rebuildWindowsMenu()
+            controller.rebuildHistoryMenu()
+        }
         @objc func showAbout(_ sender: Any?) { controller.handleShowAbout() }
         @objc func quit(_ sender: Any?) { controller.handleQuit() }
     }
