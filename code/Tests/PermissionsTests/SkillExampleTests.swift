@@ -130,6 +130,44 @@ final class SkillExampleTests: XCTestCase {
         XCTAssertEqual(["1", "x"].traverse { Option.fromOptional(Int($0)) }^, Option.none())
     }
 
+    /// §8: the nested form and the flattened one, asserted to agree.
+    ///
+    /// This is the shape of the proof the skill asks for — the inversion is
+    /// only a refactor if something checks that both answer the same on the
+    /// cases that mattered, including the one the `else` used to handle.
+    func testGuardStyleMeansTheSameAsTheNestedForm() {
+        func nested(_ raw: String?, allowEmpty: Bool) -> String {
+            if let raw {
+                let trimmed = raw.trimmingCharacters(in: .whitespaces)
+                if trimmed.isEmpty && !allowEmpty {
+                    return "Untitled"
+                } else {
+                    return trimmed
+                }
+            } else {
+                return "Untitled"
+            }
+        }
+
+        func flattened(_ raw: String?, allowEmpty: Bool) -> String {
+            guard let raw else { return "Untitled" }
+            let trimmed = raw.trimmingCharacters(in: .whitespaces)
+            // The negation, spelled out: `!(empty && !allow)` is `!empty || allow`.
+            guard !trimmed.isEmpty || allowEmpty else { return "Untitled" }
+            return trimmed
+        }
+
+        for raw in [nil, "", "   ", " the vault "] as [String?] {
+            for allowEmpty in [true, false] {
+                XCTAssertEqual(
+                    nested(raw, allowEmpty: allowEmpty),
+                    flattened(raw, allowEmpty: allowEmpty),
+                    "raw: \(String(describing: raw)), allowEmpty: \(allowEmpty)"
+                )
+            }
+        }
+    }
+
     // MARK: - The railway recipe
 
     /// `^` is required after `flatMap` — without it the result is

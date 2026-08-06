@@ -110,6 +110,31 @@ Verified shapes (compiled in `SkillExampleTests`): `Option<Int>.map(a, b) { $0 +
 - Plain-collection code stays plain: `list.map(f)`, not Bow's `ArrayK` routing.
 - Don't build a combinator, a custom operator, or a generic protocol to remove one `if`. If the functional version needs a paragraph of explanation, the `if` was better and this section does not apply.
 
+### 8. Flatten with `guard` — without changing what the code means
+
+Nesting is the other way a body becomes unreadable. A function whose closing braces march to the right is one `if` wrapped around everything; invert it and the work comes back to the left margin.
+
+- **Signal:** more than two levels of indent in a domain function; an `if` (or `if let`) whose body *is* the whole function; a run of `}` at the end that you have to count.
+- **Do instead:** `guard <the good case> else { return … }`, then keep going unindented. One guard per precondition, each with its own reason to leave — that is also what makes a failure easy to name.
+- **This does not contradict §5 and §7.** Inside a domain chain, keep mapping and let `fold` be the last step. `guard` is for the *preconditions* of a function — the things that must be true before the chain starts — and for edge code (adapters, delegates, view bridges) that has to act rather than transform.
+
+**Inverting a condition is a refactor with a correctness proof attached. Walk the list before you commit it:**
+
+| Check | Why it bites |
+|---|---|
+| The guard condition is the exact negation | `if !(a && b)` inverts to `guard a \|\| b`, *not* `guard a && b`. De Morgan, every time. |
+| The original `else` branch, if any | `if c { X } else { Y }` is `guard c else { Y; return }` then `X` — dropping `Y` silently deletes behaviour. |
+| Code *after* the old `if` block | It used to run in both cases. After a guard-return it runs in neither. Move it, or the guard is wrong. |
+| The return value | A non-`Void` function has to hand back what falling through used to produce, not a fresh default. |
+| Loop bodies | Inside `for`, the exit is `continue`, not `return` — a `return` leaves the whole function. |
+| Optional binding scope | `if let x = …` binds inside the braces; `guard let x = …` binds *after*. Check it doesn't now shadow an outer `x` for the rest of the function. |
+| `defer` and cleanup | Still runs on the guard's return. If the old code did the cleanup at the bottom of the `if` instead, it is now skipped. |
+| Async and `await` | An early return before an `await` changes what has been kicked off. Read the whole body, not the condition. |
+
+**Prove it, don't eyeball it.** Run the tests that cover the branch before and after — and if the branch had no test, write one *before* inverting, because that is the only thing separating a refactor from a change. A flattened function that returns a different value on one input is worse than the arrow it replaced.
+
+**And don't overdo it:** a two-line `if` is already flat. Inverting it buys nothing and costs a reader one more negation to hold.
+
 ## The boundary rule
 
 Bow types live in the domain core. Swift-native types live at three edges, with an explicit conversion function at each. **This is not stylistic — `Option` in a `Codable` struct does not compile.**
@@ -252,6 +277,7 @@ Reach for point-free on `Option`/`Either` and on functions you want to pass arou
 - No `.toOptional()` / `if let` / `getOrElse` in the middle of a domain chain; the unwrap is the last step.
 - No new `Bool` parameter that switches behaviour — that is two functions.
 - No `for` where `map`/`filter`/`reduce`/`traverse` says it; no `if let`/`guard let` chain where one `flatMap` chain or a `fold` says it.
+- No function body wrapped in one big `if` — invert it to a `guard` and return early, and check the negation, the old `else`, the code after the block, and the return value before calling it done.
 - …and none of the above turned into a combinator nobody asked for: if the functional version is harder to read, the plain one wins.
 - No `throws` in a domain function; failures are on the left of `Either`.
 - No `?` in a domain type; absence is `Option`. Swift `Optional` only in DTOs and view projections.
