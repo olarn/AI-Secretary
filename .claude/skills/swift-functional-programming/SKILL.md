@@ -13,6 +13,103 @@ Domain logic in this repo is written in typed functional style on [Bow](https://
 
 **Core principle: a result is a value, not a control-flow event.** A decision you can store in state, compare in a test, and pass to the next step beats one that unwinds the stack.
 
+## Designing with functions
+
+Six habits, each written as something to *do* and something to *look for*. They are the design half of this skill; everything below is the mechanics of getting it past the compiler.
+
+### 1. Start from the function, not the type
+
+Write the signature of the transformation before you write anything that holds it: `(ApprovalRequest) -> PermissionDecision`, `(URL) -> Option<String>`, `([TranscriptEntry]) -> String`. Introduce a type only when two functions have to agree on a shape.
+
+- **Signal you skipped this:** a `class` or `struct` whose only job is to hold two dependencies and expose one method.
+- **Do instead:** a free function taking the dependency as a curried first parameter — `requireApproval(grants)` returns `(ApprovalRequest) -> …`, so callers bind the dependency once and pass the rest around.
+- **In this repo:** `decidePermission(_:)`, `conversationTitle(from:)`, `placeBubble`, `admitting(name:bytes:to:)`.
+
+### 2. Never mutate — return a new value
+
+Every stored property in a domain type is `let`. A change is a function from old value to new value, named with `-ing`.
+
+- **Signal:** `var` in a domain `struct`; a method returning `Void` that changes something; `array.append` inside domain logic.
+- **Do instead:** `granting`, `archiving`, `attaching` — build the new collection with `map`/`filter`/`reduce` and return it.
+- **In this repo:** `PermissionGrants.granting`, `WebSiteGrants.granting(host:)`, `archiving(_:into:limit:)`.
+- **Exception, stated once:** the single `@Observable` store (`Secretary`) holds `var`s because SwiftUI observes them. It holds values; it does not compute inside them.
+
+### 3. A function is data — store it, list it, pass it
+
+Functions go in properties, arrays, dictionaries, and return positions. A table of `(name, function)` beats a `switch` whose cases keep arriving.
+
+- **Signal:** a one-method protocol that exists only so a test can substitute it; a `switch` over a string that grows a case per feature.
+- **Do instead:** a stored closure (`@ObservationIgnored let discoverSkills: ([String]) -> [SkillInfo]`), or an array of rails folded together.
+- **Keep the protocol** when the boundary has several methods, identity, or lifetime — `ChatProvider`, `ConversationStoring`. One function, one closure; a real collaborator, a protocol.
+
+```swift
+// Rails as data: adding a rule is adding an element, not editing a function.
+let rules: [(String, (Int) -> Either<ParseError, Int>)] = [
+    ("positive", requirePositive),
+    ("small", { $0 < 100 ? .right($0) : .left(.notPositive) })
+]
+let checked = rules.reduce(Either<ParseError, Int>.right(candidate)) { result, rule in
+    result.flatMap(rule.1)^
+}
+```
+
+### 4. Solve by composing, not by adding parameters
+
+A new requirement is a new small function joined to the chain — not a `Bool` on an existing one.
+
+- **Signal:** a parameter that switches behaviour (`includeHidden:`, `strict:`), or a function whose body is two paragraphs separated by a blank line and a comment.
+- **Do instead:** two functions and a caller that picks, or one more rail in the chain: `requireAllowlistedTool >>> { $0.flatMap(requireApproval(grants))^ }`.
+- **Rule of thumb:** if you can't name a function without "and", it is two functions.
+
+### 5. Stay inside the container; unwrap once, at the edge
+
+`map`/`flatMap` on `Option` and `Either` all the way through the domain. The unwrap belongs at the boundary that has to *act* — the view bridge, or the caller that shows a message.
+
+- **Signal:** `.toOptional()`, `if let`, or `getOrElse` in the middle of domain code, followed by more logic on the unwrapped value.
+- **Do instead:** keep mapping, and let `fold` be the last step: `webSiteHost(of: url).fold({ … }, { … })`.
+- **Reminder:** `^` after every `map`/`flatMap` on these types, or the result is `Kind<…>` and won't type-check.
+
+```swift
+// One unwrap, at the end — not one per step.
+let label = Option.fromOptional(rawName)
+    .map { $0.trimmingCharacters(in: .whitespaces) }^
+    .filter { !$0.isEmpty }^
+    .getOrElse("Untitled conversation")
+```
+
+### 6. Small functions, and free ones by default
+
+- **Small:** one reason to fail, and short enough to read without scrolling. A comment that separates two halves of a body is a request to split it.
+- **Free by default:** pure logic that doesn't need the type's own invariants is a free function in the module, not a method. Methods are for behaviour about the value's own data (`grants.allows(host:)`); free functions are for decisions about a *situation* (`admitting(name:bytes:to:)`, `worthArchiving(_:)`).
+- **Naming, because `SecretaryCore` imports every domain module into one scope:** qualify a public free function with its domain noun — `decidePermission`, not `decide`. Names that are already specific (`requireAllowlistedTool`) need no prefix.
+- **Test the function, not the class.** If something is hard to test, it is usually because a decision is trapped inside a type that also does I/O — pull the decision out as a function and the test needs no fake.
+
+### 7. Loops and branches are the last resort
+
+`for` and `if` describe *how*; `map`, `filter`, `reduce`, `flatMap` and `fold` describe *what*. Reach for the second set first — but see the boundary at the end of this section, which is part of the rule, not an apology for it.
+
+| Instead of | Write |
+|---|---|
+| `for x in xs { out.append(f(x)) }` | `xs.map(f)` |
+| `for x in xs where p(x)` | `xs.filter(p)` |
+| `for x in xs { total += x.n }` | `xs.reduce(0) { $0 + $1.n }` |
+| a loop that can fail partway | `xs.traverse { … }^` — every element, or the first failure |
+| `if let a = x, let b = y { f(a, b) }` | `Option<A>.map(x, y, f)^` — two containers, one function |
+| `if cond { .a } else { .b }` in a body | a `switch` *expression* assigned to a `let`, or `fold` on the value you already have |
+| `if let v = opt { … } else { … }` | `opt.fold({ … }, { … })` |
+| `guard let` chains down a function | one chain of `.flatMap(…)^`, or `binding` past three steps |
+
+Verified shapes (compiled in `SkillExampleTests`): `Option<Int>.map(a, b) { $0 + $1 }^` and `Either<E, Int>.map(x, y) { … }^` are the applicative pair; `xs.traverse { … }^` is the fallible loop; `Option.filter` exists and needs `^`. Two gotchas measured while writing this: **`zip` on `Option` does not work in a usable shape in 0.8.0** — use the 2-ary `map` — and the arguments to `Either.map` must be typed `Either` values, since a bare `.right(1)` there infers `Kind<EitherPartial<E>, Int>` and fails with *has no member 'right'*.
+
+**Recursion over accumulation.** When the shape is "keep going until", write a recursive function whose parameters *are* the state, rather than a `var` and a `while`. Swift does not guarantee tail-call elimination, so keep it to bounded work — a menu, a path, a retry budget — and use `reduce` for anything that walks a whole file or a long list.
+
+**Where this stops — do not over-engineer.** These rules are for readability, not purity. Keep the plain thing when the functional one is longer or slower to read:
+
+- `guard` for a precondition at the top of a function is clearer than a fold; keep it.
+- A single `if` that returns early from otherwise-linear code is fine.
+- Plain-collection code stays plain: `list.map(f)`, not Bow's `ArrayK` routing.
+- Don't build a combinator, a custom operator, or a generic protocol to remove one `if`. If the functional version needs a paragraph of explanation, the `if` was better and this section does not apply.
+
 ## The boundary rule
 
 Bow types live in the domain core. Swift-native types live at three edges, with an explicit conversion function at each. **This is not stylistic — `Option` in a `Codable` struct does not compile.**
@@ -150,6 +247,12 @@ Reach for point-free on `Option`/`Either` and on functions you want to pass arou
 
 ## Checklist before committing domain code
 
+- Every new decision is a named function with a signature you could read aloud; nothing new is a class holding two dependencies and one method.
+- No `var` in a domain type, and no method returning `Void` that changes something — changes are `-ing` functions returning a new value.
+- No `.toOptional()` / `if let` / `getOrElse` in the middle of a domain chain; the unwrap is the last step.
+- No new `Bool` parameter that switches behaviour — that is two functions.
+- No `for` where `map`/`filter`/`reduce`/`traverse` says it; no `if let`/`guard let` chain where one `flatMap` chain or a `fold` says it.
+- …and none of the above turned into a combinator nobody asked for: if the functional version is harder to read, the plain one wins.
 - No `throws` in a domain function; failures are on the left of `Either`.
 - No `?` in a domain type; absence is `Option`. Swift `Optional` only in DTOs and view projections.
 - Error enum belongs to this module and is `Equatable, Sendable`.

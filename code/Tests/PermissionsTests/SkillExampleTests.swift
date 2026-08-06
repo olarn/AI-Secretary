@@ -74,6 +74,62 @@ final class SkillExampleTests: XCTestCase {
         XCTAssertEqual(ok.toEither(), .right(1))
     }
 
+    // MARK: - Designing with functions
+
+    /// Rails held as data: adding a rule is adding an element, not editing a
+    /// function. The `^` after `flatMap` is what makes the fold type-check.
+    func testRailsHeldAsDataFoldIntoOneDecision() {
+        let rules: [(String, (Int) -> Either<ParseError, Int>)] = [
+            ("positive", requirePositive),
+            ("small", { $0 < 100 ? .right($0) : .left(.notPositive) })
+        ]
+        func check(_ candidate: Int) -> Either<ParseError, Int> {
+            rules.reduce(Either<ParseError, Int>.right(candidate)) { result, rule in
+                result.flatMap(rule.1)^
+            }
+        }
+
+        XCTAssertEqual(check(4), .right(4))
+        XCTAssertEqual(check(400), .left(.notPositive))
+        XCTAssertEqual(check(-1), .left(.notPositive))
+    }
+
+    /// One unwrap, at the end — not one per step.
+    func testTheUnwrapIsTheLastStep() {
+        func label(_ rawName: String?) -> String {
+            Option.fromOptional(rawName)
+                .map { $0.trimmingCharacters(in: .whitespaces) }^
+                .filter { !$0.isEmpty }^
+                .getOrElse("Untitled conversation")
+        }
+
+        XCTAssertEqual(label("  the vault "), "the vault")
+        XCTAssertEqual(label("   "), "Untitled conversation")
+        XCTAssertEqual(label(nil), "Untitled conversation")
+    }
+
+    /// The applicative pair, which replaces `if let a = x, let b = y`. Bow
+    /// 0.8.0 spells it as a static 2-ary `map`; `zip` on `Option` does not work
+    /// in a usable shape, which is why the skill tells you not to reach for it.
+    func testTwoContainersOneFunction() {
+        XCTAssertEqual(Option<Int>.map(Option.some(1), Option.some(2)) { $0 + $1 }^, Option.some(3))
+        XCTAssertEqual(Option<Int>.map(Option.some(1), Option.none()) { $0 + $1 }^, Option.none())
+        XCTAssertEqual(
+            Either<ParseError, Int>.map(
+                Either<ParseError, Int>.right(1),
+                Either<ParseError, Int>.right(2)
+            ) { $0 + $1 }^,
+            .right(3)
+        )
+    }
+
+    /// The fallible loop: every element, or the first failure — no `for`, no
+    /// partially-filled accumulator to reason about.
+    func testTraverseIsTheLoopThatCanFail() {
+        XCTAssertEqual(["1", "2"].traverse { Option.fromOptional(Int($0)) }^, Option.some([1, 2]))
+        XCTAssertEqual(["1", "x"].traverse { Option.fromOptional(Int($0)) }^, Option.none())
+    }
+
     // MARK: - The railway recipe
 
     /// `^` is required after `flatMap` — without it the result is
