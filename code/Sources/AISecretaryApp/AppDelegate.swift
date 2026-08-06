@@ -146,7 +146,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
             onOpenChat: { [weak self] in self?.openChatFromMenu() },
             onToggleCharacter: { [weak self] in self?.toggleCharacterVisibility() ?? true },
             onShowUsage: { [weak self] in self?.usageWindow.toggle() },
-            onNewConversation: { [weak self] in self?.secretary.newConversation() },
+            onNewConversation: { [weak self] in
+                self?.secretary.newConversation()
+                // Starting a conversation means having one. Clearing the slate
+                // behind a hidden window would leave nothing to show for the
+                // click, and the bubble being closed is a common reason to
+                // reach for the menu in the first place.
+                self?.openChatFromMenu()
+            },
             history: { [weak self] in self?.secretary.historyRows() ?? [] },
             onResumeConversation: { [weak self] id in
                 self?.secretary.resumeConversation(id)
