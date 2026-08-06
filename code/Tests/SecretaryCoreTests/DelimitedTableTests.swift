@@ -128,3 +128,37 @@ extension DelimitedTableTests {
         ]))
     }
 }
+
+/// The false table that turned up in the running app.
+extension DelimitedTableTests {
+    /// "total 1,250 THB" over two lines was drawn as a two-column grid with the
+    /// thousands cut off in the first column. A comma between digits is part of
+    /// a number; a CSV that means a separator there quotes the field.
+    func testAThousandsSeparatorIsNotAColumnBreak() {
+        let text = """
+        sample.pdf: Invoice 42 for Olarn — total 1,250 THB
+        note.txt: Invoice 42 for Olarn — total 1,250 THB
+        """
+        XCTAssertTrue(
+            DelimitedTableParser.segments(of: text).allSatisfy { if case .text = $0 { return true } else { return false } },
+            "Got: \(DelimitedTableParser.segments(of: text))"
+        )
+        XCTAssertEqual(
+            DelimitedTableParser.fields(of: "total 1,250 THB", delimiter: ","),
+            ["total 1,250 THB"]
+        )
+    }
+
+    /// …and a real column of numbers still splits, because the separator there
+    /// is a comma between a digit and a space or a letter, not between digits.
+    func testAColumnOfMoneyStillSplits() {
+        XCTAssertEqual(
+            tables("item,amount\nlunch,1250\ntaxi,300").first?.rows,
+            [["lunch", "1250"], ["taxi", "300"]]
+        )
+        XCTAssertEqual(
+            DelimitedTableParser.fields(of: "\"1,250\",THB", delimiter: ","),
+            ["1,250", "THB"]
+        )
+    }
+}

@@ -95,6 +95,19 @@ public enum DelimitedTableParser {
         return .none()
     }
 
+    /// Whether this comma is the one inside "1,250" rather than a separator.
+    ///
+    /// Found by driving it: a reply reading "total 1,250 THB" over two lines
+    /// split into a two-column grid with the thousands cut off in the first
+    /// column. A comma between two digits is part of a number in every locale
+    /// that writes numbers that way, and a CSV that means a comma there quotes
+    /// the field — so this loses nothing and stops the most common false table
+    /// there is, money.
+    static func groupsANumber(at index: Int, in characters: [Character]) -> Bool {
+        guard characters[index] == "," , index > 0, index + 1 < characters.count else { return false }
+        return characters[index - 1].isNumber && characters[index + 1].isNumber
+    }
+
     /// Whether a line's fields read as data rather than as a sentence that
     /// happens to contain commas.
     ///
@@ -138,7 +151,7 @@ public enum DelimitedTableParser {
                     continue
                 }
                 quoted.toggle()
-            } else if character == delimiter, !quoted {
+            } else if character == delimiter, !quoted, !groupsANumber(at: index, in: characters) {
                 fields.append(current.trimmingCharacters(in: .whitespaces))
                 current = ""
             } else {
