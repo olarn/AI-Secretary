@@ -312,15 +312,16 @@ The current phase for version-bumping purposes (`AppVersion.swift`,
   เป็นไฟล์จริง รันเทสรอบเดียวเขียนบทสนทนาปลอม 9 อันลงไฟล์ของเจ้าของ
 
 ## Phase 11: ทำงานกับ web app ใดๆ แทน user
-- [ ] user สามารถบอก app ได้ ว่าให้ทำงานกับ web ใดๆ ผ่าน chat ได้ 
+- [ ] user สามารถบอก app ได้ ว่าให้ทำงานกับ web ใดๆ ผ่าน chat ได้ (ผ่าน Chrome extension)
 - [ ] user จะส่ง url ให้ทาง chat แล้ว app จะเริ่มขอ permission 
 - [ ] app ตรวจสอบว่า web app นั้นคืออะไร และทำความเข้าใจ context ของ user 
 - [ ] user จะส่งข้อมูลให้ app ได้ ในกรณีที่ app ต้อง submit ข้อมูลลง web (data entry) โดยข้อมูลที่รองรับคือ 
-  - [] text ใน chat เป็นภาษาธรรมชาติ, AI จะตีความเพื่อ map เข้ากับ web
-  - [] text ใน chat ด้วย markdown, หรือ CSV (เมื่อ paste ลงไปใน chat, content ใน chat window จะแสดงเป็น read format) 
-  - [] upload file ได้ ด้วยการ drag/drop ใน text box หรือบอก AI ว่าจะ upload แล้ว AI จะส่ง open file button ให้ user กดเปิด open file dialog
-  - [] รองรับ .md, .csv, JSON, key:value, รูปภาพที่เป็น text และ AI แกะ content ออกมา
+  - [ ] text ใน chat เป็นภาษาธรรมชาติ, AI จะตีความเพื่อ map เข้ากับ web
+  - [ ] text ใน chat ด้วย markdown, หรือ CSV (เมื่อ paste ลงไปใน chat, content ใน chat window จะแสดงเป็น read format) 
+  - [ ] upload file ได้ ด้วยการ drag/drop ใน text box หรือบอก AI ว่าจะ upload แล้ว AI จะส่ง open file button ให้ user กดเปิด open file dialog
+  - [ ] รองรับ .md, .csv, JSON, key:value, รูปภาพที่เป็น text และ AI แกะ content ออกมา
 - [ ] AI จะตีความและ confirm user ถ้าเนื้อหากำกวม
+- [ ] test scenario: ใช้ chrome เปิด gmail ที่ให้ user login รอไว้ก่อน แล้วส่ง test email ไปที่ olarn.u@odds.team
 
 ## Phase 12: Liquid Glass Theme
   ตามหลัก 10 ข้อของ Liquid Glass ที่เจ้าของสรุปไว้ (2026-08-04) เลขข้อตรงกับต้นฉบับ
@@ -328,15 +329,15 @@ The current phase for version-bumping purposes (`AppVersion.swift`,
   ข้อเท็จจริงใต้แต่ละข้อสำรวจจากโค้ดจริงตอนตั้ง backlog ไม่ใช่การเดา — ถ้าโค้ดขยับไปแล้วให้ตรวจซ้ำ
 - [ ] **ด่าน — ทดสอบว่า glass ทำงานจริงบนหน้าต่างที่ไม่เป็น key ก่อนทำทุกข้อ
   ถ้าไม่ผ่าน ไม่ต้องไปต่อ ทั้งเฟสนี้ตกไป**
-  - หน้าต่างของแอปนี้ถูกออกแบบให้ไม่เป็น key window ตลอดชีวิต และ AppKit ถอด accent ออกจาก
+  - [ ] หน้าต่างของแอปนี้ถูกออกแบบให้ไม่เป็น key window ตลอดชีวิต และ AppKit ถอด accent ออกจาก
     tinted control เมื่อหน้าต่างไม่ใช่ key มาแล้วครั้งหนึ่ง — นั่นคือที่มาของ `PanelToggleStyle`
     ถ้า `.glass` ประพฤติแบบเดียวกัน ผิวทั้งเฟสจะดูตายตลอดเวลา ซึ่งแย่กว่าของเดิมที่มีอยู่
-  - **อ่านโค้ดหรือเอกสารแล้วตอบไม่ได้** เอกสารของ Apple ไม่ได้พูดถึงกรณี non-activating panel
+  - [ ] **อ่านโค้ดหรือเอกสารแล้วตอบไม่ได้** เอกสารของ Apple ไม่ได้พูดถึงกรณี non-activating panel
     ต้องเปิดแอปแล้วมองด้วยตา ทั้งตอนที่แอปเป็น frontmost และตอนที่ไปคลิก Finder ทิ้งไว้
-  - spike ให้เล็กที่สุด: ตัวบับเบิล + แถวปุ่มท้ายกล่อง เท่านั้น ห้ามลาม ถ้าไม่ผ่านจะได้ทิ้งง่าย
-  - ทำก่อน #0 ได้โดยไม่ต้องขยับ deployment target — ห่อ spike ด้วย `if #available(macOS 26, *)`
+  - [ ] spike ให้เล็กที่สุด: ตัวบับเบิล + แถวปุ่มท้ายกล่อง เท่านั้น ห้ามลาม ถ้าไม่ผ่านจะได้ทิ้งง่าย
+  - [ ] ทำก่อน #0 ได้โดยไม่ต้องขยับ deployment target — ห่อ spike ด้วย `if #available(macOS 26, *)`
     ชั่วคราว เพื่อไม่ให้การทดสอบกลายเป็นการตัดสินใจเรื่อง macOS 14/15 ไปด้วยกัน
-  - ถ้าไม่ผ่าน: จดผลลงที่นี่ว่าเห็นอะไร แล้วปิดเฟส อย่าปล่อยให้เป็นข้อค้างที่ใครมาเริ่มใหม่ได้
+  - [ ] ถ้าไม่ผ่าน: จดผลลงที่นี่ว่าเห็นอะไร แล้วปิดเฟส อย่าปล่อยให้เป็นข้อค้างที่ใครมาเริ่มใหม่ได้
 - [ ] **#0 ขยับ deployment target `macOS 14` → `macOS 26`** (`code/Package.swift:7`) — API ชุดนี้
   (`glassEffect`, `GlassEffectContainer`, `.buttonStyle(.glass)`) มีตั้งแต่ macOS 26 คงไว้ที่ 14
   แปลว่าทุกจุดต้องมี `if #available` คู่กับทางสำรองของเดิม คือเขียนสองหน้าตาแล้วต้องดูแลทั้งคู่
@@ -360,7 +361,7 @@ The current phase for version-bumping purposes (`AppVersion.swift`,
   `glassEffectID` morph ข้ามหน้าต่างไม่ได้ ตัวอย่าง "กล่องแชตขยายจากไอคอนตัวละคร" จึงทำด้วย
   SwiftUI morph ไม่ได้เลย — ต้องเลือกระหว่างขยับ frame ของ panel เองแบบ AppKit (ใกล้เคียง
   ไม่ใช่ morph จริง) หรือยุบเป็นหน้าต่างเดียว ซึ่งรื้อ `placeBubble`/`GripCorner`/การลากตัวละคร
-  - และทั้งแอปมี `withAnimation` อยู่ที่เดียว (`UsageWindow.swift`) ข้อนี้จึงไม่ใช่การปรับ theme
+  - [ ] และทั้งแอปมี `withAnimation` อยู่ที่เดียว (`UsageWindow.swift`) ข้อนี้จึงไม่ใช่การปรับ theme
     แต่เป็นการสร้างของใหม่
 - [ ] **#5 ห้ามซ้อน glass หลายชั้น** — มี 25 จุดที่วาดพื้นหลังเอง ควรเป็น glass แค่ ~5 จุดตามข้อ 1
   ที่เหลือ (กล่องข้อความ, badge, บล็อกโค้ด, การ์ด approval/`/run`/onboarding) อยู่ในชั้นเนื้อหา
