@@ -281,11 +281,19 @@ final class ClaudeCodeProviderStreamTests: XCTestCase {
         }
     }
 
-    /// Claude Code scopes session lookup to the working directory, so a session
-    /// started in the scratch directory cannot be resumed from inside a project.
-    /// Carrying the id across the move produced "No conversation found with
-    /// session ID" on the first message after approving a project.
-    func testMovingToAnotherDirectoryDropsTheSession() {
+    /// Moving keeps the session, and this test used to assert the opposite.
+    ///
+    /// The belief was that Claude Code scoped session lookup to the working
+    /// directory. Measured against 2.1.220 on 2026-08-06 it does not: a session
+    /// created in one directory resumes from another and still remembers.
+    /// Dropping it pre-emptively cost the first message's context every time a
+    /// project was approved, and silently beat Chat History — a reopened
+    /// conversation lost its thread on the first turn, before the resume was
+    /// ever tried.
+    ///
+    /// Trying and failing is the better failure: a session that really is gone
+    /// comes back as `.staleSession`, which starts a fresh one and says so.
+    func testMovingToAnotherDirectoryKeepsTheSession() {
         let provider = makeProvider()
         provider.prepare(workingDirectory: URL(fileURLWithPath: "/tmp/scratch"), additionalDirectories: [], allowedTools: nil)
         _ = provider.handle(line: #"{"type":"system","subtype":"init","session_id":"scratch-session"}"#)
@@ -293,7 +301,17 @@ final class ClaudeCodeProviderStreamTests: XCTestCase {
 
         provider.prepare(workingDirectory: URL(fileURLWithPath: "/tmp/project"), additionalDirectories: [], allowedTools: nil)
 
-        XCTAssertNil(provider.sessionID, "A session from another directory can't be resumed")
+        XCTAssertEqual(provider.sessionID, "scratch-session", "the thread survives the move")
+    }
+
+    /// The safety net that makes the above safe to rely on: a session that has
+    /// genuinely gone is recognised, so the turn starts over and reports it
+    /// instead of failing.
+    func testAGoneSessionIsRecognisedFromWhatClaudeCodePrints() {
+        XCTAssertTrue(ClaudeCodeProvider.isMissingSession(
+            "No conversation found with session ID: 00000000-0000-0000-0000-000000000000"
+        ))
+        XCTAssertFalse(ClaudeCodeProvider.isMissingSession("some other failure"))
     }
 
     func testStayingInTheSameDirectoryKeepsTheSession() {

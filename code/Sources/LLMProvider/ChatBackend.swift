@@ -48,26 +48,31 @@ public extension WorkspaceScopedProvider {
 }
 
 extension ClaudeCodeProvider: WorkspaceScopedProvider {
-    /// Changing the directory also drops the session.
+    /// Changing the directory no longer drops the session.
     ///
-    /// This was written believing Claude Code scoped session lookup to the
-    /// working directory, so that resuming from elsewhere failed with "No
+    /// It used to, on the belief that Claude Code scoped session lookup to the
+    /// working directory — resuming from elsewhere failing with "No
     /// conversation found with session ID". Measured against 2.1.220 on
-    /// 2026-08-06 that is **not** true: a session created in one directory
-    /// resumes from another and still remembers. The reset stays anyway, for
-    /// the reason that survives the correction — a session carries the tools
-    /// and the directory it was created with, and silently continuing a thread
-    /// that believes it is somewhere else is worse than starting a clean one
-    /// the person can see beginning.
+    /// 2026-08-06 that is not true: a session created in one directory resumes
+    /// from another and still remembers.
+    ///
+    /// The pre-emptive reset had to go because it silently beat Chat History.
+    /// Reopening a conversation adopts its session; resolving the project on
+    /// the first turn then moved the directory and threw the session away
+    /// before it was ever used — so the thread came back on screen with none
+    /// of it behind the answers, and nothing said so, because no resume was
+    /// even attempted.
+    ///
+    /// Trying and failing is strictly better than not trying: a session that
+    /// really has gone comes back as `.staleSession`, which starts a fresh one
+    /// *and* says so. Directory and tools are rebuilt into the argv on every
+    /// turn regardless — the session only carries what was said.
     public func prepare(workingDirectory: URL?, additionalDirectories: [URL], allowedTools: [String]?) {
         var updated = configuration
-        let moved = updated.workingDirectory?.standardizedFileURL
-            != workingDirectory?.standardizedFileURL
         updated.workingDirectory = workingDirectory
         updated.additionalDirectories = additionalDirectories
         if let allowedTools { updated.allowedTools = allowedTools }
         configuration = updated
-        if moved { resetSession() }
     }
 
     public func resetConversation() { resetSession() }
