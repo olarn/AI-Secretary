@@ -10,11 +10,15 @@ import UniformTypeIdentifiers
 /// greyed out in the panel rather than refused afterwards.
 enum AttachmentPicker {
     @MainActor
-    static func promptForFile(message: String) -> URL? {
+    static func promptForFiles(message: String) -> [URL] {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
-        panel.allowsMultipleSelection = false
+        // Several at once: the data for one form is often several files — the
+        // rows in one, the attachment to upload in another — and making that
+        // three trips through a dialog is three chances to send the wrong one.
+        // The list has its own cap and says so when it is reached.
+        panel.allowsMultipleSelection = true
         panel.allowedContentTypes = [
             .plainText, .commaSeparatedText, .tabSeparatedText, .json, .yaml, .log,
             .png, .jpeg, .heic, .gif, .webP, .tiff,
@@ -29,7 +33,7 @@ enum AttachmentPicker {
         NSApp.activate(ignoringOtherApps: true)
 
         // Esc has to cancel this dialog, not the chat window behind it.
-        guard GlobalHotKeys.whileSuspended({ panel.runModal() }) == .OK else { return nil }
-        return panel.url
+        guard GlobalHotKeys.whileSuspended({ panel.runModal() }) == .OK else { return [] }
+        return panel.urls
     }
 }

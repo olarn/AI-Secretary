@@ -224,7 +224,26 @@ struct ChatPanelView: View {
     /// capped, rather than capping the field with `lineLimit`. Both look the same
     /// until you reach for the wheel: a line-limited field scrolls only to follow
     /// the caret, and a wheel over it does nothing at all.
+    /// The composer: what is attached, and what is being typed, inside one
+    /// box.
+    ///
+    /// The chips live *in* the field rather than above it because that is what
+    /// they are — part of the message being written, not a separate thing that
+    /// happens to be nearby. Sending takes both, and the box that Return
+    /// belongs to should look like it holds both.
     private var messageBox: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if !secretary.attachments.isEmpty { attachmentRow }
+            messageField
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .background(RoundedRectangle(cornerRadius: 6).fill(Color(nsColor: .textBackgroundColor)))
+        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.4), lineWidth: 1))
+        .overlay(alignment: .bottomTrailing) { sendGlyph }
+    }
+
+    private var messageField: some View {
         ScrollView(.vertical) {
             // The persona's own name, not "the Secretary": the app can be
             // several people and the box should ask for whoever is listening.
@@ -267,11 +286,6 @@ struct ChatPanelView: View {
         // Keeps the newest line in view as the message grows, which is where the
         // caret is while typing.
         .defaultScrollAnchor(.bottom)
-        .padding(.horizontal, 6)
-        .padding(.vertical, 4)
-        .background(RoundedRectangle(cornerRadius: 6).fill(Color(nsColor: .textBackgroundColor)))
-        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.4), lineWidth: 1))
-        .overlay(alignment: .bottomTrailing) { sendGlyph }
     }
 
     /// One line of the message font, measured rather than guessed — a fraction
@@ -1338,8 +1352,7 @@ struct ChatPanelView: View {
     /// rather than a button beside it.
     private var inputRow: some View {
         VStack(alignment: .leading, spacing: appearance.settings.panelSpacing) {
-            if let asking = secretary.fileRequestDescription { fileRequestRow(asking) }
-            if !secretary.attachments.isEmpty { attachmentRow }
+            if let asking = secretary.fileRequestDescription { fileRequestCard(asking) }
             messageBox
         }
         // The drop target is the whole composer, not the text field alone: the
@@ -1360,7 +1373,12 @@ struct ChatPanelView: View {
     /// The files waiting to go with the next message, each with a way off the
     /// list. Attached and invisible is the state that gets a file sent twice.
     private var attachmentRow: some View {
-        HStack(spacing: appearance.settings.panelSpacing) {
+        // Scrolls sideways rather than widening the box. Five files with long
+        // names are wider than any chat panel, and a row that can push the box
+        // out is a row that decides the window's width — the same mistake the
+        // panels were structurally stopped from making.
+        ScrollView(.horizontal) {
+            HStack(spacing: appearance.settings.panelSpacing) {
             ForEach(secretary.attachments) { attachment in
                 HStack(spacing: 4) {
                     Image(systemName: attachment.kind == .image ? "photo" : "doc.text")
@@ -1379,28 +1397,49 @@ struct ChatPanelView: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
                 .background(Color.secondary.opacity(0.12), in: Capsule())
+                }
             }
+            .padding(.vertical, 1)
         }
+        .scrollIndicators(.never)
     }
 
-    /// The assistant asking for a file. A button, not a path: nobody knows
-    /// where their spreadsheet is in a path, and the panel is also the only way
-    /// a sandboxed build could ever open one.
-    private func fileRequestRow(_ asking: String) -> some View {
-        HStack(spacing: appearance.settings.panelSpacing) {
-            Button {
-                if let url = AttachmentPicker.promptForFile(message: asking) {
-                    secretary.attach(url)
-                }
-            } label: {
-                Label("Choose \(asking)…", systemImage: "paperclip")
-            }
-            .buttonStyle(.bordered)
-            Button("Not now") { secretary.dismissFileRequest() }
-                .buttonStyle(.plain)
+    /// The assistant asking for a file.
+    ///
+    /// A card rather than a line of buttons, and its own colour: this is a
+    /// question waiting on the person, which is what the approval card is too —
+    /// but nothing here acts on their behalf, so it must not wear the colour
+    /// that means "something is about to happen as you". Teal against the
+    /// orange and red of the cards that do.
+    ///
+    /// A button, not a path: nobody knows where their spreadsheet is in a path,
+    /// and the panel is also the only way a sandboxed build could ever open one.
+    private func fileRequestCard(_ asking: String) -> some View {
+        VStack(alignment: .leading, spacing: appearance.settings.panelSpacing) {
+            Label("Send me a file?", systemImage: "paperclip")
+                .font(.system(size: appearance.settings.footnoteFontSize, weight: .semibold))
+            Text(asking)
+                .font(.system(size: appearance.settings.footnoteFontSize))
+                .fixedSize(horizontal: false, vertical: true)
+            Text("Markdown, CSV, JSON, text or an image — or drag one onto the box below.")
+                .font(.system(size: appearance.settings.hintFontSize))
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: appearance.settings.panelSpacing * 1.3) {
+                Button("Choose…") {
+                    for url in AttachmentPicker.promptForFiles(message: asking) {
+                        secretary.attach(url)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                Button("Not now") { secretary.dismissFileRequest() }
+                    .buttonStyle(.bordered)
+            }
+            .font(.system(size: appearance.settings.footnoteFontSize))
         }
-        .font(.system(size: appearance.settings.footnoteFontSize))
+        .padding(appearance.settings.panelPadding)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.teal.opacity(0.14), in: RoundedRectangle(cornerRadius: 8))
     }
 
     /// The ↵'s point size, relative to the message text. Was 1.1 — 10% smaller
