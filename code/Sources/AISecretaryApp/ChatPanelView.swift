@@ -796,7 +796,10 @@ struct ChatPanelView: View {
             // failed one, and a reply still streaming has yet to be stripped at
             // all — neither should put a fenced block on screen.
             let body = LoopBlock.parse(MessageChoices.parse(entry.text).body).body
-            let parts = messageParts(of: MarkdownTableParser.segments(of: body))
+            // Pasted rows count as a table too. Someone handing over data has
+            // it as CSV far more often than as pipes, and a wall of commas is
+            // exactly what they can't check before it is typed into a form.
+            let parts = messageParts(of: DelimitedTableParser.segments(of: body))
             // Boxes within one turn sit closer together than turns do, but not
             // as close as they were: three boxes 5pt apart read as one striped
             // block rather than as three things.
