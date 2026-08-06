@@ -286,11 +286,28 @@ The current phase for version-bumping purposes (`AppVersion.swift`,
 - [x] ขอด้วยภาษาคนได้เช่นกัน ผ่าน block ```run — ปลอดภัยเพราะ "ขอ" ไม่ใช่ "ทำ": ไปได้ไกลสุด
   แค่การ์ดยืนยัน step ซึ่งเป็นด่านเดียวกับที่พิมพ์ `/run` เอง
 
-## Phase 10: Liquid Glass Theme
-ตามหลัก 10 ข้อของ Liquid Glass ที่เจ้าของสรุปไว้ (2026-08-04) เลขข้อตรงกับต้นฉบับ
-มี **ด่าน** อยู่ก่อน #0 ต้องผ่านก่อนถึงจะเริ่มข้อไหนก็ตาม รวมทั้ง #0 ด้วย
-ข้อเท็จจริงใต้แต่ละข้อสำรวจจากโค้ดจริงตอนตั้ง backlog ไม่ใช่การเดา — ถ้าโค้ดขยับไปแล้วให้ตรวจซ้ำ
+## Phase 10: 
+ - [ ] เพิ่มเมนู Chat History ใน Menu icon, อยู่ระหว่างเมนู New Conversation และ Hide Character
+ - [ ] มีเส้นคั่น group ก่อนเมนู Hide Character
+ - [ ] เมื่อเริ่ม Chat, app จะเพิ่ม history ในเมนูนั้น (app ตั้งชื่อให้ด้วยจาก context) และ app จะคอยจำ context ที่คุยกันไว้ด้วย
+ - [ ] เมื่อ new chat, app จะเก็บ chat เดิมลง history แล้วสร้าง chat sessionใหม่แทนใน chat window เดิม และ clear content ใน window เดิมด้วย
+  - [ ] เมื่อเลือก chat ใน history, chat window จะแสดง content ของ history นั้น และ app จะดึง context เดิมและคุยต่อได้เลย
+  - [ ] Chat History มีสูสงุด 10 รายการ และมี menu Clear all
 
+## Phase 11: ทำงานกับ web app ใดๆ แทน user
+- [ ] user สามารถบอก app ได้ ว่าให้ทำงานกับ web ใดๆ ผ่าน chat ได้ 
+- [ ] user จะส่ง url ให้ทาง chat แล้ว app จะเริ่มขอ permission 
+- [ ] app ตรวจสอบว่า web app นั้นคืออะไร และทำความเข้าใจ context ของ user 
+- [ ] user จะส่งข้อมูลให้ app ได้ ในกรณีที่ app ต้อง submit ข้อมูลลง web (data entry) โดยข้อมูลที่รองรับคือ 
+  - text ใน chat เป็นภาษาธรรมชาติ, AI จะตีความเพื่อ map เข้ากับ web
+  - text ใน chat ด้วย markdown, หรือ CSV (เมื่อ paste ลงไปใน chat, content ใน chat window จะแสดงเป็น read format) 
+  - upload file ได้ support :- .md, .csv, JSON, key:value
+- [ ] AI จะตีความและ confirm user ถ้าเนื้อหากำกวม
+
+## Phase 12: Liquid Glass Theme
+  ตามหลัก 10 ข้อของ Liquid Glass ที่เจ้าของสรุปไว้ (2026-08-04) เลขข้อตรงกับต้นฉบับ
+  มี **ด่าน** อยู่ก่อน #0 ต้องผ่านก่อนถึงจะเริ่มข้อไหนก็ตาม รวมทั้ง #0 ด้วย
+  ข้อเท็จจริงใต้แต่ละข้อสำรวจจากโค้ดจริงตอนตั้ง backlog ไม่ใช่การเดา — ถ้าโค้ดขยับไปแล้วให้ตรวจซ้ำ
 - [ ] **ด่าน — ทดสอบว่า glass ทำงานจริงบนหน้าต่างที่ไม่เป็น key ก่อนทำทุกข้อ
   ถ้าไม่ผ่าน ไม่ต้องไปต่อ ทั้งเฟสนี้ตกไป**
   - หน้าต่างของแอปนี้ถูกออกแบบให้ไม่เป็น key window ตลอดชีวิต และ AppKit ถอด accent ออกจาก
@@ -339,7 +356,7 @@ The current phase for version-bumping purposes (`AppVersion.swift`,
 - [ ] **#10 Focus ด้วย Glass** — หน้าต่างนี้ไม่เคยเป็น key window จึงพึ่ง focus state ของระบบไม่ได้
   ต้องวาดสถานะเอง ซึ่งเป็นเหตุผลเดียวกับที่ `PanelToggleStyle` มีอยู่ทุกวันนี้
 
-## Phase 11: App ทำงานร่วมกันได้
+## Phase 12: App ทำงานร่วมกันได้
 - [ ] User สามารถ start app พร้อมกันได้มากกว่า 1 app
 - [ ] Two or more app be able to talk to each other.
 - [ ] การทำงานร่วมกัน
@@ -353,7 +370,7 @@ The current phase for version-bumping purposes (`AppVersion.swift`,
   - [ ] ถ้า step ไหนช่วยกันทำได้ app ต้องรู้ว่า parallel ได้กี่ app, ต้องรออะไรจึงจะรู้ว่าทำแล้ว, และทำเสร็จแล้ว โดย update กันใน task log
   - [ ] prevent เรื่อง lock file และ race condition (ทำซ้ำกัน, เข้าใจว่า app อื่นทำเลยไม่ได้ทำ, ลำดับงานผิด, ข้ามลำดับงาน, infinite loog) 
 
-## Phase 12: Multi-session
+## Phase 13: Multi-session
 - Before Start : อ่าน requirement ทั้งหมดใน phase นี้ก่อน เพราะต้อง re-architecture app และต้องจัดกลุ่ม feature ที่อยู่ใน Setting, Profile, Skills ใหม่ 
 - Requirements
   - [ ] สามารถเปิด chat bubble ได้มากกว่า 1 window โดยที่แต่ละ window จะแยก Claude Session ออกจากกัน
@@ -373,12 +390,12 @@ The current phase for version-bumping purposes (`AppVersion.swift`,
     - [ ] แต่ละ session ใน menu มีปุ่มปิด ถ้าปิดก็ลบ history ไปเลย
 - Expected App Architecture
 
-## Phase 13: Loop & Notification
+## Phase 14: Loop & Notification
 - [ ] สั่งให้ loop ได้ เช่น นับถอยหลัง 5 นาทีแล้วแจ้งเตือน หรือ long run แล้วแจ้งเตือนได้
 - [ ] มี local notification เมื่อทำงานเสร็จ (notification settings ตาม macOS)
 - [ ] เมื่อ click ที่กล่อง notication, จะเปิด app และ chat window ขึ้นมา
 
-## Phase 14: Voice
+## Phase 15: Voice
 - [ ] Push-to-talk or explicit voice activation.
 - [ ] Speech-to-text, text-to-speech, interruption behavior, and privacy controls.
 - [ ] Voice must follow the same approval and auditing model as chat.
