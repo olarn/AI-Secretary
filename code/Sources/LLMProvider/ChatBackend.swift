@@ -85,16 +85,23 @@ extension ClaudeCodeProvider: WorkspaceScopedProvider {
 
     public var supportsBrowser: Bool { true }
 
-    /// Turning the browser on or off changes which tools the next session is
-    /// started with, so the current session is dropped — a resumed one keeps
-    /// the tools it was created with, and the user would be told the browser
-    /// was connected while the model still couldn't see it.
+    /// Turning the browser on or off changes the argv of the next turn, and
+    /// nothing else — the session is kept.
+    ///
+    /// It used to be dropped here, on the belief that a resumed session keeps
+    /// the tools it was created with. Measured against Claude Code 2.1.220 on
+    /// 2026-08-06 and the belief is false: a session started with no `--chrome`
+    /// and resumed *with* it reports `claude-in-chrome` connected and runs its
+    /// tools. The reset cost two things every time browsing was switched on
+    /// mid-conversation — everything said before it, and the browser's tab
+    /// group, which the extension binds to the Claude Code session. A new
+    /// session is a new group, in a new window, which is what "it opens a new
+    /// tab group every time" turned out to be.
     public func setBrowserEnabled(_ enabled: Bool) {
         var updated = configuration
         guard updated.browserEnabled != enabled else { return }
         updated.browserEnabled = enabled
         configuration = updated
-        resetSession()
     }
 }
 

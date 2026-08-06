@@ -79,3 +79,48 @@ final class BrowserToolsTests: XCTestCase {
         XCTAssertTrue(BrowserTools.readOnlyRules.contains("mcp__claude-in-chrome__get_page_text"))
     }
 }
+
+/// Switching the browser on must not cost the conversation.
+///
+/// The tab group is the visible half of this. The Claude in Chrome extension
+/// binds a group to the Claude Code session, so dropping the session mid-chat
+/// put a second group — in a second window — in front of the person, on top of
+/// losing everything said before it.
+final class BrowserSessionTests: XCTestCase {
+
+    private func provider() -> ClaudeCodeProvider {
+        ClaudeCodeProvider(
+            installation: ClaudeCodeInstallation(executableURL: URL(fileURLWithPath: "/usr/bin/true"))
+        )
+    }
+
+    func testTurningTheBrowserOnKeepsTheSession() {
+        let backend = provider()
+        backend.adoptSession("session-1")
+
+        backend.setBrowserEnabled(true)
+
+        XCTAssertEqual(backend.currentSessionID, "session-1")
+    }
+
+    func testTurningItOffKeepsItToo() {
+        let backend = provider()
+        backend.setBrowserEnabled(true)
+        backend.adoptSession("session-1")
+
+        backend.setBrowserEnabled(false)
+
+        XCTAssertEqual(backend.currentSessionID, "session-1")
+    }
+
+    /// Starting over is still starting over — that one is a new group on
+    /// purpose, because it is a new conversation.
+    func testANewConversationStillDropsIt() {
+        let backend = provider()
+        backend.adoptSession("session-1")
+
+        backend.resetConversation()
+
+        XCTAssertNil(backend.currentSessionID)
+    }
+}
