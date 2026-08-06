@@ -22,7 +22,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
         chatProvider: backend,
         // The one place that should touch the real file. Everywhere else —
         // every test — gets the in-memory default and cannot reach it.
-        conversationStore: FileConversationStore()
+        conversationStore: FileConversationStore(),
+        // Likewise: the real one copies the person's files onto disk.
+        attachmentStore: FileAttachmentStore()
     )
     private var characterPanel: FloatingPanel!
     private var chatPanel: FloatingPanel!

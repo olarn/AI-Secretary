@@ -806,7 +806,7 @@ final class AgentSessionTests: XCTestCase {
         let secretary = await busySecretary()
         secretary.submit("and another thing")
 
-        guard case .interruption(let text) = secretary.pendingDecision.toOptional() else {
+        guard case .interruption(let text, _) = secretary.pendingDecision.toOptional() else {
             return XCTFail("Expected to be asked. Got: \(secretary.pendingDecision)")
         }
         XCTAssertEqual(text, "and another thing")
@@ -898,7 +898,7 @@ final class AgentSessionTests: XCTestCase {
         secretary.submit("second extra")
 
         XCTAssertEqual(secretary.queuedMessages, ["first extra"])
-        guard case .interruption(let text) = secretary.pendingDecision.toOptional() else {
+        guard case .interruption(let text, _) = secretary.pendingDecision.toOptional() else {
             return XCTFail("the newest one is the question now")
         }
         XCTAssertEqual(text, "second extra")

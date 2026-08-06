@@ -108,6 +108,22 @@ public enum PlannedOperation: Equatable, Sendable {
     }
 }
 
+/// Something typed while a turn was running, kept whole until its turn comes.
+///
+/// The files travel with the words because they were handed over together. A
+/// queue of strings dropped them: the attachment was taken off the list when
+/// the person pressed Return, and the message that finally ran mentioned a
+/// spreadsheet nobody had sent.
+public struct QueuedMessage: Equatable, Sendable {
+    public let text: String
+    public let attachments: [Attachment]
+
+    public init(text: String, attachments: [Attachment] = []) {
+        self.text = text
+        self.attachments = attachments
+    }
+}
+
 /// A request waiting on the user: either confirm an action, or pick a project.
 public enum PendingDecision: Equatable, Sendable {
     case approval(ApprovalRequest, operation: PlannedOperation)
@@ -128,7 +144,7 @@ public enum PendingDecision: Equatable, Sendable {
     /// work thrown away. Both answers are reasonable — wait your turn, or drop
     /// that and do this — and which one is right depends on what the person
     /// meant, which only they know.
-    case interruption(text: String)
+    case interruption(text: String, attachments: [Attachment])
     /// A link arrived in chat and the assistant is being asked whether to go
     /// and work in that site as the person. Nothing has been opened yet.
     case website(WebTaskRequest)
@@ -161,6 +177,16 @@ public final class Secretary {
     public private(set) var showsActivity: Bool
     /// Whether the assistant is connected to the user's Chrome.
     public private(set) var browserEnabled: Bool
+    /// Files handed over for the next message, waiting above the input.
+    ///
+    /// Observed because they are on screen with an × each: something the person
+    /// attached and can't see attached is something they will attach twice.
+    public private(set) var attachments: [Attachment] = []
+    /// What the assistant has asked for a file for, when it has. Shows the
+    /// open-file button; cleared as soon as one is chosen or the person moves
+    /// on, so a button offering to pick "the spreadsheet" never outlives the
+    /// question that wanted it.
+    public private(set) var fileRequest: Option<String> = .none()
     /// The standing check-back, when one is running: every so often the
     /// Secretary asks itself the question the user left standing, and answers
     /// into the conversation. Observed so the panel can show that it is on and
@@ -252,6 +278,11 @@ public final class Secretary {
     @ObservationIgnored private var _sessionAgentTools: Set<String> = []
     /// Sites the person has agreed the assistant may work in, this session.
     @ObservationIgnored private var webSites = WebSiteGrants()
+    @ObservationIgnored private let attachmentStore: AttachmentStaging
+    /// Whether anything has been staged, so the backend is only pointed at the
+    /// staging folder once there is something in it — `--add-dir` on a folder
+    /// that doesn't exist is an argument the CLI has to reject.
+    @ObservationIgnored private var stagedThisSession = false
     /// This turn's activity entry. Without it, a later turn would find the
     /// previous turn's box by kind and overwrite that history instead of
     /// starting its own.
@@ -315,6 +346,10 @@ public final class Secretary {
         // to override, and the ones that forgot were the ones that had nothing
         // to do with history.
         conversationStore: ConversationStoring = InMemoryConversationStore(),
+        // Nowhere by default, for the same reason as the history store: the
+        // real one copies the person's files onto disk, which no test should
+        // have to remember to opt out of.
+        attachmentStore: AttachmentStaging = InMemoryAttachmentStore(),
         discoverSkills: @escaping ([String]) -> [SkillInfo] = { SkillDiscovery.discover(projectPaths: $0) }
     ) {
         self.profile = profile
@@ -331,6 +366,7 @@ public final class Secretary {
         self.browserEnabled = browserPreference.browserEnabled
         self.chatProvider = chatProvider
         self.conversationStore = conversationStore
+        self.attachmentStore = attachmentStore
         // A history that failed to load reads as an empty one. The alternative
         // is refusing to start over a file of old chat, which trades the whole
         // app for the part of it that remembers.
@@ -365,7 +401,11 @@ public final class Secretary {
     // MARK: - Entry point
 
     public func submit(_ text: String) {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        var trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Dragging a file in and pressing Return is a complete request — the
+        // file is the message. Requiring words as well would leave the person
+        // typing "here" to send what they had already handed over.
+        if trimmed.isEmpty, !attachments.isEmpty { trimmed = "Here's the file." }
         guard !trimmed.isEmpty else { return }
         // Typing instead of answering drops whatever was waiting — but not
         // silently. It used to vanish, and the next reply then claimed the
@@ -375,7 +415,14 @@ public final class Secretary {
         // the transcript, because the model's belief is the half that produced
         // the false claim.
         dropPendingDecision()
-        say(.user, trimmed)
+
+        // The files ride with this message and this message only. Taken off the
+        // list here, before anything can fail, so a refused or queued turn
+        // never leaves them attached to the *next* thing typed.
+        let carried = attachments
+        attachments = []
+        fileRequest = .none()
+        say(.user, ([trimmed] + carried.map(attachmentLine)).joined(separator: "\n"))
 
         // Local commands first: never hit the network or the state machine.
         if trimmed.hasPrefix("/") {
@@ -395,15 +442,26 @@ public final class Secretary {
                 I'm still on the last one. Shall this wait its turn, or does it \
                 replace what I'm doing?
                 """)
-            pendingDecision = .some(.interruption(text: trimmed))
+            pendingDecision = .some(.interruption(text: trimmed, attachments: carried))
             return
         }
 
-        beginTurn(trimmed)
+        beginTurn(trimmed, attachments: carried)
+    }
+
+    /// The message as the model receives it: what was typed, plus where the
+    /// staged copies of any attached files are.
+    ///
+    /// The paths go to the model and not to the screen. On screen the person
+    /// sees the names of their own files, which is what they handed over; a
+    /// line of Application Support path is noise to them and the address the
+    /// assistant needs.
+    private func carriedMessage(_ text: String, _ attached: [Attachment]) -> String {
+        attached.isEmpty ? text : text + "\n" + attachmentNote(attached)
     }
 
     /// Everything `submit` does once it is settled that this message runs now.
-    private func beginTurn(_ trimmed: String) {
+    private func beginTurn(_ trimmed: String, attachments carried: [Attachment] = []) {
         let taskID = String(UUID().uuidString.prefix(8).lowercased())
         // A link is a request to go somewhere, and where it goes is someone
         // else's site holding the person's signed-in session. Asked here rather
@@ -412,7 +470,12 @@ public final class Secretary {
         // of choices.
         if askAboutSite(in: trimmed, taskID: taskID) { return }
         activeTaskID = .some(taskID)
-        activeRequestText = .some(trimmed)
+        // What the model is answering, which is the typed words plus where the
+        // staged files are. Classification below sees only what was typed: the
+        // note is a list of paths, and one read as a command turned "read this"
+        // into a request to open a project called "what they asked:".
+        let sending = carriedMessage(trimmed, carried)
+        activeRequestText = .some(sending)
         audit.record(AuditEntry(taskID: taskID, kind: .requestReceived, detail: "message received"))
 
         activity = []
@@ -433,7 +496,7 @@ public final class Secretary {
         case .understandFile(let request, let projectQuery):
             handleTool(operation: .understand(request), projectQuery: projectQuery)
         case .unknown:
-            startChat(trimmed, taskID: taskID)
+            startChat(sending, taskID: taskID)
         }
     }
 
@@ -443,7 +506,11 @@ public final class Secretary {
     ///
     /// Session-only, like the grants and the watches: a queue that survived a
     /// relaunch would fire work nobody was there to see asked for.
-    public private(set) var queuedMessages: [String] = []
+    private(set) var queue: [QueuedMessage] = []
+
+    /// What is waiting, in words. The files waiting with them are the queue's
+    /// business, not the panel's — it counts them and shows what was typed.
+    public var queuedMessages: [String] { queue.map(\.text) }
 
     /// Whether the queue is held. The running turn can't be paused — it is one
     /// invocation of a CLI and there is nothing to pause — so this is the only
@@ -472,7 +539,7 @@ public final class Secretary {
         var ended: [String] = []
         if !queuedMessages.isEmpty {
             ended.append("\(queuedMessages.count) waiting message\(queuedMessages.count == 1 ? "" : "s")")
-            queuedMessages.removeAll()
+            queue.removeAll()
         }
         queuePaused = false
         if activeLoop.isDefined { stopLoop(because: nil); ended.append("the loop") }
@@ -500,6 +567,13 @@ public final class Secretary {
         // app is over; the next one starts by asking again, which is the whole
         // point of the grant being session-shaped.
         webSites = WebSiteGrants()
+        // The copies were taken for this conversation. Keeping them would leave
+        // someone's spreadsheet in Application Support for as long as the app
+        // is installed, for a conversation that is over.
+        attachments = []
+        fileRequest = .none()
+        stagedThisSession = false
+        attachmentStore.clear()
         instructionMemory = InstructionMemory()
         // The backend keeps its own thread; ours going quiet is not enough.
         (chatProvider as? WorkspaceScopedProvider)?.resetConversation()
@@ -649,16 +723,16 @@ public final class Secretary {
     }
 
     /// Answers the card that appears when something is typed mid-flight.
-    public func resolveInterruption(queue: Bool) {
-        guard case .interruption(let text) = pendingDecision.toOptional() else { return }
+    public func resolveInterruption(queue wait: Bool) {
+        guard case .interruption(let text, let carried) = pendingDecision.toOptional() else { return }
         pendingDecision = .none()
 
-        if queue {
-            queuedMessages.append(text)
+        if wait {
+            queue.append(QueuedMessage(text: text, attachments: carried))
             say(.secretary, "Noted — I'll come to that when this one's done.")
         } else {
             stopCurrentTurn(because: "you replaced it")
-            beginTurn(text)
+            beginTurn(text, attachments: carried)
         }
     }
 
@@ -673,9 +747,9 @@ public final class Secretary {
     /// Drops everything waiting. Said out loud, because a queue disappearing
     /// quietly is indistinguishable from a queue that ran.
     public func clearQueue() {
-        guard !queuedMessages.isEmpty else { return }
-        let count = queuedMessages.count
-        queuedMessages.removeAll()
+        guard !queue.isEmpty else { return }
+        let count = queue.count
+        queue.removeAll()
         say(.secretary, "Dropped \(count) message\(count == 1 ? "" : "s") that were waiting.")
     }
 
@@ -715,12 +789,12 @@ public final class Secretary {
 
     /// Starts the next waiting message, if this is a moment to start one.
     private func dispatchNextQueued() {
-        guard !queuePaused, !queuedMessages.isEmpty,
+        guard !queuePaused, !queue.isEmpty,
               !stateMachine.state.isBusy, !pendingDecision.isDefined
         else { return }
-        let next = queuedMessages.removeFirst()
+        let next = queue.removeFirst()
         say(.secretary, "Now, the one that was waiting:")
-        beginTurn(next)
+        beginTurn(next.text, attachments: next.attachments)
     }
 
     public func resolvePendingApproval(granted: Bool) {
@@ -752,6 +826,34 @@ public final class Secretary {
             )
         }
         execute(operation, in: request.project)
+    }
+
+    // MARK: - Files handed over
+
+    /// Takes a file the person dropped on the input or chose from the panel.
+    ///
+    /// Refusals are said in the chat rather than swallowed: a file that lands
+    /// nowhere and says nothing is one the person believes they sent.
+    public func attach(_ url: URL) {
+        attachmentStore.stage(url, existing: attachments).fold(
+            { failure in say(.secretary, failure.reason) },
+            { attachment in
+                attachments.append(attachment)
+                stagedThisSession = true
+                // The button was asking for exactly this; leaving it up would
+                // invite a second copy of the same file.
+                fileRequest = .none()
+            }
+        )
+    }
+
+    public func detach(_ id: UUID) {
+        attachments.removeAll { $0.id == id }
+    }
+
+    /// Puts the open-file button away without choosing anything.
+    public func dismissFileRequest() {
+        fileRequest = .none()
     }
 
     // MARK: - Working in a web app
@@ -825,8 +927,8 @@ public final class Secretary {
         // the message that raised the question is put in the queue rather than
         // dropped. Losing what someone typed is the one outcome neither answer
         // would have produced.
-        if case .interruption(let text) = decision {
-            queuedMessages.append(text)
+        if case .interruption(let text, let carried) = decision {
+            queue.append(QueuedMessage(text: text, attachments: carried))
             say(.secretary, "(Kept “\(text)” in the queue — you typed again before choosing.)")
             return
         }
@@ -1760,9 +1862,16 @@ public final class Secretary {
         // the backend is actually standing in.
         lastProject = primary
         let primaryID = primary.map(\.id)^.toOptional()
-        let others = approvedProjects
+        var others = approvedProjects
             .filter { $0.id != primaryID }
             .map(\.url)
+        // The staging folder, once there is something in it. This is the whole
+        // reason attachments are copied rather than linked: the backend is
+        // opened onto one folder that holds only what was handed over, instead
+        // of onto whichever folder the person happened to drag from.
+        if stagedThisSession, let staging = attachmentStore.stagingDirectory.toOptional() {
+            others.append(staging)
+        }
         scoped.prepare(
             workingDirectory: primary.map(\.url)^.getOrElse(Self.scratchDirectory),
             additionalDirectories: others,
@@ -2044,6 +2153,10 @@ public final class Secretary {
         // different path every few characters.
         let watched = success ? WatchBlock.parse(planned.body) : WatchBlock(body: planned.body, request: nil)
         let asked = success ? RunBlock.parse(watched.body) : RunBlock(body: watched.body, request: nil)
+        // The assistant asking for a file to be handed over. Read once the
+        // reply is whole, like the rest: a half-written block would put a
+        // button up asking for half a sentence.
+        let wanting = success ? AttachBlock.parse(asked.body) : AttachBlock(body: asked.body, asking: nil)
         if let missing = blocked.missing,
            let request = conversation.last(where: { $0.role == .user })?.content {
             outstanding = OutstandingRequest(request: request, missing: missing)
@@ -2089,6 +2202,10 @@ public final class Secretary {
         // into the turn that asked for it.
         if let request = watched.request { applyWatchRequest(request) }
         if let request = asked.request { applyRunRequest(request) }
+        // Only a button, and only until the next thing is typed. Asking is not
+        // reading: nothing opens a panel, and nothing is read, until the person
+        // presses it and chooses the file themselves.
+        if let asking = wanting.asking { fileRequest = .some(asking) }
     }
 
     /// Appends a step, collapsing an immediate repeat — several thinking blocks
@@ -2105,7 +2222,7 @@ public final class Secretary {
         let blocked = BlockedBlock.parse(pinned.body)
         let planned = PlanBlock.parse(blocked.body)
         let watched = WatchBlock.parse(planned.body)
-        return RunBlock.parse(watched.body).body
+        return AttachBlock.parse(RunBlock.parse(watched.body).body).body
     }
 
     /// - Parameter replyID: the bubble being written, when there is one. With
@@ -2929,6 +3046,8 @@ public final class Secretary {
 
         \(Self.loopPrompt)
 
+        \(Self.attachPrompt)
+
         \(browserNote)
 
         \(webSiteNote(hosts: webSites.sorted))
@@ -3218,6 +3337,29 @@ public final class Secretary {
     file, or when you're sure which file they mean — never guess a filename, and \
     ask which one if it isn't clear. Don't try to carry out its steps yourself \
     in this turn.
+    """
+
+    /// How the assistant asks for a file instead of asking the person to type
+    /// out what's in it.
+    ///
+    /// The button matters more than it looks. The alternative is "paste the
+    /// rows here", which is the work the person came to hand over, and "give me
+    /// the path", which nobody knows off the top of their head and which a
+    /// sandboxed build could not open anyway.
+    private static let attachPrompt = """
+    When you need data that is in a file they have — a spreadsheet of rows to \
+    enter, a document to work from, a screenshot of the form — end your message \
+    with a block like this, and nothing after it:
+
+    ```attach
+    the spreadsheet with the rows
+    ```
+
+    The app puts an open-file button in front of them; they choose the file and \
+    it comes with their next message. You can read Markdown, CSV, JSON, plain \
+    text and images. Never ask them to paste a table into the chat, and never \
+    ask for a path — ask for the file. They can also just drag one onto the \
+    message box, in which case it arrives without you asking.
     """
 
     private var helpText: String {

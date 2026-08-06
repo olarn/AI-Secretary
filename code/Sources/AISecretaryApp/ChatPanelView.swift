@@ -77,6 +77,9 @@ struct ChatPanelView: View {
     @State private var copiedBox: BoxID?
     /// Which box the pointer is over, so only that one shows its copy button.
     @State private var hoveredBox: BoxID?
+    /// Whether a file is being dragged over the composer, so there is an
+    /// outline to let go inside rather than a guess.
+    @State private var droppingFile = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -1233,7 +1236,7 @@ struct ChatPanelView: View {
                 in: RoundedRectangle(cornerRadius: 8)
             )
 
-        case .interruption(let text):
+        case .interruption(let text, _):
             VStack(alignment: .leading, spacing: appearance.settings.panelSpacing) {
                 Label("I'm still on the last one", systemImage: "clock.arrow.circlepath")
                     .font(.system(size: appearance.settings.footnoteFontSize, weight: .semibold))
@@ -1331,7 +1334,70 @@ struct ChatPanelView: View {
     /// The box spans the full width now, with the send affordance inside it
     /// rather than a button beside it.
     private var inputRow: some View {
-        messageBox
+        VStack(alignment: .leading, spacing: appearance.settings.panelSpacing) {
+            if let asking = secretary.fileRequestDescription { fileRequestRow(asking) }
+            if !secretary.attachments.isEmpty { attachmentRow }
+            messageBox
+        }
+        // The drop target is the whole composer, not the text field alone: the
+        // chips and the button below are part of "put it here", and a file let
+        // go two points outside a text field is a file the person believes they
+        // handed over.
+        .dropDestination(for: URL.self) { urls, _ in
+            for url in urls { secretary.attach(url) }
+            return !urls.isEmpty
+        } isTargeted: { droppingFile = $0 }
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(Color.accentColor, lineWidth: droppingFile ? 2 : 0)
+                .allowsHitTesting(false)
+        )
+    }
+
+    /// The files waiting to go with the next message, each with a way off the
+    /// list. Attached and invisible is the state that gets a file sent twice.
+    private var attachmentRow: some View {
+        HStack(spacing: appearance.settings.panelSpacing) {
+            ForEach(secretary.attachments) { attachment in
+                HStack(spacing: 4) {
+                    Image(systemName: attachment.kind == .image ? "photo" : "doc.text")
+                    Text(attachment.name)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Button {
+                        secretary.detach(attachment.id)
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                    }
+                    .buttonStyle(.plain)
+                    .help("Don't send this one")
+                }
+                .font(.system(size: appearance.settings.footnoteFontSize))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Color.secondary.opacity(0.12), in: Capsule())
+            }
+        }
+    }
+
+    /// The assistant asking for a file. A button, not a path: nobody knows
+    /// where their spreadsheet is in a path, and the panel is also the only way
+    /// a sandboxed build could ever open one.
+    private func fileRequestRow(_ asking: String) -> some View {
+        HStack(spacing: appearance.settings.panelSpacing) {
+            Button {
+                if let url = AttachmentPicker.promptForFile(message: asking) {
+                    secretary.attach(url)
+                }
+            } label: {
+                Label("Choose \(asking)…", systemImage: "paperclip")
+            }
+            .buttonStyle(.bordered)
+            Button("Not now") { secretary.dismissFileRequest() }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+        }
+        .font(.system(size: appearance.settings.footnoteFontSize))
     }
 
     /// The ↵'s point size, relative to the message text. Was 1.1 — 10% smaller
@@ -1373,7 +1439,11 @@ struct ChatPanelView: View {
         .padding(.bottom, 5)
     }
 
-    private var canSend: Bool { !draft.trimmingCharacters(in: .whitespaces).isEmpty }
+    /// A file on its own is a message. Dragging a spreadsheet in and pressing
+    /// Return should send it, not sit there waiting for a word to be typed.
+    private var canSend: Bool {
+        !draft.trimmingCharacters(in: .whitespaces).isEmpty || !secretary.attachments.isEmpty
+    }
 
     private var settingsSection: some View {
         VStack(alignment: .leading, spacing: appearance.settings.panelSpacing) {
