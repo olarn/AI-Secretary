@@ -287,6 +287,21 @@ final class ChatHistoryTests: XCTestCase {
         XCTAssertTrue(secretary.transcript.contains { $0.text == "two" }, "The live chat is not history")
     }
 
+    /// Losing the conversation and losing the warning about it is the worst of
+    /// both. The notice used to be written just before `newConversation`
+    /// cleared the transcript, which deleted it two lines later.
+    func testAFailedSaveIsStillOnScreenAfterTheClear() async {
+        let secretary = makeSecretary(provider: SpyWorkspaceProvider(), store: FailingConversationStore())
+        await exchange(secretary, "a conversation worth keeping")
+
+        secretary.newConversation()
+
+        XCTAssertTrue(
+            secretary.transcript.contains { $0.kind == .failure && $0.text.contains("couldn't save") },
+            "Got: \(secretary.transcript.map(\.text))"
+        )
+    }
+
     // MARK: - Across launches
 
     /// A history that emptied itself on relaunch would be a list of things you
@@ -399,5 +414,14 @@ final class ChatHistoryTests: XCTestCase {
             secretary.transcript.last?.text.contains("No past conversations yet") == true,
             "Got: \(secretary.transcript.last?.text ?? "-")"
         )
+    }
+}
+
+/// A store that always refuses, for checking that a refusal is reported.
+final class FailingConversationStore: ConversationStoring, @unchecked Sendable {
+    func load() -> Either<ConversationStoreError, [ArchivedConversation]> { .right([]) }
+
+    func save(_ conversations: [ArchivedConversation]) -> Either<ConversationStoreError, Void> {
+        .left(.writeFailed(path: "/nowhere", message: "disk is full"))
     }
 }

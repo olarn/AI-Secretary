@@ -478,7 +478,7 @@ public final class Secretary {
         // `stopCurrentTurn`, so the archived copy carries the "(stopped
         // part-way)" mark the person last saw rather than a reply that looks
         // like it finished.
-        archiveCurrentConversation()
+        let saveFailure = archiveCurrentConversation()
 
         conversation.removeAll()
         transcript.removeAll()
@@ -496,6 +496,17 @@ public final class Secretary {
                 ? "New conversation."
                 : "New conversation — stopped \(ended.joined(separator: ", "))."
         ))
+        // After the clear, so it survives it. The person has just lost the
+        // conversation from the screen; being told it also didn't reach the
+        // history is the whole point of saying it.
+        if let saveFailure {
+            transcript.append(TranscriptEntry(
+                speaker: .secretary,
+                kind: .failure,
+                text: saveFailure,
+                speakerName: profile.displayName
+            ))
+        }
     }
 
     // MARK: - Chat history
@@ -505,9 +516,10 @@ public final class Secretary {
     /// Does nothing when nobody said anything, so opening the app and pressing
     /// New Conversation twice doesn't push two blank rows in front of ten real
     /// ones.
-    private func archiveCurrentConversation() {
+    @discardableResult
+    private func archiveCurrentConversation() -> String? {
         let entries = archivableEntries(transcript)
-        guard worthArchiving(entries) else { return }
+        guard worthArchiving(entries) else { return nil }
 
         let id = resumedConversationID.getOrElse(UUID())
         // Keep the title a reopened conversation already had. It was derived
@@ -526,7 +538,7 @@ public final class Secretary {
             into: history
         )
         resumedConversationID = .none()
-        persistHistory()
+        return persistHistory()
     }
 
     /// Reopens a conversation: its words back on screen, and Claude Code's own
@@ -605,20 +617,19 @@ public final class Secretary {
         persistHistory()
     }
 
-    private func persistHistory() {
+    /// Writes the history out, and hands back what to tell the person if it
+    /// didn't work rather than saying it here.
+    ///
+    /// Returned instead of appended because of where this is called from:
+    /// `newConversation` archives and then clears the transcript, so a warning
+    /// written at this point is deleted two lines later — the person would lose
+    /// the conversation *and* the notice that it hadn't been saved. The caller
+    /// knows when the screen has settled.
+    @discardableResult
+    private func persistHistory() -> String? {
         conversationStore.save(history).fold(
-            { error in
-                // Worth a line in the conversation rather than a silent
-                // failure: the person is entitled to know the thread they just
-                // put away won't be there tomorrow.
-                self.transcript.append(TranscriptEntry(
-                    speaker: .secretary,
-                    kind: .failure,
-                    text: "I couldn't save the chat history — \(error.reason)",
-                    speakerName: self.profile.displayName
-                ))
-            },
-            { _ in }
+            { "I couldn't save the chat history — \($0.reason)" },
+            { _ in nil }
         )
     }
 
