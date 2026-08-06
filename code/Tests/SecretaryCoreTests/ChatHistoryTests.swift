@@ -348,6 +348,37 @@ final class ChatHistoryTests: XCTestCase {
         XCTAssertTrue(secretary.transcript.contains { $0.text == "the first one" })
     }
 
+    /// Driving the app produced a history row titled "/history 1": reopening a
+    /// conversation archived the command that reopened it, and every reopen
+    /// would have added another.
+    func testReopeningDoesNotArchiveTheCommandThatReopened() async {
+        let secretary = makeSecretary(provider: SpyWorkspaceProvider())
+        await exchange(secretary, "a real conversation")
+        secretary.newConversation()
+
+        secretary.submit("/history 1")
+        secretary.newConversation()
+
+        XCTAssertEqual(secretary.history.count, 1)
+        XCTAssertFalse(
+            secretary.history.contains { $0.title.hasPrefix("/") },
+            "Got: \(secretary.history.map(\.title))"
+        )
+    }
+
+    /// `/new` itself must not ride along inside the conversation it closed.
+    func testTheClosingCommandIsNotPartOfTheArchivedConversation() async {
+        let secretary = makeSecretary(provider: SpyWorkspaceProvider())
+        await exchange(secretary, "a real conversation")
+
+        secretary.submit("/new")
+
+        XCTAssertFalse(
+            secretary.history.first?.entries.contains { $0.text == "/new" } == true,
+            "Got: \(secretary.history.first?.entries.map(\.text) ?? [])"
+        )
+    }
+
     func testTheSlashCommandRefusesANumberThatIsNotThere() async {
         let secretary = makeSecretary(provider: SpyWorkspaceProvider())
         await exchange(secretary, "only one")

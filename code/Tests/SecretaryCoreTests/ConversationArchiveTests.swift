@@ -32,6 +32,38 @@ final class ConversationArchiveTests: XCTestCase {
         XCTAssertFalse(worthArchiving([TranscriptEntry(speaker: .user, kind: .activity, text: "x")]))
     }
 
+    // MARK: - Commands are not conversation
+
+    /// Reopening a conversation archived the command used to reopen it, and the
+    /// menu grew a row called "/history 1". A slash command is an instruction
+    /// to the program; it shows in the transcript so you can see it registered,
+    /// not because anyone said it.
+    func testATranscriptOfNothingButCommandsIsNotAConversation() {
+        XCTAssertFalse(worthArchiving([user("/history 1"), said("Picked up …")]))
+        XCTAssertFalse(worthArchiving([user("/new")]))
+        XCTAssertTrue(worthArchiving([user("/model sonnet"), user("now a real question")]))
+    }
+
+    func testTheTitleIsNeverACommand() {
+        XCTAssertEqual(
+            conversationTitle(from: [user("/model sonnet"), said("ok"), user("what changed?")]),
+            "what changed?"
+        )
+    }
+
+    /// The command that closed the conversation belongs to what happens next.
+    func testTheClosingCommandIsNotFiledWithTheConversation() {
+        let entries = archivableEntries([user("a real question"), said("an answer"), user("/new")])
+        XCTAssertEqual(entries.map(\.text), ["a real question", "an answer"])
+    }
+
+    /// One in the middle stays: it explains why the answers after it changed,
+    /// and a conversation that doesn't account for itself reads as broken.
+    func testACommandInTheMiddleIsKept() {
+        let entries = archivableEntries([user("question"), user("/model sonnet"), said("answer")])
+        XCTAssertEqual(entries.count, 3)
+    }
+
     // MARK: - Title
 
     func testTheTitleIsTheOpeningQuestion() {

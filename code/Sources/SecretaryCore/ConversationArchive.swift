@@ -53,6 +53,19 @@ public struct ArchivedConversation: Identifiable, Equatable, Sendable {
 /// A menu is a list you read at a glance; past a screenful it stops being one.
 public let conversationHistoryLimit = 10
 
+/// Whether the person said this to the assistant, or to the app.
+///
+/// A slash command is an instruction to the program — `/new`, `/history 2`,
+/// `/model sonnet`. It appears in the transcript because seeing what you typed
+/// is how you know it registered, but it isn't part of a conversation, and
+/// treating it as one produced a history row literally titled "/history 1":
+/// reopening a conversation archived the command used to reopen it.
+func isCommand(_ entry: TranscriptEntry) -> Bool {
+    entry.speaker == .user
+        && entry.kind == .message
+        && entry.text.trimmingCharacters(in: .whitespaces).hasPrefix("/")
+}
+
 /// Whether this conversation is worth keeping at all.
 ///
 /// The rule is that somebody said something. Opening the app, watching the
@@ -60,7 +73,19 @@ public let conversationHistoryLimit = 10
 /// the history would fill with threads nobody had, and the ten real ones would
 /// fall off the end to make room for them.
 public func worthArchiving(_ entries: [TranscriptEntry]) -> Bool {
-    entries.contains { $0.speaker == .user && $0.kind == .message }
+    entries.contains { $0.speaker == .user && $0.kind == .message && !isCommand($0) }
+}
+
+/// The conversation as it should be filed.
+///
+/// Commands stay where they fall — `/model sonnet` halfway down explains why
+/// the answers change tone after it, and removing it would leave a conversation
+/// that doesn't account for itself. The exception is the last line, which is
+/// the command that closed the conversation and belongs to what happens next
+/// rather than to what was said.
+public func archivableEntries(_ entries: [TranscriptEntry]) -> [TranscriptEntry] {
+    guard let last = entries.last, isCommand(last) else { return entries }
+    return entries.dropLast()
 }
 
 /// What to call a conversation in the menu.
@@ -71,7 +96,9 @@ public func worthArchiving(_ entries: [TranscriptEntry]) -> Bool {
 /// three failure modes for a menu label. The opening question is also what
 /// people actually search their own memory by.
 public func conversationTitle(from entries: [TranscriptEntry], limit: Int = 42) -> String {
-    let opening = entries.first { $0.speaker == .user && $0.kind == .message }?.text ?? ""
+    let opening = entries.first {
+        $0.speaker == .user && $0.kind == .message && !isCommand($0)
+    }?.text ?? ""
     let collapsed = opening
         .split(whereSeparator: \.isWhitespace)
         .joined(separator: " ")

@@ -506,7 +506,7 @@ public final class Secretary {
     /// New Conversation twice doesn't push two blank rows in front of ten real
     /// ones.
     private func archiveCurrentConversation() {
-        let entries = transcript
+        let entries = archivableEntries(transcript)
         guard worthArchiving(entries) else { return }
 
         let id = resumedConversationID.getOrElse(UUID())
