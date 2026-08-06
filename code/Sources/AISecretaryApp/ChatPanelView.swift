@@ -1381,7 +1381,7 @@ struct ChatPanelView: View {
             HStack(spacing: appearance.settings.panelSpacing) {
             ForEach(secretary.attachments) { attachment in
                 HStack(spacing: 4) {
-                    Image(systemName: attachment.kind == .image ? "photo" : "doc.text")
+                    Image(systemName: attachmentGlyph(attachment.kind))
                     Text(attachment.name)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -1404,6 +1404,19 @@ struct ChatPanelView: View {
         .scrollIndicators(.never)
     }
 
+    /// What a chip is a picture of. Says what kind of thing was attached at a
+    /// glance, which is the one question a row of names can't answer.
+    private func attachmentGlyph(_ kind: AttachmentKind) -> String {
+        switch kind {
+        case .image: return "photo"
+        case .pdf: return "doc.richtext"
+        case .sourceCode: return "chevron.left.forwardslash.chevron.right"
+        case .csv: return "tablecells"
+        case .json: return "curlybraces"
+        case .markdown, .text: return "doc.text"
+        }
+    }
+
     /// The assistant asking for a file.
     ///
     /// A card rather than a line of buttons, and its own colour: this is a
@@ -1421,7 +1434,7 @@ struct ChatPanelView: View {
             Text(asking)
                 .font(.system(size: appearance.settings.footnoteFontSize))
                 .fixedSize(horizontal: false, vertical: true)
-            Text("Markdown, CSV, JSON, text or an image — or drag one onto the box below.")
+            Text("Markdown, CSV, JSON, a PDF, source code, notes or an image — or drag one onto the box below.")
                 .font(.system(size: appearance.settings.hintFontSize))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

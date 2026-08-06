@@ -19,10 +19,17 @@ enum AttachmentPicker {
         // three trips through a dialog is three chances to send the wrong one.
         // The list has its own cap and says so when it is reached.
         panel.allowsMultipleSelection = true
+        // Broad on purpose: source files, notes, configuration and PDFs are
+        // all things people hand over, and a panel that greys out the file
+        // they came to send is a dead end with no explanation in it. `.data`
+        // catches the extensions macOS has no type for — an unnamed format is
+        // taken if its bytes are text, and refused with words if they aren't.
         panel.allowedContentTypes = [
-            .plainText, .commaSeparatedText, .tabSeparatedText, .json, .yaml, .log,
-            .png, .jpeg, .heic, .gif, .webP, .tiff,
-            UTType(filenameExtension: "md") ?? .plainText
+            .plainText, .text, .sourceCode, .script, .shellScript, .propertyList,
+            .commaSeparatedText, .tabSeparatedText, .json, .yaml, .xml, .html, .log,
+            .pdf, .png, .jpeg, .heic, .gif, .webP, .tiff,
+            UTType(filenameExtension: "md") ?? .plainText,
+            .data
         ]
         panel.prompt = "Attach"
         panel.message = "Choose \(message)"

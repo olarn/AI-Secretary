@@ -3356,8 +3356,9 @@ public final class Secretary {
     ```
 
     The app puts an open-file button in front of them; they choose the file and \
-    it comes with their next message. You can read Markdown, CSV, JSON, plain \
-    text and images. Never ask them to paste a table into the chat, and never \
+    it comes with their next message — several at once, if that is what the job \
+    needs. You can read Markdown, CSV, JSON, PDFs, source files, notes and \
+    images. Never ask them to paste a table into the chat, and never \
     ask for a path — ask for the file. They can also just drag one onto the \
     message box, in which case it arrives without you asking.
     """

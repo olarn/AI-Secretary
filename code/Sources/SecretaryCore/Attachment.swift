@@ -42,8 +42,16 @@ public enum AttachmentKind: String, Equatable, Sendable, CaseIterable {
     case markdown
     case csv
     case json
-    /// `key: value` lines, .env-shaped notes, plain text.
+    /// `key: value` lines, .env-shaped notes, plain text — and anything else
+    /// whose bytes turn out to be text.
     case text
+    /// A file of code. Its own kind rather than plain text because saying
+    /// "Swift" in the chip and in the note is the difference between "here is
+    /// a file" and "here is the thing you asked to look at".
+    case sourceCode
+    /// Read by the model, not by us: a PDF is a container, and the words in it
+    /// are the point.
+    case pdf
     /// A picture with words in it — a screenshot of a form, a photo of a
     /// receipt. The model reads it; nothing here tries to.
     case image
@@ -54,17 +62,42 @@ public enum AttachmentKind: String, Equatable, Sendable, CaseIterable {
         case .csv: return "CSV"
         case .json: return "JSON"
         case .text: return "text"
+        case .sourceCode: return "source"
+        case .pdf: return "PDF"
         case .image: return "image"
         }
     }
 }
 
-/// The kind a file's name implies, or nothing when it isn't one this can use.
+/// Extensions that say "this is code", so the chip and the note can say so
+/// too.
 ///
-/// By extension, not by sniffing the bytes. A person choosing a file knows what
-/// they chose, and a mismatch between the name and the content is theirs to
-/// see — guessing past the name would mean silently treating a `.txt` as a CSV
-/// because it had commas in it.
+/// A list, and it will always be missing someone's language — which is exactly
+/// why nothing depends on it being complete. A file whose extension isn't here
+/// still gets in as text if its bytes are text; all this list changes is what
+/// the person and the model are told it is.
+let sourceCodeExtensions: Set<String> = [
+    "swift", "m", "mm", "h", "hpp", "c", "cc", "cpp", "cs", "java", "kt", "kts",
+    "go", "rs", "rb", "py", "js", "mjs", "cjs", "jsx", "ts", "tsx", "php", "pl",
+    "lua", "r", "dart", "scala", "clj", "ex", "exs", "erl", "hs", "sh", "bash",
+    "zsh", "fish", "sql", "html", "htm", "css", "scss", "less", "vue", "svelte",
+    "gradle", "cmake", "podspec", "rake", "ipynb"
+]
+
+/// Extensions that are worth naming as text even before the bytes are looked
+/// at — configuration and prose formats a person hands over constantly.
+let plainTextExtensions: Set<String> = [
+    "txt", "text", "env", "yaml", "yml", "log", "toml", "ini", "cfg", "conf",
+    "properties", "xml", "plist", "rtf", "tex", "org", "rst", "srt", "vtt", "diff", "patch"
+]
+
+/// The kind a file's name implies, or nothing when the name doesn't say.
+///
+/// By extension, not by sniffing — for the kinds that change how the file is
+/// *described*. A person choosing a file knows what they chose, and guessing
+/// past the name would mean treating a `.txt` as a CSV because it had commas in
+/// it. When the name says nothing at all, the bytes get a turn: see
+/// `textIfReadable`.
 public func attachmentKind(for name: String) -> Option<AttachmentKind> {
     // `.env`, `.gitignore`, `Makefile`: no extension, and `pathExtension` says
     // so, which had them refused as an unknown format. A name with nothing
@@ -72,15 +105,37 @@ public func attachmentKind(for name: String) -> Option<AttachmentKind> {
     // one as text is the mildest thing that could be wrong.
     let ext = (name as NSString).pathExtension.lowercased()
     if ext.isEmpty { return .some(.text) }
+    if sourceCodeExtensions.contains(ext) { return .some(.sourceCode) }
+    if plainTextExtensions.contains(ext) { return .some(.text) }
     switch ext {
     case "md", "markdown": return .some(.markdown)
     case "csv", "tsv": return .some(.csv)
-    case "json": return .some(.json)
-    case "txt", "text", "env", "yaml", "yml", "log": return .some(.text)
+    case "json", "jsonl", "geojson": return .some(.json)
+    case "pdf": return .some(.pdf)
     case "png", "jpg", "jpeg", "heic", "gif", "webp", "tiff", "bmp": return .some(.image)
     default: return .none()
     }
 }
+
+/// Whether a file the name couldn't place is text after all.
+///
+/// The alternative was a list of extensions that grows every time someone
+/// hands over a format nobody thought of — and the list is never the point,
+/// because what the model needs is only whether it can read the thing. So the
+/// name decides the *description*, and for anything left over the bytes decide
+/// admission: valid UTF-8 with no NUL in the first stretch is text.
+///
+/// A prefix rather than the whole file, because a 4MB log has to be answered
+/// as fast as a 4KB note, and a file that is text for its first few thousand
+/// bytes and binary after that is not a case worth being slow for.
+public func textIfReadable(_ prefix: Data) -> Option<AttachmentKind> {
+    guard !prefix.isEmpty, !prefix.contains(0) else { return .none() }
+    return String(data: prefix, encoding: .utf8).map { _ in AttachmentKind.text }
+        |> Option.fromOptional
+}
+
+/// How much of an unnamed file is looked at before deciding it is text.
+public let attachmentSniffBytes = 4_096
 
 /// How many files may ride along on one message.
 ///
@@ -104,7 +159,7 @@ public enum AttachmentError: Error, Equatable, Sendable {
     public var reason: String {
         switch self {
         case .unsupported(let name):
-            return "I can't take \(name) — I can read Markdown, CSV, JSON, plain text and images."
+            return "I can't take \(name) — it isn't text, and it isn't a kind of file I can open. Markdown, CSV, JSON, PDFs, source code, notes and images all work."
         case .tooLarge(let name, let bytes):
             return "\(name) is \(bytes / 1_000_000)MB, which is more than I can send in one message."
         case .tooMany(let limit):
@@ -123,11 +178,14 @@ public func admitting(
     name: String,
     bytes: Int,
     to existing: [Attachment],
-    limit: Int = attachmentLimit
+    limit: Int = attachmentLimit,
+    sniffed: Option<AttachmentKind> = .none()
 ) -> Either<AttachmentError, AttachmentKind> {
     guard existing.count < limit else { return .left(.tooMany(limit: limit)) }
     guard bytes <= attachmentMaxBytes else { return .left(.tooLarge(name: name, bytes: bytes)) }
-    return attachmentKind(for: name)
+    // The name first, the bytes second. A `.swift` file is source whatever its
+    // first four kilobytes look like; a `.bak` is whatever it turns out to be.
+    return attachmentKind(for: name).orElse(sniffed)
         .fold({ .left(.unsupported(name: name)) }, { .right($0) })
 }
 
@@ -186,7 +244,12 @@ public final class FileAttachmentStore: AttachmentStaging, @unchecked Sendable {
     public func stage(_ url: URL, existing: [Attachment]) -> Either<AttachmentError, Attachment> {
         let name = url.lastPathComponent
         let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
-        return admitting(name: name, bytes: size, to: existing).flatMap { kind in
+        // Only when the name didn't say. Opening every file to look at it would
+        // make an ordinary `.csv` wait on a read it doesn't need.
+        let sniffed = attachmentKind(for: name).isDefined
+            ? Option<AttachmentKind>.none()
+            : textIfReadable(FileAttachmentStore.prefix(of: url))
+        return admitting(name: name, bytes: size, to: existing, sniffed: sniffed).flatMap { kind in
             // The copy keeps the person's own filename, prefixed so two files
             // called `data.csv` from different folders don't overwrite each
             // other — the model is told the plain name either way.
@@ -207,6 +270,15 @@ public final class FileAttachmentStore: AttachmentStaging, @unchecked Sendable {
 
     public func clear() {
         try? FileManager.default.removeItem(at: directory)
+    }
+
+    /// The first few kilobytes, or nothing if the file can't be opened. Read
+    /// through a handle rather than `Data(contentsOf:)` so a large file doesn't
+    /// come into memory to answer a question about its first page.
+    static func prefix(of url: URL, bytes: Int = attachmentSniffBytes) -> Data {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return Data() }
+        defer { try? handle.close() }
+        return (try? handle.read(upToCount: bytes)) ?? Data()
     }
 }
 

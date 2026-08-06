@@ -17,15 +17,61 @@ final class AttachmentRuleTests: XCTestCase {
         XCTAssertEqual(attachmentKind(for: "form.png"), Option.some(.image))
     }
 
-    /// Refused rather than sent and misread. A `.pages` or `.xlsx` handed over
-    /// would reach the model as bytes it can't open, and the answer would be
-    /// about the failure rather than the data.
-    func testAFormatNothingHereCanReadIsRefused() {
-        XCTAssertEqual(attachmentKind(for: "book.xlsx"), Option.none())
+    func testSourceFilesSayTheyAreSource() {
+        for name in ["App.swift", "main.py", "index.tsx", "build.gradle", "query.sql", "deploy.sh"] {
+            XCTAssertEqual(attachmentKind(for: name), Option.some(.sourceCode), "Got: \(name)")
+        }
+    }
+
+    func testAPdfIsItsOwnThingBecauseTheModelOpensIt() {
+        XCTAssertEqual(attachmentKind(for: "invoice.PDF"), Option.some(.pdf))
+    }
+
+    func testOrdinaryNotesAndConfigurationAreText() {
+        for name in ["notes.txt", "app.toml", "settings.ini", "data.xml", "changes.patch"] {
+            XCTAssertEqual(attachmentKind(for: name), Option.some(.text), "Got: \(name)")
+        }
+    }
+
+    /// The name gets the first word. A `.swift` file is source however its
+    /// bytes read, so nothing sniffed can rename it.
+    func testTheNameWinsOverTheBytes() {
         XCTAssertEqual(
-            admitting(name: "book.xlsx", bytes: 10, to: []),
+            admitting(name: "App.swift", bytes: 10, to: [], sniffed: .some(.text)),
+            Either.right(.sourceCode)
+        )
+    }
+
+    /// The point of sniffing: an extension nobody listed still gets in, as long
+    /// as it is something the model can actually read.
+    func testAnUnknownExtensionGetsInIfItsBytesAreText() {
+        XCTAssertEqual(attachmentKind(for: "notes.zzz"), Option.none())
+        XCTAssertEqual(
+            admitting(name: "notes.zzz", bytes: 10, to: [], sniffed: textIfReadable(Data("hello".utf8))),
+            Either.right(.text)
+        )
+    }
+
+    /// Refused rather than sent and misread. A `.xlsx` is a zip: handed over,
+    /// it would reach the model as bytes it can't open, and the answer would be
+    /// about the failure rather than about the data.
+    func testSomethingThatIsNotTextAtAllIsRefused() {
+        let binary = Data([0x50, 0x4B, 0x03, 0x04, 0x00, 0x00, 0xFF, 0xFE])
+        XCTAssertEqual(textIfReadable(binary), Option.none(), "A NUL byte is the giveaway")
+        XCTAssertEqual(
+            admitting(name: "book.xlsx", bytes: 10, to: [], sniffed: textIfReadable(binary)),
             Either.left(.unsupported(name: "book.xlsx"))
         )
+    }
+
+    func testAnEmptyReadDecidesNothing() {
+        XCTAssertEqual(textIfReadable(Data()), Option.none())
+    }
+
+    /// Thai, and anything else outside ASCII, is text — the check is UTF-8, not
+    /// "looks English".
+    func testTextIsNotOnlyEnglishText() {
+        XCTAssertEqual(textIfReadable(Data("สวัสดีค่ะ".utf8)), Option.some(.text))
     }
 
     func testTheListStopsAtItsLimit() {
@@ -112,6 +158,24 @@ final class AttachmentRuleTests: XCTestCase {
 
         store.clear()
         XCTAssertFalse(FileManager.default.fileExists(atPath: staged.stagedURL.path))
+    }
+
+    /// End to end through the disk: the store is what reads the prefix, so the
+    /// rule is only real if it is applied there.
+    func testAFileWithAnUnknownExtensionIsStagedWhenItIsText() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("attach-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let readable = root.appendingPathComponent("notes.zzz")
+        try Data("just some notes\n".utf8).write(to: readable)
+        let binary = root.appendingPathComponent("thing.zzz9")
+        try Data([0x00, 0x01, 0x02, 0x00]).write(to: binary)
+
+        let store = FileAttachmentStore(directory: root.appendingPathComponent("staged"))
+        XCTAssertEqual(store.stage(readable, existing: []).fold({ _ in nil }, { $0.kind }), .text)
+        XCTAssertTrue(store.stage(binary, existing: []).isLeft, "A file of NULs is not something to send")
     }
 
     /// Two files of the same name from different folders are two files.
