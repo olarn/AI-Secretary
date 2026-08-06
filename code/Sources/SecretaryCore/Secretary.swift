@@ -129,6 +129,9 @@ public enum PendingDecision: Equatable, Sendable {
     /// that and do this — and which one is right depends on what the person
     /// meant, which only they know.
     case interruption(text: String)
+    /// A link arrived in chat and the assistant is being asked whether to go
+    /// and work in that site as the person. Nothing has been opened yet.
+    case website(WebTaskRequest)
 }
 
 /// Orchestration layer. Interprets a message, resolves context, applies policy,
@@ -247,6 +250,8 @@ public final class Secretary {
     /// "in <project>" repeated on every line.
     @ObservationIgnored private var lastProject: Option<Project> = .none()
     @ObservationIgnored private var _sessionAgentTools: Set<String> = []
+    /// Sites the person has agreed the assistant may work in, this session.
+    @ObservationIgnored private var webSites = WebSiteGrants()
     /// This turn's activity entry. Without it, a later turn would find the
     /// previous turn's box by kind and overwrite that history instead of
     /// starting its own.
@@ -400,6 +405,12 @@ public final class Secretary {
     /// Everything `submit` does once it is settled that this message runs now.
     private func beginTurn(_ trimmed: String) {
         let taskID = String(UUID().uuidString.prefix(8).lowercased())
+        // A link is a request to go somewhere, and where it goes is someone
+        // else's site holding the person's signed-in session. Asked here rather
+        // than in `submit` so the question is put whichever way the message
+        // arrived — typed, queued behind a running turn, or picked from a list
+        // of choices.
+        if askAboutSite(in: trimmed, taskID: taskID) { return }
         activeTaskID = .some(taskID)
         activeRequestText = .some(trimmed)
         audit.record(AuditEntry(taskID: taskID, kind: .requestReceived, detail: "message received"))
@@ -485,6 +496,10 @@ public final class Secretary {
         activity = []
         activityEntryID = .none()
         sessionAgentTools = []
+        // Sites go with the tools that reach them. A conversation about one web
+        // app is over; the next one starts by asking again, which is the whole
+        // point of the grant being session-shaped.
+        webSites = WebSiteGrants()
         instructionMemory = InstructionMemory()
         // The backend keeps its own thread; ours going quiet is not enough.
         (chatProvider as? WorkspaceScopedProvider)?.resetConversation()
@@ -739,6 +754,61 @@ public final class Secretary {
         execute(operation, in: request.project)
     }
 
+    // MARK: - Working in a web app
+
+    /// Raises the card when a message carries a link to a site that hasn't been
+    /// agreed to yet. Returns whether the turn should stop and wait.
+    ///
+    /// A site already granted this session goes straight through: the person
+    /// answered that question, and asking it again per page would turn the card
+    /// into something to dismiss rather than read.
+    private func askAboutSite(in text: String, taskID: String) -> Bool {
+        guard let url = webAddress(in: text).toOptional(),
+              let host = webSiteHost(of: url).toOptional(),
+              !webSites.allows(host: host)
+        else { return false }
+
+        let request = WebTaskRequest(
+            taskID: taskID,
+            url: url,
+            host: host,
+            message: text,
+            connectsBrowser: !browserEnabled
+        )
+        audit.record(AuditEntry(taskID: taskID, kind: .approvalRequested, detail: request.summary))
+        say(.secretary, """
+            \(request.url.absoluteString) — shall I work with this in your Chrome? \
+            I'd open it as you, read what's there, and tell you what the app is \
+            before doing anything in it.
+            """)
+        pendingDecision = .some(.website(request))
+        return true
+    }
+
+    /// Answers the site card. Approving grants the host for this session and,
+    /// when it was off, connects the browser — then runs the message that
+    /// raised the question, so nothing has to be typed twice.
+    public func resolveWebTask(granted: Bool) {
+        guard case .website(let request) = pendingDecision.toOptional() else { return }
+        pendingDecision = .none()
+
+        guard granted else {
+            audit.record(AuditEntry(taskID: request.taskID, kind: .approvalDenied, detail: request.summary))
+            say(.secretary, "Left it alone — I haven't opened \(request.host).")
+            return
+        }
+
+        audit.record(AuditEntry(taskID: request.taskID, kind: .approvalGranted, detail: request.summary))
+        webSites = webSites.granting(host: request.host)
+        if request.connectsBrowser { setBrowserEnabled(true) }
+        // Opening the page is the first thing this approval is for, so the tool
+        // that does it is granted here. Without this the person would answer
+        // this card and then immediately meet the refuse-then-widen card for
+        // `navigate`, which asks the same question in worse words.
+        sessionAgentTools.insert(BrowserTools.rule(for: "navigate"))
+        beginTurn(request.message)
+    }
+
     public func choose(project: Project) {
         guard case .projectChoice(_, let operation) = pendingDecision.toOptional() else { return }
         pendingDecision = .none()
@@ -766,6 +836,7 @@ public final class Secretary {
         case .approval(let request, _): what = request.commandSummary
         case .projectChoice: what = "choosing a project"
         case .instructionPlan(let plan, _, _): what = "the steps in \(plan.relativePath)"
+        case .website(let request): what = request.summary
         case .interruption: return
         }
         say(.secretary, "(Didn't do “\(what)” — you moved on before answering.)")
@@ -2859,6 +2930,8 @@ public final class Secretary {
         \(Self.loopPrompt)
 
         \(browserNote)
+
+        \(webSiteNote(hosts: webSites.sorted))
 
         \(permissionNote) If something is refused, say so plainly instead of \
         pretending it worked — the user will be offered the chance to allow it. \

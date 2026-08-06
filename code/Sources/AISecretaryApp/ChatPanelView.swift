@@ -1274,6 +1274,36 @@ struct ChatPanelView: View {
             .padding(appearance.settings.panelPadding)
             .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
 
+        case .website(let request):
+            VStack(alignment: .leading, spacing: appearance.settings.panelSpacing) {
+                Label("Work in this site as you?", systemImage: "globe")
+                    .font(.system(size: appearance.settings.footnoteFontSize, weight: .semibold))
+                Text(request.url.absoluteString)
+                    .font(.system(size: appearance.settings.footnoteFontSize, design: .monospaced))
+                    .lineLimit(2)
+                    .truncationMode(.middle)
+                // Says what the grant covers and how long it lasts. "This site"
+                // is the unit that was approved, not this one page, and the
+                // person should read that here rather than discover it later.
+                Text(
+                    request.connectsBrowser
+                        ? "Connects Chrome, then acts as you on \(request.host) for this conversation"
+                        : "Acts as you on \(request.host) for this conversation"
+                )
+                .font(.system(size: appearance.settings.footnoteFontSize))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: appearance.settings.panelSpacing * 1.3) {
+                    Button("Go ahead") { secretary.resolveWebTask(granted: true) }
+                        .buttonStyle(.borderedProminent)
+                    Button("Not this one") { secretary.resolveWebTask(granted: false) }
+                        .buttonStyle(.bordered)
+                }
+                .font(.system(size: appearance.settings.footnoteFontSize))
+            }
+            .padding(appearance.settings.panelPadding)
+            .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+
         case .instructionPlan(let plan, let risks, let changed):
             InstructionPlanCard(
                 plan: plan,
