@@ -105,8 +105,15 @@ through the `FunctionalCore` target. Failures are the left of an `Either` rather
 than `throws`, and absence is `Option` rather than `?`. SwiftUI views stay
 ordinary SwiftUI and must not import `FunctionalCore`; they cross the boundary
 through `AISecretaryApp/DomainBridge.swift`. The rules, and the Bow APIs that do
-and don't exist, are in the `swift-functional-programming` skill — read it before
-changing domain code.
+and don't exist, are in the `swift-functional-programming` skill.
+
+**เรียกสกิลนั้นก่อนแก้ไฟล์ Swift ไฟล์แรกของทุก session — ทุกไฟล์ ไม่ใช่เฉพาะที่คิดว่าเป็น
+"domain code"** เดิมเขียนว่า "read it before changing domain code" ซึ่งเป็นการให้ตัดสินเอง
+แล้วก็ถูกข้ามจริงมาแล้วทั้ง Phase 11 ที่เขียนไฟล์ใหม่ใน `SecretaryCore` ตลอดทาง เกณฑ์ใหม่
+ไม่ต้องตัดสิน: จะแตะ `.swift` ก็เรียกก่อน รวมถึงไฟล์เทสและไฟล์ที่ขอบ SwiftUI
+  — **รวมถึงตอน code review และ refactor ด้วย** ซึ่งเป็นงานเดียวกันอ่านย้อนทาง: รีวิวคือการเทียบ
+  diff กับกติกาเก้าข้อในสกิลแล้วบอกว่าผิดข้อไหนด้วยอินพุตอะไร ส่วน refactor ต้องพิสูจน์ว่า
+  ความหมายไม่เปลี่ยน (เทสเดิมต้องผ่านโดยไม่ถูกแก้ ถ้าต้องแก้เทสให้เขียว แปลว่าไม่ใช่ refactor)
 
 ## MVP scope
 

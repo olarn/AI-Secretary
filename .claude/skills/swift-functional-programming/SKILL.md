@@ -1,11 +1,13 @@
 ---
 name: swift-functional-programming
-description: Use when writing or changing Swift logic outside SwiftUI views in this repo — any file under code/Sources/AssistantState, ProjectRegistry, Permissions, ToolAdapters, LLMProvider, Credentials, or SecretaryCore. Also use when adding a Codable model, an async provider call, a permission or validation check, or when a type would otherwise be optional or throwing.
+description: Invoke before writing, reviewing OR refactoring ANY Swift in this repo — every file under code/Sources and code/Tests, new modules included, and the SwiftUI boundary too. Reading counts: a code review is judged against the nine rules here, and a refactor has to prove it kept the meaning. Read it once per session before the first edit or the first file you review. It carries Bow 0.8.0 API facts that exist nowhere else (what compiles, what doesn't) and the rule that a SwiftUI view must never import FunctionalCore. Also covers: Codable models, async provider calls, permission and validation checks, and anything that would otherwise be optional or throwing.
 ---
 
 # Swift Functional Programming (Bow)
 
 ## Overview
+
+**Read this before the first Swift edit of a session — and before reviewing or refactoring Swift, which are the same job read backwards — not when you judge the file to be "domain code".** That judgement is what gets skipped: the last session to skip it was writing new `SecretaryCore` files the whole time. The Bow facts below are the ones that cost a build cycle each time they are guessed, and they are not derivable from the surrounding code.
 
 Domain logic in this repo is written in typed functional style on [Bow](https://github.com/bow-swift/bow) 0.8.0: `Option` instead of `nil`, `Either` instead of `throws`, pure functions composed into pipelines. SwiftUI views stay ordinary SwiftUI.
 
@@ -295,7 +297,9 @@ Reach for point-free on `Option`/`Either` and on functions you want to pass arou
 | `value of type 'Option<A>' has no member 'forEach'` | Bow's `Option` is not a `Sequence` | `fold({ }, { … })`, or build a list: `opt.fold({ [] }, { [$0] })` |
 | new `throws` in a domain function | Foundation call not wrapped | wrap in the adapter, return `Either` |
 
-## Checklist before committing domain code
+## Checklist — before committing, and when reviewing or refactoring
+
+Reviewing is this list read against someone else's diff; refactoring is this list plus §8's proof that the meaning didn't move. A review that only says "looks fine" has not been done against anything.
 
 - Every new decision is a named function with a signature you could read aloud; nothing new is a class holding two dependencies and one method.
 - No `var` in a domain type, and no method returning `Void` that changes something — changes are `-ing` functions returning a new value.
@@ -311,3 +315,5 @@ Reach for point-free on `Option`/`Either` and on functions you want to pass arou
 - State-holding types are values with `-ing` methods, not classes with `var`.
 - No `XCTAssertNil`/`XCTAssertNotNil` on an `Option` — they compile and assert nothing. Use `XCTAssertEqual(x, Option.none())`.
 - `swift test` passes. If an API changed, the test changed with it — a deleted assertion is not a passing test.
+- **Reviewing:** name the rule each finding breaks (§1–§9) and the input that shows it. "This should be functional" is not a review comment.
+- **Refactoring:** the tests that covered the old shape still pass unchanged. If they had to be edited to go green, it was a behaviour change wearing a refactor's name.
