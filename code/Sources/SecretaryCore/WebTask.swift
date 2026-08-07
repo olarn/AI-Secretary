@@ -65,18 +65,23 @@ public func webSiteHost(of url: URL) -> Option<String> {
 /// addresses; a bare `example.com` deliberately does not — "check config.json"
 /// and "it's about node.js" would both become sites to ask about.
 public func webAddress(in text: String) -> Option<URL> {
-    for token in text.split(whereSeparator: \.isWhitespace) {
-        // Trailing punctuation belongs to the sentence, not the address.
-        let trimmed = token.trimmingCharacters(in: CharacterSet(charactersIn: ".,;:!?)]}>\"'”’"))
-        let candidate = trimmed.lowercased().hasPrefix("www.") ? "https://" + trimmed : trimmed
-        guard let url = URL(string: candidate),
-              let scheme = url.scheme?.lowercased(),
-              scheme == "http" || scheme == "https",
-              webSiteHost(of: url).isDefined
-        else { continue }
-        return .some(url)
-    }
-    return .none()
+    // First match wins, which `orElse` says on its own: once something is
+    // there, later tokens can't replace it. The loop this replaced said the
+    // same thing with a `continue` and a `return` you had to pair up by eye.
+    text.split(whereSeparator: \.isWhitespace)
+        .reduce(Option<URL>.none()) { found, token in found.orElse(webAddress(inToken: token)) }
+}
+
+/// One word, if it is an address.
+private func webAddress(inToken token: Substring) -> Option<URL> {
+    // Trailing punctuation belongs to the sentence, not the address.
+    let trimmed = token.trimmingCharacters(in: CharacterSet(charactersIn: ".,;:!?)]}>\"'”’"))
+    let candidate = trimmed.lowercased().hasPrefix("www.") ? "https://" + trimmed : trimmed
+    return Option.fromOptional(URL(string: candidate))
+        .filter { url in
+            let scheme = url.scheme?.lowercased()
+            return (scheme == "http" || scheme == "https") && webSiteHost(of: url).isDefined
+        }^
 }
 
 /// The sites the person has agreed the assistant may work in, this session.
