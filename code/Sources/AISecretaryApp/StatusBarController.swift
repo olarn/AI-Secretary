@@ -107,9 +107,16 @@ final class StatusBarController {
         characterMenuItem.keyEquivalentModifierMask = [.command]
         menu.addItem(characterMenuItem)
 
-        // Its own window rather than a row in the chat: the figures are for
-        // leaving open next to the work, and closing the chat must not take
-        // them away.
+        windowsMenuItem.submenu = NSMenu(title: "Pinned Messages")
+        menu.addItem(windowsMenuItem)
+        menu.delegate = target
+
+        menu.addItem(.separator())
+
+        // Below the line with About, because both open a window about the app
+        // rather than doing anything to the conversation. Its own window rather
+        // than a row in the chat: the figures are for leaving open next to the
+        // work, and closing the chat must not take them away.
         let usageItem = NSMenuItem(
             title: "Token Usage",
             action: #selector(Target.showUsage(_:)),
@@ -118,12 +125,6 @@ final class StatusBarController {
         usageItem.keyEquivalentModifierMask = [.command]
         usageItem.target = target
         menu.addItem(usageItem)
-
-        windowsMenuItem.submenu = NSMenu(title: "Pinned Messages")
-        menu.addItem(windowsMenuItem)
-        menu.delegate = target
-
-        menu.addItem(.separator())
 
         let aboutItem = NSMenuItem(
             title: "About \(AppInfo.name)",
