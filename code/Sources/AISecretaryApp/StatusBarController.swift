@@ -140,6 +140,16 @@ final class StatusBarController {
         quitItem.target = target
         menu.addItem(quitItem)
 
+        // macOS 26 draws an ⓘ beside anything it recognises as an About
+        // command. Nothing here asked for it, and one icon in a menu of
+        // fifteen plain rows reserves an icon column that indents every other
+        // title — so the glyph is refused, in one place, for every row.
+        //
+        // An empty image rather than `nil`: `nil` means "decide for me", which
+        // is how the ⓘ arrived. Applied to all of them so no row is indented
+        // differently from its neighbours.
+        menu.items.forEach { $0.image = NSImage(size: .zero) }
+
         statusItem.menu = menu
     }
 
