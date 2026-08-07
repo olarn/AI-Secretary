@@ -138,7 +138,7 @@ final class SecretaryTests: XCTestCase {
             stateMachine: machine,
             registry: ProjectRegistry(store: InMemoryProjectStore(projects: projects)),
             adapter: adapter,
-            classifier: RuleBasedIntentClassifier(),
+            classify: RuleBasedIntentClassifier().classify,
             audit: AuditLog(),
             chatProvider: chat
         )
@@ -299,7 +299,7 @@ final class SecretaryTests: XCTestCase {
             stateMachine: machine,
             registry: registry,
             adapter: adapter,
-            classifier: RuleBasedIntentClassifier(),
+            classify: RuleBasedIntentClassifier().classify,
             audit: AuditLog(),
             chatProvider: FakeChatProvider(.events([.completed(stopReason: .none(), usage: .none())]))
         )

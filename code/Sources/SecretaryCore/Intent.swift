@@ -18,14 +18,15 @@ public enum Intent: Equatable, Sendable {
     case unknown(text: String)
 }
 
-public protocol IntentClassifying: AnyObject {
-    func classify(_ text: String) -> Intent
-}
-
 /// Rule-based classifier: keyword matching only, no model call. Anything that
 /// doesn't clearly match a known operation returns `.unknown`, so the assistant
 /// never invents an action from ambiguous text.
-public final class RuleBasedIntentClassifier: IntentClassifying {
+///
+/// A class because it holds the rule tables, but it is not a seam: what the
+/// Secretary takes is the function `classify`, not a protocol. There was a
+/// one-method `IntentClassifying` here purely so a test could substitute it,
+/// which is a closure wearing a protocol's clothes.
+public final class RuleBasedIntentClassifier {
     public init() {}
 
     private struct Rule {
@@ -77,16 +78,10 @@ public final class RuleBasedIntentClassifier: IntentClassifying {
         }
 
         // File operations are checked before Git rules so "read the log file"
-        // isn't captured by the "log" keyword.
-        if let file = fileIntent(original: original).toOptional() {
-            return file
-        }
-
-        for rule in rules where rule.keywords.contains(where: { Self.containsWord($0, in: normalized) }) {
-            return .codeTool(operation: rule.operation, projectQuery: projectQuery(in: normalized))
-        }
-
-        return .unknown(text: text)
+        // isn't captured by the "log" keyword. Both answers stay inside
+        // `Option` until the last line, where the fallback is chat.
+        return fileIntent(original: original)
+            .getOrElse(codeToolIntent(normalized).getOrElse(.unknown(text: text)))
     }
 
     /// Whether `keyword` appears in `text` as a whole word or phrase, rather
@@ -119,6 +114,18 @@ public final class RuleBasedIntentClassifier: IntentClassifying {
         return false
     }
 
+    /// The first Git rule whose keywords appear in the text, as an `Option` so
+    /// `classify` can chain it rather than unwrap it. `first(where:)` says what
+    /// the `for … where … { return }` it replaced was doing: first match wins.
+    private func codeToolIntent(_ normalized: String) -> Option<Intent> {
+        Option.fromOptional(
+            rules.first { rule in
+                rule.keywords.contains { Self.containsWord($0, in: normalized) }
+            }
+        )
+        .map { Intent.codeTool(operation: $0.operation, projectQuery: self.projectQuery(in: normalized)) }^
+    }
+
     private static func isWordCharacter(_ character: Character) -> Bool {
         character.isASCII && (character.isLetter || character.isNumber)
     }
@@ -133,9 +140,9 @@ public final class RuleBasedIntentClassifier: IntentClassifying {
 
         // Understand: checked first so "summarize README.md" doesn't fall into
         // the read path and merely dump the file.
-        if let understanding = understandIntent(head: head, headLower: headLower).toOptional() {
-            return .some(.understandFile(request: understanding, projectQuery: project))
-        }
+        let understanding = understandIntent(head: head, headLower: headLower)
+            .map { Intent.understandFile(request: $0, projectQuery: project) }^
+        if understanding.isDefined { return understanding }
 
         // Read: explicit phrasing always counts; weak verbs need a scope or a
         // path-like argument so they don't capture ordinary chat.

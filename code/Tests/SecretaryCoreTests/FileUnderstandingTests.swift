@@ -193,7 +193,7 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
             registry: ProjectRegistry(store: InMemoryProjectStore(projects: [project])),
             adapter: SpyAdapter(),
             fileAdapter: fileAdapter,
-            classifier: RuleBasedIntentClassifier(),
+            classify: RuleBasedIntentClassifier().classify,
             audit: AuditLog(),
             chatProvider: chat
         )
@@ -375,7 +375,7 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
             registry: ProjectRegistry(store: InMemoryProjectStore(projects: [project])),
             adapter: adapter,
             fileAdapter: fileAdapter,
-            classifier: RuleBasedIntentClassifier(),
+            classify: RuleBasedIntentClassifier().classify,
             audit: AuditLog(),
             chatProvider: chat
         )
@@ -419,7 +419,7 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
             ])),
             adapter: SpyAdapter(),
             fileAdapter: fileAdapter,
-            classifier: RuleBasedIntentClassifier(),
+            classify: RuleBasedIntentClassifier().classify,
             audit: AuditLog(),
             chatProvider: chat
         )
@@ -439,7 +439,7 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
             registry: ProjectRegistry(store: InMemoryProjectStore(projects: [])),
             adapter: SpyAdapter(),
             fileAdapter: fileAdapter,
-            classifier: RuleBasedIntentClassifier(),
+            classify: RuleBasedIntentClassifier().classify,
             audit: AuditLog(),
             chatProvider: chat
         )
@@ -464,7 +464,7 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
             registry: ProjectRegistry(store: InMemoryProjectStore(projects: [project, second])),
             adapter: SpyAdapter(),
             fileAdapter: fileAdapter,
-            classifier: RuleBasedIntentClassifier(),
+            classify: RuleBasedIntentClassifier().classify,
             audit: AuditLog(),
             chatProvider: chat
         )

@@ -30,7 +30,7 @@ final class SkillsSessionTests: XCTestCase {
             registry: ProjectRegistry(store: InMemoryProjectStore(projects: projects)),
             adapter: SpyAdapter(),
             fileAdapter: SpyFileAdapter(),
-            classifier: RuleBasedIntentClassifier(),
+            classify: RuleBasedIntentClassifier().classify,
             audit: AuditLog(),
             chatProvider: provider,
             discoverSkills: { _ in discovered ?? self.skills }
@@ -61,7 +61,7 @@ final class SkillsSessionTests: XCTestCase {
             registry: ProjectRegistry(store: InMemoryProjectStore(projects: [])),
             adapter: SpyAdapter(),
             fileAdapter: SpyFileAdapter(),
-            classifier: RuleBasedIntentClassifier(),
+            classify: RuleBasedIntentClassifier().classify,
             audit: AuditLog(),
             chatProvider: provider,
             discoverSkills: { _ in installed }

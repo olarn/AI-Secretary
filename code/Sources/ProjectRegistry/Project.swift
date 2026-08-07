@@ -8,16 +8,16 @@ import Foundation
 /// which keeps the on-disk JSON byte-identical to what earlier versions wrote.
 public struct Project: Equatable, Identifiable, Sendable {
     public let id: UUID
-    public var name: String
-    public var path: String
+    public let name: String
+    public let path: String
     /// Free-text note about the project. Named `summary` in the domain because
     /// `description` on a struct reads as `CustomStringConvertible`; the JSON
     /// key stays `description` so existing files still load.
-    public var summary: Option<String>
+    public let summary: Option<String>
     /// Tool identifiers this project may use, e.g. "git.readOnly".
-    public var allowedTools: [String]
+    public let allowedTools: [String]
     /// Action identifiers this project may perform, e.g. "read".
-    public var allowedActions: [String]
+    public let allowedActions: [String]
 
     public init(
         id: UUID = UUID(),
@@ -39,14 +39,24 @@ public struct Project: Equatable, Identifiable, Sendable {
 
     public func allows(tool: String) -> Bool { allowedTools.contains(tool) }
 
-    /// A copy with one more tool allowed. Absent when the tool was already
-    /// there, so a caller can tell "granted" from "no change" without
+    /// A new project with one more tool allowed. Absent when the tool was
+    /// already there, so a caller can tell "granted" from "no change" without
     /// comparing arrays.
+    ///
+    /// Built field by field rather than by copying and mutating: every stored
+    /// property is a `let`, so "one more tool" is a new value.
     public func granting(tool: String) -> Option<Project> {
         guard !allowedTools.contains(tool) else { return .none() }
-        var copy = self
-        copy.allowedTools.append(tool)
-        return .some(copy)
+        return .some(
+            Project(
+                id: id,
+                name: name,
+                path: path,
+                summary: summary,
+                allowedTools: allowedTools + [tool],
+                allowedActions: allowedActions
+            )
+        )
     }
 
     /// Paths compared after standardising, so "/a/b" and "/a/b/" are one place.

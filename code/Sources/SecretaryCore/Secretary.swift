@@ -258,7 +258,10 @@ public final class Secretary {
     public private(set) var grants: PermissionGrants
     @ObservationIgnored private let adapter: CodeToolAdapter
     @ObservationIgnored private let fileAdapter: FileToolAdapter
-    @ObservationIgnored private let classifier: IntentClassifying
+    /// How a message becomes an intent. A function, not a protocol: there is
+    /// one thing to do here, and a test hands in a closure instead of building
+    /// a fake.
+    @ObservationIgnored private let classify: (String) -> Intent
     @ObservationIgnored private let audit: AuditLogging
     @ObservationIgnored private let chatProvider: ChatProvider
     @ObservationIgnored private let activityPreference: ActivityPreferenceStoring
@@ -333,7 +336,7 @@ public final class Secretary {
         grants: PermissionGrants = PermissionGrants(),
         adapter: CodeToolAdapter = GitReadOnlyAdapter(),
         fileAdapter: FileToolAdapter = FileReadOnlyAdapter(),
-        classifier: IntentClassifying = RuleBasedIntentClassifier(),
+        classify: @escaping (String) -> Intent = RuleBasedIntentClassifier().classify,
         audit: AuditLogging = AuditLog(),
         activityPreference: ActivityPreferenceStoring = UserDefaultsActivityPreference(),
         browserPreference: BrowserPreferenceStoring = UserDefaultsBrowserPreference(),
@@ -358,7 +361,7 @@ public final class Secretary {
         self.grants = grants
         self.adapter = adapter
         self.fileAdapter = fileAdapter
-        self.classifier = classifier
+        self.classify = classify
         self.audit = audit
         self.activityPreference = activityPreference
         self.showsActivity = activityPreference.showsActivity
@@ -483,7 +486,7 @@ public final class Secretary {
         stateMachine.send(.userBeganInput, reason: "user submitted a message", taskID: .some(taskID))
         stateMachine.send(.beginInterpreting, reason: "classifying intent", taskID: .some(taskID))
 
-        let intent = classifier.classify(trimmed)
+        let intent = classify(trimmed)
         audit.record(AuditEntry(taskID: taskID, kind: .intentClassified, detail: describe(intent)))
 
         switch intent {

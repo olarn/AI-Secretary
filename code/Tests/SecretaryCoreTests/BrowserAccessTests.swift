@@ -35,7 +35,7 @@ final class BrowserAccessTests: XCTestCase {
             registry: ProjectRegistry(store: InMemoryProjectStore(projects: projects ?? [project])),
             adapter: SpyAdapter(),
             fileAdapter: SpyFileAdapter(),
-            classifier: RuleBasedIntentClassifier(),
+            classify: RuleBasedIntentClassifier().classify,
             audit: AuditLog(),
             activityPreference: InMemoryActivityPreference(),
             browserPreference: preference,

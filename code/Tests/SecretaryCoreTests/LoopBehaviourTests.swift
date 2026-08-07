@@ -23,7 +23,7 @@ final class LoopBehaviourTests: XCTestCase {
             stateMachine: machine,
             registry: ProjectRegistry(store: InMemoryProjectStore(projects: [])),
             adapter: SpyAdapter(),
-            classifier: RuleBasedIntentClassifier(),
+            classify: RuleBasedIntentClassifier().classify,
             audit: AuditLog(),
             chatProvider: chat
         )

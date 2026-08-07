@@ -111,7 +111,7 @@ final class AgentSessionTests: XCTestCase {
             registry: registry,
             adapter: SpyAdapter(),
             fileAdapter: SpyFileAdapter(),
-            classifier: RuleBasedIntentClassifier(),
+            classify: RuleBasedIntentClassifier().classify,
             audit: AuditLog(),
             activityPreference: activityPreference,
             chatProvider: provider
