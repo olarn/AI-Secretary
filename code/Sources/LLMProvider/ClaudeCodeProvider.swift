@@ -330,100 +330,113 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
               let type = object["type"] as? String
         else { return [] }
 
+        // One line of the CLI's JSON is one kind of thing, and each kind is its
+        // own reader below. As one body it was a hundred lines whose arms had
+        // nothing to do with each other but had to be read together anyway.
         switch type {
-        case "system":
-            if object["subtype"] as? String == "init" {
-                stateLock.withLock {
-                    if let id = object["session_id"] as? String { _sessionID = id }
-                    // Authoritative: what the session actually resolved to,
-                    // whichever way the model was (or wasn't) specified.
-                    if let model = object["model"] as? String { _reportedModel = model }
-                }
-            }
-            return []
+        case "system": return adoptSession(from: object)
+        case "assistant": return toolCalls(in: object)
+        case "user": return refusals(in: object)
+        case "stream_event": return streamEvents(in: object)
+        case "result": return [completion(from: object)]
+        default: return []
+        }
+    }
 
-        case "assistant":
-            // Remember what each tool call was for; the refusal that may follow
-            // carries only the id.
-            var events: [ChatStreamEvent] = []
-            for block in Self.contentBlocks(of: object) where block["type"] as? String == "tool_use" {
-                guard let id = block["id"] as? String, let name = block["name"] as? String else { continue }
+    /// The init line is the only place the session id and the model actually
+    /// resolved to are reported. Nothing to show for it — it changes what the
+    /// next turn is sent with, not what is on screen.
+    private func adoptSession(from object: [String: Any]) -> [ChatStreamEvent] {
+        guard object["subtype"] as? String == "init" else { return [] }
+        stateLock.withLock {
+            if let id = object["session_id"] as? String { _sessionID = id }
+            // Authoritative: what the session actually resolved to, whichever
+            // way the model was (or wasn't) specified.
+            if let model = object["model"] as? String { _reportedModel = model }
+        }
+        return []
+    }
+
+    /// Remembers what each tool call was for; the refusal that may follow
+    /// carries only the id.
+    private func toolCalls(in object: [String: Any]) -> [ChatStreamEvent] {
+        Self.contentBlocks(of: object)
+            .filter { $0["type"] as? String == "tool_use" }
+            .compactMap { block in
+                guard let id = block["id"] as? String, let name = block["name"] as? String else { return nil }
                 let input = block["input"] as? [String: Any] ?? [:]
                 stateLock.withLock { _pendingToolUses[id] = (name, input) }
-                events.append(.activity(AgentActivity(kind: .tool, detail: Self.activityDetail(tool: name, input: input))))
+                return .activity(AgentActivity(kind: .tool, detail: Self.activityDetail(tool: name, input: input)))
             }
-            return events
+    }
 
-        case "user":
-            var denied: [ChatStreamEvent] = []
-            for block in Self.contentBlocks(of: object)
-            where block["type"] as? String == "tool_result" && block["is_error"] as? Bool == true {
+    /// Tool results that are refusals, named by the tool they refused.
+    private func refusals(in object: [String: Any]) -> [ChatStreamEvent] {
+        Self.contentBlocks(of: object)
+            .filter { $0["type"] as? String == "tool_result" && $0["is_error"] as? Bool == true }
+            .compactMap { block in
                 guard let id = block["tool_use_id"] as? String,
                       let call = stateLock.withLock({ _pendingToolUses[id] })
-                else { continue }
+                else { return nil }
                 // Which tool it was decides which refusals count, so the call is
                 // looked up first and only dropped once it's been judged.
                 guard Self.isPermissionRefusal(
                     String(describing: block["content"] ?? ""),
                     tool: call.name
-                ) else { continue }
+                ) else { return nil }
                 stateLock.withLock { _pendingToolUses.removeValue(forKey: id) }
-                denied.append(.toolDenied(Self.describe(tool: call.name, input: call.input)))
+                return .toolDenied(Self.describe(tool: call.name, input: call.input))
             }
-            return denied
+    }
 
-        case "stream_event":
-            // A thinking block opening is the only signal that reasoning is
-            // happening; its deltas carry no text to show.
-            if let event = object["event"] as? [String: Any],
-               event["type"] as? String == "content_block_start",
-               let block = event["content_block"] as? [String: Any] {
-                switch block["type"] as? String {
-                case "thinking":
-                    return [.activity(AgentActivity(kind: .thinking, detail: "Thinking"))]
-                case "text":
-                    // Where one thing the model said ends and the next begins.
-                    // The deltas alone can't say — they are just characters, and
-                    // the last of one block butts against the first of the next.
-                    return [.textBlockBegan]
-                default:
-                    return []
-                }
+    private func streamEvents(in object: [String: Any]) -> [ChatStreamEvent] {
+        guard let event = object["event"] as? [String: Any] else { return [] }
+
+        // A thinking block opening is the only signal that reasoning is
+        // happening; its deltas carry no text to show.
+        if event["type"] as? String == "content_block_start",
+           let block = event["content_block"] as? [String: Any] {
+            switch block["type"] as? String {
+            case "thinking":
+                return [.activity(AgentActivity(kind: .thinking, detail: "Thinking"))]
+            case "text":
+                // Where one thing the model said ends and the next begins. The
+                // deltas alone can't say — they are just characters, and the
+                // last of one block butts against the first of the next.
+                return [.textBlockBegan]
+            default:
+                return []
             }
-            guard let event = object["event"] as? [String: Any],
-                  event["type"] as? String == "content_block_delta",
-                  let delta = event["delta"] as? [String: Any],
-                  delta["type"] as? String == "text_delta",
-                  let text = delta["text"] as? String
-            else { return [] }
-            return [.textDelta(text)]
-
-        case "result":
-            // Cost and the context window sit beside `usage`, not inside it.
-            let cost = object["total_cost_usd"] as? Double ?? 0
-            let window = Self.contextWindow(of: object)
-            let usage = Option.fromOptional(object["usage"] as? [String: Any]).map {
-                ChatUsage(
-                    inputTokens: $0["input_tokens"] as? Int ?? 0,
-                    outputTokens: $0["output_tokens"] as? Int ?? 0,
-                    // Left out until now, which made the reported figure useless
-                    // on any real turn: these two are almost all of the traffic.
-                    cacheWriteTokens: $0["cache_creation_input_tokens"] as? Int ?? 0,
-                    cacheReadTokens: $0["cache_read_input_tokens"] as? Int ?? 0,
-                    costUSD: cost,
-                    contextWindow: window
-                )
-            }^
-            return [
-                .completed(
-                    stopReason: Option.fromOptional(object["stop_reason"] as? String),
-                    usage: usage
-                )
-            ]
-
-        default:
-            return []
         }
+
+        guard event["type"] as? String == "content_block_delta",
+              let delta = event["delta"] as? [String: Any],
+              delta["type"] as? String == "text_delta",
+              let text = delta["text"] as? String
+        else { return [] }
+        return [.textDelta(text)]
+    }
+
+    private func completion(from object: [String: Any]) -> ChatStreamEvent {
+        // Cost and the context window sit beside `usage`, not inside it.
+        let cost = object["total_cost_usd"] as? Double ?? 0
+        let window = Self.contextWindow(of: object)
+        let usage = Option.fromOptional(object["usage"] as? [String: Any]).map {
+            ChatUsage(
+                inputTokens: $0["input_tokens"] as? Int ?? 0,
+                outputTokens: $0["output_tokens"] as? Int ?? 0,
+                // Left out until now, which made the reported figure useless on
+                // any real turn: these two are almost all of the traffic.
+                cacheWriteTokens: $0["cache_creation_input_tokens"] as? Int ?? 0,
+                cacheReadTokens: $0["cache_read_input_tokens"] as? Int ?? 0,
+                costUSD: cost,
+                contextWindow: window
+            )
+        }^
+        return .completed(
+            stopReason: Option.fromOptional(object["stop_reason"] as? String),
+            usage: usage
+        )
     }
 
     /// The context window, dug out of `modelUsage`, which is keyed by model id.

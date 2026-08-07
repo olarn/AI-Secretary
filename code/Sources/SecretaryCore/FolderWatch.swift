@@ -156,18 +156,19 @@ public struct WatchSnapshot: Equatable, Sendable {
     /// Sorted so the same change set always reads the same way, and so a test
     /// doesn't depend on dictionary order.
     public func changes(to later: WatchSnapshot) -> [WatchChange] {
-        var changes: [WatchChange] = []
-        for (path, stamp) in later.stamps {
-            guard let before = stamps[path] else {
-                changes.append(.added(path))
-                continue
-            }
-            if before != stamp { changes.append(.modified(path)) }
+        // Two questions, each answered over one collection: what is in the new
+        // snapshot that is new or different, and what was in the old one and
+        // isn't there now. The accumulator this replaced could be read three
+        // ways depending on where you entered the loop.
+        let appeared = later.stamps.compactMap { path, stamp -> WatchChange? in
+            guard let before = stamps[path] else { return .added(path) }
+            return before == stamp ? nil : .modified(path)
         }
-        for path in stamps.keys where later.stamps[path] == nil {
-            changes.append(.removed(path))
-        }
-        return changes.sorted { $0.path < $1.path }
+        let gone = stamps.keys
+            .filter { later.stamps[$0] == nil }
+            .map(WatchChange.removed)
+
+        return (appeared + gone).sorted { $0.path < $1.path }
     }
 }
 

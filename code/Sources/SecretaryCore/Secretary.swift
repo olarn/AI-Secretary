@@ -124,6 +124,28 @@ public struct QueuedMessage: Equatable, Sendable {
     }
 }
 
+/// The state of one streaming reply, threaded through the handlers as a value.
+///
+/// It was five locals captured by a 160-line closure, which is why every arm of
+/// that switch had to be read together to know what any one of them did. As a
+/// value it is the accumulator of a fold: each handler takes it `inout`, changes
+/// the part it owns, and hands it back.
+///
+/// `reply` is the whole turn — what the conversation remembers and what the
+/// fenced blocks are read out of — while `segmentText` is only what belongs in
+/// the bubble being written now: a reply is one bubble per stretch of talking,
+/// split wherever a tool ran.
+private struct ReplyRun {
+    let taskID: String
+    /// The profile that was active when the reply started.
+    let speakerName: String
+    var segmentID: UUID?
+    var segmentText = ""
+    var reply = ""
+    var denied: [DeniedTool] = []
+    var movedToWorking = false
+}
+
 /// A request waiting on the user: either confirm an action, or pick a project.
 public enum PendingDecision: Equatable, Sendable {
     case approval(ApprovalRequest, operation: PlannedOperation)
@@ -1960,33 +1982,17 @@ public final class Secretary {
             speaker: .secretary, text: "", speakerName: profile.displayName
         )
         transcript.append(replyEntry)
-        let replyID = replyEntry.id
         // Remembered so that stopping a run mid-reply can close off the entry
         // it interrupted. A cancelled stream never reaches `.completed`, so
         // without this the half-written bubble just sits there, indistinguishable
         // from a reply still arriving.
-        streamingEntryID = .some(replyID)
-        // A reply is one bubble per stretch of talking, split wherever a tool
-        // ran. `reply` is still the whole thing — that is what the conversation
-        // remembers and what the fenced blocks are read out of — while
-        // `segmentText` is only what belongs in the bubble being written now.
-        var segmentID: UUID? = replyID
-        var segmentText = ""
-        let speakerName = profile.displayName
-        // Finishes the bubble being written, if anything was written in it. The
-        // empty case matters: a turn that reaches for a tool before saying
-        // anything keeps its placeholder instead of gaining a blank bubble, and
-        // the block boundary that opens the very first block arrives before any
-        // text at all.
-        let closeSegment = { [weak self] in
-            guard let self, let id = segmentID,
-                  !segmentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            else { return }
-            self.updateEntry(id: id, text: self.strippedForDisplay(segmentText))
-            segmentID = nil
-            segmentText = ""
-            self.streamingEntryID = .none()
-        }
+        streamingEntryID = .some(replyEntry.id)
+
+        var run = ReplyRun(
+            taskID: taskID,
+            speakerName: profile.displayName,
+            segmentID: replyEntry.id
+        )
 
         audit.record(AuditEntry(taskID: taskID, kind: .executionStarted, detail: "chat model=\(modelDescription) effort=\(effortDescription)"))
 
@@ -1999,119 +2005,160 @@ public final class Secretary {
         )
 
         streamingTask?.cancel()
-        // Explicitly main-actor: every branch below touches @MainActor state
+        // Explicitly main-actor: every step below touches @MainActor state
         // (transcript, state machine, audit). The stream itself does its network
         // work off-actor and we consume it back here on the main actor.
         streamingTask = Task { @MainActor [weak self] in
-            var reply = ""
-            var movedToWorking = false
-            var denied: [DeniedTool] = []
-
-            @MainActor func ensureWorking() {
-                guard let self, !movedToWorking else { return }
-                movedToWorking = true
-                // The file-understanding path is already WORKING from the read;
-                // re-sending the event there would be an invalid transition.
-                guard self.stateMachine.state != .working else { return }
-                self.stateMachine.send(.beginExecuting, reason: "streaming reply", taskID: .some(taskID), toolStatus: .some("streaming"))
-            }
-
             for await outcome in stream {
                 guard let self else { return }
-
-                // The left rail ends the turn; anything else is an event to render.
-                guard let event = outcome.toOption().toOptional() else {
-                    ensureWorking()
-                    let message = outcome.swap().toOption().toOptional()
-                        .map { $0.errorDescription ?? "\($0)" } ?? "Chat failed."
-                    self.audit.record(AuditEntry(taskID: taskID, kind: .failed, detail: "chat error"))
-                    self.finishChat(
-                        entryID: segmentID, taskID: taskID, success: false,
-                        displayText: message, fullText: message
-                    )
-                    break
-                }
-
-                switch event {
-                    case .thinking:
-                        break // stay in THINKING until the first token
-                    case .textBlockBegan:
-                        // The model started saying a new thing. Whatever it was
-                        // saying before is finished — left joined, an answer to
-                        // the person ran into its note to itself and then into
-                        // the report of what it did, three things in one block
-                        // with not even a space between them.
-                        closeSegment()
-                    case .sessionLost:
-                        // Said in the transcript, not just logged. The whole
-                        // conversation is sitting above this line, so an answer
-                        // written without it would look like the app ignoring
-                        // what is right there on screen.
-                        closeSegment()
-                        self.transcript.append(TranscriptEntry(
-                            speaker: .secretary,
-                            kind: .divider,
-                            text: "I've lost my memory of everything above — Claude Code no longer has that thread. You can still read it, but I'm answering from this message on."
-                        ))
-                        self.resumedConversationID = .none()
-                    case .activity(let step):
-                        // A tool between two things said ends the first of them
-                        // too. In practice a block boundary follows anyway, but
-                        // not every backend sends one and the seam belongs
-                        // wherever the turn actually turns.
-                        closeSegment()
-                        // Kept even when the user has the panel closed: turning
-                        // it on mid-turn should show what already happened.
-                        self.recordActivity(step, before: Option.fromOptional(segmentID))
-                    case .toolDenied(let tool):
-                        // Collected rather than acted on immediately: the turn
-                        // keeps going and may be refused several things, and one
-                        // prompt listing all of them beats a stream of them.
-                        if !denied.contains(tool) { denied.append(tool) }
-                    case .textDelta(let chunk):
-                        ensureWorking()
-                        reply += chunk
-                        segmentText += chunk
-                        if segmentID == nil {
-                            // Speaking again after a tool: a new bubble, named
-                            // with the profile this reply started under, so a
-                            // profile switch mid-turn can't re-sign it.
-                            let entry = TranscriptEntry(
-                                speaker: .secretary, text: "", speakerName: speakerName
-                            )
-                            self.transcript.append(entry)
-                            segmentID = entry.id
-                            self.streamingEntryID = .some(entry.id)
-                        }
-                        if let id = segmentID { self.updateEntry(id: id, text: segmentText) }
-                    case .completed(let stopReason, let usage):
-                        ensureWorking()
-                        let reason = stopReason.getOrElse("end_turn")
-                        usage.fold({ }, { self.record(usage: $0) })
-                        self.audit.record(AuditEntry(
-                            taskID: taskID,
-                            kind: .executionFinished,
-                            detail: "stop=\(reason) tokens=\(self.sessionUsage.totalTokens)"
-                        ))
-                        if reason == "refusal" {
-                            self.finishChat(
-                                entryID: segmentID, taskID: taskID, success: false,
-                                displayText: segmentText.isEmpty ? "(The model declined to respond.)" : segmentText,
-                                fullText: reply.isEmpty ? "(The model declined to respond.)" : reply
-                            )
-                        } else {
-                            self.conversation.append(ChatMessage(role: .assistant, content: reply))
-                            self.trimConversation()
-                            self.finishChat(
-                                entryID: segmentID, taskID: taskID, success: true,
-                                displayText: segmentText, fullText: reply
-                            )
-                            self.offerToWiden(denied, taskID: taskID)
-                        }
-                }
+                if self.apply(outcome, to: &run) { break }
             }
             self?.streamingTask = nil
         }
+    }
+
+    /// One event from the stream. Returns whether the turn is over — the error
+    /// rail ends it, everything else is something to render.
+    private func apply(_ outcome: Either<ChatError, ChatStreamEvent>, to run: inout ReplyRun) -> Bool {
+        guard let event = outcome.toOption().toOptional() else {
+            failReply(outcome.swap().toOption().toOptional(), &run)
+            return true
+        }
+        render(event, &run)
+        return false
+    }
+
+    private func render(_ event: ChatStreamEvent, _ run: inout ReplyRun) {
+        switch event {
+        case .thinking:
+            break // stay in THINKING until the first token
+        case .textBlockBegan:
+            // The model started saying a new thing. Whatever it was saying
+            // before is finished — left joined, an answer to the person ran
+            // into its note to itself and then into the report of what it did,
+            // three things in one block with not even a space between them.
+            closeSegment(&run)
+        case .sessionLost:
+            announceLostSession(&run)
+        case .activity(let step):
+            // A tool between two things said ends the first of them too. In
+            // practice a block boundary follows anyway, but not every backend
+            // sends one and the seam belongs wherever the turn actually turns.
+            closeSegment(&run)
+            // Kept even when the user has the panel closed: turning it on
+            // mid-turn should show what already happened.
+            recordActivity(step, before: Option.fromOptional(run.segmentID))
+        case .toolDenied(let tool):
+            // Collected rather than acted on immediately: the turn keeps going
+            // and may be refused several things, and one prompt listing all of
+            // them beats a stream of them.
+            if !run.denied.contains(tool) { run.denied.append(tool) }
+        case .textDelta(let chunk):
+            append(chunk, to: &run)
+        case .completed(let stopReason, let usage):
+            complete(stopReason: stopReason, usage: usage, &run)
+        }
+    }
+
+    /// Finishes the bubble being written, if anything was written in it.
+    ///
+    /// The empty case matters: a turn that reaches for a tool before saying
+    /// anything keeps its placeholder instead of gaining a blank bubble, and
+    /// the block boundary that opens the very first block arrives before any
+    /// text at all.
+    private func closeSegment(_ run: inout ReplyRun) {
+        guard let id = run.segmentID,
+              !run.segmentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return }
+        updateEntry(id: id, text: strippedForDisplay(run.segmentText))
+        run.segmentID = nil
+        run.segmentText = ""
+        streamingEntryID = .none()
+    }
+
+    /// The first token is what turns THINKING into WORKING — not the request,
+    /// which may still be waiting on a tool.
+    private func ensureWorking(_ run: inout ReplyRun) {
+        guard !run.movedToWorking else { return }
+        run.movedToWorking = true
+        // The file-understanding path is already WORKING from the read;
+        // re-sending the event there would be an invalid transition.
+        guard stateMachine.state != .working else { return }
+        stateMachine.send(
+            .beginExecuting,
+            reason: "streaming reply",
+            taskID: .some(run.taskID),
+            toolStatus: .some("streaming")
+        )
+    }
+
+    private func append(_ chunk: String, to run: inout ReplyRun) {
+        ensureWorking(&run)
+        run.reply += chunk
+        run.segmentText += chunk
+        if run.segmentID == nil {
+            // Speaking again after a tool: a new bubble, named with the profile
+            // this reply started under, so a profile switch mid-turn can't
+            // re-sign it.
+            let entry = TranscriptEntry(
+                speaker: .secretary, text: "", speakerName: run.speakerName
+            )
+            transcript.append(entry)
+            run.segmentID = entry.id
+            streamingEntryID = .some(entry.id)
+        }
+        if let id = run.segmentID { updateEntry(id: id, text: run.segmentText) }
+    }
+
+    /// Said in the transcript, not just logged. The whole conversation is
+    /// sitting above this line, so an answer written without it would look like
+    /// the app ignoring what is right there on screen.
+    private func announceLostSession(_ run: inout ReplyRun) {
+        closeSegment(&run)
+        transcript.append(TranscriptEntry(
+            speaker: .secretary,
+            kind: .divider,
+            text: "I've lost my memory of everything above — Claude Code no longer has that thread. You can still read it, but I'm answering from this message on."
+        ))
+        resumedConversationID = .none()
+    }
+
+    private func complete(stopReason: Option<String>, usage: Option<ChatUsage>, _ run: inout ReplyRun) {
+        ensureWorking(&run)
+        let reason = stopReason.getOrElse("end_turn")
+        usage.fold({ }, { self.record(usage: $0) })
+        audit.record(AuditEntry(
+            taskID: run.taskID,
+            kind: .executionFinished,
+            detail: "stop=\(reason) tokens=\(sessionUsage.totalTokens)"
+        ))
+
+        guard reason != "refusal" else {
+            finishChat(
+                entryID: run.segmentID, taskID: run.taskID, success: false,
+                displayText: run.segmentText.isEmpty ? "(The model declined to respond.)" : run.segmentText,
+                fullText: run.reply.isEmpty ? "(The model declined to respond.)" : run.reply
+            )
+            return
+        }
+
+        conversation.append(ChatMessage(role: .assistant, content: run.reply))
+        trimConversation()
+        finishChat(
+            entryID: run.segmentID, taskID: run.taskID, success: true,
+            displayText: run.segmentText, fullText: run.reply
+        )
+        offerToWiden(run.denied, taskID: run.taskID)
+    }
+
+    private func failReply(_ error: ChatError?, _ run: inout ReplyRun) {
+        ensureWorking(&run)
+        let message = error.map { $0.errorDescription ?? "\($0)" } ?? "Chat failed."
+        audit.record(AuditEntry(taskID: run.taskID, kind: .failed, detail: "chat error"))
+        finishChat(
+            entryID: run.segmentID, taskID: run.taskID, success: false,
+            displayText: message, fullText: message
+        )
     }
 
     /// Ends the turn: reads the fenced blocks out of the reply, and writes what
