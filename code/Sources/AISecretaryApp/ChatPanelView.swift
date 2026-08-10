@@ -71,6 +71,17 @@ struct ChatPanelView: View {
     @FocusState private var messageBoxFocused: Bool
     /// Watches for the arrow keys before the text field sees them.
     @State private var arrowKeyMonitor: Any?
+    /// Watches for the reader scrolling the transcript themselves.
+    @State private var scrollMonitor: Any?
+    /// How each message was last broken into boxes. A reference type on
+    /// purpose: it is a memo of a pure function, not state the view renders,
+    /// and writing to it must not invalidate anything.
+    @State private var partsCache = MessagePartsCache()
+    /// Whether the pointer is over the transcript. A local monitor sees every
+    /// scroll in the app — the history window, the settings panel, a pinned
+    /// message — and only the ones aimed at the transcript say anything about
+    /// where the reader wants the transcript to be.
+    @State private var pointerOverTranscript = false
     /// Which option is highlighted in the choice list, when one is showing.
     @State private var choiceIndex = 0
     /// Which box was last copied, so its button can show a tick.
@@ -93,8 +104,14 @@ struct ChatPanelView: View {
             footer
         }
         .padding(18)
-        .onAppear { startWatchingArrowKeys() }
-        .onDisappear { stopWatchingArrowKeys() }
+        .onAppear {
+            startWatchingArrowKeys()
+            startWatchingScroll()
+        }
+        .onDisappear {
+            stopWatchingArrowKeys()
+            stopWatchingScroll()
+        }
         // Not `onAppear`: this view is built once and then shown and hidden by
         // the window's alpha, so appearing happens exactly one time.
         //
@@ -733,65 +750,111 @@ struct ChatPanelView: View {
     private static let headerTopClearance: Double = 26
 
     private var transcript: some View {
-        // The outer geometry gives the viewport height; the one behind the
-        // content reports where the content's bottom currently sits in the same
-        // space. The difference is how far from the bottom the reader is.
+        // The outer reader is only here for one number: where the bottom edge
+        // of the visible area is, to compare the end of the content against.
         GeometryReader { viewport in
-            ScrollViewReader { proxy in
-                ScrollView {
-                    // Wider than the gap between boxes of one turn, so the eye
-                    // groups a split answer together before it groups the
-                    // conversation.
-                    VStack(alignment: .leading, spacing: 16) {
-                        if secretary.transcript.isEmpty {
-                            Text(emptyTranscriptHint)
-                                .font(.system(size: appearance.settings.fontSize))
-                                .foregroundStyle(.secondary)
-                        }
-                        ForEach(secretary.transcript) { entry in
-                            messageBubble(entry).id(entry.id)
-                        }
-                        // Breathing room under the last line.
-                        //
-                        // Scrolled to the bottom, the final line sat flush
-                        // against the edge and read as cut off — and with a
-                        // descender or a second line arriving mid-stream it
-                        // genuinely was. Scaled to the text size, because the
-                        // amount that goes missing scales with it too.
-                        Color.clear.frame(height: appearance.settings.fontSize)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(
-                        GeometryReader { content in
-                            Color.clear.preference(
-                                key: TranscriptBottomKey.self,
-                                value: content.frame(in: .named(Self.scrollSpace)).maxY
-                            )
-                        }
-                    )
-                }
-                .coordinateSpace(name: Self.scrollSpace)
-                .onPreferenceChange(TranscriptBottomKey.self) { contentBottom in
-                    scrollPin.update(distanceFromBottom: contentBottom - viewport.size.height)
-                }
-                // Fires on streamed text too, not just new entries: a reply
-                // grows inside one entry, and following only new entries would
-                // leave the answer scrolling out of view as it arrives.
-                .onChange(of: transcriptSignature) {
-                    guard scrollPin.isFollowing, let last = secretary.transcript.last else { return }
-                    // Unanimated, and measurements are muted while it settles:
-                    // an animated scroll reports near-bottom positions all the
-                    // way down, which re-latches following and drags the reader
-                    // back even after they've scrolled away.
-                    scrollPin.beginProgrammaticScroll()
-                    proxy.scrollTo(last.id, anchor: .bottom)
-                }
-            }
+            transcriptScroller(bottomEdge: viewport.frame(in: .global).maxY)
         }
         .frame(maxHeight: .infinity)
+        .onHover { pointerOverTranscript = $0 }
     }
 
-    private static let scrollSpace = "transcript"
+    private func transcriptScroller(bottomEdge: Double) -> some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                // Eager, and it has to stay eager. `LazyVStack` was tried here
+                // — it would let the strip at the end report its own visibility
+                // and it builds far less per token — and it puts the scroll bar
+                // in the wrong place: parked at the very bottom of a reply, the
+                // thumb sat half way down its track, because the height of a
+                // list whose rows haven't been built is a guess.
+                //
+                // Spacing wider than the gap between boxes of one turn, so the
+                // eye groups a split answer together before it groups the
+                // conversation.
+                VStack(alignment: .leading, spacing: 16) {
+                    if secretary.transcript.isEmpty {
+                        Text(emptyTranscriptHint)
+                            .font(.system(size: appearance.settings.fontSize))
+                            .foregroundStyle(.secondary)
+                    }
+                    ForEach(secretary.transcript) { entry in
+                        messageBubble(entry).id(entry.id)
+                    }
+                    // Breathing room under the last line, and the thing that
+                    // reports whether the reader is at the bottom.
+                    //
+                    // The room came first: scrolled to the bottom, the final
+                    // line sat flush against the edge and read as cut off — and
+                    // with a descender or a second line arriving mid-stream it
+                    // genuinely was. Scaled to the text size, because the amount
+                    // that goes missing scales with it too.
+                    //
+                    // Reporting is only ever "the bottom is on screen", never
+                    // the opposite: content growing under a reader who hasn't
+                    // moved pushes this strip off screen too, and that must not
+                    // be read as them scrolling away. Leaving is the scroll
+                    // wheel's business, in `startWatchingScroll`.
+                    Color.clear
+                        .frame(height: appearance.settings.fontSize)
+                        .id(Self.endOfTranscript)
+                        .background(
+                            GeometryReader { tail in
+                                Color.clear.preference(
+                                    key: TranscriptTailKey.self,
+                                    value: tail.frame(in: .global).maxY
+                                )
+                            }
+                        )
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            // How far the end of the transcript sits below the bottom edge.
+            //
+            // Measured in `.global` deliberately. The first version of this
+            // asked for the content's frame in a *named* coordinate space on
+            // the scroll view, and that preference was delivered exactly once,
+            // at launch — not on a single token of a reply, not on a single
+            // turn of the wheel. It read correctly and never ran; the same
+            // reading in global coordinates fires throughout.
+            .onPreferenceChange(TranscriptTailKey.self) { endOfContent in
+                // Assigned only when the answer changes: writing to `@State`
+                // invalidates the view whether or not the value differs, and
+                // this arrives on every token.
+                var pin = scrollPin
+                pin.update(distanceBelowFold: endOfContent - bottomEdge)
+                if pin != scrollPin { scrollPin = pin }
+            }
+            // A conversation only ever gets shorter by being replaced — started
+            // again, or an older one loaded — and that is the moment the parses
+            // of messages that are no longer on screen stop being worth
+            // keeping. Pruning here rather than per message keeps the walk off
+            // the token-by-token path.
+            .onChange(of: secretary.transcript.count) { before, after in
+                guard after < before else { return }
+                partsCache.keepingOnly(Set(secretary.transcript.map(\.id)))
+            }
+            // Fires on streamed text too, not just new entries: a reply grows
+            // inside one entry, and following only new entries would leave the
+            // answer scrolling out of view as it arrives.
+            .onChange(of: transcriptSignature) {
+                guard scrollPin.isFollowing else { return }
+                // To the very end, not to the last message: the last message's
+                // bottom is a line of text short of the end, which left the
+                // breathing room under it permanently off screen and made "am I
+                // at the bottom?" a question about a strip nobody could see.
+                //
+                // Unanimated: an animated scroll is still moving when the next
+                // token arrives and asks for another one, and the two fight
+                // each other into a visible judder.
+                proxy.scrollTo(Self.endOfTranscript, anchor: .bottom)
+            }
+        }
+    }
+
+    /// The strip below the last message: what following scrolls to, and what
+    /// being at the bottom is measured against.
+    private static let endOfTranscript = "end-of-transcript"
 
     /// Changes whenever anything visible changes — a new entry, or more text in
     /// the last one.
@@ -805,15 +868,14 @@ struct ChatPanelView: View {
         if !style.isBubble {
             activityRow(entry)
         } else {
-            // Both markers come out before anything is laid out. The Secretary
-            // already strips a loop block from a finished reply, but not from a
-            // failed one, and a reply still streaming has yet to be stripped at
-            // all — neither should put a fenced block on screen.
-            let body = LoopBlock.parse(MessageChoices.parse(entry.text).body).body
-            // Pasted rows count as a table too. Someone handing over data has
-            // it as CSV far more often than as pipes, and a wall of commas is
-            // exactly what they can't check before it is typed into a form.
-            let parts = messageParts(of: DelimitedTableParser.segments(of: body))
+            // Markers stripped, and pasted rows recognised as tables — someone
+            // handing over data has it as CSV far more often than as pipes, and
+            // a wall of commas is exactly what they can't check before it is
+            // typed into a form.
+            //
+            // Through the cache because this runs for every message in the
+            // conversation on every token of the one still arriving.
+            let parts = partsCache.parts(id: entry.id, text: entry.text)
             // Boxes within one turn sit closer together than turns do, but not
             // as close as they were: three boxes 5pt apart read as one striped
             // block rather than as three things.
@@ -1919,6 +1981,31 @@ struct ChatPanelView: View {
                 return event
             }
         }
+    }
+
+    /// Notices the reader scrolling back through the conversation, so a reply
+    /// still arriving stops chasing them down the page.
+    ///
+    /// From the event rather than from the scroll position, because a position
+    /// cannot say who moved it: the content growing under a reader who hasn't
+    /// touched anything looks exactly like the reader scrolling up. The event
+    /// only exists when they did it. Never consumed — it is passed straight
+    /// through and the view scrolls as usual.
+    private func startWatchingScroll() {
+        guard scrollMonitor == nil else { return }
+        scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
+            guard pointerOverTranscript,
+                  readerIsScrollingBack(scrollingDeltaY: event.scrollingDeltaY),
+                  scrollPin.isFollowing
+            else { return event }
+            scrollPin.readerScrolledUp()
+            return event
+        }
+    }
+
+    private func stopWatchingScroll() {
+        scrollMonitor.map(NSEvent.removeMonitor)
+        scrollMonitor = nil
     }
 
     private func stopWatchingArrowKeys() {

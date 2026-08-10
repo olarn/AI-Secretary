@@ -24,12 +24,15 @@ final class ChatBubbleLayout {
     func requestInputFocus() { focusRequests += 1 }
 }
 
-/// Reports where the bottom of the transcript content sits inside the scroll
-/// view's coordinate space, so the panel can tell whether the reader is at the
-/// bottom. macOS 14 has no scroll-position API; this is the way to measure it.
-struct TranscriptBottomKey: PreferenceKey {
+/// Reports where the end of the transcript sits, in global coordinates, so the
+/// panel can tell whether the reader is at the bottom. macOS 14 has no
+/// scroll-position API; this is the way to measure it.
+///
+/// Global, not the scroll view's own named coordinate space. The named version
+/// was delivered exactly once, at launch — never on a token of a reply, never
+/// on a turn of the wheel — which is how a scroll pin that read correctly could
+/// never have worked.
+struct TranscriptTailKey: PreferenceKey {
     static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }

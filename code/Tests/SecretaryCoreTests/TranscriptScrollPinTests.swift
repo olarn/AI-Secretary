@@ -9,116 +9,107 @@ final class TranscriptScrollPinTests: XCTestCase {
                       "Nothing to scroll away from yet — following is the sane start")
     }
 
-    func testScrollingUpStopsItFollowing() {
+    func testScrollingBackStopsItFollowing() {
         var pin = TranscriptScrollPin()
-        pin.update(distanceFromBottom: 400)
+        pin.readerScrolledUp()
         XCTAssertFalse(pin.isFollowing)
     }
 
-    func testComingBackToTheBottomResumesFollowing() {
+    func testComingBackToTheEndResumesFollowing() {
         var pin = TranscriptScrollPin()
-        pin.update(distanceFromBottom: 400)
-        pin.update(distanceFromBottom: 0)
+        pin.readerScrolledUp()
+        pin.update(distanceBelowFold: 0)
         XCTAssertTrue(pin.isFollowing)
     }
 
-    /// A scroll view sitting at the bottom rarely reports exactly zero — partial
-    /// rows and sub-pixel layout leave a few points. Without slack the view
-    /// would stop following for no visible reason.
-    func testASmallGapStillCountsAsTheBottom() {
+    /// The end of the transcript lands a layout pass before the scroll that
+    /// follows it, so "on screen" has to allow a line's worth of slack.
+    func testJustBelowTheFoldStillCountsAsTheEnd() {
         var pin = TranscriptScrollPin()
-        pin.update(distanceFromBottom: TranscriptScrollPin.tolerance - 1)
+        pin.readerScrolledUp()
+        pin.update(distanceBelowFold: TranscriptScrollPin.tolerance - 1)
         XCTAssertTrue(pin.isFollowing)
     }
 
-    func testJustPastTheToleranceCountsAsScrolledAway() {
+    func testFurtherBelowTheFoldDoesNot() {
         var pin = TranscriptScrollPin()
-        pin.update(distanceFromBottom: TranscriptScrollPin.tolerance + 1)
-        XCTAssertFalse(pin.isFollowing)
+        pin.readerScrolledUp()
+        pin.update(distanceBelowFold: TranscriptScrollPin.tolerance + 1)
+        XCTAssertFalse(pin.isFollowing, "Still short of the end — nothing to resume from")
     }
 
-    /// Content shorter than the viewport reports a negative distance.
+    /// A conversation shorter than the view reports a negative distance.
     func testAShortConversationFollows() {
         var pin = TranscriptScrollPin()
-        pin.update(distanceFromBottom: -200)
+        pin.readerScrolledUp()
+        pin.update(distanceBelowFold: -200)
         XCTAssertTrue(pin.isFollowing)
     }
 
-    /// Sending a message is an explicit "I'm here now" — it should win over
-    /// wherever the reader happened to be scrolled.
+    /// Sending a message is an explicit "I'm here now" — it wins over wherever
+    /// the reader happened to be scrolled, without waiting to be measured.
     func testSendingAMessageBringsItBack() {
         var pin = TranscriptScrollPin()
-        pin.update(distanceFromBottom: 900)
-        XCTAssertFalse(pin.isFollowing)
-
+        pin.readerScrolledUp()
         pin.follow()
         XCTAssertTrue(pin.isFollowing)
     }
 
-    /// …but only until the next measurement, so scrolling away again works.
     func testItCanBeScrolledAwayAgainAfterwards() {
         var pin = TranscriptScrollPin()
         pin.follow()
-        pin.update(distanceFromBottom: 900)
+        pin.readerScrolledUp()
         XCTAssertFalse(pin.isFollowing)
     }
 
-    // MARK: - Not mistaking our own scrolling for the reader's
+    // MARK: - The reported bug: dragged back down mid-reply
 
-    /// The bug this was reported for: scrolling up during a streamed reply and
-    /// being dragged back down. An app-driven scroll passes through near-bottom
-    /// positions the whole way, and treating those as the reader's position
-    /// re-latches following on the next token.
-    func testMeasurementsDuringOurOwnScrollAreIgnored() {
+    /// What a streamed reply looks like from in here: the reader scrolls up
+    /// once, and then token after token arrives while they read. Nothing the
+    /// arriving reply does may put the view back.
+    ///
+    /// The previous version failed this by a different route — it ignored
+    /// measurements for 0.3s after each of its own scrolls, tokens arrived
+    /// faster than that, and so following was never switched off for the whole
+    /// length of a reply. Whichever way it is written, this is the assertion
+    /// that has to hold: only the reader turns it back on.
+    func testGrowingContentNeverDragsTheReaderBack() {
         var pin = TranscriptScrollPin()
-        let start = Date()
-        pin.update(distanceFromBottom: 800, now: start)
-        XCTAssertFalse(pin.isFollowing, "Reader scrolled away")
+        pin.readerScrolledUp()
 
-        pin.beginProgrammaticScroll(now: start)
-        pin.update(distanceFromBottom: 0, now: start.addingTimeInterval(0.05))
+        // The end of the transcript retreating below the fold, token by token.
+        [80.0, 140, 260, 500, 900, 1_600].forEach {
+            pin.update(distanceBelowFold: $0)
+        }
 
-        XCTAssertFalse(pin.isFollowing, "Our own scroll must not re-latch following")
+        XCTAssertFalse(pin.isFollowing, "The reader is reading; the reply grew, they didn't move")
     }
 
-    func testMeasurementsCountAgainOnceTheScrollHasSettled() {
+    /// The regression to watch for while fixing the above: a table or a code
+    /// block arriving while the reader sits at the bottom pushes the end far
+    /// below the fold with no input from them, and that must not be mistaken
+    /// for scrolling away.
+    func testABlockArrivingAtTheBottomKeepsFollowing() {
         var pin = TranscriptScrollPin()
-        let start = Date()
-        pin.update(distanceFromBottom: 800, now: start)
-        pin.beginProgrammaticScroll(now: start)
-
-        pin.update(
-            distanceFromBottom: 0,
-            now: start.addingTimeInterval(TranscriptScrollPin.settleWindow + 0.01)
-        )
-
-        XCTAssertTrue(pin.isFollowing, "A real return to the bottom must still register")
+        pin.update(distanceBelowFold: 600)
+        XCTAssertTrue(pin.isFollowing, "Nobody scrolled — that was the content growing")
     }
 
-    /// Scrolling away *during* the settle window shouldn't be lost either — the
-    /// next measurement after it expires decides.
-    func testScrollingAwayIsNoticedAfterTheWindow() {
-        var pin = TranscriptScrollPin()
-        let start = Date()
-        pin.beginProgrammaticScroll(now: start)
-        pin.update(distanceFromBottom: 900, now: start.addingTimeInterval(0.1))
-        XCTAssertTrue(pin.isFollowing, "Still settling")
+    // MARK: - Which scrolls are the reader taking over
 
-        pin.update(
-            distanceFromBottom: 900,
-            now: start.addingTimeInterval(TranscriptScrollPin.settleWindow + 0.01)
-        )
-        XCTAssertFalse(pin.isFollowing)
+    func testScrollingBackThroughTheConversationIsTakingOver() {
+        XCTAssertTrue(readerIsScrollingBack(scrollingDeltaY: 12))
     }
 
-    func testSendingAMessageClearsTheSettleWindowToo() {
-        var pin = TranscriptScrollPin()
-        let start = Date()
-        pin.update(distanceFromBottom: 800, now: start)
-        pin.beginProgrammaticScroll(now: start)
-        pin.follow()
+    /// Scrolling down is either asking for more of what is arriving or the way
+    /// back to the bottom. Reading it as taking over would stop following at
+    /// the moment it is wanted most.
+    func testScrollingFurtherDownIsNot() {
+        XCTAssertFalse(readerIsScrollingBack(scrollingDeltaY: -12))
+    }
 
-        pin.update(distanceFromBottom: 900, now: start.addingTimeInterval(0.05))
-        XCTAssertFalse(pin.isFollowing, "follow() shouldn't leave the window armed")
+    func testAScrollThatMovedNothingIsNot() {
+        XCTAssertFalse(readerIsScrollingBack(scrollingDeltaY: 0),
+                       "Momentum tails and horizontal scrolls report zero")
     }
 }
