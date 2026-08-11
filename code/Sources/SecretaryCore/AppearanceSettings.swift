@@ -58,6 +58,9 @@ public struct AppearanceSettings: Equatable, Sendable {
     public private(set) var chatWidth: Double
     public private(set) var chatHeight: Double
     public var appScale: AppScale
+    /// Which colours the windows are painted with. Not clamped to anything —
+    /// unlike the sizes, every value is as valid as every other.
+    public var theme: ThemeChoice
 
     /// The most the bubble may become: the usable area of the screen it's on.
     /// Deliberately not persisted — the display can change between launches, so
@@ -71,9 +74,11 @@ public struct AppearanceSettings: Equatable, Sendable {
         chatHeight: Double = Self.defaultHeight,
         maxWidth: Double = Self.defaultWidth,
         maxHeight: Double = Self.defaultHeight,
-        appScale: AppScale = .medium
+        appScale: AppScale = .medium,
+        theme: ThemeChoice = .system
     ) {
         self.appScale = appScale
+        self.theme = theme
         self.fontSize = min(max(fontSize, Self.minFontSize), Self.maxFontSize)
         self.maxHeight = max(maxHeight, Self.defaultHeight)
         self.maxWidth = max(maxWidth, Self.defaultWidth)
@@ -194,17 +199,20 @@ public struct StoredAppearance: Equatable, Sendable {
     public var chatWidth: Double
     public var chatHeight: Double
     public var appScale: AppScale
+    public var theme: ThemeChoice
 
     public init(
         fontSize: Double = AppearanceSettings.defaultFontSize,
         chatWidth: Double = AppearanceSettings.defaultWidth,
         chatHeight: Double = AppearanceSettings.defaultHeight,
-        appScale: AppScale = .medium
+        appScale: AppScale = .medium,
+        theme: ThemeChoice = .system
     ) {
         self.fontSize = fontSize
         self.chatWidth = chatWidth
         self.chatHeight = chatHeight
         self.appScale = appScale
+        self.theme = theme
     }
 }
 
@@ -219,6 +227,7 @@ public final class UserDefaultsAppearanceStore: AppearanceStoring, @unchecked Se
     private let widthKey = "appearance.chatWidth"
     private let heightKey = "appearance.chatHeight"
     private let scaleKey = "appearance.appScale"
+    private let themeKey = "appearance.theme"
     private let defaults: UserDefaults
 
     public init(defaults: UserDefaults = .standard) {
@@ -237,7 +246,10 @@ public final class UserDefaultsAppearanceStore: AppearanceStoring, @unchecked Se
             chatHeight: (defaults.object(forKey: heightKey) as? Double) ?? AppearanceSettings.defaultHeight,
             appScale: Option.fromOptional(defaults.string(forKey: scaleKey))
                 .flatMap { Option.fromOptional(AppScale(rawValue: $0)) }^
-                .getOrElse(.medium)
+                .getOrElse(.medium),
+            theme: Option.fromOptional(defaults.string(forKey: themeKey))
+                .flatMap { Option.fromOptional(ThemeChoice(rawValue: $0)) }^
+                .getOrElse(.system)
         )
     }
 
@@ -246,6 +258,7 @@ public final class UserDefaultsAppearanceStore: AppearanceStoring, @unchecked Se
         defaults.set(appearance.chatWidth, forKey: widthKey)
         defaults.set(appearance.chatHeight, forKey: heightKey)
         defaults.set(appearance.appScale.rawValue, forKey: scaleKey)
+        defaults.set(appearance.theme.rawValue, forKey: themeKey)
     }
 }
 

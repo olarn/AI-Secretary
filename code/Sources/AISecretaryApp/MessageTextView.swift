@@ -1,4 +1,5 @@
 import SwiftUI
+import SecretaryCore
 import AppKit
 
 /// A message body, rendered by AppKit so its links actually behave like links.
@@ -12,6 +13,11 @@ import AppKit
 struct MessageTextView: NSViewRepresentable {
     let text: AttributedString
     let fontSize: Double
+    /// Passed in rather than read from the environment: the text is drawn by
+    /// AppKit into an `NSTextStorage`, so it needs `NSColor` values at the
+    /// moment the storage is built — `labelColor` and `linkColor` follow the
+    /// *system's* light/dark setting, which is not ours to assume.
+    let palette: Palette
 
     /// Stands in for "as much room as you like" when measuring. A finite number
     /// rather than `.greatestFiniteMagnitude`: TextKit lays out against this
@@ -30,14 +36,21 @@ struct MessageTextView: NSViewRepresentable {
         view.isHorizontallyResizable = false
         // Underlining is left to hover, so the resting state stays quiet.
         view.linkTextAttributes = [
-            .foregroundColor: NSColor.linkColor,
+            .foregroundColor: palette.accent.nsColor,
             .cursor: NSCursor.pointingHand
         ]
         return view
     }
 
     func updateNSView(_ view: HoverLinkTextView, context: Context) {
-        let styled = Self.styled(text, fontSize: fontSize)
+        // Re-applied on every update, not only in `makeNSView`: the theme can
+        // change while the window is open, and the link colour lives on the
+        // view rather than in the storage.
+        view.linkTextAttributes = [
+            .foregroundColor: palette.accent.nsColor,
+            .cursor: NSCursor.pointingHand
+        ]
+        let styled = Self.styled(text, fontSize: fontSize, palette: palette)
         if view.textStorage?.isEqual(to: styled) != true {
             view.textStorage?.setAttributedString(styled)
         }
@@ -100,8 +113,12 @@ struct MessageTextView: NSViewRepresentable {
     /// newline still breaks the line when nothing else does. Splitting the text
     /// up and measuring each line separately gives the same answer and costs a
     /// scan of the whole message per line, on every streamed token.
+    ///
+    /// Measured with a fixed palette, which is not a shortcut: colour has no
+    /// effect on line breaking or on the width of a glyph, and threading the
+    /// live theme through a pure measurement would suggest it did.
     static func naturalWidth(_ text: AttributedString, fontSize: Double) -> Double {
-        let styled = Self.styled(text, fontSize: fontSize)
+        let styled = Self.styled(text, fontSize: fontSize, palette: .dark)
         return ceil(
             styled.boundingRect(
                 with: CGSize(width: unboundedWidth, height: .greatestFiniteMagnitude),
@@ -112,7 +129,11 @@ struct MessageTextView: NSViewRepresentable {
 
     /// The transcript is monospaced; markdown emphasis keeps that face and only
     /// changes weight/slant, so a bold word doesn't jump to a different font.
-    static func styled(_ text: AttributedString, fontSize: Double) -> NSAttributedString {
+    static func styled(
+        _ text: AttributedString,
+        fontSize: Double,
+        palette: Palette
+    ) -> NSAttributedString {
         let result = NSMutableAttributedString(attributedString: NSAttributedString(text))
         let size = CGFloat(fontSize)
         let plain = NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
@@ -120,7 +141,7 @@ struct MessageTextView: NSViewRepresentable {
 
         let base: [NSAttributedString.Key: Any] = [
             .font: plain,
-            .foregroundColor: NSColor.labelColor
+            .foregroundColor: palette.primaryText.nsColor
         ]
         result.addAttributes(base, range: NSRange(location: 0, length: result.length))
 
@@ -143,7 +164,7 @@ struct MessageTextView: NSViewRepresentable {
             in: NSRange(location: 0, length: result.length)
         ) { value, range, _ in
             guard value != nil else { return }
-            result.addAttribute(.foregroundColor, value: NSColor.linkColor, range: range)
+            result.addAttribute(.foregroundColor, value: palette.accent.nsColor, range: range)
         }
         return result
     }

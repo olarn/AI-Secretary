@@ -14,11 +14,18 @@ import SecretaryCore
 @Observable
 final class Appearance {
     private(set) var settings: AppearanceSettings
+    /// Whether macOS is currently in dark mode. Stored and observed rather than
+    /// read where it's needed: the `System` theme has to repaint when the user
+    /// flips the system setting, and a value read inside a `body` is not
+    /// something SwiftUI knows to re-read.
+    private(set) var systemIsDark: Bool
     @ObservationIgnored private let store: AppearanceStoring
     @ObservationIgnored var onChange: (() -> Void)?
+    @ObservationIgnored private var systemThemeObserver: NSObjectProtocol?
 
     init(store: AppearanceStoring = UserDefaultsAppearanceStore()) {
         self.store = store
+        self.systemIsDark = Self.readSystemIsDark()
         let saved = store.load()
         // No screen to measure means no limit to apply, so the saved size stands
         // as its own ceiling. Falling back to the default here would shrink a
@@ -30,8 +37,45 @@ final class Appearance {
             chatHeight: saved.chatHeight,
             maxWidth: screen.map(Self.usableWidth) ?? saved.chatWidth,
             maxHeight: screen.map { Double($0.height) } ?? saved.chatHeight,
-            appScale: saved.appScale
+            appScale: saved.appScale,
+            theme: saved.theme
         )
+        watchSystemTheme()
+    }
+
+    /// The colours everything is painted with right now.
+    ///
+    /// Module-qualified because the property and the function that computes it
+    /// share a name, which is the right name for both.
+    var colors: Palette {
+        SecretaryCore.palette(for: settings.theme, systemIsDark: systemIsDark)
+    }
+
+    private static func readSystemIsDark() -> Bool {
+        NSApp?.effectiveAppearance
+            .bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+    }
+
+    /// AppKit posts this on the distributed centre when the user changes the
+    /// system's light/dark setting. Without it, `System` would only be re-read
+    /// at launch — the app would keep its old palette until relaunched, which
+    /// looks exactly like the setting not working.
+    private func watchSystemTheme() {
+        systemThemeObserver = DistributedNotificationCenter.default().addObserver(
+            forName: Notification.Name("AppleInterfaceThemeChangedNotification"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                let nowDark = Self.readSystemIsDark()
+                guard nowDark != self.systemIsDark else { return }
+                self.systemIsDark = nowDark
+                // Only `System` is following it; the other two are the user
+                // saying the system setting is not what they want.
+                if self.settings.theme == .system { self.onChange?() }
+            }
+        }
     }
 
     /// The margin the layout keeps at each screen edge, so the widest the bubble
@@ -62,6 +106,7 @@ final class Appearance {
     func increaseHeight() { mutate { $0.increaseHeight() } }
     func decreaseHeight() { mutate { $0.decreaseHeight() } }
     func selectAppScale(_ scale: AppScale) { mutate { $0.appScale = scale } }
+    func selectTheme(_ theme: ThemeChoice) { mutate { $0.theme = theme } }
     func widenChat() { mutate { $0.widenChat() } }
     func restoreChatWidth() { mutate { $0.restoreChatWidth() } }
     func resizeChat(width: Double, height: Double) {
@@ -78,16 +123,21 @@ final class Appearance {
         guard updated != settings else { return }
         // The character window is resized imperatively too, so a scale change
         // has to reach the delegate the same way a height change does.
+        // A theme change is imperative work on the window too: the control
+        // appearance is an AppKit property, not something a SwiftUI body can
+        // return, so it goes through the same callback as a resize.
         let needsRelayout = updated.chatHeight != settings.chatHeight
             || updated.chatWidth != settings.chatWidth
             || updated.appScale != settings.appScale
+            || updated.theme != settings.theme
         settings = updated
         store.save(
             StoredAppearance(
                 fontSize: updated.fontSize,
                 chatWidth: updated.chatWidth,
                 chatHeight: updated.chatHeight,
-                appScale: updated.appScale
+                appScale: updated.appScale,
+                theme: updated.theme
             )
         )
         if needsRelayout { onChange?() }

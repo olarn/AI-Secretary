@@ -27,6 +27,11 @@ final class UsageWindow: NSObject, NSWindowDelegate {
 
     var isOpen: Bool { window?.isVisible ?? false }
 
+    /// Re-lights an already-open window when the theme changes.
+    func applyControlAppearance(_ controls: NSAppearance?) {
+        window?.appearance = controls
+    }
+
     func toggle() {
         if isOpen { close() } else { show() }
     }
@@ -62,6 +67,7 @@ final class UsageWindow: NSObject, NSWindowDelegate {
         panel.isRestorable = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.delegate = self
+        panel.appearance = appearance.colors.controlAppearance
         panel.contentView = NSHostingView(
             rootView: UsageView(secretary: secretary, appearance: appearance, plan: plan)
         )
@@ -84,6 +90,10 @@ final class UsageWindow: NSObject, NSWindowDelegate {
 /// The contents. Deliberately plain: four counts, a context bar and the caveat
 /// about what the dollar figure is.
 private struct UsageView: View {
+    /// This window sets the palette rather than inheriting one: it is a root,
+    /// not a view inside the chat panel.
+    private var theme: Palette { appearance.colors }
+
     @Bindable var secretary: Secretary
     let appearance: Appearance
     @Bindable var plan: PlanUsageModel
@@ -111,6 +121,7 @@ private struct UsageView: View {
         }
         .frame(minWidth: 300, minHeight: 320)
         .onReceive(Timer.publish(every: 30, on: .main, in: .common).autoconnect()) { tick = $0 }
+        .themedWindow(theme)
     }
 
     private var content: some View {
@@ -122,7 +133,7 @@ private struct UsageView: View {
                 EmptyView()
             } else if usage.turns == 0 {
                 Text("Nothing used yet this session.")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(theme.mutedText.color)
             } else {
                 contextBar
                 Divider()
@@ -138,7 +149,7 @@ private struct UsageView: View {
                     Text("\(UsageFormat.cost(usage.costUSD)) over \(usage.turns) turn\(usage.turns == 1 ? "" : "s")")
                     Text(UsageFormat.costNote)
                         .font(.system(size: max(9, appearance.settings.secondaryFontSize - 2)))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(theme.mutedText.color)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -155,7 +166,7 @@ private struct UsageView: View {
         VStack(alignment: .leading, spacing: 10) {
             sectionHeader("Plan usage limits", isExpanded: $showPlan) {
                 if let name = plan.usage?.planName {
-                    Text(name).foregroundStyle(.secondary)
+                    Text(name).foregroundStyle(theme.mutedText.color)
                 }
             }
 
@@ -163,7 +174,7 @@ private struct UsageView: View {
                 EmptyView()
             } else if let problem = plan.problem {
                 Text(problem)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(theme.mutedText.color)
                     .fixedSize(horizontal: false, vertical: true)
             } else if let usage = plan.usage {
                 ForEach(Array(usage.session.enumerated()), id: \.offset) { _, limit in
@@ -187,7 +198,7 @@ private struct UsageView: View {
                         }
                         Text(PlanUsage.activityNote)
                             .font(.system(size: max(9, appearance.settings.secondaryFontSize - 2)))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(theme.mutedText.color)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -195,7 +206,7 @@ private struct UsageView: View {
                 HStack(spacing: 6) {
                     Text("Last updated: \(UsageFormat.age(of: usage.checkedAt, now: tick))")
                         .font(.system(size: max(9, appearance.settings.secondaryFontSize - 2)))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(theme.mutedText.color)
                     Button { plan.refresh() } label: {
                         Image(systemName: "arrow.clockwise")
                     }
@@ -207,7 +218,7 @@ private struct UsageView: View {
                 .padding(.top, 2)
             } else {
                 Text(plan.isRefreshing ? "Checking…" : "Not checked yet.")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(theme.mutedText.color)
             }
         }
     }
@@ -226,7 +237,7 @@ private struct UsageView: View {
             HStack(spacing: 6) {
                 Image(systemName: "chevron.right")
                     .font(.system(size: max(8, appearance.settings.secondaryFontSize - 4), weight: .bold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(theme.mutedText.color)
                     .rotationEffect(.degrees(isExpanded.wrappedValue ? 90 : 0))
                 Text(title)
                     .font(.system(size: appearance.settings.secondaryFontSize, weight: .semibold))
@@ -249,12 +260,12 @@ private struct UsageView: View {
                 Spacer()
                 Text("\(UsageFormat.tokens(period.requests)) req · \(UsageFormat.tokens(period.sessions)) sessions")
                     .monospacedDigit()
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(theme.mutedText.color)
             }
             ForEach(period.notes, id: \.self) { note in
                 Text(note)
                     .font(.system(size: max(9, appearance.settings.secondaryFontSize - 2)))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(theme.mutedText.color)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -268,18 +279,18 @@ private struct UsageView: View {
             HStack {
                 Text(limit.name)
                 Spacer()
-                Text(limit.percentText).monospacedDigit().foregroundStyle(.secondary)
+                Text(limit.percentText).monospacedDigit().foregroundStyle(theme.mutedText.color)
             }
             ProgressView(value: limit.fraction)
                 .tint(limit.fraction > 0.85 ? .orange : .accentColor)
             if let resets = limit.resetDescription(now: tick) {
                 Text(resets)
                     .font(.system(size: max(9, appearance.settings.secondaryFontSize - 2)))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(theme.mutedText.color)
             } else if limit.fraction == 0 {
                 Text("Not used yet")
                     .font(.system(size: max(9, appearance.settings.secondaryFontSize - 2)))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(theme.mutedText.color)
             }
         }
     }
@@ -298,7 +309,7 @@ private struct UsageView: View {
                 ProgressView(value: fraction)
                     .tint(fraction > 0.85 ? .orange : .accentColor)
                 Text("\(UsageFormat.tokens(usage.lastTurnContextTokens)) of \(UsageFormat.tokens(window))")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(theme.mutedText.color)
                     .monospacedDigit()
             }
         }
@@ -311,7 +322,7 @@ private struct UsageView: View {
         HStack {
             Text(label)
                 .fontWeight(emphasised ? .semibold : .regular)
-                .foregroundStyle(emphasised ? .primary : .secondary)
+                .foregroundStyle(emphasised ? theme.primaryText.color : theme.mutedText.color)
             Spacer()
             Text(UsageFormat.tokens(value))
                 .fontWeight(emphasised ? .semibold : .regular)

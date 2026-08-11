@@ -138,7 +138,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
 
         // Resizing an NSPanel is imperative work, so the model calls back here
         // rather than the delegate re-deriving it during a view update.
-        appearance.onChange = { [weak self] in self?.applyWindowSizes() }
+        appearance.onChange = { [weak self] in
+            self?.applyWindowSizes()
+            self?.applyControlAppearance()
+        }
+        applyControlAppearance()
         // Switching profile has to reach the prompt as well as the pictures.
         profiles.onActiveChange = { [weak self] profile in
             self?.secretary.apply(profile: profile)
@@ -304,6 +308,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     /// The character grows from its bottom-centre: it usually sits near the Dock
     /// with the bubble above it, and growing from the top-left corner instead
     /// would walk it across the desktop each time the size changed.
+    /// Tells AppKit which way the windows are lit.
+    ///
+    /// A window property, not something a SwiftUI body can return, and it has
+    /// to be re-applied rather than set once: without it the caret, the
+    /// scroller and the text-selection tint keep coming from the system's
+    /// light/dark setting — a white scroll bar down the side of a dark panel
+    /// the moment the theme is overridden.
+    private func applyControlAppearance() {
+        let controls = appearance.colors.controlAppearance
+        characterPanel?.appearance = controls
+        chatPanel?.appearance = controls
+        usageWindow.applyControlAppearance(controls)
+        infoWindows.applyControlAppearance(controls)
+    }
+
     private func applyWindowSizes() {
         let old = characterPanel.frame
         let size = characterSize

@@ -1,4 +1,5 @@
 import SwiftUI
+import SecretaryCore
 
 /// The Projects / Profile / Skills / Settings buttons: how big they are, and
 /// which one is open.
@@ -28,6 +29,9 @@ import SwiftUI
 struct PanelToggleStyle: ToggleStyle {
     let fontSize: Double
     let controlSize: ControlSize
+    /// Passed in, not read from the environment: a `ToggleStyle` is not a
+    /// `View`, so `@Environment` in one is never populated.
+    let palette: Palette
 
     func makeBody(configuration: Configuration) -> some View {
         Button {
@@ -48,9 +52,15 @@ struct PanelToggleStyle: ToggleStyle {
         // hit area stay whatever the bordered style gives every other button
         // in the row.
         .background(
-            configuration.isOn ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(Color.clear),
+            configuration.isOn ? AnyShapeStyle(palette.accent.color) : AnyShapeStyle(Color.clear),
             in: RoundedRectangle(cornerRadius: fontSize * 0.4)
         )
-        .foregroundStyle(configuration.isOn ? AnyShapeStyle(Color.white) : AnyShapeStyle(Color.primary))
+        .foregroundStyle(configuration.isOn ? AnyShapeStyle(palette.onAccent.color) : AnyShapeStyle(palette.primaryText.color))
+        // `.tint`, not only `.foregroundStyle`: a bordered button takes its
+        // label colour from the tint, so the foreground style alone left the
+        // selected button's label the same blue as the fill drawn behind it —
+        // a solid blue block with the word invisible inside it. Seen in the
+        // running app; nothing about the code read wrong.
+        .tint(configuration.isOn ? palette.onAccent.color : palette.primaryText.color)
     }
 }

@@ -10,6 +10,9 @@ import SecretaryCore
 /// a draft and committed with Save, because a text field that applied per
 /// keystroke would announce a change in the conversation for every letter typed.
 struct ProfileSettingsView: View {
+    /// The colours in force, set by whichever window this view is inside.
+    @Environment(\.palette) private var theme
+
     let profiles: ProfileLibrary
     let appearance: Appearance
 
@@ -57,7 +60,7 @@ struct ProfileSettingsView: View {
                     Button("Delete") { delete() }
                         .buttonStyle(.plain)
                         .font(.system(size: appearance.settings.footnoteFontSize))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(theme.mutedText.color)
                 }
                 Spacer()
             }
@@ -65,11 +68,11 @@ struct ProfileSettingsView: View {
             if let note {
                 Text(note)
                     .font(.system(size: appearance.settings.hintFontSize))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(theme.mutedText.color)
             }
         }
         .padding(appearance.settings.panelPadding)
-        .background(Color.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+        .background(theme.chipFill.color, in: RoundedRectangle(cornerRadius: 8))
         // Keeps the fields in step when the active profile changes from anywhere
         // else — a new profile, or a delete that fell back to another one.
         .onChange(of: profiles.activeID) { _, newID in
@@ -179,7 +182,7 @@ struct ProfileSettingsView: View {
                     .font(.system(size: appearance.settings.footnoteFontSize))
                 Text("Free text — who she is, in your words. Blank means \(SecretaryProfile.defaultPersonality).")
                     .font(.system(size: appearance.settings.hintFontSize))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(theme.mutedText.color)
             }
         }
     }
@@ -206,7 +209,7 @@ struct ProfileSettingsView: View {
                     HStack(spacing: appearance.settings.panelSpacing * 0.5) {
                         Image(systemName: hasPicture ? "checkmark.circle.fill" : "circle.dashed")
                             .font(.system(size: appearance.settings.hintFontSize * 0.9))
-                            .foregroundStyle(hasPicture ? Color.green : .secondary)
+                            .foregroundStyle(hasPicture ? theme.success.color : theme.mutedText.color)
                         Text(hasPicture ? "Chosen" : "None")
                             .font(.system(size: appearance.settings.hintFontSize + 1))
                     }
@@ -220,7 +223,7 @@ struct ProfileSettingsView: View {
                 }
                 Text("Shown in every state — the colour and badge say what she's doing.")
                     .font(.system(size: appearance.settings.hintFontSize))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(theme.mutedText.color)
             }
         }
     }
@@ -243,7 +246,7 @@ struct ProfileSettingsView: View {
     private func fieldLabel(_ text: String) -> some View {
         Text(text)
             .font(.system(size: appearance.settings.footnoteFontSize))
-            .foregroundStyle(.secondary)
+            .foregroundStyle(theme.mutedText.color)
             // The grid gives the column the width of the widest label; this
             // only says the label itself must not be the thing that wraps.
             .lineLimit(1)

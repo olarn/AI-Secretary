@@ -34,6 +34,11 @@ final class InfoWindows: NSObject, NSWindowDelegate {
 
     /// Opens a pane and shows it. Called when a reply carried a ` ```window `
     /// block.
+    /// Re-lights every open pinned window when the theme changes.
+    func applyControlAppearance(_ controls: NSAppearance?) {
+        panels.values.forEach { $0.appearance = controls }
+    }
+
     func open(_ spec: InfoWindowSpec) {
         // Already pinned: bring that one forward rather than making a second
         // copy of it. See `InfoWindowSet.matching` for why this is on content
@@ -87,6 +92,7 @@ final class InfoWindows: NSObject, NSWindowDelegate {
         panel.isRestorable = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.delegate = self
+        panel.appearance = appearance.colors.controlAppearance
         panel.contentView = host
         panel.setFrameTopLeftPoint(nextOrigin())
         panel.makeKeyAndOrderFront(nil)
@@ -159,6 +165,10 @@ final class InfoWindows: NSObject, NSWindowDelegate {
 
 /// One pane's contents: the same renderer the chat uses, scrolled.
 private struct InfoWindowView: View {
+    /// This window sets the palette rather than inheriting one: it is a root,
+    /// not a view inside the chat panel.
+    private var theme: Palette { appearance.colors }
+
     let spec: InfoWindowSpec
     let appearance: Appearance
 
@@ -182,6 +192,7 @@ private struct InfoWindowView: View {
             if hovering { copyButton }
         }
         .onHover { hovering = $0 }
+        .themedWindow(theme)
     }
 
     private var copyButton: some View {
@@ -196,9 +207,9 @@ private struct InfoWindowView: View {
         } label: {
             Image(systemName: copied ? "checkmark" : "doc.on.doc")
                 .font(.system(size: appearance.settings.secondaryFontSize))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(theme.mutedText.color)
                 .padding(5)
-                .background(.background.opacity(0.8), in: RoundedRectangle(cornerRadius: 5))
+                .background(theme.chipFill.color, in: RoundedRectangle(cornerRadius: 5))
         }
         .buttonStyle(.plain)
         .help("Copy this window's text")

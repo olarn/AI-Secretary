@@ -22,6 +22,11 @@ struct ChatPanelView: View {
     /// like one the assistant asked to pin.
     let onPin: (InfoWindowSpec) -> Void
 
+    /// The colours in force. Every colour in this file comes from a role on
+    /// this palette; there are no literals left, because a literal here cannot
+    /// be checked — `AISecretaryApp` is not linked into the test bundle.
+    private var theme: Palette { appearance.colors }
+
     @State private var draft: String = ""
     /// Which configuration section is open, if any.
     ///
@@ -104,6 +109,13 @@ struct ChatPanelView: View {
             footer
         }
         .padding(18)
+        // The default for anything that doesn't name a colour, so a `Text` added
+        // later inherits the palette instead of the system label colour — which
+        // is decided by the system's light/dark setting, not by ours, and would
+        // be black text on a dark panel the moment the theme is overridden.
+        .foregroundStyle(theme.primaryText.color)
+        .tint(theme.accent.color)
+        .environment(\.palette, theme)
         .onAppear {
             startWatchingArrowKeys()
             startWatchingScroll()
@@ -126,11 +138,11 @@ struct ChatPanelView: View {
         .frame(maxHeight: .infinity, alignment: .top)
         .background(
             SpeechBubbleShape(isMirrored: layout.isMirrored, isFlippedVertically: layout.isFlippedVertically)
-                .fill(.regularMaterial)
+                .fill(theme.ground.color)
         )
         .overlay(
             SpeechBubbleShape(isMirrored: layout.isMirrored, isFlippedVertically: layout.isFlippedVertically)
-                .stroke(Color.primary.opacity(0.85), lineWidth: 2)
+                .stroke(theme.panelBorder.color, lineWidth: theme.panelBorderWidth)
         )
         // The button row stays on the tail's side of the top edge; the grip goes
         // to the corner the bubble actually grows out of, which is not always a
@@ -164,7 +176,7 @@ struct ChatPanelView: View {
                 closeButton
             }
         }
-        .foregroundStyle(.secondary)
+        .foregroundStyle(theme.mutedText.color)
         .buttonStyle(.plain)
         .padding(.top, 10)
         .padding(buttonsOnLeading ? .leading : .trailing, 10)
@@ -255,8 +267,8 @@ struct ChatPanelView: View {
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 4)
-        .background(RoundedRectangle(cornerRadius: 6).fill(Color(nsColor: .textBackgroundColor)))
-        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.4), lineWidth: 1))
+        .background(RoundedRectangle(cornerRadius: 6).fill(theme.chipFill.color))
+        .overlay(RoundedRectangle(cornerRadius: 6).stroke(theme.hairline.color, lineWidth: 1))
         .overlay(alignment: .bottomTrailing) { sendGlyph }
     }
 
@@ -333,7 +345,7 @@ struct ChatPanelView: View {
         // ↖↘ at top-leading and bottom-trailing, ↗↙ at the other two.
         Image(systemName: gripCorner.glyphName)
             .font(.system(size: 9, weight: .bold))
-            .foregroundStyle(.secondary)
+            .foregroundStyle(theme.mutedText.color)
             // Enough to sit clear of the bubble's rounded corner rather than
             // tucked into it. This is also the grip's hit area, and at a bottom
             // corner it is what the footer row has to stay above — so it is as
@@ -430,11 +442,11 @@ struct ChatPanelView: View {
                 .textSelection(.enabled)
             Text("Then reopen this panel. If it's installed somewhere unusual, I also check your login shell's PATH.")
                 .font(.system(size: appearance.settings.footnoteFontSize))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(theme.mutedText.color)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(appearance.settings.panelPadding)
-        .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+        .background(theme.warningFill.color, in: RoundedRectangle(cornerRadius: 8))
     }
 
     /// Clicking the name opens a real picker. The same entry point the slash
@@ -514,7 +526,7 @@ struct ChatPanelView: View {
             // views renders as the title and the chevron alone here — which is
             // why Model and Effort show no value — and the one thing this row
             // has to say is whether the browser is connected.
-            Text("Browser:").foregroundStyle(.secondary)
+            Text("Browser:").foregroundStyle(theme.mutedText.color)
             browserMenu
         }
         .font(.system(size: appearance.settings.footnoteFontSize))
@@ -543,12 +555,12 @@ struct ChatPanelView: View {
     /// which can change if the user reconfigures Claude Code.
     private func settingLabel(_ title: String, value: String, inherited: Bool) -> some View {
         HStack(spacing: appearance.settings.panelSpacing * 0.5) {
-            Text("\(title):").foregroundStyle(.secondary)
-            Text(value).foregroundStyle(.primary)
+            Text("\(title):").foregroundStyle(theme.mutedText.color)
+            Text(value).foregroundStyle(theme.primaryText.color)
             if inherited {
                 Image(systemName: "circle.dashed")
                     .font(.system(size: appearance.settings.hintFontSize * 0.8))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(theme.mutedText.color)
             }
         }
         .font(.system(size: appearance.settings.footnoteFontSize))
@@ -570,7 +582,7 @@ struct ChatPanelView: View {
             if let tag = characterStatusTag(for: machine.state) {
                 Text("- \(tag)")
                     .font(.system(size: appearance.settings.footnoteFontSize, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(theme.mutedText.color)
             }
             stopBadge
             queueBadge
@@ -608,7 +620,7 @@ struct ChatPanelView: View {
                 .font(.system(size: appearance.settings.secondaryFontSize, weight: .semibold))
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
-                .background(Color.accentColor.opacity(0.22), in: Capsule())
+                .background(theme.accentFill.color, in: Capsule())
                 .contentShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -635,7 +647,7 @@ struct ChatPanelView: View {
                 .font(.system(size: appearance.settings.secondaryFontSize, weight: .semibold))
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
-                .background(Color.accentColor.opacity(0.22), in: Capsule())
+                .background(theme.accentFill.color, in: Capsule())
                 .contentShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -662,7 +674,7 @@ struct ChatPanelView: View {
                 .font(.system(size: appearance.settings.secondaryFontSize, weight: .semibold))
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
-                .background(Color.red.opacity(0.22), in: Capsule())
+                .background(theme.dangerFill.color, in: Capsule())
                 .contentShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -684,7 +696,7 @@ struct ChatPanelView: View {
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
                 .background(
-                    (secretary.queuePaused ? Color.orange : Color.accentColor).opacity(0.22),
+                    (secretary.queuePaused ? theme.warningFill : theme.accentFill).color,
                     in: Capsule()
                 )
                 .contentShape(Capsule())
@@ -731,7 +743,7 @@ struct ChatPanelView: View {
                 .font(.system(size: appearance.settings.secondaryFontSize, weight: .semibold))
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
-                .background(Color.accentColor.opacity(0.22), in: Capsule())
+                .background(theme.accentFill.color, in: Capsule())
                 .contentShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -776,7 +788,7 @@ struct ChatPanelView: View {
                     if secretary.transcript.isEmpty {
                         Text(emptyTranscriptHint)
                             .font(.system(size: appearance.settings.fontSize))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(theme.mutedText.color)
                     }
                     ForEach(secretary.transcript) { entry in
                         messageBubble(entry).id(entry.id)
@@ -1001,7 +1013,7 @@ struct ChatPanelView: View {
             Text(MessageTime.label(for: entry.timestamp))
                 .font(.system(size: appearance.settings.secondaryFontSize))
         }
-        .foregroundStyle(style.isFailure ? Color.orange : Color.secondary)
+        .foregroundStyle(style.isFailure ? theme.warning.color : theme.mutedText.color)
     }
 
     /// Pin and copy, in that order left to right.
@@ -1038,9 +1050,9 @@ struct ChatPanelView: View {
         } label: {
             Image(systemName: "pin")
                 .font(.system(size: appearance.settings.secondaryFontSize))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(theme.mutedText.color)
                 .padding(4)
-                .background(.background.opacity(0.75), in: RoundedRectangle(cornerRadius: 5))
+                .background(theme.chipFill.color, in: RoundedRectangle(cornerRadius: 5))
         }
         .buttonStyle(.plain)
         .help("Pin this box into its own window")
@@ -1062,9 +1074,9 @@ struct ChatPanelView: View {
             // can't be left looking as though it went away.
             Image(systemName: copiedBox == box ? "checkmark" : "doc.on.doc")
                 .font(.system(size: appearance.settings.secondaryFontSize))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(theme.mutedText.color)
                 .padding(4)
-                .background(.background.opacity(0.75), in: RoundedRectangle(cornerRadius: 5))
+                .background(theme.chipFill.color, in: RoundedRectangle(cornerRadius: 5))
         }
         .buttonStyle(.plain)
         .help("Copy this box")
@@ -1114,7 +1126,8 @@ struct ChatPanelView: View {
                         // the row has and simply gets the row.
                         MessageTextView(
                             text: MessageMarkdown.attributed(body),
-                            fontSize: appearance.settings.fontSize
+                            fontSize: appearance.settings.fontSize,
+                            palette: theme
                         )
                         .frame(
                             maxWidth: MessageTextView.naturalWidth(
@@ -1141,8 +1154,8 @@ struct ChatPanelView: View {
     /// the rest of the panel uses. Both are faint: the text has to stay the
     /// loudest thing in the bubble.
     private func bubbleFill(_ style: MessageBubbleStyle) -> Color {
-        if style.isFailure { return Color.orange.opacity(0.14) }
-        return style.isMine ? Color.accentColor.opacity(0.16) : Color.secondary.opacity(0.12)
+        if style.isFailure { return theme.warningFill.color }
+        return (style.isMine ? theme.bubbleMine : theme.bubbleTheirs).color
     }
 
     /// One setting, two buttons. A button that can't do anything is disabled
@@ -1158,7 +1171,7 @@ struct ChatPanelView: View {
         HStack(spacing: appearance.settings.panelSpacing) {
             Text(label)
                 .font(.system(size: appearance.settings.footnoteFontSize))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(theme.mutedText.color)
             Spacer(minLength: 4)
             Text(value)
                 .font(.system(size: appearance.settings.footnoteFontSize, design: .monospaced))
@@ -1190,7 +1203,7 @@ struct ChatPanelView: View {
             if let language = block.language {
                 Text(language)
                     .font(.system(size: appearance.settings.secondaryFontSize))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(theme.mutedText.color)
                     .padding(.horizontal, 8)
                     .padding(.top, 5)
             }
@@ -1206,10 +1219,10 @@ struct ChatPanelView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+        .background(theme.nestedFill.color, in: RoundedRectangle(cornerRadius: 6))
         .overlay(
             RoundedRectangle(cornerRadius: 6)
-                .stroke(Color.secondary.opacity(0.25), lineWidth: 1)
+                .stroke(theme.hairline.color, lineWidth: 1)
         )
     }
 
@@ -1237,7 +1250,11 @@ struct ChatPanelView: View {
             .padding(8)
             .textSelection(.enabled)
         }
-        .background(Color.secondary.opacity(0.07), in: RoundedRectangle(cornerRadius: 6))
+        .background(theme.nestedFill.color, in: RoundedRectangle(cornerRadius: 6))
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(theme.hairline.color, lineWidth: 1)
+        )
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -1268,7 +1285,7 @@ struct ChatPanelView: View {
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .foregroundStyle(.secondary)
+        .foregroundStyle(theme.mutedText.color)
         .padding(.leading, Self.bubbleTextInset)
         .padding(.trailing, messageBubbleGutter(panelWidth: appearance.settings.chatWidth))
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1300,7 +1317,7 @@ struct ChatPanelView: View {
                     .font(.system(size: appearance.settings.footnoteFontSize, design: .monospaced))
                 Text("in \(request.project.name) · \(request.actionClass.humanDescription)")
                     .font(.system(size: appearance.settings.footnoteFontSize))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(theme.mutedText.color)
                 HStack(spacing: appearance.settings.panelSpacing * 1.3) {
                     Button("Approve") { secretary.resolvePendingApproval(granted: true) }
                         .buttonStyle(.borderedProminent)
@@ -1311,7 +1328,7 @@ struct ChatPanelView: View {
             }
             .padding(appearance.settings.panelPadding)
             .background(
-                (leavesTheMachine ? Color.red : Color.orange).opacity(0.12),
+                (leavesTheMachine ? theme.dangerFill : theme.warningFill).color,
                 in: RoundedRectangle(cornerRadius: 8)
             )
 
@@ -1321,7 +1338,7 @@ struct ChatPanelView: View {
                     .font(.system(size: appearance.settings.footnoteFontSize, weight: .semibold))
                 Text(text)
                     .font(.system(size: appearance.settings.footnoteFontSize))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(theme.mutedText.color)
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: appearance.settings.panelSpacing * 1.3) {
@@ -1338,7 +1355,7 @@ struct ChatPanelView: View {
                 .font(.system(size: appearance.settings.footnoteFontSize))
             }
             .padding(appearance.settings.panelPadding)
-            .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+            .background(theme.accentFill.color, in: RoundedRectangle(cornerRadius: 8))
 
         case .projectChoice(let candidates, _):
             VStack(alignment: .leading, spacing: appearance.settings.panelSpacing) {
@@ -1354,7 +1371,7 @@ struct ChatPanelView: View {
                     .font(.system(size: appearance.settings.footnoteFontSize))
             }
             .padding(appearance.settings.panelPadding)
-            .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+            .background(theme.accentFill.color, in: RoundedRectangle(cornerRadius: 8))
 
         case .website(let request):
             VStack(alignment: .leading, spacing: appearance.settings.panelSpacing) {
@@ -1373,7 +1390,7 @@ struct ChatPanelView: View {
                         : "Acts as you on \(request.host) for this conversation"
                 )
                 .font(.system(size: appearance.settings.footnoteFontSize))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(theme.mutedText.color)
                 .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: appearance.settings.panelSpacing * 1.3) {
                     Button("Go ahead") { secretary.resolveWebTask(granted: true) }
@@ -1384,7 +1401,7 @@ struct ChatPanelView: View {
                 .font(.system(size: appearance.settings.footnoteFontSize))
             }
             .padding(appearance.settings.panelPadding)
-            .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+            .background(theme.warningFill.color, in: RoundedRectangle(cornerRadius: 8))
 
         case .instructionPlan(let plan, let risks, let changed):
             InstructionPlanCard(
@@ -1427,7 +1444,7 @@ struct ChatPanelView: View {
         } isTargeted: { droppingFile = $0 }
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(Color.accentColor, lineWidth: droppingFile ? 2 : 0)
+                .strokeBorder(theme.accent.color, lineWidth: droppingFile ? 2 : 0)
                 .allowsHitTesting(false)
         )
     }
@@ -1458,7 +1475,7 @@ struct ChatPanelView: View {
                 .font(.system(size: appearance.settings.footnoteFontSize))
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
-                .background(Color.secondary.opacity(0.12), in: Capsule())
+                .background(theme.chipFill.color, in: Capsule())
                 }
             }
             .padding(.vertical, 1)
@@ -1498,7 +1515,7 @@ struct ChatPanelView: View {
                 .fixedSize(horizontal: false, vertical: true)
             Text("Markdown, CSV, JSON, a PDF, source code, notes or an image — or drag one onto the box below.")
                 .font(.system(size: appearance.settings.hintFontSize))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(theme.mutedText.color)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: appearance.settings.panelSpacing * 1.3) {
                 Button("Choose…") {
@@ -1514,7 +1531,7 @@ struct ChatPanelView: View {
         }
         .padding(appearance.settings.panelPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.teal.opacity(0.14), in: RoundedRectangle(cornerRadius: 8))
+        .background(theme.infoFill.color, in: RoundedRectangle(cornerRadius: 8))
     }
 
     /// The ↵'s point size, relative to the message text. Was 1.1 — 10% smaller
@@ -1547,8 +1564,8 @@ struct ChatPanelView: View {
         // (black/white at 0.5 alpha) — naming the placeholder one says which
         // of the two this is matched to.
         .foregroundStyle(
-            canSend ? AnyShapeStyle(Color.primary.opacity(0.75))
-                    : AnyShapeStyle(Color(nsColor: .placeholderTextColor))
+            canSend ? AnyShapeStyle(theme.primaryText.color)
+                    : AnyShapeStyle(theme.mutedText.color)
         )
         .disabled(!canSend)
         .help("Return to send")
@@ -1574,7 +1591,7 @@ struct ChatPanelView: View {
             .font(.system(size: appearance.settings.footnoteFontSize))
             Text("Change with /model <id> or /effort <level> in the chat.")
                 .font(.system(size: appearance.settings.hintFontSize))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(theme.mutedText.color)
 
             browserPicker
             Text(
@@ -1582,13 +1599,15 @@ struct ChatPanelView: View {
                 + "Needs the Claude in Chrome extension. Clicking and typing still ask first."
             )
             .font(.system(size: appearance.settings.hintFontSize))
-            .foregroundStyle(.secondary)
+            .foregroundStyle(theme.mutedText.color)
             // Two lines rather than one truncated one: the sentence about
             // reading signed-in sites is the part a person needs before they
             // switch this on, and "…" is where it was being cut.
             .fixedSize(horizontal: false, vertical: true)
 
             Divider()
+
+            themeRow
 
             stepperRow(
                 label: "Text size",
@@ -1608,16 +1627,62 @@ struct ChatPanelView: View {
             )
             Text("Or drag the grip in the corner away from the tail to size it freely — the tail stays on \(secretary.profile.displayName) either way.")
                 .font(.system(size: appearance.settings.hintFontSize))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(theme.mutedText.color)
 
             if let settingsNote {
                 Text(settingsNote)
                     .font(.system(size: appearance.settings.hintFontSize))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(theme.mutedText.color)
             }
         }
         .padding(appearance.settings.panelPadding)
-        .background(Color.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+        .background(theme.chipFill.color, in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    /// One button per theme, laid out like the character-size picker in
+    /// Profile, so the two size/appearance choices in the app are chosen the
+    /// same way. Built from `ThemeChoice.allCases`, so adding a theme adds a
+    /// button without this row being touched.
+    private var themeRow: some View {
+        VStack(alignment: .leading, spacing: appearance.settings.panelSpacing * 0.5) {
+            HStack(spacing: appearance.settings.panelSpacing) {
+                Text("Theme")
+                    .font(.system(size: appearance.settings.footnoteFontSize))
+                Spacer(minLength: 0)
+                ForEach(ThemeChoice.allCases, id: \.self) { choice in
+                    Button(choice.label) { appearance.selectTheme(choice) }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .font(.system(size: appearance.settings.hintFontSize))
+                        // Drawn here rather than left to the bordered style's
+                        // own tint, for the reason in `PanelToggleStyle`: this
+                        // window is never key, and AppKit greys out a tinted
+                        // control in a window that isn't.
+                        .background(
+                            appearance.settings.theme == choice
+                                ? AnyShapeStyle(theme.accent.color)
+                                : AnyShapeStyle(Color.clear),
+                            in: RoundedRectangle(cornerRadius: 5)
+                        )
+                        .foregroundStyle(
+                            appearance.settings.theme == choice
+                                ? theme.onAccent.color
+                                : theme.primaryText.color
+                        )
+                        // See `PanelToggleStyle`: a bordered button's label
+                        // follows the tint, not the foreground style.
+                        .tint(
+                            appearance.settings.theme == choice
+                                ? theme.onAccent.color
+                                : theme.primaryText.color
+                        )
+                }
+            }
+            Text(appearance.settings.theme.explanation)
+                .font(.system(size: appearance.settings.hintFontSize))
+                .foregroundStyle(theme.mutedText.color)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     private var projectsSection: some View {
@@ -1628,7 +1693,7 @@ struct ChatPanelView: View {
             if registry.projects.isEmpty {
                 Text("None registered. Add one to let me work in it.")
                     .font(.system(size: appearance.settings.footnoteFontSize))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(theme.mutedText.color)
             }
 
             ForEach(registry.projects) { project in
@@ -1637,7 +1702,7 @@ struct ChatPanelView: View {
                         Text(project.name).font(.system(size: appearance.settings.footnoteFontSize, weight: .semibold))
                         Text(project.path)
                             .font(.system(size: appearance.settings.hintFontSize, design: .monospaced))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(theme.mutedText.color)
                             .lineLimit(1)
                             .truncationMode(.head)
                     }
@@ -1648,7 +1713,7 @@ struct ChatPanelView: View {
                         Image(systemName: "minus.circle")
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(theme.mutedText.color)
                 }
             }
 
@@ -1667,11 +1732,11 @@ struct ChatPanelView: View {
             if let addProjectNote {
                 Text(addProjectNote)
                     .font(.system(size: appearance.settings.hintFontSize))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(theme.mutedText.color)
             }
         }
         .padding(appearance.settings.panelPadding)
-        .background(Color.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+        .background(theme.chipFill.color, in: RoundedRectangle(cornerRadius: 8))
     }
 
     /// Checkboxes rather than a menu: unlike Model/Effort, this is a
@@ -1688,14 +1753,14 @@ struct ChatPanelView: View {
                     Image(systemName: "arrow.clockwise")
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(theme.mutedText.color)
                 .help("Rescan for installed skills")
             }
 
             if secretary.availableSkills.isEmpty {
                 Text("None found — checked ~/.claude/skills, this project's .claude/skills, and your enabled plugins.")
                     .font(.system(size: appearance.settings.footnoteFontSize))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(theme.mutedText.color)
             }
 
             ForEach(secretary.availableSkills) { skill in
@@ -1708,7 +1773,7 @@ struct ChatPanelView: View {
                         if !skill.summary.isEmpty {
                             Text(skill.summary)
                                 .font(.system(size: appearance.settings.hintFontSize))
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(theme.mutedText.color)
                                 .lineLimit(2)
                         }
                     }
@@ -1726,11 +1791,11 @@ struct ChatPanelView: View {
                     : "I'll prefer these when they fit. Others stay available, and naming one in your message is still the sure way."
             )
             .font(.system(size: appearance.settings.hintFontSize))
-            .foregroundStyle(.secondary)
+            .foregroundStyle(theme.mutedText.color)
             .fixedSize(horizontal: false, vertical: true)
         }
         .padding(appearance.settings.panelPadding)
-        .background(Color.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+        .background(theme.chipFill.color, in: RoundedRectangle(cornerRadius: 8))
     }
 
     /// The open configuration section, held to a share of the window and given
@@ -1828,7 +1893,8 @@ struct ChatPanelView: View {
         // how "this one is open" is drawn.
         .toggleStyle(PanelToggleStyle(
             fontSize: appearance.settings.secondaryFontSize,
-            controlSize: appearance.settings.fontSize > 16 ? .regular : .small
+            controlSize: appearance.settings.fontSize > 16 ? .regular : .small,
+            palette: theme
         ))
         .font(.system(size: appearance.settings.secondaryFontSize))
     }
@@ -1884,7 +1950,7 @@ struct ChatPanelView: View {
                         .padding(.vertical, 3)
                         .padding(.horizontal, 6)
                         .background(
-                            index == choiceIndex ? Color.accentColor.opacity(0.22) : .clear,
+                            index == choiceIndex ? theme.accentFill.color : .clear,
                             in: RoundedRectangle(cornerRadius: 5)
                         )
                         .contentShape(Rectangle())
@@ -1899,7 +1965,7 @@ struct ChatPanelView: View {
                         : "typing your own answer · ↑ ↓ recall sent messages"
                 )
                 .font(.system(size: appearance.settings.secondaryFontSize))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(theme.mutedText.color)
                 .padding(.horizontal, 6)
             }
             .frame(maxWidth: .infinity, alignment: .leading)

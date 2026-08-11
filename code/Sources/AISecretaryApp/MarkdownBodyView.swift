@@ -8,6 +8,9 @@ import SecretaryCore
 /// renderer would drift — the first thing to go would be the rule that a table
 /// scrolls inside its own box rather than widening the window.
 struct MarkdownBodyView: View {
+    /// The colours in force, set by whichever window this view is inside.
+    @Environment(\.palette) private var theme
+
     let text: String
     let fontSize: Double
     /// For the language label above a code block, which is a caption rather than
@@ -27,7 +30,8 @@ struct MarkdownBodyView: View {
                     // or a hover underline over them.
                     MessageTextView(
                         text: MessageMarkdown.attributed(body),
-                        fontSize: fontSize
+                        fontSize: fontSize,
+                        palette: theme
                     )
                     .frame(maxWidth: .infinity, alignment: .leading)
                 case .table(let table):
@@ -64,7 +68,11 @@ struct MarkdownBodyView: View {
             .padding(8)
             .textSelection(.enabled)
         }
-        .background(Color.secondary.opacity(0.07), in: RoundedRectangle(cornerRadius: 6))
+        .background(theme.nestedFill.color, in: RoundedRectangle(cornerRadius: 6))
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(theme.hairline.color, lineWidth: 1)
+        )
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -73,7 +81,7 @@ struct MarkdownBodyView: View {
             if let language = block.language {
                 Text(language)
                     .font(.system(size: secondaryFontSize))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(theme.mutedText.color)
                     .padding(.horizontal, 8)
                     .padding(.top, 5)
             }
@@ -89,10 +97,10 @@ struct MarkdownBodyView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+        .background(theme.nestedFill.color, in: RoundedRectangle(cornerRadius: 6))
         .overlay(
             RoundedRectangle(cornerRadius: 6)
-                .stroke(Color.secondary.opacity(0.25), lineWidth: 1)
+                .stroke(theme.hairline.color, lineWidth: 1)
         )
     }
 }

@@ -15,6 +15,9 @@ import SecretaryCore
 /// are answered in `SecretaryCore`; this only renders the answers and calls
 /// back.
 struct InstructionPlanCard: View {
+    /// The colours in force, set by whichever window this view is inside.
+    @Environment(\.palette) private var theme
+
     let plan: InstructionPlan
     let risks: [InstructionRisk]
     let changedSinceLastRun: Bool
@@ -43,7 +46,7 @@ struct InstructionPlanCard: View {
 
             Text(plan.relativePath)
                 .font(.system(size: fontSize, design: .monospaced))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(theme.mutedText.color)
 
             if changedSinceLastRun {
                 Label(
@@ -51,7 +54,7 @@ struct InstructionPlanCard: View {
                     systemImage: "pencil.circle"
                 )
                 .font(.system(size: hintSize))
-                .foregroundStyle(.orange)
+                .foregroundStyle(theme.warning.color)
             }
 
             VStack(alignment: .leading, spacing: spacing * 0.5) {
@@ -59,7 +62,7 @@ struct InstructionPlanCard: View {
                     HStack(alignment: .firstTextBaseline, spacing: spacing * 0.8) {
                         Text("\(index + 1).")
                             .font(.system(size: hintSize, design: .monospaced))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(theme.mutedText.color)
                         Text(step)
                             .font(.system(size: fontSize))
                             .fixedSize(horizontal: false, vertical: true)
@@ -75,7 +78,7 @@ struct InstructionPlanCard: View {
                         // a warning you can check is a warning you can weigh.
                         Text("⚠ \(risk.reason) — \(risk.evidence)")
                             .font(.system(size: hintSize))
-                            .foregroundStyle(.red)
+                            .foregroundStyle(theme.danger.color)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     Toggle("I've read these and want to go ahead", isOn: $acknowledged)
@@ -95,7 +98,7 @@ struct InstructionPlanCard: View {
         }
         .padding(padding)
         .background(
-            (risks.isEmpty ? Color.accentColor : Color.red).opacity(0.12),
+            (risks.isEmpty ? theme.accentFill : theme.dangerFill).color,
             in: RoundedRectangle(cornerRadius: 8)
         )
     }
