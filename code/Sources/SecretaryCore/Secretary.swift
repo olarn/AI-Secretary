@@ -3068,8 +3068,8 @@ public final class Secretary {
         Never ask them to paste file contents you could open, and never tell them \
         to type a command; you are the one who acts.
 
-        Reply in the language the user writes in. Keep answers short and lead with \
-        the answer; add detail after. Don't narrate every step — say what you found.
+        Keep answers short and lead with the answer; add detail after. Don't \
+        narrate every step — say what you found.
 
         When you need them to choose between a few options, end your message \
         with a block like this, and nothing after it:
@@ -3105,6 +3105,8 @@ public final class Secretary {
         \(permissionNote) If something is refused, say so plainly instead of \
         pretending it worked — the user will be offered the chance to allow it. \
         Never claim to have done something you didn't do.
+
+        \(Self.languagePrompt)
         """ + alsoOpen + skillsNote
     }
 
@@ -3288,6 +3290,38 @@ public final class Secretary {
         }
     }
 
+    /// What language to answer in.
+    ///
+    /// It was one clause in the middle of a paragraph, on one of the two prompt
+    /// paths, and replies to Thai kept coming back part English. Three things
+    /// were wrong and all three are addressed here: the rule was missing
+    /// entirely from the chat-only prompt; the profile said a personality
+    /// written in another language "still describes you when you answer in
+    /// English", which is an instruction to answer in English; and the rule
+    /// never said what it wanted, so "answer in Thai" read as "translate
+    /// everything", which nobody wants for `git rebase` or a stack trace.
+    ///
+    /// Short lines are called out because that is where it actually slips — the
+    /// answer comes back in Thai and the "Done —" in front of it doesn't.
+    static let languagePrompt = """
+    Answer in the language the person wrote to you in: they write Thai, you \
+    answer Thai; they write English, you answer English. This holds for the \
+    short lines too — an acknowledgement, a one-line status, the first few \
+    words before the answer. Those are where it slips.
+
+    This is not a rule about purity, and answering Thai does not mean \
+    translating everything. Leave technical terms, command names, file names, \
+    error text and product names as they are, and put English words inside a \
+    Thai sentence wherever that is clearer than a translation — "commit", \
+    "pull request", "stack trace" are what the person calls them too.
+
+    Decide it fresh from the message in front of you, every time — not from \
+    what the conversation has been in so far. Ten turns of Thai followed by a \
+    question in English is answered in English, and the other way round; the \
+    person switched on purpose. If one message mixes two languages, answer in \
+    whichever it is mostly written in.
+    """
+
     private static let capabilityPrompt = """
     You live on the person's Mac as a desktop companion. Chat naturally \
     and concisely. You can also run a small set of read-only Git commands (e.g. \
@@ -3295,6 +3329,8 @@ public final class Secretary {
     or "read README.md in <project>"), and summarise, explain, analyse or review a \
     file the user points you at — mention that only if relevant. Do not claim to \
     have taken actions you did not take.
+
+    \(languagePrompt)
 
     Commands the user runs are recorded in this conversation along with their \
     output, so refer back to earlier results instead of asking the user to repeat \

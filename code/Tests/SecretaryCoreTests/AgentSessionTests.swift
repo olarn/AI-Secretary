@@ -273,9 +273,41 @@ final class AgentSessionTests: XCTestCase {
 
         let prompt = provider.lastSystem ?? "-"
         XCTAssertTrue(prompt.contains(Secretary.resumePrompt), "resume rule missing")
+        XCTAssertTrue(prompt.contains(Secretary.languagePrompt), "language rule missing")
         for fence in [LoopBlock.fence, InfoWindowBlock.fence] {
             XCTAssertTrue(prompt.contains(fence), "\(fence) is not described. Got: \(prompt)")
         }
+    }
+
+    /// Which language to answer in is asked for on both prompt paths, because
+    /// it was asked for on only one of them and replies to Thai kept coming
+    /// back part English.
+    func testTheAgentIsAskedToAnswerInTheLanguageItWasWrittenTo() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        secretary.submit("สวัสดี ช่วยดูโปรเจกต์ให้หน่อย")
+        await waitUntilIdle()
+
+        XCTAssertTrue((provider.lastSystem ?? "-").contains(Secretary.languagePrompt))
+    }
+
+    /// And it asks for the thing the person actually wants, which is not a
+    /// translation: an answer in Thai still says "commit" and still quotes the
+    /// error verbatim.
+    func testTheLanguageRuleDoesNotAskForEverythingToBeTranslated() {
+        XCTAssertTrue(Secretary.languagePrompt.contains("technical terms"))
+        XCTAssertTrue(Secretary.languagePrompt.contains("error text"))
+    }
+
+    /// A personality written in Thai used to end with "they still describe you
+    /// when you answer in English" — an instruction to answer in English,
+    /// sitting in the same prompt as the instruction not to.
+    func testThePersonalityDoesNotDecideTheLanguage() {
+        let profile = SecretaryProfile(
+            name: "Miku",
+            personality: "ร่าเริง เป็นกันเอง ชอบช่วยงาน"
+        )
+        XCTAssertFalse(profile.promptDescription.contains("answer in English."))
+        XCTAssertTrue(profile.promptDescription.contains("decided by the person's"))
     }
 
     /// Adding a project mid-conversation is a correction, so the question that
