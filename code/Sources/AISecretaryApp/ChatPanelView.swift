@@ -89,10 +89,21 @@ struct ChatPanelView: View {
     @State private var pointerOverTranscript = false
     /// Which option is highlighted in the choice list, when one is showing.
     @State private var choiceIndex = 0
-    /// Which box was last copied, so its button can show a tick.
-    @State private var copiedBox: BoxID?
-    /// Which box the pointer is over, so only that one shows its copy button.
-    @State private var hoveredBox: BoxID?
+    /// Which box the pointer is over and which was last copied.
+    ///
+    /// An object rather than two `@State` values, and this is a performance
+    /// decision with a rule attached: **nothing in `ChatPanelView.body` may
+    /// read `hover.pointingAt` or `hover.copied`.** Reading an `@Observable`
+    /// property is what subscribes a view to it, so a single read here puts the
+    /// whole transcript back on the hot path — and the symptom is invisible
+    /// until someone scrolls a long thread.
+    ///
+    /// When they were `@State`, every box passing under the pointer during a
+    /// scroll rebuilt the entire panel: 19 rebuilds over a 120-tick scroll,
+    /// each one re-measuring all 60 messages through TextKit at ~0.2ms each.
+    /// That is the stutter. The reads now happen only inside `WhenPointingAt`,
+    /// which is a leaf, so a hover change repaints two buttons and nothing else.
+    @State private var hover = BoxHover()
     /// Whether a file is being dragged over the composer, so there is an
     /// outline to let go inside rather than a guess.
     @State private var droppingFile = false
@@ -936,25 +947,25 @@ struct ChatPanelView: View {
             }
         }
         .overlay(alignment: .topTrailing) {
-            if style.showsCopyButton, hoveredBox == box {
-                boxButtons(text: copyText(of: part), box: box, entry: entry)
-                    // Straddling the corner rather than sitting inside it: over
-                    // the text, the button hid the end of the first line — and
-                    // the one thing a copy button must not do is cover the words
-                    // you are deciding whether to copy. The room it moves into is
-                    // the gutter, which is empty by construction.
-                    .offset(x: 10, y: -10)
+            if style.showsCopyButton {
+                // The `hover ==` test lives inside this leaf, deliberately —
+                // see `hover`. Building the buttons is also deferred into it,
+                // so a box nobody is pointing at costs a closure and no views.
+                WhenPointingAt(box: box, hover: hover) {
+                    boxButtons(text: copyText(of: part), box: box, entry: entry)
+                        // Straddling the corner rather than sitting inside it:
+                        // over the text, the button hid the end of the first
+                        // line — and the one thing a copy button must not do is
+                        // cover the words you are deciding whether to copy. The
+                        // room it moves into is the gutter, which is empty by
+                        // construction.
+                        .offset(x: 10, y: -10)
+                }
             }
         }
         // Hover, not always: a button on every box at rest is three buttons in
         // a three-box answer, and none of them are what you came to read.
-        .onHover { inside in
-            if inside {
-                hoveredBox = box
-            } else if hoveredBox == box {
-                hoveredBox = nil
-            }
-        }
+        .onHover { hover.report(pointerIsInside: $0, over: box) }
     }
 
     /// Which box the pointer is over. One value, not a flag per box: the pointer
@@ -1025,13 +1036,6 @@ struct ChatPanelView: View {
             pinButton(text: text, entry: entry)
             copyButton(text: text, box: box)
         }
-        .onHover { inside in
-            if inside {
-                hoveredBox = box
-            } else if hoveredBox == box {
-                hoveredBox = nil
-            }
-        }
     }
 
     /// Pulls this box out into its own floating window, which then survives the
@@ -1072,7 +1076,7 @@ struct ChatPanelView: View {
             // A tick in place of the icon is fine *here*, unlike in the header:
             // the button only exists while the pointer is on the box, so it
             // can't be left looking as though it went away.
-            Image(systemName: copiedBox == box ? "checkmark" : "doc.on.doc")
+            Image(systemName: hover.copied == box ? "checkmark" : "doc.on.doc")
                 .font(.system(size: appearance.settings.secondaryFontSize))
                 .foregroundStyle(theme.mutedText.color)
                 .padding(4)
@@ -1080,26 +1084,16 @@ struct ChatPanelView: View {
         }
         .buttonStyle(.plain)
         .help("Copy this box")
-        // The button hangs off the corner of the box, so the pointer reaching it
-        // has left the box. Without this it would vanish on the way to being
-        // clicked.
-        .onHover { inside in
-            if inside {
-                hoveredBox = box
-            } else if hoveredBox == box {
-                hoveredBox = nil
-            }
-        }
     }
 
     /// Shows the tick, then takes it away again. Held only briefly: it says
     /// "that press worked", and a tick still sitting there ten minutes later
     /// says something else.
     private func confirmCopy(of box: BoxID) {
-        copiedBox = box
+        hover.copied = box
         Task {
             try? await Task.sleep(for: .seconds(1.5))
-            if copiedBox == box { copiedBox = nil }
+            if hover.copied == box { hover.copied = nil }
         }
     }
 
