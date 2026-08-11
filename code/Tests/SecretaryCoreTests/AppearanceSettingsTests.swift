@@ -145,6 +145,28 @@ final class AppearanceSettingsTests: XCTestCase {
         XCTAssertEqual(UserDefaultsAppearanceStore(defaults: defaults).load().appScale, .medium)
     }
 
+    func testTheThemeIsSavedAndReloaded() {
+        let defaults = UserDefaults(suiteName: "AppearanceThemeTests")!
+        defaults.removePersistentDomain(forName: "AppearanceThemeTests")
+        let store = UserDefaultsAppearanceStore(defaults: defaults)
+
+        store.save(StoredAppearance(theme: .light))
+
+        XCTAssertEqual(store.load().theme, .light)
+    }
+
+    /// `contrast` was offered in 0.10.197 and removed in 0.10.198. Anyone who
+    /// had it selected has that word on disk, and the app must open on the
+    /// default rather than refuse to read its own settings — the same handling
+    /// a scale from a future build gets.
+    func testAThemeThatNoLongerExistsFallsBackToSystem() {
+        let defaults = UserDefaults(suiteName: "AppearanceThemeFallbackTests")!
+        defaults.removePersistentDomain(forName: "AppearanceThemeFallbackTests")
+        defaults.set("contrast", forKey: "appearance.theme")
+
+        XCTAssertEqual(UserDefaultsAppearanceStore(defaults: defaults).load().theme, .system)
+    }
+
     // MARK: - Persistence
 
     func testTheChoiceIsSavedAndReloaded() {

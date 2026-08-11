@@ -6,7 +6,7 @@ import XCTest
 final class ThemeTests: XCTestCase {
 
     /// The one that matters. Every text colour, on every ground it can be drawn
-    /// on, in every palette — 168 pairs today, and more the moment a role or a
+    /// on, in every palette — 126 pairs today, and more the moment a role or a
     /// palette is added, without this test being touched.
     ///
     /// Written as a sweep rather than a handful of chosen pairs because the
@@ -28,7 +28,10 @@ final class ThemeTests: XCTestCase {
                 }
             }
         }
-        XCTAssertEqual(checked, 3 * 7 * 9, "Every combination, not a sample")
+        XCTAssertEqual(
+            checked, Palette.all.count * 7 * 9,
+            "Every combination, not a sample"
+        )
     }
 
     /// An edge is allowed to be quieter than text, but it still has to be
@@ -80,21 +83,11 @@ final class ThemeTests: XCTestCase {
         }
     }
 
-    /// Contrast is what the user asked for, so the option named after it has to
-    /// actually deliver more of it than the one it is an alternative to.
-    func testContrastPushesFurtherApartThanPlainDark() {
-        XCTAssertGreaterThan(
-            contrastRatio(Palette.contrast.mutedText, Palette.contrast.ground),
-            contrastRatio(Palette.dark.mutedText, Palette.dark.ground)
-        )
-        XCTAssertGreaterThan(Palette.contrast.panelBorderWidth, Palette.dark.panelBorderWidth)
-    }
-
     func testSystemFollowsTheSystemAndTheOthersDoNot() {
         XCTAssertEqual(palette(for: .system, systemIsDark: true), .dark)
         XCTAssertEqual(palette(for: .system, systemIsDark: false), .light)
         XCTAssertEqual(palette(for: .dark, systemIsDark: false), .dark)
-        XCTAssertEqual(palette(for: .contrast, systemIsDark: false), .contrast)
+        XCTAssertEqual(palette(for: .light, systemIsDark: true), .light)
     }
 
     /// The window asks AppKit for a matching control appearance, so the caret,

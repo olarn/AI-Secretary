@@ -5,21 +5,26 @@ import Foundation
 /// Three, not a full theme engine: the charter asks for a small MVP, and the
 /// problem being solved is one specific failure — a bright desktop showing
 /// through the panel — not "I want to pick colours".
+///
+/// The three are the two palettes plus "follow the system", which is the whole
+/// choice there is to make once the surfaces are opaque. A fourth, `contrast`
+/// — dark with a heavier border — shipped in 0.10.197 and was taken out in
+/// 0.10.198 at the owner's request. A stored `"contrast"` no longer decodes and
+/// falls back to `system`, which is the same handling an unknown value gets.
 public enum ThemeChoice: String, CaseIterable, Sendable, Codable {
     /// Follow the system's light/dark setting.
     case system
+    /// Light whatever the system says.
+    case light
     /// Dark whatever the system says. For a light desktop the user doesn't
     /// want to change.
     case dark
-    /// Dark, pushed further apart, with a heavier border. For a desktop busy
-    /// enough that the ordinary dark palette still reads as noise.
-    case contrast
 
     public var label: String {
         switch self {
         case .system: return "System"
+        case .light: return "Light"
         case .dark: return "Dark"
-        case .contrast: return "Contrast"
         }
     }
 
@@ -27,8 +32,8 @@ public enum ThemeChoice: String, CaseIterable, Sendable, Codable {
     public var explanation: String {
         switch self {
         case .system: return "Follows macOS"
+        case .light: return "Always light"
         case .dark: return "Always dark"
-        case .contrast: return "Dark, stronger edges"
         }
     }
 }
@@ -123,8 +128,8 @@ public struct Palette: Equatable, Sendable {
     /// Four sites, and every one of them must keep its stroke —
     /// `ChatPanelView.codeBlockView` / `.tableView` and
     /// `MarkdownBodyView`'s two. Two of them shipped without one for an hour;
-    /// in `contrast` a table on `bubbleMine` is 1.011 against its parent, which
-    /// is no boundary at all. `testEveryEdgeIsVisibleAgainstEveryGround` checks
+    /// `nestedFill` against `bubbleMine` is 1.05 in `light` — no boundary at
+    /// all without the stroke. `testEveryEdgeIsVisibleAgainstEveryGround` checks
     /// the hairline's *colour* would be visible — it cannot see whether the
     /// stroke is drawn, so that part is on the reader.
     public let nestedFill: ThemeColor
@@ -239,36 +244,11 @@ extension Palette {
         prefersDarkControls: true
     )
 
-    public static let contrast = Palette(
-        ground: ThemeColor(0.03, 0.03, 0.04),
-        chipFill: ThemeColor(0.12, 0.12, 0.14),
-        bubbleMine: ThemeColor(0.10, 0.16, 0.28),
-        bubbleTheirs: ThemeColor(0.11, 0.11, 0.13),
-        accentFill: ThemeColor(0.12, 0.19, 0.33),
-        warningFill: ThemeColor(0.24, 0.18, 0.06),
-        dangerFill: ThemeColor(0.28, 0.10, 0.09),
-        infoFill: ThemeColor(0.07, 0.22, 0.24),
-        nestedFill: ThemeColor(0.20, 0.20, 0.235),
-        primaryText: ThemeColor(1.00, 1.00, 1.00),
-        mutedText: ThemeColor(0.84, 0.85, 0.87),
-        accent: ThemeColor(0.62, 0.79, 1.00),
-        warning: ThemeColor(1.00, 0.82, 0.45),
-        danger: ThemeColor(1.00, 0.62, 0.57),
-        success: ThemeColor(0.55, 0.95, 0.63),
-        info: ThemeColor(0.52, 0.92, 0.94),
-        onAccent: ThemeColor(0.00, 0.00, 0.00),
-        hairline: ThemeColor(0.58, 0.59, 0.62),
-        panelBorder: ThemeColor(0.78, 0.79, 0.82),
-        panelBorderWidth: 2.5,
-        prefersDarkControls: true
-    )
-
     /// Every palette that can end up on screen, so a check written once covers
     /// all of them — including any added later.
     public static let all: [(String, Palette)] = [
         ("light", .light),
         ("dark", .dark),
-        ("contrast", .contrast),
     ]
 }
 
@@ -279,7 +259,7 @@ extension Palette {
 public func palette(for choice: ThemeChoice, systemIsDark: Bool) -> Palette {
     switch choice {
     case .system: return systemIsDark ? .dark : .light
+    case .light: return .light
     case .dark: return .dark
-    case .contrast: return .contrast
     }
 }
