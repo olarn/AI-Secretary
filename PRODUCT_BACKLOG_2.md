@@ -7,6 +7,8 @@ what's left). Checked items are shipped; unchecked items are still open.
 The current phase for version-bumping purposes (`AppVersion.swift`,
 `major.phase.change`) is **9** — see `CLAUDE.md` → Engineering expectations.
 
+## TODO: Design App Architecture ก่อน - ถ้ายังมี TODO ถ้าแก้ code จนกว่า user จะลบบรรทัดนี้เอง
+
 
 ## Phase 12: Multi-AI-Secretaty
 
