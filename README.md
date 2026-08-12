@@ -85,6 +85,9 @@ something the packaging script can do on its own.
 | [`code/`](code/) | The Swift package. Its [README](code/README.md) is the detailed guide — architecture, every module, how to run things. |
 | `code/Sources/` | Domain modules (`AssistantState`, `ProjectRegistry`, `Permissions`, `ToolAdapters`, `LLMProvider`, `SecretaryCore`) and the SwiftUI app. |
 | `code/Tests/` | One suite per module. |
+| [`PRODUCT_BACKLOG.md`](PRODUCT_BACKLOG.md) | What's shipped, by phase. |
+| [`SPRINT_BACKLOG.md`](SPRINT_BACKLOG.md) | The sprint being worked on now — this is what "continue" means. |
+| [`PRODUCT_BACKLOG_NEXT_SPRINTS.md`](PRODUCT_BACKLOG_NEXT_SPRINTS.md) | Later work; the owner moves items out of it, not the assistant. |
 | `initial-implementation-prompt.md` | The original brief, kept for provenance. |
 
 Domain logic is written in a typed functional style on

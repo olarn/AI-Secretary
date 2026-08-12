@@ -133,6 +133,17 @@ The current phase for version-bumping purposes is **10**. This line is the only
 place that number is stated; the backlog files deliberately do not repeat it,
 because the copy they used to carry went stale and said 9.
 
+**Sprint workflow** — read this before starting or finishing any round of work:
+
+- When told to continue ("ทำต่อได้เลย" or similar, with no further detail), the
+  work to do is whatever is unchecked in `SPRINT_BACKLOG.md`. Go read that file
+  rather than asking what to work on.
+- When a round of work is done, summarize what shipped into `PRODUCT_BACKLOG.md`
+  (check off / add the item under its phase) and remove or check off the
+  corresponding line in `SPRINT_BACKLOG.md`.
+- Never edit `PRODUCT_BACKLOG_NEXT_SPRINTS.md`. The owner moves items from it
+  into `SPRINT_BACKLOG.md` themselves when a sprint is planned.
+
 ## Security and privacy
 
 - Apply least privilege by default.
