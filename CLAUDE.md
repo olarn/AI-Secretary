@@ -145,6 +145,11 @@ items. The current phase for version-bumping purposes is **10**.
   message box shipped with eight passing tests over its height arithmetic while
   the box itself never grew past one line, because the measurement it fed was
   always zero. Open the app, do the thing a user would do, and look at it.
+  The tools for doing that — find the window, glide the pointer, post keys only
+  while the app is frontmost, capture at the window's live bounds — are in
+  `code/scripts/uidrive/`, with a README. **Read that README before writing a
+  new one-liner:** each script encodes a mistake already made once, and the
+  ungated key-posting variants were deleted on purpose.
 - **`AISecretaryApp` is invisible to coverage, so decisions must not live there.**
   It is an executable target and is never linked into the test bundle: measured
   on 2026-07-30 at v0.6.60, not one of its 18 files / 2,289 ncloc appeared in the
