@@ -97,7 +97,7 @@ Pid below always means the app's pid:
 |---|---|---|
 | `keysafe.swift` | `pid code times` | Posts a bare key `times` times, only while `pid` is frontmost. |
 | `cmdsafe.swift` | `pid code times` | Command-shortcut, re-checking frontmost before each press. |
-| `modkey.swift` | `pid code mod…` | Key with modifiers named as words (`cmd`, `shift`, …). |
+| `modkey.swift` | `pid code mod…` | Key with modifiers named as words: `cmd`, `shift`, `option`, `control`. An unrecognised name exits 2 rather than being skipped — `cmd` was absent from the table while this row claimed it worked, so `modkey <pid> 4 cmd` posted a bare `h` and read for half an hour as "⌘H is broken" in an app whose ⌘H was fine. |
 | `keyto.swift` | `appName code [cmd]` | **Inverted guard**: refuses unless the named app *is* frontmost — for testing a system-wide hot key, where the point is that our app is *not* in front. |
 | `paste.swift` | `pid` | Opens the panel, focuses the input, pastes the clipboard. Deliberately does **not** press Return. |
 | `sendmsg.swift` | `pid` | Same, then Return. Put the message on the clipboard with `pbcopy` first. |
