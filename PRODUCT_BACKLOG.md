@@ -365,5 +365,3 @@ The current phase for version-bumping purposes (`AppVersion.swift`,
   - **ข้อจำกัดที่เหลือ**: บทสนทนาใหม่ = session ใหม่ = group ใหม่ แก้จากฝั่งเราไม่ได้
 - **ไม่เขียน parser ของ .csv/.json/key-value เอง** — ให้โมเดลเปิดไฟล์ด้วยเครื่องมือของมันเอง
   เขียนเองคือได้ parser สามตัวที่แย่กว่าของเดิม แล้วรูปแบบที่สี่ก็ยังมาอยู่ดี
-
--- Continue in the Backlog #2
