@@ -1,5 +1,41 @@
 # AI Desktop Companion / AI Secretary
 
+## Definition of done — อ่านก่อนเริ่ม ไม่ใช่ตอนจะจบ
+
+**งานไม่จบเมื่อเทสเขียว และไม่จบเมื่อ commit แล้ว งานจบเมื่อ `.app` ตัวเดียวใน
+`~/Desktop/AI-Secretary/code` ถูก build จาก `main` ที่มีงานรอบนั้นอยู่แล้ว**
+ห้ามรายงานว่าเสร็จก่อนถึงตรงนั้น
+
+ห้าขั้น เรียงตามนี้:
+
+1. commit ใน worktree
+2. เอาขึ้น `main` — fast-forward แล้ว push **ไม่มี PR ไม่มี force ไม่มี merge commit**
+3. **sync `code/` กลับ** — `cd ~/Desktop/AI-Secretary/code && git pull --ff-only`
+4. build — `cd ~/Desktop/AI-Secretary/code && ./scripts/package-app.sh`
+   บรรทัดสุดท้ายของ output ต้องอ่านว่า `on main` และต้องไม่มี `-dirty`
+5. fast-forward worktree ให้ตรง `main` — checkout ที่ค้างคือ build เก่าที่รอถูกเปิด
+
+**ขั้น 3 คือขั้นที่หายไปบ่อยที่สุด** และเป็นเหตุผลที่ต้องเขียนแยกออกมาจากขั้น 4:
+session ที่ทำงานใน worktree จะจบด้วย `main` บน remote ที่ใหม่กว่า `code/` เสมอ
+ถ้าไม่ pull กลับ ผลคือ `code/` เป็นโค้ดเก่า `.app` ที่ build จากตรงนั้นก็เก่าตาม
+และ commit ถัดไปจาก `code/` จะ push ไม่ผ่าน ซึ่งเป็นจังหวะที่คนเผลอใช้ `--force`
+
+**ถ้าทำขั้น 3–4 ด้วยตัวเองไม่ได้** — session ที่ถูก isolate อยู่ใน worktree จะถูก harness
+ปฏิเสธทั้ง `cd` และ `git -C` ที่ชี้ไป `code/` (เกิดจริง 2026-08-12 ทั้งสองแบบ) กรณีนี้:
+
+- push ด้วย `git push origin HEAD:main` จาก worktree ได้ — เป็น fast-forward ล้วน
+- **ห้ามข้ามขั้น 3–4 เงียบๆ และห้ามรายงานว่า shipped** ต้องปิดเทิร์นด้วยคำสั่งเต็ม
+  ให้เจ้าของรัน และบอกตรงๆ ว่ายังไม่ได้ build:
+
+  ```
+  ! cd ~/Desktop/AI-Secretary/code && git pull --ff-only && ./scripts/package-app.sh
+  ```
+
+**ข้ามขั้น 4 ได้กรณีเดียว** คือรอบนั้นไม่มีโค้ดที่ลงไปอยู่ใน bundle เปลี่ยนเลย
+(เอกสาร, สคริปต์ dev, เทสล้วน) เพราะ `.app` เดิมยังเป็น build ที่ถูกต้องของโค้ดที่ ship อยู่
+และการ repackage โค้ดที่เหมือนเดิมทุกไบต์ทำให้ "นี่ build ไหน" แย่ลงไม่ใช่ดีขึ้น
+แต่ **ขั้น 3 ข้ามไม่ได้ไม่ว่ากรณีใด** และถ้าข้ามขั้น 4 ต้องบอกเหตุผลในรายงาน
+
 ## Product vision
 
 Build a macOS-native AI Desktop Companion: a floating animated character that lives on the desktop, communicates through chat (voice later), and acts as a trusted AI Secretary.
@@ -225,16 +261,14 @@ because the copy they used to carry went stale and said 9.
   indistinguishable from a feature breaking. The bundle is stamped with the
   commit and branch it was built from (`AISecretaryBuild`), shown in About and in
   the status bar menu, so "which build is this?" never needs a terminal.
-- **จบงานแล้วต้องรัน `./scripts/package-app.sh` เสมอ และรันจาก `~/Desktop/AI-Secretary/code`
-  เท่านั้น** — หลัง merge เข้า `main` แล้ว ไม่ใช่จากใน worktree
+- **ขั้นตอนการ ship อยู่ที่ "Definition of done" บนสุดของไฟล์นี้** ห้ามเขียนซ้ำไว้ตรงนี้ —
+  สำเนาที่สองของกติกาจะเก่าโดยไม่มีใครรู้ (เลข phase ในไฟล์ backlog เพิ่งเป็นแบบนั้นมา)
+  สองอย่างที่เป็นรายละเอียดของ `package-app.sh` เอง ไม่ใช่ของขั้นตอน:
   - รันจาก worktree เมื่อไหร่ `.app` ตัวเดียวที่เหลือจะไปอยู่ใน worktree นั้น ส่วน `code/`
     ที่ root กลายเป็นไม่มี build เลย ซึ่งเกิดขึ้นมาแล้วหลายรอบ (สาเหตุคือ `cd` ที่ค้างมาจาก
     คำสั่งก่อนหน้า — ให้ `cd` ให้ครบทุกครั้ง ไม่ใช่พึ่ง cwd ปัจจุบัน)
   - สคริปต์ลบ `AISecretary.app` ตัวอื่นในรีโปทิ้งเอง worktree จึงสะอาดโดยอัตโนมัติ
     ไม่ต้องไปตามลบเอง
-  - เช็คได้ที่บรรทัดสุดท้ายของ output ต้องอ่านว่า `on main` และไม่มี `-dirty`
-- Fast-forward a worktree once its branch is merged, so its `code/` matches
-  `main`. A stale checkout is a stale build waiting to be launched.
 - Avoid broad filesystem access and unbounded shell execution in tests.
 - Add structured logs and task correlation IDs.
 - Document setup, architecture decisions, permission model, and how to run tests.
