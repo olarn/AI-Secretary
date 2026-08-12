@@ -1,30 +1,11 @@
-# Product Backlog — AI Desktop Companion / AI Secretary
+# Product Backlog — Next Sprints
 
-Feature list by phase, extracted out of `CLAUDE.md` so the charter (architecture,
-principles, engineering rules) stays separate from the backlog (what's built vs.
-what's left). Checked items are shipped; unchecked items are still open.
-
-The phase digit in `AppVersion.swift` (`major.phase.change`) is **not** derived
-from anything in this file — the highest heading here has never been the current
-phase. It is stated once, in `CLAUDE.md` → Engineering expectations. A copy kept
-here said **9** while the charter said **10**, so the copy is gone rather than
-corrected.
-
+งานของ sprint ถัดๆ ไป ยังไม่เริ่ม
 
 ## TODO: Design App Architecture ก่อน - ถ้ายังมี TODO ถ้าแก้ code จนกว่า user จะลบบรรทัดนี้เอง
 
-**ขอบเขต: คุมเฉพาะหัวข้อ multi-app / multi-secretary ในไฟล์นี้** (เจ้าของยืนยัน
-2026-08-12) ไม่ได้คุมทั้งรีโป — `SPRINT_BACKLOG.md` และ `PRODUCT_BACKLOG.md`
-ทำต่อได้ตามปกติ
-
-เขียนกำกับเพราะบรรทัดข้างบนอ่านแล้วเหมือนห้ามแก้โค้ดทุกอย่าง แต่เจตนาคือ "อย่าเพิ่งเขียนโค้ด
-ของฟีเจอร์หลายแอปก่อนออกแบบสถาปัตยกรรม" ซึ่งเป็นคนละเรื่องกัน คนอ่านคนถัดไปคือ session
-ที่ไม่มีความทรงจำของบทสนทนานี้ ถ้าไม่เขียนไว้ก็จะเดาเอา
-
-**ยังไม่ชัดหลังจัดไฟล์ใหม่:** บรรทัด TODO อยู่บนสุดของไฟล์ จึงคร่อมหัวข้อที่ไม่ใช่เรื่อง
-หลายแอปไปด้วย — Liquid Glass Theme, Loop & Notification, Voice ถ้าตั้งใจให้พวกนี้
-ทำได้ ควรย้ายบรรทัด TODO ลงไปไว้เหนือหัวข้อ multi-app โดยตรง เพราะตำแหน่งบอกขอบเขต
-ได้ดีกว่าคำอธิบาย
+**คุมเฉพาะหัวข้อ multi-app / multi-secretary ในไฟล์นี้** (เจ้าของยืนยัน 2026-08-12)
+Liquid Glass, Loop & Notification, Voice และไฟล์ backlog อีกสองไฟล์ ทำได้ตามปกติ
 
 
 ## Phase 12: Multi-AI-Secretaty
