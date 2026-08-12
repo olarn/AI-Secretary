@@ -405,3 +405,41 @@ corrected.
 - **กดทั้งสองแถวที่ผ่าน `choiceRow`** ไม่ใช่แถวเดียว เพราะทั้งคู่ถูกเขียนใหม่พร้อมกัน: App size L
   แล้วหน้าต่างตัวละครโตจาก 128×149 เป็น 167×194 จริง, Theme Light แล้ว palette พลิกทั้งแอป
   accent ย้ายไปปุ่ม Light และคำอธิบายใต้แถวเปลี่ยนเป็น "Always light"
+
+## Phase 13: Multi-AI-Secretaty
+- [x] ทำความเข้าใจโครงสร้างใหม่ ใน file menu.pdf
+- [x] app สามารถ สร้าง character ได้มากกว่า 1 ตัว โดยจะมีเมนู New Character แล้ว app จะแสดง window
+  ให้ create character ใหม่ โดยใช้ configuration จาก Profile เดิม
+- [x] character แต่ละตัว จะแยก session กัน ตามที่ออกแบบไว้ใน menu.pdf
+- [x] ปรับเมนูใน menu bar ตาม menu.pdf
+
+**Character = Profile** (เจ้าของตัดสิน 2026-08-13) ทุก profile ใน `ProfileLibrary` คือตัวละครที่อยู่บนจอ
+ไม่มี type ใหม่ และ New Character คือ add profile ที่ clone มาจากตัวที่กดอยู่ ทำเป็น 5 ก้อนที่ ship
+ทีละก้อน (v0.10.203–208) เพราะก้อนแรกเป็น refactor ล้วนที่ต้องพิสูจน์ด้วยเทสเดิมที่ไม่ถูกแก้
+
+สิ่งที่คนมาต่อควรรู้:
+
+- **`CharacterInstance` คือหน่วยที่คูณได้** — ของที่เป็นของตัวละคร (state machine, Secretary,
+  สองหน้าต่าง, bubble layout, backend, pinned panes, visibility) เคยเป็น property เดี่ยวๆ บน
+  `AppDelegate` ทั้งหมด ที่เหลืออยู่ข้างนอกคือของแอปจริงๆ: theme, roster, registry, status bar
+  และ Esc ซึ่งระบบให้ได้ครั้งเดียว ตัวละครแค่ "รายงานว่าคำตอบเปลี่ยน" ไม่ได้ตัดสินเอง
+- **roster เป็น reconcile ไม่ใช่ add/remove** — `reconcileCharacters()` ทำให้คนบนจอตรงกับ profile
+  ที่มี ทั้ง launch, add, delete เดินทางเดียวกัน ไม่มีที่สองที่จะเถียงกันว่าใครอยู่บนจอ
+- **`ChatBackend` ทำสองงานปนกัน** — หา Claude Code (ช้า ต้องแชร์ เพราะ fallback เปิด login shell)
+  กับถือ session (ต้องแยก) แยกเป็น `ClaudeCodeDetector` + backend ต่อตัว ถ้าไม่แยก สองตัวละคร
+  จะตอบลงเธรดเดียวกัน
+- **เมนูเป็น value ไม่ใช่โค้ดสร้าง `NSMenuItem`** — `statusBarMenu(...)` ใน `SecretaryCore`
+  มีเทสยืนยันทีละแถว ทุก action พก id ของตัวละครไปด้วย เพราะ "Clear All" ต้องบอกได้ว่าของใคร
+- **`activeID` เหลืองานเล็กลง** — ไม่ได้แปลว่า "ตัวที่เห็น" อีกแล้ว แต่แปลว่า "ตัวที่ถูก clone
+  ตอนสร้างใหม่" และ "ตัวที่ fallback ไป"
+- **`onActiveChange` ต้องแตกเป็นสอง** — ของเดิมยิงเฉพาะ profile ที่ active ซึ่งถูกตอนมี profile
+  เดียวบนจอ และผิดทันทีที่ทุก profile มี prompt ของตัวเอง (แก้ Kai ตอน Miku active แล้วไม่ถึงใคร)
+
+ขับจริงที่ v0.10.208 (build 5631b03): สามตัวละครขึ้นพร้อมกันห่างกัน 179pt (= 128×1.4) แต่ละตัว
+รูปและชื่อของตัวเอง, เปิดสองแชทพร้อมกันแยกกันสมบูรณ์, New Character สร้าง "Miku 2" ที่สืบทอด
+อายุ/บุคลิกแต่ Picture: None, กด Delete แล้วทั้งตัวละครและหน้าต่างหายไปพร้อมกัน, migration ย้าย
+`conversations.json` 39,877 ไบต์ไปเป็นไฟล์ต่อตัวละครแล้วประวัติยังอ่านเจอ
+
+**เรื่องที่เจอตอนขับ ยังไม่ได้แก้:** ตัวละครยืนห่างกัน 179pt แต่บับเบิลกว้าง 423pt **แชทจึงทับกัน**
+คลิกในเขตทับจะตกไปที่หน้าต่างบนสุด ไม่ใช่ตัวที่เล็งไว้ — เกี่ยวโดยตรงกับ Phase 15 ที่ออกแบบให้
+bubble ซ้อนเหลื่อมกันเป็นชั้น
