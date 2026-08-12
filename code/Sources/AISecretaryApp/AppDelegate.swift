@@ -7,191 +7,100 @@ import LLMProvider
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
-    private let stateMachine = AssistantStateMachine()
-    private let chatLayout = ChatBubbleLayout()
+    // What belongs to the app rather than to any one character: the look, the
+    // roster, where work may run, and the single status bar item. A character's
+    // own world — her Secretary, her windows, her Claude Code session — lives
+    // in `CharacterInstance`.
     private let registry = ProjectRegistry()
-    /// The only backend there is: the person's own Claude Code.
-    private lazy var backend = ChatBackend()
     private let backendStatus = BackendStatus()
     private let appearance = Appearance()
     private let profiles = ProfileLibrary()
-    private lazy var secretary = Secretary(
-        stateMachine: stateMachine,
-        registry: registry,
-        profile: profiles.active,
-        chatProvider: backend,
-        // The one place that should touch the real file. Everywhere else —
-        // every test — gets the in-memory default and cannot reach it.
-        conversationStore: FileConversationStore(),
-        // Likewise: the real one copies the person's files onto disk.
-        attachmentStore: FileAttachmentStore()
-    )
-    private var characterPanel: FloatingPanel!
-    private var chatPanel: FloatingPanel!
+
+    /// The characters on the desktop. One for now; the point of the type is
+    /// that this becomes several without the delegate changing shape.
+    private var characters: [CharacterInstance] = []
+    /// The one the menu and the app-wide shortcuts act on. With a single
+    /// character it is simply that character.
+    private var focused: CharacterInstance! { characters.first }
+
     private var statusBar: StatusBarController!
     private var hotKeys: GlobalHotKeys?
     /// Watches this app's own key events for ⌘H; see `watchForHideShortcut`.
     private var hideKeyMonitor: Any?
-    private lazy var usageWindow = UsageWindow(secretary: secretary, appearance: appearance, backend: backend)
-    private lazy var infoWindows = InfoWindows(appearance: appearance)
-    private var isChatVisible = false
-    private var isCharacterVisible = true
-
-    /// What the character view asks for at 1×, measured from the view itself
-    /// rather than written down here — a hard-coded window that was a few points
-    /// too small clipped the halo into a flat edge across the top of the head.
-    private var characterBaseSize: CGSize = .zero
-    /// The window follows the S/M/L choice; `CharacterView` scales to match.
-    private var characterSize: CGSize {
-        let factor = appearance.settings.appScale.factor
-        return CGSize(
-            width: characterBaseSize.width * factor,
-            height: characterBaseSize.height * factor
-        )
-    }
-    /// Both axes are the user's now, from Appearance. The tail is positioned
-    /// against the width rather than at a fixed offset, so `applyChatLayout`
-    /// re-anchors it on every size change and it stays on the character.
-    private var chatSize: CGSize {
-        CGSize(
-            width: appearance.settings.chatWidth,
-            height: appearance.settings.chatHeight
-        )
-    }
-    /// Where the tail tip sits along the bubble's edge, taken from the shape
-    /// itself so the two can't drift apart. A distance rather than a fraction,
-    /// so widening the bubble leaves the tip on the character.
-    private var tailTipOffset: CGFloat { SpeechBubbleShape.tailTipOffset }
-    /// Gap kept between the bubble and the screen edge when clamping horizontally.
-    private let screenMargin: CGFloat = 8
-    /// How far the bubble is pushed sideways, away from the character, as a
-    /// fraction of **the character's** width — not the bubble's.
-    ///
-    /// It has to scale with the character or the same offset reads differently at
-    /// each size: a fixed 36pt put the tail tip outside a small character
-    /// altogether (S looked detached) and well inside a large one (L sat under
-    /// the bubble). As a share of the character's width, the tip lands on the
-    /// same spot at every size.
-    private let bubbleClearanceFraction: CGFloat = 0.28
-    /// Gap between the character and the bubble window. The tail tip now ends
-    /// exactly at the window edge, and the character's avatar sits ~12pt inside
-    /// its own window, so a small negative gap makes the tail visually touch
-    /// the avatar. Scaled with the character, since the inset it compensates for
-    /// scales too.
-    private var characterGap: CGFloat {
-        -14 * appearance.settings.appScale.factor
-    }
+    private lazy var usageWindow = UsageWindow(
+        secretary: focused.secretary,
+        appearance: appearance,
+        backend: focused.backend
+    )
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        let characterHost = FirstMouseHostingView(
-            rootView: CharacterView(
-                machine: stateMachine,
-                secretary: secretary,
-                profiles: profiles,
-                appearance: appearance,
-                onTap: { [weak self] in self?.toggleChatPanel() }
-            )
+        let character = CharacterInstance(
+            profileID: profiles.activeID,
+            profiles: profiles,
+            appearance: appearance,
+            registry: registry,
+            backendStatus: backendStatus,
+            // The one place that should touch the real files. Everywhere else —
+            // every test — gets the in-memory defaults and cannot reach them.
+            conversationStore: FileConversationStore(),
+            attachmentStore: FileAttachmentStore()
         )
-        // Ask the view how big it wants to be at 1×, then give it exactly that
-        // times the S/M/L factor, so nothing is cropped.
-        characterBaseSize = characterHost.fittingSize
+        characters = [character]
+        character.onDismissableChanged = { [weak self] in self?.refreshHotKeyClaim() }
+        character.onVisibilityChanged = { [weak self] visible in
+            self?.statusBar?.setCharacterVisible(visible)
+        }
+        character.buildWindows(onClose: { [weak self] in self?.focused.hideChatPanel() })
 
-        // Wrapped in a plain container rather than used as the content view
-        // directly: an NSHostingView publishes its SwiftUI layout size as an
-        // intrinsic size, and Auto Layout then shrinks the window back to it.
-        // `scaleEffect` doesn't change that layout size, so at L the character
-        // was drawn 1.3x inside a 1x window and clipped on every side.
-        characterPanel = FloatingPanel(
-            contentRect: NSRect(origin: .zero, size: characterSize),
-            content: Self.container(for: characterHost, size: characterSize)
-        )
-
-        let chatHost = FirstMouseHostingView(
-            rootView: ChatPanelView(
-                machine: stateMachine,
-                secretary: secretary,
-                registry: registry,
-                backendStatus: backendStatus,
-                appearance: appearance,
-                profiles: profiles,
-                layout: chatLayout,
-                onClose: { [weak self] in self?.hideChatPanel() },
-                onPin: { [weak self] spec in self?.infoWindows.open(spec) }
-            )
-        )
-        chatHost.frame = NSRect(origin: .zero, size: chatSize)
-
-        chatPanel = FloatingPanel(
-            contentRect: NSRect(origin: .zero, size: chatSize),
-            content: chatHost,
-            // The chat is where the keyboard belongs once you click into it —
-            // typing, Esc, the arrow keys and ⌘H all read as "to the chat".
-            // The character isn't: clicking it opens or closes this panel, and
-            // taking the keyboard from the app behind to do that would be rude.
-            takesKeyOnClick: true
-        )
-        chatPanel.alphaValue = 0
-
-        positionInitialWindows()
-        observeWindowMovement()
         detectBackend()
 
         // Resizing an NSPanel is imperative work, so the model calls back here
         // rather than the delegate re-deriving it during a view update.
         appearance.onChange = { [weak self] in
-            self?.applyWindowSizes()
+            self?.characters.forEach { $0.applyWindowSizes() }
             self?.applyControlAppearance()
         }
         applyControlAppearance()
         // Switching profile has to reach the prompt as well as the pictures.
         profiles.onActiveChange = { [weak self] profile in
-            self?.secretary.apply(profile: profile)
+            self?.focused.secretary.apply(profile: profile)
         }
 
         statusBar = StatusBarController(
-            onOpenChat: { [weak self] in self?.openChatFromMenu() },
-            onToggleCharacter: { [weak self] in self?.toggleCharacterVisibility() ?? true },
+            onOpenChat: { [weak self] in self?.focused.openChat() },
+            onToggleCharacter: { [weak self] in self?.focused.toggleCharacterVisibility() ?? true },
             onShowUsage: { [weak self] in self?.usageWindow.toggle() },
             onNewConversation: { [weak self] in
-                self?.secretary.newConversation()
+                self?.focused.secretary.newConversation()
                 // Starting a conversation means having one. Clearing the slate
                 // behind a hidden window would leave nothing to show for the
                 // click, and the bubble being closed is a common reason to
                 // reach for the menu in the first place.
-                self?.openChatFromMenu()
+                self?.focused.openChat()
             },
-            history: { [weak self] in self?.secretary.historyRows() ?? [] },
+            history: { [weak self] in self?.focused.secretary.historyRows() ?? [] },
             onResumeConversation: { [weak self] id in
-                self?.secretary.resumeConversation(id)
+                self?.focused.secretary.resumeConversation(id)
                 // Reopening a conversation from the menu means wanting to look
                 // at it, and the bubble may well be hidden — that is often why
                 // the menu was used at all.
-                self?.openChatFromMenu()
+                self?.focused.openChat()
             },
-            onClearHistory: { [weak self] in self?.secretary.clearHistory() },
-            windows: { [weak self] in self?.infoWindows }
+            onClearHistory: { [weak self] in self?.focused.secretary.clearHistory() },
+            windows: { [weak self] in self?.focused.infoWindows }
         )
-
-        // A reply can ask for part of itself to be kept on screen.
-        secretary.onPinWindow = { [weak self] spec in self?.infoWindows.open(spec) }
-        infoWindows.onCountChanged = { [weak self] in self?.refreshHotKeyClaim() }
 
         // Esc is claimed from the whole system, so the bubble answers it while
         // the user is typing in another app. Only Esc, and only while the chat
         // is showing — see `GlobalShortcut` for why ⌘H is not in this list.
         hotKeys = GlobalHotKeys(actions: [
-            // Esc means "put away whatever is in front". A pinned pane in front
-            // is what it puts away; otherwise it closes the chat.
-            .closeChat: { [weak self] in
-                guard let self else { return }
-                if self.infoWindows.hideKeyWindow() { return }
-                self.hideChatPanel()
-            }
+            // Esc means "put away whatever is in front".
+            .closeChat: { [weak self] in self?.focused.dismissFrontmost() }
         ])
         refreshHotKeyClaim()
         watchForHideShortcut()
 
-        showCharacter()
+        character.showCharacter()
     }
 
     /// ⌘H, taken from this app's own event stream while one of its windows has
@@ -225,14 +134,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     /// menu item has always done. An accessory app has no Dock tile to come back
     /// from, so `NSApplication.hide` would leave nothing to click.
     private func hideEverything() {
-        if isCharacterVisible { toggleCharacterVisibility() }
+        characters.filter(\.isCharacterVisible).forEach { $0.toggleCharacterVisibility() }
     }
 
     /// Esc is worth claiming only while something is on screen to dismiss —
-    /// the chat bubble or a pinned pane. Called from both, since either can be
-    /// the last one standing.
+    /// a chat bubble or a pinned pane. Called from the characters, since any of
+    /// them can be the last one standing.
     func refreshHotKeyClaim() {
-        hotKeys?.apply(hasDismissableWindow: isChatVisible || !infoWindows.set.isEmpty)
+        hotKeys?.apply(hasDismissableWindow: characters.contains(where: \.hasDismissableWindow))
     }
 
     /// Hands Esc back to the rest of the system on the way out. The process
@@ -249,18 +158,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     /// double-clicking the app again is exactly what someone does when they
     /// can't see it. Hiding is for getting it out of the way for a moment, not
     /// a setting to be remembered, so reopening always brings it back.
-
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
-        showCharacter()
+        focused?.showCharacter()
         return true
-    }
-
-    /// Puts the character on screen and keeps the menu wording honest. Safe
-    /// when it is already showing.
-    private func showCharacter() {
-        isCharacterVisible = true
-        characterPanel.orderFrontRegardless()
-        statusBar?.setCharacterVisible(true)
     }
 
     // MARK: - Menu commands
@@ -272,211 +172,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
 
     func decreaseTextSize(_ sender: Any?) { appearance.decreaseFontSize() }
 
-    /// ⌘H. Goes through the same toggle the status bar item uses, then tells the
-    /// menu what happened so its wording doesn't go stale.
-    func toggleCharacter(_ sender: Any?) {
-        statusBar.setCharacterVisible(toggleCharacterVisibility())
-    }
+    /// ⌘H. Goes through the same toggle the status bar item uses; the character
+    /// reports back so the menu's wording doesn't go stale.
+    func toggleCharacter(_ sender: Any?) { focused.toggleCharacterVisibility() }
 
     func showAbout(_ sender: Any?) { AboutPanel.show() }
 
     func toggleUsageWindow(_ sender: Any?) { usageWindow.toggle() }
 
-    /// Lets the window own its size and the hosted view fill it.
-    private static func container(for host: NSView, size: CGSize) -> NSView {
-        let container = FirstMouseContainerView(frame: NSRect(origin: .zero, size: size))
-        host.frame = container.bounds
-        host.autoresizingMask = [.width, .height]
-        container.addSubview(host)
-        return container
-    }
-
     /// Finds Claude Code off the main thread. The fast path is a handful of
     /// `stat` calls, but the fallback launches the user's login shell, which can
     /// take seconds — doing that here would delay the character appearing.
     private func detectBackend() {
+        let backend = focused.backend
         backend.observeAvailability { [weak self] availability in
             Task { @MainActor in self?.backendStatus.availability = availability }
         }
-        let backend = self.backend
         Task.detached(priority: .utility) { backend.resolve() }
     }
 
-    /// Resizes both windows to the current choices and re-anchors the bubble,
-    /// keeping the tail on the character and the whole panel on screen.
-    ///
-    /// The character grows from its bottom-centre: it usually sits near the Dock
-    /// with the bubble above it, and growing from the top-left corner instead
-    /// would walk it across the desktop each time the size changed.
-    /// Tells AppKit which way the windows are lit.
-    ///
-    /// A window property, not something a SwiftUI body can return, and it has
-    /// to be re-applied rather than set once: without it the caret, the
-    /// scroller and the text-selection tint keep coming from the system's
-    /// light/dark setting — a white scroll bar down the side of a dark panel
-    /// the moment the theme is overridden.
+    /// Re-lights every window the app owns when the theme changes.
     private func applyControlAppearance() {
         let controls = appearance.colors.controlAppearance
-        characterPanel?.appearance = controls
-        chatPanel?.appearance = controls
+        characters.forEach { $0.applyControlAppearance(controls) }
         usageWindow.applyControlAppearance(controls)
-        infoWindows.applyControlAppearance(controls)
-    }
-
-    private func applyWindowSizes() {
-        let old = characterPanel.frame
-        let size = characterSize
-        let characterResized = old.size != size
-        if characterResized {
-            characterPanel.setFrame(
-                NSRect(
-                    x: old.midX - size.width / 2,
-                    y: old.minY,
-                    width: size.width,
-                    height: size.height
-                ),
-                display: true
-            )
-        }
-
-        var frame = chatPanel.frame
-        frame.size = chatSize
-        chatPanel.setFrame(frame, display: true)
-
-        if let screen = characterPanel.screen ?? NSScreen.main {
-            // Only a character that just changed size can have been pushed off
-            // an edge by this call. Resizing the chat used to run this too, and
-            // a character standing where the user put it — at the bottom of the
-            // screen, over the Dock — was yanked 54pt upward the moment the
-            // grip moved. Resizing the bubble must resize the bubble and
-            // nothing else.
-            if characterResized { keepCharacterOnScreen(in: screen) }
-            applyChatLayout(in: screen.visibleFrame)
-        }
-    }
-
-    /// A character that just grew near an edge would otherwise hang off it.
-    ///
-    /// Measured against the whole screen rather than the part left over by the
-    /// Dock and menu bar: standing on top of the Dock is a normal place to put
-    /// a desktop character, and having it shoved out of there for growing one
-    /// size is the same complaint as being shoved for a resize. The rule is
-    /// only "don't end up off the screen".
-    private func keepCharacterOnScreen(in screen: NSScreen) {
-        let bounds = screen.frame
-        let frame = characterPanel.frame
-        let x = min(max(frame.minX, bounds.minX), bounds.maxX - frame.width)
-        let y = min(max(frame.minY, bounds.minY), bounds.maxY - frame.height)
-        if x != frame.minX || y != frame.minY {
-            characterPanel.setFrameOrigin(NSPoint(x: x, y: y))
-        }
-    }
-
-    /// Opens the chat, making the character visible first if it was hidden so the
-    /// bubble has something to anchor to.
-    private func openChatFromMenu() {
-        showCharacter()
-        showChatPanel()
-    }
-
-    /// Shows or hides the floating character. Returns the new visibility so the
-    /// menu can relabel its item. Hiding the character also hides the chat.
-    @discardableResult
-    private func toggleCharacterVisibility() -> Bool {
-        isCharacterVisible.toggle()
-        if isCharacterVisible {
-            characterPanel.orderFrontRegardless()
-        } else {
-            if isChatVisible { hideChatPanel() }
-            characterPanel.orderOut(nil)
-        }
-        statusBar?.setCharacterVisible(isCharacterVisible)
-        return isCharacterVisible
-    }
-
-    private func positionInitialWindows() {
-        guard let screen = NSScreen.main else { return }
-        let visibleFrame = screen.visibleFrame
-
-        let characterOrigin = CharacterLaunch.origin(
-            characterSize: characterPanel.frame.size,
-            visibleFrame: visibleFrame,
-            screenFrame: screen.frame
-        )
-        characterPanel.setFrameOrigin(NSPoint(x: characterOrigin.x, y: characterOrigin.y))
-
-        applyChatLayout(in: visibleFrame)
-    }
-
-    private func observeWindowMovement() {
-        NotificationCenter.default.addObserver(
-            forName: NSWindow.didMoveNotification,
-            object: characterPanel,
-            queue: .main
-        ) { [weak self] _ in
-            // Delivered on the main queue, so it's safe to assert main-actor
-            // isolation to reach the panel and layout without a warning.
-            MainActor.assumeIsolated {
-                guard let self, let screen = self.characterPanel.screen ?? NSScreen.main else { return }
-                self.applyChatLayout(in: screen.visibleFrame)
-            }
-        }
-    }
-
-    /// Repositions the bubble relative to the character's current frame.
-    /// The decision itself is `placeBubble`, which can be checked without a
-    /// screen; this only feeds it the current frames and applies the answer.
-    private func applyChatLayout(in visibleFrame: NSRect) {
-        let characterFrame = characterPanel.frame
-        let placement = placeBubble(
-            character: characterFrame,
-            bubble: chatSize,
-            visibleFrame: visibleFrame,
-            tailTipOffset: tailTipOffset,
-            clearance: characterFrame.width * bubbleClearanceFraction,
-            gap: characterGap,
-            margin: screenMargin
-        )
-
-        chatLayout.isMirrored = placement.isMirrored
-        chatLayout.isFlippedVertically = placement.isFlippedVertically
-        chatPanel.setFrameOrigin(placement.origin)
-    }
-
-    private func toggleChatPanel() {
-        if isChatVisible {
-            hideChatPanel()
-        } else {
-            showChatPanel()
-        }
-    }
-
-    private func showChatPanel() {
-        isChatVisible = true
-        refreshHotKeyClaim()
-        // The display may have changed since launch; re-clamp before showing,
-        // against the screen the character is on rather than whichever one
-        // happens to be "main" at the time.
-        appearance.applyScreenLimits(
-            (characterPanel.screen ?? NSScreen.main)?.visibleFrame
-        )
-        NSApp.activate(ignoringOtherApps: true)
-        chatPanel.makeKeyAndOrderFront(nil)
-        chatPanel.animator().alphaValue = 1
-        // Clicking the character is someone starting to say something. Landing
-        // in the box means they can just type; without it the bubble opened with
-        // the caret nowhere and the first keystroke went into the void.
-        chatLayout.requestInputFocus()
-    }
-
-    private func hideChatPanel() {
-        isChatVisible = false
-        // Esc goes back to whichever app the user is actually in the moment
-        // there is nothing left to put away.
-        refreshHotKeyClaim()
-        chatPanel.animator().alphaValue = 0
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
-            self?.chatPanel.orderOut(nil)
-        }
     }
 }
