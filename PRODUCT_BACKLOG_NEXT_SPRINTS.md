@@ -8,10 +8,10 @@
 Liquid Glass, Loop & Notification, Voice และไฟล์ backlog อีกสองไฟล์ ทำได้ตามปกติ
 
 
-## Phase 12: Multi-AI-Secretaty
+## Phase 13: Multi-AI-Secretaty
 
 
-## Phase 12: App ทำงานร่วมกันได้
+## Phase 14: App ทำงานร่วมกันได้
 - [ ] User สามารถ start app พร้อมกันได้มากกว่า 1 app
 - [ ] Two or more app be able to talk to each other.
 - [ ] การทำงานร่วมกัน
@@ -25,7 +25,7 @@ Liquid Glass, Loop & Notification, Voice และไฟล์ backlog อีก
   - [ ] ถ้า step ไหนช่วยกันทำได้ app ต้องรู้ว่า parallel ได้กี่ app, ต้องรออะไรจึงจะรู้ว่าทำแล้ว, และทำเสร็จแล้ว โดย update กันใน task log
   - [ ] prevent เรื่อง lock file และ race condition (ทำซ้ำกัน, เข้าใจว่า app อื่นทำเลยไม่ได้ทำ, ลำดับงานผิด, ข้ามลำดับงาน, infinite loog) 
 
-## Phase 13: Multi-session
+## Phase 15: Multi-session
 - Before Start : อ่าน requirement ทั้งหมดใน phase นี้ก่อน เพราะต้อง re-architecture app และต้องจัดกลุ่ม feature ที่อยู่ใน Setting, Profile, Skills ใหม่ 
 - Requirements
   - [ ] สามารถเปิด chat bubble ได้มากกว่า 1 window โดยที่แต่ละ window จะแยก Claude Session ออกจากกัน
@@ -45,7 +45,7 @@ Liquid Glass, Loop & Notification, Voice และไฟล์ backlog อีก
     - [ ] แต่ละ session ใน menu มีปุ่มปิด ถ้าปิดก็ลบ history ไปเลย
 - Expected App Architecture
 
-## Phase 12: Liquid Glass Theme
+## Phase 16: Liquid Glass Theme
   **ข้อเท็จจริงใต้เฟสนี้ขยับไปแล้วบางส่วนที่ v0.10.197 (2026-08-11)** — รอบนั้นแก้อาการ
   "พื้นโปร่งทำให้อ่านไม่ออกเมื่อ desktop สว่าง" ซึ่งแตะโค้ดชุดเดียวกับเฟสนี้ อ่านก่อนเริ่มข้อไหนก็ตาม
   - `.fill(.regularMaterial)` ที่ข้อ #2 อ้างถึง **ไม่มีแล้ว** เป็น `theme.ground.color` (สีทึบ)
@@ -114,7 +114,7 @@ Liquid Glass, Loop & Notification, Voice และไฟล์ backlog อีก
 - [ ] **#11 Focus ด้วย Glass** — หน้าต่างนี้ไม่เคยเป็น key window จึงพึ่ง focus state ของระบบไม่ได้
   ต้องวาดสถานะเอง ซึ่งเป็นเหตุผลเดียวกับที่ `PanelToggleStyle` มีอยู่ทุกวันนี้
 
-## Phase 12: App ทำงานร่วมกันได้
+## Phase 17: App ทำงานร่วมกันได้
 - [ ] User สามารถ start app พร้อมกันได้มากกว่า 1 app
 - [ ] Two or more app be able to talk to each other.
 - [ ] การทำงานร่วมกัน
@@ -128,7 +128,7 @@ Liquid Glass, Loop & Notification, Voice และไฟล์ backlog อีก
   - [ ] ถ้า step ไหนช่วยกันทำได้ app ต้องรู้ว่า parallel ได้กี่ app, ต้องรออะไรจึงจะรู้ว่าทำแล้ว, และทำเสร็จแล้ว โดย update กันใน task log
   - [ ] prevent เรื่อง lock file และ race condition (ทำซ้ำกัน, เข้าใจว่า app อื่นทำเลยไม่ได้ทำ, ลำดับงานผิด, ข้ามลำดับงาน, infinite loog) 
 
-## Phase 13: Multi-session
+## Phase 18: Multi-session
 - Before Start : อ่าน requirement ทั้งหมดใน phase นี้ก่อน เพราะต้อง re-architecture app และต้องจัดกลุ่ม feature ที่อยู่ใน Setting, Profile, Skills ใหม่ 
 - Requirements
   - [ ] สามารถเปิด chat bubble ได้มากกว่า 1 window โดยที่แต่ละ window จะแยก Claude Session ออกจากกัน
@@ -148,12 +148,12 @@ Liquid Glass, Loop & Notification, Voice และไฟล์ backlog อีก
     - [ ] แต่ละ session ใน menu มีปุ่มปิด ถ้าปิดก็ลบ history ไปเลย
 - Expected App Architecture
 
-## Phase 14: Loop & Notification
+## Phase 19: Loop & Notification
 - [ ] สั่งให้ loop ได้ เช่น นับถอยหลัง 5 นาทีแล้วแจ้งเตือน หรือ long run แล้วแจ้งเตือนได้
 - [ ] มี local notification เมื่อทำงานเสร็จ (notification settings ตาม macOS)
 - [ ] เมื่อ click ที่กล่อง notication, จะเปิด app และ chat window ขึ้นมา
 
-## Phase 15: Voice
+## Phase 20: Voice
 - [ ] Push-to-talk or explicit voice activation.
 - [ ] Speech-to-text, text-to-speech, interruption behavior, and privacy controls.
 - [ ] Voice must follow the same approval and auditing model as chat.
