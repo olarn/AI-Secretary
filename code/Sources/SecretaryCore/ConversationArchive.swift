@@ -290,11 +290,53 @@ public final class FileConversationStore: ConversationStoring, @unchecked Sendab
         self.fileURL = fileURL ?? FileConversationStore.defaultURL
     }
 
+    /// Where history lived while there was one character. Still read once, to
+    /// be adopted — see `conversationFileMigration`.
     public static var defaultURL: URL {
+        supportDirectory.appendingPathComponent("conversations.json")
+    }
+
+    /// One file per character. A character's conversations are hers, and a
+    /// single file holding everybody's would have to carry an owner on every
+    /// row and be rewritten by whichever character saved last.
+    public static func url(forCharacter id: UUID) -> URL {
+        supportDirectory.appendingPathComponent("conversations-\(id.uuidString).json")
+    }
+
+    private static var supportDirectory: URL {
         FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("AISecretary", isDirectory: true)
-            .appendingPathComponent("conversations.json")
+    }
+
+    /// Hands the pre-Phase-13 history file to a character, once.
+    ///
+    /// The decision is `conversationFileMigration`; this reads the two `exists`
+    /// answers off the disk and applies what it says. Returns what it decided
+    /// so a caller can see whether anything moved.
+    @discardableResult
+    public static func adoptLegacyHistory(
+        for id: UUID,
+        fileManager: FileManager = .default
+    ) -> Either<ConversationStoreError, ConversationFileMigration> {
+        let legacy = defaultURL
+        let mine = url(forCharacter: id)
+        let decision = conversationFileMigration(
+            legacy: legacy,
+            perCharacter: mine,
+            legacyExists: fileManager.fileExists(atPath: legacy.path),
+            perCharacterExists: fileManager.fileExists(atPath: mine.path)
+        )
+        guard case .adopt(let from, let to) = decision else { return .right(decision) }
+        return attempt {
+            try fileManager.createDirectory(
+                at: to.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try fileManager.moveItem(at: from, to: to)
+        }
+        .mapLeft { ConversationStoreError.writeFailed(path: to.path, message: $0.localizedDescription) }^
+        .map { decision }^
     }
 
     public func load() -> Either<ConversationStoreError, [ArchivedConversation]> {

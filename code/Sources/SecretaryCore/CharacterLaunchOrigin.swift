@@ -40,6 +40,43 @@ public enum CharacterLaunch {
         )
     }
 
+    /// How far left each further character stands from the one before, as a
+    /// fraction of its own width. A share rather than a fixed gap, for the same
+    /// reason `lowering` is: the character is drawn at three sizes, and a
+    /// spacing that looks right at S has them overlapping at L.
+    public static let spacingFraction: Double = 1.4
+
+    /// Where character number `existing.count + 1` stands.
+    ///
+    /// The resting spot is taken, so she stands to the left of whoever is
+    /// already there — landing a new character exactly on top of an existing one
+    /// looks like nothing happened, which is the worst possible answer to
+    /// "New Character…".
+    ///
+    /// Measured from the resting position rather than from the leftmost
+    /// character on screen: characters are draggable, so following them would
+    /// mean a new one appearing wherever the last one was dropped, including
+    /// off in a corner. Counting instead keeps the row predictable, and once it
+    /// would run off the left edge the clamp stacks them at the edge rather
+    /// than putting one where it cannot be clicked.
+    public static func origin(
+        ordinal: Int,
+        characterSize: CGSize,
+        visibleFrame: CGRect,
+        screenFrame: CGRect
+    ) -> CGPoint {
+        let first = origin(
+            characterSize: characterSize,
+            visibleFrame: visibleFrame,
+            screenFrame: screenFrame
+        )
+        let shifted = first.x - Double(max(0, ordinal)) * characterSize.width * spacingFraction
+        return CGPoint(
+            x: clamp(shifted, low: screenFrame.minX, high: screenFrame.maxX - characterSize.width),
+            y: first.y
+        )
+    }
+
     /// Low wins if the two cross — a character taller than the screen is pinned
     /// to the bottom rather than to a negative height above it.
     private static func clamp(_ value: Double, low: Double, high: Double) -> Double {

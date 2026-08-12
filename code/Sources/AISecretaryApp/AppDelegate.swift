@@ -46,7 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
             detector: detector,
             // The one place that should touch the real files. Everywhere else —
             // every test — gets the in-memory defaults and cannot reach them.
-            conversationStore: FileConversationStore(),
+            conversationStore: FileConversationStore(fileURL: historyFile(for: profiles.activeID)),
             attachmentStore: FileAttachmentStore()
         )
         characters = [character]
@@ -83,6 +83,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
         watchForHideShortcut()
 
         character.showCharacter()
+    }
+
+    /// This character's own history file, adopting the one everybody shared
+    /// before characters had their own.
+    ///
+    /// The failure is discarded on purpose, and explicitly rather than by
+    /// omission: it can only be a rename that didn't happen, the character then
+    /// starts with an empty history instead of her old one, and there is no
+    /// useful thing to say about it while the app is still opening. Nothing is
+    /// deleted either way — the old file is still there to adopt next launch.
+    private func historyFile(for id: UUID) -> URL {
+        _ = FileConversationStore.adoptLegacyHistory(for: id)
+        return FileConversationStore.url(forCharacter: id)
     }
 
     // MARK: - The status bar menu

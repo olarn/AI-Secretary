@@ -4,7 +4,7 @@ A macOS desktop companion: a floating animated character that lives on your
 desktop, talks to you in chat, and gets work done through the Claude Code you
 already have installed.
 
-Version 0.10.206. macOS 14+. Not shipped — this is a working repository.
+Version 0.10.207. macOS 14+. Not shipped — this is a working repository.
 
 ## What it actually is
 
