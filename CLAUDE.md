@@ -194,6 +194,17 @@ don't get mixed in with feature items:
   designed. **The guard is scoped to those sections** (confirmed 2026-08-12) —
   it does not cover the other two files.
 
+**เฟสที่ผ่าน Definition of done แล้ว ต้องย้าย ไม่ใช่แค่ติ๊ก** — เขียนสิ่งที่ ship ลง
+`PRODUCT_BACKLOG.md` ซึ่งเป็นที่เก็บ "อะไร ship ไปแล้ว" **แล้วลบหัวข้อเฟสนั้นออกจาก
+`SPRINT_BACKLOG.md`** สองขั้นนี้แยกกันไม่ได้: ลบอย่างเดียวคือทิ้งบันทึก ติ๊กอย่างเดียวคือ
+sprint ที่โตขึ้นเรื่อยๆ จนอ่านไม่ออกว่ารอบนี้เหลืออะไร เงื่อนไขว่า "จบ" คืออะไร ไม่เขียนซ้ำที่นี่ —
+อยู่ที่ Definition of done ห้าขั้นด้านบน ที่เดียว
+
+**หัวข้อเฟสต้องไม่ซ้ำเลขกันข้ามไฟล์** ตอนนี้ซ้ำอยู่ (2026-08-12): `SPRINT_BACKLOG.md` มี
+Phase 12 หนึ่งอัน ส่วน `PRODUCT_BACKLOG_NEXT_SPRINTS.md` มีอีกสามอันที่เขียนว่า Phase 12
+เหมือนกัน ผลคือ "ทำ Phase 12 ให้หน่อย" ชี้ไปได้สี่ที่ และเคยถูกเข้าใจผิดมาแล้วว่างานธีมที่ ship
+ไปคืองาน Phase 12 ของ sprint
+
 The phase digit used in the version number is stated once, in Versioning and
 packaging — not here and not in the backlog files, whose copy of it went stale
 and said 9 while this file said 10.
