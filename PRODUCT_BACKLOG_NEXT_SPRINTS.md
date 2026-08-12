@@ -7,10 +7,6 @@
 **คุมเฉพาะหัวข้อ multi-app / multi-secretary ในไฟล์นี้** (เจ้าของยืนยัน 2026-08-12)
 Liquid Glass, Loop & Notification, Voice และไฟล์ backlog อีกสองไฟล์ ทำได้ตามปกติ
 
-
-## Phase 13: Multi-AI-Secretaty
-
-
 ## Phase 14: App ทำงานร่วมกันได้
 - [ ] User สามารถ start app พร้อมกันได้มากกว่า 1 app
 - [ ] Two or more app be able to talk to each other.
