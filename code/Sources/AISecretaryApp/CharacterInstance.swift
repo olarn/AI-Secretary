@@ -106,6 +106,7 @@ final class CharacterInstance {
         appearance: Appearance,
         registry: ProjectRegistry,
         backendStatus: BackendStatus,
+        detector: ClaudeCodeDetector,
         conversationStore: ConversationStoring,
         attachmentStore: AttachmentStaging
     ) {
@@ -114,7 +115,8 @@ final class CharacterInstance {
         self.appearance = appearance
         self.registry = registry
         self.backendStatus = backendStatus
-        let backend = ChatBackend()
+        // Her own session over the app's one search — see `ClaudeCodeDetector`.
+        let backend = ChatBackend(detector: detector)
         self.backend = backend
         self.infoWindows = InfoWindows(appearance: appearance)
         self.secretary = Secretary(

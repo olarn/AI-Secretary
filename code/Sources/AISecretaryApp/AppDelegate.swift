@@ -15,6 +15,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     private let backendStatus = BackendStatus()
     private let appearance = Appearance()
     private let profiles = ProfileLibrary()
+    /// Where Claude Code is — the machine's answer, found once and handed to
+    /// every character. The session built on top of it is hers; this is not.
+    private let detector = ClaudeCodeDetector()
 
     /// The characters on the desktop. One for now; the point of the type is
     /// that this becomes several without the delegate changing shape.
@@ -40,6 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
             appearance: appearance,
             registry: registry,
             backendStatus: backendStatus,
+            detector: detector,
             // The one place that should touch the real files. Everywhere else —
             // every test — gets the in-memory defaults and cannot reach them.
             conversationStore: FileConversationStore(),
@@ -183,12 +187,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     /// Finds Claude Code off the main thread. The fast path is a handful of
     /// `stat` calls, but the fallback launches the user's login shell, which can
     /// take seconds — doing that here would delay the character appearing.
+    ///
+    /// Asked of the detector rather than of a character's backend: the answer
+    /// is the machine's, every backend is already watching for it, and running
+    /// it once is the point of the split.
     private func detectBackend() {
-        let backend = focused.backend
-        backend.observeAvailability { [weak self] availability in
+        detector.observe { [weak self] availability in
             Task { @MainActor in self?.backendStatus.availability = availability }
         }
-        Task.detached(priority: .utility) { backend.resolve() }
+        let detector = self.detector
+        Task.detached(priority: .utility) { detector.resolve() }
     }
 
     /// Re-lights every window the app owns when the theme changes.

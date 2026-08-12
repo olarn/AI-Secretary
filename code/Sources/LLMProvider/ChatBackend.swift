@@ -117,9 +117,13 @@ extension ClaudeCodeProvider: WorkspaceScopedProvider {
 /// (or an explicit background refresh) pays for it and everything after reads a
 /// cached answer.
 public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, @unchecked Sendable {
-    private let locator: ClaudeCodeLocator
+    /// Where Claude Code is. Shared with every other backend in the app — see
+    /// `ClaudeCodeDetector` for why that half does not belong here.
+    private let detector: ClaudeCodeDetector
     private let lock = NSLock()
-    private var _availability: ClaudeCodeAvailability?
+    /// This backend's own handle on Claude Code: its own session, working
+    /// directory, allowlist and browser flag. One per character, which is the
+    /// whole reason the detector is not one per character.
     private var _claudeCode: ClaudeCodeProvider?
     private var _pending: (workingDirectory: URL?, additionalDirectories: [URL], allowedTools: [String]?)?
     private var _pendingBrowser = false
@@ -130,61 +134,61 @@ public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, @unchecke
     /// then. Held here and applied the moment the provider appears, the same
     /// way the working directory is.
     private var _pendingSession: String?
-    private var _observer: (@Sendable (ClaudeCodeAvailability) -> Void)?
-    private var _diskDefaults: ClaudeCodeDefaults?
 
-    public init(locator: ClaudeCodeLocator = ClaudeCodeLocator()) {
-        self.locator = locator
+    public init(detector: ClaudeCodeDetector) {
+        self.detector = detector
+        // Whoever pays for detection, every backend gets the answer — including
+        // one built after the search already finished, which `observe` delivers
+        // to immediately. Without that, a character created later would sit
+        // with no provider until something called `resolve` on her in
+        // particular.
+        detector.observe { [weak self] availability in self?.adopt(availability) }
+    }
+
+    /// For a backend that answers to nobody else — a test, or a one-off. The
+    /// app hands every character the same detector instead.
+    public convenience init(locator: ClaudeCodeLocator = ClaudeCodeLocator()) {
+        self.init(detector: ClaudeCodeDetector(locator: locator))
     }
 
     /// Detection result, or nil if we haven't looked yet.
-    public var availability: ClaudeCodeAvailability? {
-        lock.withLock { _availability }
-    }
+    public var availability: ClaudeCodeAvailability? { detector.availability }
 
     /// Which copy of Claude Code is in use, once detection has run.
-    public var installation: ClaudeCodeInstallation? {
-        availability?.installation
-    }
-
-    /// Called on the main thread whenever detection completes, so the UI can
-    /// swap an onboarding card for the real chat without polling.
-    public func observeAvailability(_ observer: @escaping @Sendable (ClaudeCodeAvailability) -> Void) {
-        lock.withLock { _observer = observer }
-    }
+    public var installation: ClaudeCodeInstallation? { detector.installation }
 
     /// Runs detection if it hasn't run. Safe to call from a background task;
     /// never call it on the main thread.
     @discardableResult
     public func resolve() -> ClaudeCodeAvailability {
-        if let cached = availability { return cached }
-
-        let found = locator.locate()
-        // Same background pass: resolving the login shell is slow and the first
-        // turn shouldn't pay for it.
-        _ = LoginShellPath.resolve()
-
-        let observer: (@Sendable (ClaudeCodeAvailability) -> Void)?
-        lock.lock()
-        _availability = found
-        if case .available(let installation) = found {
-            let provider = ClaudeCodeProvider(installation: installation)
-            if let pending = _pending {
-                provider.prepare(
-                    workingDirectory: pending.workingDirectory,
-                    additionalDirectories: pending.additionalDirectories,
-                    allowedTools: pending.allowedTools
-                )
-            }
-            provider.setBrowserEnabled(_pendingBrowser)
-            if let session = _pendingSession { provider.adopt(session: session) }
-            _claudeCode = provider
-        }
-        observer = _observer
-        lock.unlock()
-
-        observer?(found)
+        let found = detector.resolve()
+        // Belt and braces with the observer installed at init: `adopt` is
+        // idempotent, and this makes the synchronous path — `stream` calling
+        // `resolve` on the first turn — hold a provider by the time it returns,
+        // without depending on observer ordering.
+        adopt(found)
         return found
+    }
+
+    /// Builds this backend's own provider from a finished detection, carrying
+    /// over anything chosen while there was nothing to carry it to.
+    private func adopt(_ availability: ClaudeCodeAvailability) {
+        guard case .available(let installation) = availability else { return }
+        lock.lock()
+        defer { lock.unlock() }
+        guard _claudeCode == nil else { return }
+
+        let provider = ClaudeCodeProvider(installation: installation)
+        if let pending = _pending {
+            provider.prepare(
+                workingDirectory: pending.workingDirectory,
+                additionalDirectories: pending.additionalDirectories,
+                allowedTools: pending.allowedTools
+            )
+        }
+        provider.setBrowserEnabled(_pendingBrowser)
+        if let session = _pendingSession { provider.adopt(session: session) }
+        _claudeCode = provider
     }
 
     // MARK: - ChatProvider
@@ -277,11 +281,10 @@ public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, @unchecke
         let live = Option.fromOptional(lock.withLock { _claudeCode }?.reportedModel)
             .flatMap { Option.fromOptional($0) }^
             .flatMap(ChatModel.named)^
-        let onDisk = lock.withLock { _diskDefaults } ?? {
-            let read = ClaudeCodeDefaults.read()
-            lock.withLock { _diskDefaults = read }
-            return read
-        }()
+        // The live half is this character's own session reporting what it ran
+        // on; the file half is the machine's, so it is read once by the
+        // detector rather than once per character.
+        let onDisk = detector.diskDefaults
         return ClaudeCodeDefaults(model: live.orElse(onDisk.model), effort: onDisk.effort)
     }
 
