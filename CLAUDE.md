@@ -368,11 +368,13 @@ already made once, and the ungated key-posting variants were deleted on purpose.
 **ทุกครั้งที่แก้ code ต้อง bump version** ตามแพตเทิร์น `major.phase.change`
 
 - `major` — 0 ไปจนกว่าจะ public เจ้าของจะเป็นคนบอกเองว่าเมื่อไหร่
-- `phase` — phase ที่กำลังทำอยู่ **ตอนนี้คือ 10 และนี่คือที่เดียวในรีโปที่เขียนเลขนี้**
+- `phase` — phase ที่กำลังทำอยู่ **ตอนนี้คือ 13 และนี่คือที่เดียวในรีโปที่เขียนเลขนี้**
   ห้าม derive จากหัวข้อที่สูงสุดในไฟล์ backlog เพราะหัวข้อไม่ได้บอก phase ปัจจุบัน
-  ทั้งสองทาง — `PRODUCT_BACKLOG.md` จบที่ Phase 11 ที่ ship ไปแล้ว ส่วน
-  `PRODUCT_BACKLOG_NEXT_SPRINTS.md` มี Phase 12–15 ที่ยังไม่เริ่ม
+  ทั้งสองทาง — `PRODUCT_BACKLOG.md` จบที่เฟสที่ ship ไปแล้ว ส่วน
+  `PRODUCT_BACKLOG_NEXT_SPRINTS.md` มีเฟสที่ยังไม่เริ่ม
   เปลี่ยนด้วยมือเมื่อขยับ phase เท่านั้น
+  **เลขนี้เคยค้างที่ 10 ตลอด Phase 11–13** จนเจ้าของสั่งให้ตามจริง (2026-08-13)
+  ขยับ phase เมื่อไหร่ให้ขยับเลขนี้ในคอมมิตเดียวกัน
 - `change` — +1 ต่อ 1 เรื่องที่ทำเสร็จ ถ้ารอบนั้นแก้ 5 เรื่องก็ +5
   **ไม่รีเซ็ตเมื่อ phase เปลี่ยน** — มีแต่เพิ่มขึ้น เลขจึงไม่ซ้ำกันข้าม build
 - ตัวเลขนี้ไม่ใช่ semver — `<` เทียบกันได้เฉพาะภายใน phase เดียวกัน
@@ -389,8 +391,11 @@ already made once, and the ungated key-posting variants were deleted on purpose.
 `AISecretary.app` in the repo — worktrees otherwise leave several bundles with
 the same id and version but different code inside, and launching an old one is
 indistinguishable from a feature breaking. The bundle is stamped with the commit
-and branch it was built from (`AISecretaryBuild`), shown in About and in the
-status bar menu, so "which build is this?" never needs a terminal.
+and branch it was built from (`AISecretaryBuild`), shown in About, so "which
+build is this?" never needs a terminal. **In About only** — the status bar menu
+carried it too until 0.13.209, when the owner asked for the hash out of the
+header: the question it answers is real but rare, and it was the first thing in
+the menu every single time.
 
 การรันสคริปต์เป็นขั้นที่ 4 ของ Definition of done — ขั้นตอนอยู่ที่นั่น ไม่เขียนซ้ำที่นี่ เพราะ
 สำเนาที่สองของกติกาจะเก่าโดยไม่มีใครรู้ สองอย่างนี้เป็นเรื่องของตัวสคริปต์เอง:

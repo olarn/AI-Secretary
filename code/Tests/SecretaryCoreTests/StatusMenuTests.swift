@@ -49,10 +49,10 @@ final class StatusMenuTests: XCTestCase {
     // MARK: - The shape
 
     func testTheRootHoldsOnlyWhatIsAboutTheAppItself() {
-        let menu = statusBarMenu(summary: "AI Secretary 0.10.204 (abc1234)", characters: [state(miku, "Miku")])
+        let menu = statusBarMenu(summary: "AI Secretary 0.13.209", characters: [state(miku, "Miku")])
 
         XCTAssertEqual(titles(menu), [
-            "AI Secretary 0.10.204 (abc1234)",
+            "AI Secretary 0.13.209",
             "—",
             "Characters",
             "—",
@@ -66,8 +66,8 @@ final class StatusMenuTests: XCTestCase {
     /// A label, not something to click: it answers "which build am I running"
     /// without opening anything.
     func testTheVersionHeaderIsNotClickable() {
-        let menu = statusBarMenu(summary: "AI Secretary 0.10.204 (abc1234)", characters: [])
-        let header = item(menu, "AI Secretary 0.10.204 (abc1234)")
+        let menu = statusBarMenu(summary: "AI Secretary 0.13.209", characters: [])
+        let header = item(menu, "AI Secretary 0.13.209")
 
         XCTAssertEqual(header?.isEnabled, false)
         XCTAssertNil(header?.action)

@@ -28,7 +28,7 @@ import Foundation
 public struct AppVersion: Equatable, Comparable, Sendable, CustomStringConvertible {
     /// The current version. Keep the literal on one line and in this shape —
     /// `scripts/package-app.sh` parses it to fill in `CFBundleShortVersionString`.
-    public static let current = AppVersion(major: 0, minor: 10, patch: 208)
+    public static let current = AppVersion(major: 0, minor: 13, patch: 209)
 
     public let major: Int
     public let minor: Int
@@ -67,14 +67,18 @@ public enum AppInfo: Sendable {
         Bundle.main.infoDictionary?["AISecretaryBranch"] as? String
     }
 
-    /// What the app says when asked what it is — the About window's subtitle,
-    /// and the answer to "which version are you running?".
+    /// What the app says when asked what it is — the label at the top of the
+    /// status bar menu.
     ///
-    /// The build is part of the answer, not a footnote: two bundles can carry
-    /// the same version and different code, and telling them apart is the whole
-    /// point of showing it.
+    /// Name and version only. The commit used to ride along in brackets, on the
+    /// grounds that two bundles can carry the same version and different code;
+    /// that is still true and is still answered, in About, which builds its own
+    /// line from `build` and `branch`. What it does not need to be is the first
+    /// thing in the menu every time it is opened — a seven-character hash in
+    /// the header is noise to everyone who is not chasing exactly that
+    /// question.
     public static var summary: String {
-        build.map { "\(name) \(version) (\($0))" } ?? "\(name) \(version)"
+        "\(name) \(version)"
     }
 
     public static let tagline = "A desktop companion that works through your own Claude Code."

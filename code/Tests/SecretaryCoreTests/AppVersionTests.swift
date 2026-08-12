@@ -29,7 +29,15 @@ final class AppVersionTests: XCTestCase {
         XCTAssertTrue(parts.allSatisfy { Int($0) != nil }, "Every part has to be a number")
     }
 
-    func testTheAppAnswersWithItsNameAndVersion() {
+    /// Name and version, and deliberately not the commit.
+    ///
+    /// This assertion has always read this way and always passed, but for the
+    /// wrong reason: `AppInfo.build` comes from the bundle's Info.plist, which
+    /// is absent under `swift test`, so the branch that appended `(sha)` was
+    /// never once executed here. It described the test rig rather than the app.
+    /// Now it describes both.
+    func testTheAppAnswersWithItsNameAndVersionAndNoCommit() {
         XCTAssertEqual(AppInfo.summary, "AI Secretary \(AppVersion.current)")
+        XCTAssertFalse(AppInfo.summary.contains("("))
     }
 }
