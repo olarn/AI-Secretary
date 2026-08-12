@@ -30,16 +30,27 @@ session ที่ทำงานใน worktree จะจบด้วย `main` 
 ถ้าไม่ pull กลับ ผลคือ `code/` เป็นโค้ดเก่า `.app` ที่ build จากตรงนั้นก็เก่าตาม
 และ commit ถัดไปจาก `code/` จะ push ไม่ผ่าน ซึ่งเป็นจังหวะที่คนเผลอใช้ `--force`
 
-**ถ้าทำขั้น 3–4 ด้วยตัวเองไม่ได้** — session ที่ถูก isolate อยู่ใน worktree จะถูก harness
-ปฏิเสธทั้ง `cd` และ `git -C` ที่ชี้ไป `code/` (เกิดจริง 2026-08-12 ทั้งสองแบบ) กรณีนี้:
+**ถ้าถูกปฏิเสธตอนจะทำขั้น 3–4 ให้ออกจาก worktree แล้วทำเอง — ห้ามโยนคำสั่งให้เจ้าของรัน**
 
-- push ด้วย `git push origin HEAD:main` จาก worktree ได้ — เป็น fast-forward ล้วน
-- **ห้ามข้ามขั้น 3–4 เงียบๆ และห้ามรายงานว่า shipped** ต้องปิดเทิร์นด้วยคำสั่งเต็ม
-  ให้เจ้าของรัน และบอกตรงๆ ว่ายังไม่ได้ build:
+session ที่ถูก isolate อยู่ใน worktree จะถูก harness ปฏิเสธทั้ง `cd` และ `git -C` ที่ชี้ไป
+`code/` ข้อความที่ได้อ่านเหมือนเป็นข้อห้ามถาวร แต่**มันผูกกับสถานะ isolate ไม่ใช่ผูกกับ path**
+ออกจาก worktree เมื่อไหร่ก็ทำได้ทันที ลำดับที่ใช้ได้จริง (ยืนยัน 2026-08-12):
 
-  ```
-  ! cd ~/Desktop/AI-Secretary/code && git pull --ff-only && ./scripts/package-app.sh
-  ```
+1. แก้ไฟล์ + commit **ใน worktree** — guard ของ background session ห้ามแก้ไฟล์ใน
+   checkout หลัก จะเด้ง `hasn't isolated its changes yet` ดังนั้นงานแก้ต้องเสร็จก่อน
+2. push — `git push origin HEAD:main` จาก worktree ได้เลย เป็น fast-forward ล้วน
+3. `ExitWorktree` ด้วย `action: "keep"` — **`keep` เท่านั้น** worktree ต้องอยู่ต่อ
+4. ขั้น 3–4 ของ Definition of done ทำได้แล้ว เช็ค `git status` ของ checkout หลักก่อน
+   เผื่อเจ้าของมีงานค้าง แล้ว `cd ~/Desktop/AI-Secretary/code && git pull --ff-only`
+5. จะกลับไปทำงานต่อก็ `EnterWorktree` ด้วย `path` ของ worktree เดิม
+
+**การส่งคำสั่งให้เจ้าของรันเองคือทางเลือกสุดท้าย ไม่ใช่ทางแรก** — เคยโยนให้สามรอบใน session
+เดียวโดยไม่ได้ลองข้อ 3 เลยสักครั้ง เหลือไว้เฉพาะตอนที่ลำดับข้างบนก็ยังไม่ผ่าน และตอนนั้น
+**ห้ามข้ามเงียบๆ ห้ามรายงานว่า shipped** ต้องบอกตรงๆ ว่ายังไม่ได้ build แล้วปิดเทิร์นด้วย:
+
+```
+! cd ~/Desktop/AI-Secretary/code && git pull --ff-only && ./scripts/package-app.sh
+```
 
 **ข้ามขั้น 4 ได้กรณีเดียว** คือรอบนั้นไม่มีโค้ดที่ลงไปอยู่ใน bundle เปลี่ยนเลย
 (เอกสาร, สคริปต์ dev, เทสล้วน) เพราะ `.app` เดิมยังเป็น build ที่ถูกต้องของโค้ดที่ ship อยู่
