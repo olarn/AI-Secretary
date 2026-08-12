@@ -118,9 +118,20 @@ and don't exist, are in the `swift-functional-programming` skill.
 ## MVP scope
 
 Build in phases. The full feature-by-phase checklist (what's shipped and what's
-still open) lives in `PRODUCT_BACKLOG.md`, kept separate from this charter so
-architecture/principles/engineering rules don't get mixed in with backlog
-items. The current phase for version-bumping purposes is **10**.
+still open) is kept separate from this charter, so architecture/principles/
+engineering rules don't get mixed in with backlog items. Three files, split by
+when the work happens:
+
+- `PRODUCT_BACKLOG.md` — phases 1–11, what has shipped.
+- `SPRINT_BACKLOG.md` — the sprint being worked on now.
+- `PRODUCT_BACKLOG_NEXT_SPRINTS.md` — later. Opens with a guard: don't write
+  code for the multi-app / multi-secretary features until the architecture is
+  designed. **The guard is scoped to those sections** (confirmed 2026-08-12) —
+  it does not cover the other two files.
+
+The current phase for version-bumping purposes is **10**. This line is the only
+place that number is stated; the backlog files deliberately do not repeat it,
+because the copy they used to carry went stale and said 9.
 
 ## Security and privacy
 
