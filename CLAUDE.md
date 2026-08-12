@@ -165,9 +165,9 @@ when the work happens:
   designed. **The guard is scoped to those sections** (confirmed 2026-08-12) —
   it does not cover the other two files.
 
-The current phase for version-bumping purposes is **10**. This line is the only
-place that number is stated; the backlog files deliberately do not repeat it,
-because the copy they used to carry went stale and said 9.
+The phase digit used in the version number is stated once, in the version rule
+under Engineering expectations — not here and not in the backlog files, whose
+copy of it went stale and said 9 while this file said 10.
 
 ## Security and privacy
 
@@ -241,8 +241,10 @@ because the copy they used to carry went stale and said 9.
   หรือคำถามเรื่อง flag ส่งไม่ได้เลย และห้ามมี flag ตามหลังข้อความ เพราะหลัง `--` เป็น positional ทั้งหมด
 - **ทุกครั้งที่แก้ code ต้อง bump version** ตามแพตเทิร์น `major.phase.change`
   - `major` — 0 ไปจนกว่าจะ public เจ้าของจะเป็นคนบอกเองว่าเมื่อไหร่
-  - `phase` — phase ของ charter ที่กำลังทำอยู่ ตอนนี้คือ **10**
-    ห้าม derive จากหัวข้อที่สูงสุดในไฟล์ เพราะ charter มี Phase 7/8 ที่ยังไม่เริ่ม
+  - `phase` — phase ที่กำลังทำอยู่ **ตอนนี้คือ 10 และนี่คือที่เดียวในรีโปที่เขียนเลขนี้**
+    ห้าม derive จากหัวข้อที่สูงสุดในไฟล์ backlog เพราะหัวข้อไม่ได้บอก phase ปัจจุบัน
+    ทั้งสองทาง — `PRODUCT_BACKLOG.md` จบที่ Phase 11 ที่ ship ไปแล้ว ส่วน
+    `PRODUCT_BACKLOG_NEXT_SPRINTS.md` มี Phase 12–15 ที่ยังไม่เริ่ม
     เปลี่ยนด้วยมือเมื่อขยับ phase เท่านั้น
   - `change` — +1 ต่อ 1 เรื่องที่ทำเสร็จ ถ้ารอบนั้นแก้ 5 เรื่องก็ +5
     **ไม่รีเซ็ตเมื่อ phase เปลี่ยน** — มีแต่เพิ่มขึ้น เลขจึงไม่ซ้ำกันข้าม build
@@ -281,7 +283,9 @@ because the copy they used to carry went stale and said 9.
 3. Propose a minimal implementation plan with risks and assumptions.
 4. Ask for approval before irreversible, security-sensitive, or scope-expanding changes.
 5. Implement in small, verifiable increments.
-6. Run relevant tests/builds and report exact results.
+
+Reporting the result is a separate gate — see "Response style for implementation
+work" below. Shipping is a third — see "Definition of done" at the top.
 
 ## Response style for implementation work
 
