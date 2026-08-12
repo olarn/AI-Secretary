@@ -460,123 +460,6 @@ struct ChatPanelView: View {
         .background(theme.warningFill.color, in: RoundedRectangle(cornerRadius: 8))
     }
 
-    /// Clicking the name opens a real picker. The same entry point the slash
-    /// commands use, so a change here is announced in the transcript too — the
-    /// conversation is where the change takes effect, so that's where it should
-    /// be visible.
-    private var modelPicker: some View {
-        Menu {
-            Button {
-                secretary.chooseModel(nil)
-            } label: {
-                Label(
-                    "Your Claude Code default",
-                    systemImage: secretary.isModelInherited ? "checkmark" : ""
-                )
-            }
-            Divider()
-            ForEach(ChatModel.known, id: \.id) { candidate in
-                Button {
-                    secretary.chooseModel(candidate)
-                } label: {
-                    Label(
-                        candidate.displayName,
-                        systemImage: secretary.chosenModel == candidate ? "checkmark" : ""
-                    )
-                }
-            }
-        } label: {
-            settingLabel(
-                "Model",
-                value: secretary.effectiveModelName,
-                inherited: secretary.isModelInherited
-            )
-        }
-        .menuStyle(.borderlessButton)
-        .fixedSize()
-    }
-
-    private var effortPicker: some View {
-        Menu {
-            Button {
-                secretary.chooseEffort(nil)
-            } label: {
-                Label(
-                    "Your Claude Code default",
-                    systemImage: secretary.isEffortInherited ? "checkmark" : ""
-                )
-            }
-            Divider()
-            ForEach(Effort.allCases, id: \.rawValue) { candidate in
-                Button {
-                    secretary.chooseEffort(candidate)
-                } label: {
-                    Label(
-                        candidate.rawValue,
-                        systemImage: secretary.chosenEffort == candidate ? "checkmark" : ""
-                    )
-                }
-            }
-        } label: {
-            settingLabel(
-                "Effort",
-                value: secretary.effectiveEffortName,
-                inherited: secretary.isEffortInherited
-            )
-        }
-        .menuStyle(.borderlessButton)
-        .fixedSize()
-    }
-
-    /// The same menu shape as Model and Effort rather than a toggle switch, so
-    /// the settings panel reads as one list of choices — and so this one is a
-    /// deliberate pick from a menu, not a switch brushed by accident.
-    private var browserPicker: some View {
-        HStack(spacing: 3) {
-            // Outside the menu on purpose. A menu label built from several
-            // views renders as the title and the chevron alone here — which is
-            // why Model and Effort show no value — and the one thing this row
-            // has to say is whether the browser is connected.
-            Text("Browser:").foregroundStyle(theme.mutedText.color)
-            browserMenu
-        }
-        .font(.system(size: appearance.settings.footnoteFontSize))
-    }
-
-    private var browserMenu: some View {
-        Menu {
-            Button {
-                secretary.setBrowserEnabled(false)
-            } label: {
-                Label("Off", systemImage: secretary.browserEnabled ? "" : "checkmark")
-            }
-            Button {
-                secretary.setBrowserEnabled(true)
-            } label: {
-                Label("Read my browser", systemImage: secretary.browserEnabled ? "checkmark" : "")
-            }
-        } label: {
-            Text(secretary.browserEnabled ? "Connected" : "Off")
-        }
-        .menuStyle(.borderlessButton)
-        .fixedSize()
-    }
-
-    /// Shows the real value either way; the dot marks one the app didn't pick,
-    /// which can change if the user reconfigures Claude Code.
-    private func settingLabel(_ title: String, value: String, inherited: Bool) -> some View {
-        HStack(spacing: appearance.settings.panelSpacing * 0.5) {
-            Text("\(title):").foregroundStyle(theme.mutedText.color)
-            Text(value).foregroundStyle(theme.primaryText.color)
-            if inherited {
-                Image(systemName: "circle.dashed")
-                    .font(.system(size: appearance.settings.hintFontSize * 0.8))
-                    .foregroundStyle(theme.mutedText.color)
-            }
-        }
-        .font(.system(size: appearance.settings.footnoteFontSize))
-    }
-
     /// What the assistant is doing right now.
     ///
     /// Note this is activity, not reasoning: Claude Code returns thinking
@@ -1578,26 +1461,7 @@ struct ChatPanelView: View {
             Text("Settings")
                 .font(.system(size: appearance.settings.footnoteFontSize, weight: .semibold))
 
-            HStack(spacing: appearance.settings.panelSpacing * 1.6) {
-                modelPicker
-                effortPicker
-            }
-            .font(.system(size: appearance.settings.footnoteFontSize))
-            Text("Change with /model <id> or /effort <level> in the chat.")
-                .font(.system(size: appearance.settings.hintFontSize))
-                .foregroundStyle(theme.mutedText.color)
-
-            browserPicker
-            Text(
-                "Reads pages in your Chrome, including sites you're signed in to. "
-                + "Needs the Claude in Chrome extension. Clicking and typing still ask first."
-            )
-            .font(.system(size: appearance.settings.hintFontSize))
-            .foregroundStyle(theme.mutedText.color)
-            // Two lines rather than one truncated one: the sentence about
-            // reading signed-in sites is the part a person needs before they
-            // switch this on, and "…" is where it was being cut.
-            .fixedSize(horizontal: false, vertical: true)
+            appSizeRow
 
             Divider()
 
@@ -1633,9 +1497,26 @@ struct ChatPanelView: View {
         .background(theme.chipFill.color, in: RoundedRectangle(cornerRadius: 8))
     }
 
-    /// One button per theme, laid out like the character-size picker in
-    /// Profile, so the two size/appearance choices in the app are chosen the
-    /// same way. Built from `ThemeChoice.allCases`, so adding a theme adds a
+    /// One button per size. Laid out the same way as `themeRow` below it, so
+    /// the two size/appearance choices in this panel are chosen the same way.
+    private var appSizeRow: some View {
+        HStack(spacing: appearance.settings.panelSpacing) {
+            Text("App size")
+                .font(.system(size: appearance.settings.footnoteFontSize))
+            Spacer(minLength: 0)
+            ForEach(AppScale.allCases, id: \.rawValue) { scale in
+                Button(scale.label) { appearance.selectAppScale(scale) }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .font(.system(size: appearance.settings.hintFontSize))
+                    .disabled(appearance.settings.appScale == scale)
+            }
+        }
+    }
+
+    /// One button per theme, laid out the same way as `appSizeRow` above it,
+    /// so the two size/appearance choices in this panel are chosen the same
+    /// way. Built from `ThemeChoice.allCases`, so adding a theme adds a
     /// button without this row being touched.
     private var themeRow: some View {
         VStack(alignment: .leading, spacing: appearance.settings.panelSpacing * 0.5) {
@@ -1684,6 +1565,20 @@ struct ChatPanelView: View {
             Text("Projects")
                 .font(.system(size: appearance.settings.footnoteFontSize, weight: .semibold))
 
+            browserPicker
+            Text(
+                "Reads pages in your Chrome, including sites you're signed in to. "
+                + "Needs the Claude in Chrome extension. Clicking and typing still ask first."
+            )
+            .font(.system(size: appearance.settings.hintFontSize))
+            .foregroundStyle(theme.mutedText.color)
+            // Two lines rather than one truncated one: the sentence about
+            // reading signed-in sites is the part a person needs before they
+            // switch this on, and "…" is where it was being cut.
+            .fixedSize(horizontal: false, vertical: true)
+
+            Divider()
+
             if registry.projects.isEmpty {
                 Text("None registered. Add one to let me work in it.")
                     .font(.system(size: appearance.settings.footnoteFontSize))
@@ -1731,6 +1626,43 @@ struct ChatPanelView: View {
         }
         .padding(appearance.settings.panelPadding)
         .background(theme.chipFill.color, in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    /// A menu rather than a toggle switch, so the choice reads as a deliberate
+    /// pick from a list, not a switch brushed by accident. It grants access to
+    /// whatever project you're working in, which is why it lives here rather
+    /// than in Settings or on a profile — see the doc comment on
+    /// `BrowserPreferenceStoring` for why it stays one flag rather than one
+    /// per project.
+    private var browserPicker: some View {
+        HStack(spacing: 3) {
+            // Outside the menu on purpose. A menu label built from several
+            // views renders as the title and the chevron alone here, and the
+            // one thing this row has to say is whether the browser is
+            // connected.
+            Text("Browser:").foregroundStyle(theme.mutedText.color)
+            browserMenu
+        }
+        .font(.system(size: appearance.settings.footnoteFontSize))
+    }
+
+    private var browserMenu: some View {
+        Menu {
+            Button {
+                secretary.setBrowserEnabled(false)
+            } label: {
+                Label("Off", systemImage: secretary.browserEnabled ? "" : "checkmark")
+            }
+            Button {
+                secretary.setBrowserEnabled(true)
+            } label: {
+                Label("Read my browser", systemImage: secretary.browserEnabled ? "checkmark" : "")
+            }
+        } label: {
+            Text(secretary.browserEnabled ? "Connected" : "Off")
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
     }
 
     /// Checkboxes rather than a menu: unlike Model/Effort, this is a
@@ -1813,7 +1745,7 @@ struct ChatPanelView: View {
             ScrollView(.vertical) {
                 switch panel {
                 case .settings: settingsSection
-                case .profile: ProfileSettingsView(profiles: profiles, appearance: appearance)
+                case .profile: ProfileSettingsView(profiles: profiles, appearance: appearance, secretary: secretary)
                 case .projects: projectsSection
                 case .skills: skillsSection
                 }

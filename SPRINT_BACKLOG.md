@@ -10,7 +10,5 @@ phase. It is stated once, in `CLAUDE.md` → Engineering expectations. A copy ke
 here said **9** while the charter said **10**, so the copy is gone rather than
 corrected.
 
-## Phase 12: ปรับ setting ให้อยู่ถูกที่ถูกทาง
-- [ ] ย้าย App size จาก Profile -> Settings
-- [ ] ย้าย Model, Effort จาก Settings -> Profile
-- [ ] ย้าย Browser จาก Settings -> Project
+Nothing open right now — see `PRODUCT_BACKLOG.md` for what's shipped and
+`PRODUCT_BACKLOG_NEXT_SPRINTS.md` for what's queued but not yet pulled in.

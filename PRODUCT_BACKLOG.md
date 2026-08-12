@@ -368,3 +368,24 @@ corrected.
   - **ข้อจำกัดที่เหลือ**: บทสนทนาใหม่ = session ใหม่ = group ใหม่ แก้จากฝั่งเราไม่ได้
 - **ไม่เขียน parser ของ .csv/.json/key-value เอง** — ให้โมเดลเปิดไฟล์ด้วยเครื่องมือของมันเอง
   เขียนเองคือได้ parser สามตัวที่แย่กว่าของเดิม แล้วรูปแบบที่สี่ก็ยังมาอยู่ดี
+
+## Phase 12: ปรับ setting ให้อยู่ถูกที่ถูกทาง
+
+- [x] ย้าย App size จาก Profile -> Settings
+- [x] ย้าย Model, Effort จาก Settings -> Profile
+- [x] ย้าย Browser จาก Settings -> Project
+
+ที่ตัดสินใจไว้ระหว่างทำ และคนที่มาต่อควรรู้ (เสร็จ 2026-08-12):
+- **ทั้งสามอย่างเป็นการย้าย view เท่านั้น ไม่แตะ persistence** — App size ยังเก็บใน
+  `AppearanceSettings`/`StoredAppearance` (global), Model/Effort ยังไม่ persist เลย (in-memory
+  บน `Secretary`), Browser ยังเก็บใน `BrowserPreferenceStoring` (global flag เดียว) ทั้งสามจุด
+  ยืนยันแล้วจากการอ่านโค้ดว่าไม่มี DTO ต้องแก้ — ปุ่มแค่ย้ายบ้าน
+- **Browser ยังเป็น flag เดียวทั้งแอป ไม่ใช่ per-project** — ย้ายแค่ตำแหน่งปุ่มไปอยู่ใน panel
+  Projects เท่านั้น `BrowserPreference.swift` มี comment อธิบายไว้แล้วว่าทำไมสิทธิ์นี้ไม่ควรผูก
+  กับ profile/project (สลับ profile/project แล้วสิทธิ์ที่ไปแตะ session ที่ล็อกอินไว้ไม่ควรเปลี่ยนตาม)
+  ถ้าจะทำ per-project จริงต้องเพิ่ม field ใหม่ใน `Project`/`ProjectDTO` — ยังไม่ได้ทำในรอบนี้
+- **`ProfileSettingsView` รับ `secretary: Secretary` เพิ่ม** เพื่อให้ Model/Effort picker เรียก
+  `secretary.chooseModel`/`chooseEffort` ได้ — เดิมรับแค่ `profiles`/`appearance`
+- ขับแอปจริงแล้วผ่านทั้งสามแผง: Settings มี App size/Theme/Text size/Chat height, Profile มี
+  Model/Effort ต่อจาก Picture, Projects มี Browser ต่อจากหัวข้อ — คลิก App size "S" แล้วหน้าต่าง
+  ตัวละครเล็กลงจริง ยืนยันว่า wiring ไม่หลุดตอนย้าย

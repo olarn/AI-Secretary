@@ -2,6 +2,7 @@ import SwiftUI
 import AppKit
 import AssistantState
 import SecretaryCore
+import LLMProvider
 
 /// The Profile section of the settings panel: which secretary the app is
 /// wearing, her details, and her picture.
@@ -15,14 +16,16 @@ struct ProfileSettingsView: View {
 
     let profiles: ProfileLibrary
     let appearance: Appearance
+    let secretary: Secretary
 
     @State private var draft: Draft
     @State private var editingID: UUID
     @State private var note: String?
 
-    init(profiles: ProfileLibrary, appearance: Appearance) {
+    init(profiles: ProfileLibrary, appearance: Appearance, secretary: Secretary) {
         self.profiles = profiles
         self.appearance = appearance
+        self.secretary = secretary
         _draft = State(initialValue: Draft(profiles.active))
         _editingID = State(initialValue: profiles.active.id)
     }
@@ -48,7 +51,8 @@ struct ProfileSettingsView: View {
                 pictureRow
 
                 dividerRow
-                appSizeRow
+                modelRow
+                effortRow
             }
 
             HStack(spacing: appearance.settings.panelSpacing) {
@@ -228,19 +232,105 @@ struct ProfileSettingsView: View {
         }
     }
 
-    private var appSizeRow: some View {
+    /// Clicking the name opens a real picker. The same entry point the slash
+    /// commands use, so a change here is announced in the transcript too — the
+    /// conversation is where the change takes effect, so that's where it should
+    /// be visible.
+    private var modelRow: some View {
         GridRow {
-            fieldLabel("App size")
+            fieldLabel("Model")
             HStack(spacing: appearance.settings.panelSpacing) {
-            Spacer(minLength: 4)
-            ForEach(AppScale.allCases, id: \.rawValue) { scale in
-                Button(scale.label) { appearance.selectAppScale(scale) }
-                    .buttonStyle(.bordered)
-                    .font(.system(size: appearance.settings.footnoteFontSize))
-                    .disabled(appearance.settings.appScale == scale)
-            }
+                modelMenu
+                Spacer(minLength: 0)
             }
         }
+        .font(.system(size: appearance.settings.footnoteFontSize))
+    }
+
+    private var modelMenu: some View {
+        Menu {
+            Button {
+                secretary.chooseModel(nil)
+            } label: {
+                Label(
+                    "Your Claude Code default",
+                    systemImage: secretary.isModelInherited ? "checkmark" : ""
+                )
+            }
+            Divider()
+            ForEach(ChatModel.known, id: \.id) { candidate in
+                Button {
+                    secretary.chooseModel(candidate)
+                } label: {
+                    Label(
+                        candidate.displayName,
+                        systemImage: secretary.chosenModel == candidate ? "checkmark" : ""
+                    )
+                }
+            }
+        } label: {
+            settingValue(secretary.effectiveModelName, inherited: secretary.isModelInherited)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+    }
+
+    private var effortRow: some View {
+        GridRow {
+            fieldLabel("Effort")
+                .gridCellAnchor(.topLeading)
+            VStack(alignment: .leading, spacing: appearance.settings.panelSpacing * 0.35) {
+                HStack(spacing: appearance.settings.panelSpacing) {
+                    effortMenu
+                    Spacer(minLength: 0)
+                }
+                Text("Change with /model <id> or /effort <level> in the chat.")
+                    .font(.system(size: appearance.settings.hintFontSize))
+                    .foregroundStyle(theme.mutedText.color)
+            }
+        }
+    }
+
+    private var effortMenu: some View {
+        Menu {
+            Button {
+                secretary.chooseEffort(nil)
+            } label: {
+                Label(
+                    "Your Claude Code default",
+                    systemImage: secretary.isEffortInherited ? "checkmark" : ""
+                )
+            }
+            Divider()
+            ForEach(Effort.allCases, id: \.rawValue) { candidate in
+                Button {
+                    secretary.chooseEffort(candidate)
+                } label: {
+                    Label(
+                        candidate.rawValue,
+                        systemImage: secretary.chosenEffort == candidate ? "checkmark" : ""
+                    )
+                }
+            }
+        } label: {
+            settingValue(secretary.effectiveEffortName, inherited: secretary.isEffortInherited)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+    }
+
+    /// Shows the real value either way; the dot marks one the app didn't pick,
+    /// which can change if the user reconfigures Claude Code.
+    private func settingValue(_ value: String, inherited: Bool) -> some View {
+        HStack(spacing: appearance.settings.panelSpacing * 0.5) {
+            Text(value).foregroundStyle(theme.primaryText.color)
+            if inherited {
+                Image(systemName: "circle.dashed")
+                    .font(.system(size: appearance.settings.hintFontSize * 0.8))
+                    .foregroundStyle(theme.mutedText.color)
+            }
+        }
+        .font(.system(size: appearance.settings.footnoteFontSize))
     }
 
     private func fieldLabel(_ text: String) -> some View {
