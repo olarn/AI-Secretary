@@ -1,10 +1,16 @@
 import SwiftUI
 import AppKit
 import AssistantState
+import LLMProvider
 import SecretaryCore
 
 /// The Profile section of the settings panel: which secretary the app is
-/// wearing, her details, and her picture.
+/// wearing, her details, her picture, and the brain she thinks with.
+///
+/// Model and Effort live here rather than in Settings because they are part of
+/// who is answering, not part of how the window looks. Settings keeps the
+/// things that change the app's appearance; this panel keeps the things that
+/// change the secretary.
 ///
 /// Selecting a profile takes effect immediately; the detail fields are edited in
 /// a draft and committed with Save, because a text field that applied per
@@ -15,14 +21,19 @@ struct ProfileSettingsView: View {
 
     let profiles: ProfileLibrary
     let appearance: Appearance
+    /// Only for the Model and Effort rows. They are settings of the running
+    /// assistant rather than fields of the stored profile, which is why they
+    /// take effect on click while everything above them waits for Save.
+    let secretary: Secretary
 
     @State private var draft: Draft
     @State private var editingID: UUID
     @State private var note: String?
 
-    init(profiles: ProfileLibrary, appearance: Appearance) {
+    init(profiles: ProfileLibrary, appearance: Appearance, secretary: Secretary) {
         self.profiles = profiles
         self.appearance = appearance
+        self.secretary = secretary
         _draft = State(initialValue: Draft(profiles.active))
         _editingID = State(initialValue: profiles.active.id)
     }
@@ -48,7 +59,8 @@ struct ProfileSettingsView: View {
                 pictureRow
 
                 dividerRow
-                appSizeRow
+                modelRow
+                effortRow
             }
 
             HStack(spacing: appearance.settings.panelSpacing) {
@@ -228,19 +240,105 @@ struct ProfileSettingsView: View {
         }
     }
 
-    private var appSizeRow: some View {
+    /// Clicking the name opens a real picker. The same entry point the slash
+    /// commands use, so a change here is announced in the transcript too — the
+    /// conversation is where the change takes effect, so that's where it should
+    /// be visible.
+    private var modelRow: some View {
         GridRow {
-            fieldLabel("App size")
-            HStack(spacing: appearance.settings.panelSpacing) {
-            Spacer(minLength: 4)
-            ForEach(AppScale.allCases, id: \.rawValue) { scale in
-                Button(scale.label) { appearance.selectAppScale(scale) }
-                    .buttonStyle(.bordered)
-                    .font(.system(size: appearance.settings.footnoteFontSize))
-                    .disabled(appearance.settings.appScale == scale)
-            }
+            fieldLabel("Model")
+            settingControl(
+                value: secretary.effectiveModelName,
+                inherited: secretary.isModelInherited
+            ) {
+                Button {
+                    secretary.chooseModel(nil)
+                } label: {
+                    Label(
+                        "Your Claude Code default",
+                        systemImage: secretary.isModelInherited ? "checkmark" : ""
+                    )
+                }
+                Divider()
+                ForEach(ChatModel.known, id: \.id) { candidate in
+                    Button {
+                        secretary.chooseModel(candidate)
+                    } label: {
+                        Label(
+                            candidate.displayName,
+                            systemImage: secretary.chosenModel == candidate ? "checkmark" : ""
+                        )
+                    }
+                }
             }
         }
+    }
+
+    private var effortRow: some View {
+        GridRow {
+            fieldLabel("Effort")
+                .gridCellAnchor(.topLeading)
+            VStack(alignment: .leading, spacing: appearance.settings.panelSpacing * 0.35) {
+                settingControl(
+                    value: secretary.effectiveEffortName,
+                    inherited: secretary.isEffortInherited
+                ) {
+                    Button {
+                        secretary.chooseEffort(nil)
+                    } label: {
+                        Label(
+                            "Your Claude Code default",
+                            systemImage: secretary.isEffortInherited ? "checkmark" : ""
+                        )
+                    }
+                    Divider()
+                    ForEach(Effort.allCases, id: \.rawValue) { candidate in
+                        Button {
+                            secretary.chooseEffort(candidate)
+                        } label: {
+                            Label(
+                                candidate.rawValue,
+                                systemImage: secretary.chosenEffort == candidate ? "checkmark" : ""
+                            )
+                        }
+                    }
+                }
+                // One hint for both rows, under the second of them, the way
+                // Personality and Picture carry theirs in the content column.
+                Text("Change with /model <id> or /effort <level> in the chat. The dashed ring marks one the app didn't pick, which can move if you reconfigure Claude Code.")
+                    .font(.system(size: appearance.settings.hintFontSize))
+                    .foregroundStyle(theme.mutedText.color)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// A menu showing the value it is set to, with the inherited marker beside
+    /// it rather than inside it.
+    ///
+    /// Outside the menu on purpose: a `Menu` label built from several views
+    /// renders as the chevron alone here, which is why these two rows used to
+    /// show their title and no value at all. The value is the one thing the row
+    /// exists to say, so it is the only thing in the label.
+    private func settingControl<Choices: View>(
+        value: String,
+        inherited: Bool,
+        @ViewBuilder choices: () -> Choices
+    ) -> some View {
+        HStack(spacing: appearance.settings.panelSpacing * 0.5) {
+            Menu(content: choices) {
+                Text(value)
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            if inherited {
+                Image(systemName: "circle.dashed")
+                    .font(.system(size: appearance.settings.hintFontSize * 0.8))
+                    .foregroundStyle(theme.mutedText.color)
+            }
+            Spacer(minLength: 0)
+        }
+        .font(.system(size: appearance.settings.footnoteFontSize))
     }
 
     private func fieldLabel(_ text: String) -> some View {

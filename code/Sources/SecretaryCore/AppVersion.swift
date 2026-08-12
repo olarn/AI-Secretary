@@ -13,9 +13,12 @@ import Foundation
 /// called:
 ///
 /// - **major** — `0` until the app is published. The owner says when.
-/// - **phase** — which phase of the charter the work belongs to, currently 9.
-///   Moved by hand when the work moves on, not derived: the backlog lists
-///   phases nobody has started, so the highest heading is not the current one.
+/// - **phase** — which phase of the charter the work belongs to. The digit
+///   itself is written down once, in the charter's Versioning and packaging
+///   section, and this comment deliberately doesn't repeat it: the copy that
+///   used to live here said 9 long after the charter said 10. Moved by hand
+///   when the work moves on, not derived — the backlog lists phases nobody has
+///   started, so the highest heading is not the current one.
 /// - **change** — one per completed change, five for five. It never resets, so
 ///   it only ever counts up and two builds can't share a number.
 ///
@@ -25,7 +28,7 @@ import Foundation
 public struct AppVersion: Equatable, Comparable, Sendable, CustomStringConvertible {
     /// The current version. Keep the literal on one line and in this shape —
     /// `scripts/package-app.sh` parses it to fill in `CFBundleShortVersionString`.
-    public static let current = AppVersion(major: 0, minor: 10, patch: 199)
+    public static let current = AppVersion(major: 0, minor: 10, patch: 202)
 
     public let major: Int
     public let minor: Int

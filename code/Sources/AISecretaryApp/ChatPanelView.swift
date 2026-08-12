@@ -460,83 +460,15 @@ struct ChatPanelView: View {
         .background(theme.warningFill.color, in: RoundedRectangle(cornerRadius: 8))
     }
 
-    /// Clicking the name opens a real picker. The same entry point the slash
-    /// commands use, so a change here is announced in the transcript too — the
-    /// conversation is where the change takes effect, so that's where it should
-    /// be visible.
-    private var modelPicker: some View {
-        Menu {
-            Button {
-                secretary.chooseModel(nil)
-            } label: {
-                Label(
-                    "Your Claude Code default",
-                    systemImage: secretary.isModelInherited ? "checkmark" : ""
-                )
-            }
-            Divider()
-            ForEach(ChatModel.known, id: \.id) { candidate in
-                Button {
-                    secretary.chooseModel(candidate)
-                } label: {
-                    Label(
-                        candidate.displayName,
-                        systemImage: secretary.chosenModel == candidate ? "checkmark" : ""
-                    )
-                }
-            }
-        } label: {
-            settingLabel(
-                "Model",
-                value: secretary.effectiveModelName,
-                inherited: secretary.isModelInherited
-            )
-        }
-        .menuStyle(.borderlessButton)
-        .fixedSize()
-    }
-
-    private var effortPicker: some View {
-        Menu {
-            Button {
-                secretary.chooseEffort(nil)
-            } label: {
-                Label(
-                    "Your Claude Code default",
-                    systemImage: secretary.isEffortInherited ? "checkmark" : ""
-                )
-            }
-            Divider()
-            ForEach(Effort.allCases, id: \.rawValue) { candidate in
-                Button {
-                    secretary.chooseEffort(candidate)
-                } label: {
-                    Label(
-                        candidate.rawValue,
-                        systemImage: secretary.chosenEffort == candidate ? "checkmark" : ""
-                    )
-                }
-            }
-        } label: {
-            settingLabel(
-                "Effort",
-                value: secretary.effectiveEffortName,
-                inherited: secretary.isEffortInherited
-            )
-        }
-        .menuStyle(.borderlessButton)
-        .fixedSize()
-    }
-
-    /// The same menu shape as Model and Effort rather than a toggle switch, so
-    /// the settings panel reads as one list of choices — and so this one is a
-    /// deliberate pick from a menu, not a switch brushed by accident.
+    /// A menu rather than a toggle switch, so this is a deliberate pick from a
+    /// list and not a switch brushed by accident.
     private var browserPicker: some View {
         HStack(spacing: 3) {
             // Outside the menu on purpose. A menu label built from several
-            // views renders as the title and the chevron alone here — which is
-            // why Model and Effort show no value — and the one thing this row
-            // has to say is whether the browser is connected.
+            // views renders as the chevron alone here, and the one thing this
+            // row has to say is whether the browser is connected. Model and
+            // Effort, over in Profile, are drawn the same way for the same
+            // reason — see `settingControl` there.
             Text("Browser:").foregroundStyle(theme.mutedText.color)
             browserMenu
         }
@@ -560,21 +492,6 @@ struct ChatPanelView: View {
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
-    }
-
-    /// Shows the real value either way; the dot marks one the app didn't pick,
-    /// which can change if the user reconfigures Claude Code.
-    private func settingLabel(_ title: String, value: String, inherited: Bool) -> some View {
-        HStack(spacing: appearance.settings.panelSpacing * 0.5) {
-            Text("\(title):").foregroundStyle(theme.mutedText.color)
-            Text(value).foregroundStyle(theme.primaryText.color)
-            if inherited {
-                Image(systemName: "circle.dashed")
-                    .font(.system(size: appearance.settings.hintFontSize * 0.8))
-                    .foregroundStyle(theme.mutedText.color)
-            }
-        }
-        .font(.system(size: appearance.settings.footnoteFontSize))
     }
 
     /// What the assistant is doing right now.
@@ -1578,30 +1495,9 @@ struct ChatPanelView: View {
             Text("Settings")
                 .font(.system(size: appearance.settings.footnoteFontSize, weight: .semibold))
 
-            HStack(spacing: appearance.settings.panelSpacing * 1.6) {
-                modelPicker
-                effortPicker
-            }
-            .font(.system(size: appearance.settings.footnoteFontSize))
-            Text("Change with /model <id> or /effort <level> in the chat.")
-                .font(.system(size: appearance.settings.hintFontSize))
-                .foregroundStyle(theme.mutedText.color)
-
-            browserPicker
-            Text(
-                "Reads pages in your Chrome, including sites you're signed in to. "
-                + "Needs the Claude in Chrome extension. Clicking and typing still ask first."
-            )
-            .font(.system(size: appearance.settings.hintFontSize))
-            .foregroundStyle(theme.mutedText.color)
-            // Two lines rather than one truncated one: the sentence about
-            // reading signed-in sites is the part a person needs before they
-            // switch this on, and "…" is where it was being cut.
-            .fixedSize(horizontal: false, vertical: true)
-
-            Divider()
-
             themeRow
+
+            appScaleRow
 
             stepperRow(
                 label: "Text size",
@@ -1633,49 +1529,66 @@ struct ChatPanelView: View {
         .background(theme.chipFill.color, in: RoundedRectangle(cornerRadius: 8))
     }
 
-    /// One button per theme, laid out like the character-size picker in
-    /// Profile, so the two size/appearance choices in the app are chosen the
-    /// same way. Built from `ThemeChoice.allCases`, so adding a theme adds a
-    /// button without this row being touched.
+    /// Built from `ThemeChoice.allCases`, so adding a theme adds a button
+    /// without this row being touched.
     private var themeRow: some View {
         VStack(alignment: .leading, spacing: appearance.settings.panelSpacing * 0.5) {
-            HStack(spacing: appearance.settings.panelSpacing) {
-                Text("Theme")
-                    .font(.system(size: appearance.settings.footnoteFontSize))
-                Spacer(minLength: 0)
-                ForEach(ThemeChoice.allCases, id: \.self) { choice in
-                    Button(choice.label) { appearance.selectTheme(choice) }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                        .font(.system(size: appearance.settings.hintFontSize))
-                        // Drawn here rather than left to the bordered style's
-                        // own tint, for the reason in `PanelToggleStyle`: this
-                        // window is never key, and AppKit greys out a tinted
-                        // control in a window that isn't.
-                        .background(
-                            appearance.settings.theme == choice
-                                ? AnyShapeStyle(theme.accent.color)
-                                : AnyShapeStyle(Color.clear),
-                            in: RoundedRectangle(cornerRadius: 5)
-                        )
-                        .foregroundStyle(
-                            appearance.settings.theme == choice
-                                ? theme.onAccent.color
-                                : theme.primaryText.color
-                        )
-                        // See `PanelToggleStyle`: a bordered button's label
-                        // follows the tint, not the foreground style.
-                        .tint(
-                            appearance.settings.theme == choice
-                                ? theme.onAccent.color
-                                : theme.primaryText.color
-                        )
-                }
-            }
+            choiceRow("Theme", ThemeChoice.allCases.map { choice in
+                (choice.label, appearance.settings.theme == choice, { appearance.selectTheme(choice) })
+            })
             Text(appearance.settings.theme.explanation)
                 .font(.system(size: appearance.settings.hintFontSize))
                 .foregroundStyle(theme.mutedText.color)
                 .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// How large the character and her window are drawn. It sat in Profile,
+    /// which made the size of the app a property of who was wearing it —
+    /// switching secretary didn't resize anything, and nothing here does.
+    private var appScaleRow: some View {
+        choiceRow("App size", AppScale.allCases.map { scale in
+            (scale.label, appearance.settings.appScale == scale, { appearance.selectAppScale(scale) })
+        })
+    }
+
+    /// A label and one button per choice, with the current one filled.
+    ///
+    /// Shared by Theme and App size because they are the same row, and because
+    /// they sit next to each other: App size used to mark its current value by
+    /// disabling that button, so two adjacent rows said "this is the one you're
+    /// on" in two different ways, one of them indistinguishable from "you can't
+    /// have this".
+    private func choiceRow(
+        _ label: String,
+        _ options: [(title: String, isCurrent: Bool, choose: () -> Void)]
+    ) -> some View {
+        HStack(spacing: appearance.settings.panelSpacing) {
+            Text(label)
+                .font(.system(size: appearance.settings.footnoteFontSize))
+            Spacer(minLength: 0)
+            ForEach(Array(options.enumerated()), id: \.offset) { _, option in
+                Button(option.title, action: option.choose)
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .font(.system(size: appearance.settings.hintFontSize))
+                    // Drawn here rather than left to the bordered style's own
+                    // tint, for the reason in `PanelToggleStyle`: this window is
+                    // never key, and AppKit greys out a tinted control in a
+                    // window that isn't.
+                    .background(
+                        option.isCurrent
+                            ? AnyShapeStyle(theme.accent.color)
+                            : AnyShapeStyle(Color.clear),
+                        in: RoundedRectangle(cornerRadius: 5)
+                    )
+                    .foregroundStyle(
+                        option.isCurrent ? theme.onAccent.color : theme.primaryText.color
+                    )
+                    // See `PanelToggleStyle`: a bordered button's label follows
+                    // the tint, not the foreground style.
+                    .tint(option.isCurrent ? theme.onAccent.color : theme.primaryText.color)
+            }
         }
     }
 
@@ -1728,6 +1641,23 @@ struct ChatPanelView: View {
                     .font(.system(size: appearance.settings.hintFontSize))
                     .foregroundStyle(theme.mutedText.color)
             }
+
+            Divider()
+
+            // Under Projects rather than Settings: the browser is somewhere the
+            // assistant is allowed to read, which is the same kind of thing as
+            // a project folder. Settings is what the app looks like.
+            browserPicker
+            Text(
+                "Reads pages in your Chrome, including sites you're signed in to. "
+                + "Needs the Claude in Chrome extension. Clicking and typing still ask first."
+            )
+            .font(.system(size: appearance.settings.hintFontSize))
+            .foregroundStyle(theme.mutedText.color)
+            // Two lines rather than one truncated one: the sentence about
+            // reading signed-in sites is the part a person needs before they
+            // switch this on, and "…" is where it was being cut.
+            .fixedSize(horizontal: false, vertical: true)
         }
         .padding(appearance.settings.panelPadding)
         .background(theme.chipFill.color, in: RoundedRectangle(cornerRadius: 8))
@@ -1813,7 +1743,12 @@ struct ChatPanelView: View {
             ScrollView(.vertical) {
                 switch panel {
                 case .settings: settingsSection
-                case .profile: ProfileSettingsView(profiles: profiles, appearance: appearance)
+                case .profile:
+                    ProfileSettingsView(
+                        profiles: profiles,
+                        appearance: appearance,
+                        secretary: secretary
+                    )
                 case .projects: projectsSection
                 case .skills: skillsSection
                 }
