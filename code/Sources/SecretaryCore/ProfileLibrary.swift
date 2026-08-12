@@ -7,7 +7,7 @@ import AssistantState
 ///
 /// Holds the list, persists every change, and reports the active profile so the
 /// character art, the chat header, and the system prompt all follow one source.
-/// `onActiveChange` is a callback rather than observation because switching has
+/// The callbacks are callbacks rather than observation because a change has
 /// imperative consequences — the Secretary's prompt changes and the character
 /// window has to reload its picture — that must happen once per change, not
 /// during a view update.
@@ -23,7 +23,13 @@ public final class ProfileLibrary {
 
     @ObservationIgnored private let store: ProfileStoring
     @ObservationIgnored private let artwork: ProfileArtwork
-    @ObservationIgnored public var onActiveChange: ((SecretaryProfile) -> Void)?
+    /// Fired when a profile is added or removed — which, since every profile is
+    /// a character on the desktop, means a character arriving or leaving.
+    @ObservationIgnored public var onRosterChange: (() -> Void)?
+    /// Fired when a profile's details change, so her prompt can follow her name
+    /// and manner rather than only her label doing so. Carries which one, since
+    /// several are live at once.
+    @ObservationIgnored public var onProfileChange: ((SecretaryProfile) -> Void)?
 
     public init(
         store: ProfileStoring = FileProfileStore(),
@@ -64,11 +70,13 @@ public final class ProfileLibrary {
 
     // MARK: - Changes
 
+    /// Which profile a newly created character is cloned from, and which one
+    /// the app falls back to. It stopped meaning "the one you can see" when
+    /// every profile became a character on the desktop.
     public func activate(_ id: UUID) {
         guard id != activeID, profiles.contains(where: { $0.id == id }) else { return }
         activeID = id
         persist()
-        onActiveChange?(active)
     }
 
     /// Adds and switches to it, because creating a profile you then have to go
@@ -78,7 +86,7 @@ public final class ProfileLibrary {
         profiles.append(profile)
         activeID = profile.id
         persist()
-        onActiveChange?(active)
+        onRosterChange?()
     }
 
     /// Edits in place. Renaming the active profile is a live change too — the
@@ -88,7 +96,7 @@ public final class ProfileLibrary {
         guard profiles[index] != profile else { return }
         profiles[index] = profile
         persist()
-        if profile.id == activeID { onActiveChange?(active) }
+        onProfileChange?(profile)
     }
 
     /// Removes the profile and its picture. Refuses the last one.
@@ -97,10 +105,9 @@ public final class ProfileLibrary {
         profiles.remove(at: index)
         artwork.removeAll(for: id)
         artworkRevision += 1
-        let switched = id == activeID
-        if switched { activeID = profiles[0].id }
+        if id == activeID { activeID = profiles[0].id }
         persist()
-        if switched { onActiveChange?(active) }
+        onRosterChange?()
     }
 
     // MARK: - Picture
@@ -111,8 +118,9 @@ public final class ProfileLibrary {
     public func setArtwork(pngData: Data, for id: UUID) -> Either<ArtworkError, URL> {
         artwork.install(pngData: pngData, for: id)
             .map { installed in
+                // No callback: the character view reads `artworkRevision`, so
+                // bumping it is what redraws her.
                 self.artworkRevision += 1
-                if id == self.activeID { self.onActiveChange?(self.active) }
                 return installed
             }^
     }
@@ -122,7 +130,6 @@ public final class ProfileLibrary {
         artwork.remove(for: id)
             .map {
                 self.artworkRevision += 1
-                if id == self.activeID { self.onActiveChange?(self.active) }
             }^
     }
 
@@ -130,6 +137,20 @@ public final class ProfileLibrary {
     /// used instead.
     public func artworkURL() -> Option<URL> {
         artwork.resolve(profile: activeID)
+    }
+
+    /// One particular character's picture. Every character on the desktop draws
+    /// her own, so the active one is no longer the only one that has to be
+    /// findable.
+    public func artworkURL(for id: UUID) -> Option<URL> {
+        artwork.resolve(profile: id)
+    }
+
+    /// The profile with this id, falling back to the active one so a character
+    /// whose profile was deleted out from under her still has somebody to be
+    /// until her window is taken down.
+    public func profile(_ id: UUID) -> SecretaryProfile {
+        profiles.first { $0.id == id } ?? active
     }
 
     public func hasArtwork(for id: UUID) -> Bool {

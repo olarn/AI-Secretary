@@ -20,6 +20,11 @@ struct ProfileSettingsView: View {
     @Environment(\.palette) private var theme
 
     let profiles: ProfileLibrary
+    /// Whose panel this is. One character, one chat window, one Profile panel
+    /// that edits her and nobody else — so there is no picker at the top any
+    /// more. Making another character is `New Character…` in the status bar
+    /// menu, which is the one place that creates one.
+    let profileID: UUID
     let appearance: Appearance
     /// Only for the Model and Effort rows. They are settings of the running
     /// assistant rather than fields of the stored profile, which is why they
@@ -27,23 +32,24 @@ struct ProfileSettingsView: View {
     let secretary: Secretary
 
     @State private var draft: Draft
-    @State private var editingID: UUID
     @State private var note: String?
 
-    init(profiles: ProfileLibrary, appearance: Appearance, secretary: Secretary) {
+    init(profiles: ProfileLibrary, profileID: UUID, appearance: Appearance, secretary: Secretary) {
         self.profiles = profiles
+        self.profileID = profileID
         self.appearance = appearance
         self.secretary = secretary
-        _draft = State(initialValue: Draft(profiles.active))
-        _editingID = State(initialValue: profiles.active.id)
+        _draft = State(initialValue: Draft(profiles.profile(profileID)))
     }
+
+    /// Who this panel is about, read fresh so a rename from anywhere else shows.
+    private var subject: SecretaryProfile { profiles.profile(profileID) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: appearance.settings.panelSpacing) {
             Text("Profile")
                 .font(.system(size: appearance.settings.footnoteFontSize, weight: .semibold))
 
-            profilePicker
             // A Grid, not a stack of HStacks with a fixed label column: the
             // labels have to line up, and the width they need changes with the
             // longest word and with the app size. "Personality" broke a 52pt
@@ -67,7 +73,7 @@ struct ProfileSettingsView: View {
                 Button("Save") { save() }
                     .buttonStyle(.bordered)
                     .font(.system(size: appearance.settings.footnoteFontSize))
-                    .disabled(!draft.hasChanges(from: profiles.active))
+                    .disabled(!draft.hasChanges(from: subject))
                 if profiles.canDelete {
                     Button("Delete") { delete() }
                         .buttonStyle(.plain)
@@ -85,41 +91,13 @@ struct ProfileSettingsView: View {
         }
         .padding(appearance.settings.panelPadding)
         .background(theme.chipFill.color, in: RoundedRectangle(cornerRadius: 8))
-        // Keeps the fields in step when the active profile changes from anywhere
-        // else — a new profile, or a delete that fell back to another one.
-        .onChange(of: profiles.activeID) { _, newID in
-            if newID != editingID { loadActiveIntoDraft() }
-        }
+        // Keeps the fields in step when this character is edited from anywhere
+        // else. Keyed on the revision rather than on the id, which no longer
+        // changes: this panel is about one character for its whole life.
+        .onChange(of: profiles.artworkRevision) { _, _ in note = nil }
     }
 
     // MARK: - Rows
-
-    private var profilePicker: some View {
-        HStack(spacing: appearance.settings.panelSpacing) {
-            Menu {
-                ForEach(profiles.profiles) { profile in
-                    Button {
-                        profiles.activate(profile.id)
-                        loadActiveIntoDraft()
-                        note = nil
-                    } label: {
-                        Label(
-                            profile.displayName,
-                            systemImage: profile.id == profiles.activeID ? "checkmark" : ""
-                        )
-                    }
-                }
-                Divider()
-                Button("New profile…") { createProfile() }
-            } label: {
-                Text(profiles.active.displayName)
-            }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
-            Spacer()
-        }
-        .font(.system(size: appearance.settings.footnoteFontSize))
-    }
 
     private var nameField: some View {
         GridRow {
@@ -202,7 +180,7 @@ struct ProfileSettingsView: View {
     /// One picture per profile. The same menu shape as the Model and Effort
     /// pickers, so choosing and clearing work the way the rest of the panel does.
     private var pictureRow: some View {
-        let id = profiles.activeID
+        let id = profileID
         let hasPicture = profiles.hasArtwork(for: id)
 
         return GridRow {
@@ -361,36 +339,21 @@ struct ProfileSettingsView: View {
 
     // MARK: - Actions
 
-    private func loadActiveIntoDraft() {
-        draft = Draft(profiles.active)
-        editingID = profiles.active.id
-    }
-
     private func save() {
-        profiles.update(draft.profile(id: editingID))
+        profiles.update(draft.profile(id: profileID))
         note = nil
     }
 
-    private func createProfile() {
-        // Named provisionally rather than blocking on a picture: the built-in
-        // avatar covers a profile with no artwork, and stopping to pick a file
-        // before the profile exists is a worse first step.
-        let existing = profiles.profiles.count + 1
-        profiles.add(SecretaryProfile(name: "Secretary \(existing)"))
-        loadActiveIntoDraft()
-        note = "New profile — set the name and add a picture."
-    }
-
+    /// Takes this character off the desktop. The window goes with her, so there
+    /// is nothing left here to report into — the delegate owns what happens
+    /// next.
     private func delete() {
-        let name = profiles.active.displayName
-        profiles.delete(profiles.activeID)
-        loadActiveIntoDraft()
-        note = "Deleted “\(name)”."
+        profiles.delete(profileID)
     }
 
     private func choosePicture() {
         guard let source = ImagePicker.promptForImage(
-            message: "Choose a picture for \(profiles.active.displayName)."
+            message: "Choose a picture for \(subject.displayName)."
         ) else { return }
 
         // Re-encoded to PNG so the stored file matches its name whatever the
@@ -400,7 +363,7 @@ struct ProfileSettingsView: View {
             note = "Couldn't read that image."
             return
         }
-        note = profiles.setArtworkReportingProblem(pngData: png, for: profiles.activeID)
+        note = profiles.setArtworkReportingProblem(pngData: png, for: profileID)
     }
 }
 

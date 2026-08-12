@@ -188,27 +188,32 @@ final class ProfileLibraryTests: XCTestCase {
         XCTAssertEqual(library.active.name, "Miku")
     }
 
-    func testSwitchingReportsTheNewProfileAndPersists() {
+    /// `activeID` stopped meaning "the one you can see" when every profile
+    /// became a character on the desktop. It now names who a new character is
+    /// cloned from, and who the app falls back to — so switching persists, and
+    /// announces nothing, because nothing on screen changes.
+    func testSwitchingPersistsTheChoice() {
         let kai = SecretaryProfile(name: "Kai")
         let (library, store) = makeLibrary(ProfileSelection(profiles: [.miku, kai], activeID: .some(SecretaryProfile.miku.id)))
-
-        var announced: [String] = []
-        library.onActiveChange = { announced.append($0.displayName) }
+        var rosterChanges = 0
+        library.onRosterChange = { rosterChanges += 1 }
 
         library.activate(kai.id)
 
-        XCTAssertEqual(announced, ["Kai"])
+        XCTAssertEqual(library.active.displayName, "Kai")
         XCTAssertEqual(store.load().map(\.activeID)^, .right(.some(kai.id)))
+        // Nobody arrived or left, so the roster is not rebuilt.
+        XCTAssertEqual(rosterChanges, 0)
     }
 
     func testSwitchingToTheProfileAlreadyActiveDoesNothing() {
-        let (library, _) = makeLibrary()
-        var changes = 0
-        library.onActiveChange = { _ in changes += 1 }
+        let (library, store) = makeLibrary()
+        let before = library.activeID
 
         library.activate(library.activeID)
 
-        XCTAssertEqual(changes, 0)
+        XCTAssertEqual(library.activeID, before)
+        XCTAssertEqual(store.load().map(\.activeID)^, .right(.some(before)))
     }
 
     /// Creating a profile you then have to go and select is a step nobody wants.
@@ -219,12 +224,12 @@ final class ProfileLibraryTests: XCTestCase {
         XCTAssertEqual(library.profiles.count, 2)
     }
 
-    /// Renaming the active profile is a live change too — the transcript label
-    /// and the system prompt both follow it.
-    func testEditingTheActiveProfileReportsTheChange() {
+    /// Renaming a profile is a live change — the transcript label and the
+    /// system prompt both follow it.
+    func testEditingAProfileReportsTheChange() {
         let (library, store) = makeLibrary()
         var announced: [String] = []
-        library.onActiveChange = { announced.append($0.displayName) }
+        library.onProfileChange = { (profile: SecretaryProfile) in announced.append(profile.displayName) }
 
         var edited = library.active
         edited.name = "Mika"
@@ -234,19 +239,23 @@ final class ProfileLibraryTests: XCTestCase {
         XCTAssertEqual(store.load().map { $0.profiles.first?.name }^, .right("Mika"))
     }
 
-    func testEditingAnInactiveProfileDoesNotReportAChange() {
+    /// This used to stay silent, and had to stop: an edit only reached the
+    /// active profile's prompt, which was right while one profile was on screen
+    /// and wrong the moment every profile is a character with a prompt of her
+    /// own. The character being edited is now always told, active or not.
+    func testEditingAnyProfileReachesThatProfile() {
         let kai = SecretaryProfile(name: "Kai")
         let (library, _) = makeLibrary(
             ProfileSelection(profiles: [.miku, kai], activeID: .some(SecretaryProfile.miku.id))
         )
-        var changes = 0
-        library.onActiveChange = { _ in changes += 1 }
+        var announced: [String] = []
+        library.onProfileChange = { (profile: SecretaryProfile) in announced.append(profile.displayName) }
 
         var edited = kai
         edited.personality = "like a friend"
         library.update(edited)
 
-        XCTAssertEqual(changes, 0)
+        XCTAssertEqual(announced, ["Kai"])
         XCTAssertEqual(library.profiles.last?.personality, "like a friend")
     }
 
@@ -260,16 +269,49 @@ final class ProfileLibraryTests: XCTestCase {
         XCTAssertEqual(library.profiles.count, 1)
     }
 
-    func testDeletingTheActiveProfileFallsBackToAnother() {
+    /// Deleting a profile is taking a character off the desktop, so the roster
+    /// has to hear about it whether or not she was the active one — the app
+    /// rebuilds its characters from this.
+    func testDeletingAProfileTellsTheRoster() {
         let kai = SecretaryProfile(name: "Kai")
         let (library, _) = makeLibrary(ProfileSelection(profiles: [.miku, kai], activeID: .some(kai.id)))
-        var announced: [String] = []
-        library.onActiveChange = { announced.append($0.displayName) }
+        var rosterChanges = 0
+        library.onRosterChange = { rosterChanges += 1 }
 
         library.delete(kai.id)
 
         XCTAssertEqual(library.profiles.map(\.name), ["Miku"])
-        XCTAssertEqual(announced, ["Miku"])
+        XCTAssertEqual(rosterChanges, 1)
+        // The fallback still happens: `activeID` names who a new character is
+        // cloned from, and it must not point at somebody who has gone.
+        XCTAssertEqual(library.activeID, SecretaryProfile.miku.id)
+    }
+
+    func testAddingAProfileTellsTheRoster() {
+        let (library, _) = makeLibrary()
+        var rosterChanges = 0
+        library.onRosterChange = { rosterChanges += 1 }
+
+        library.add(SecretaryProfile(name: "Anya"))
+
+        XCTAssertEqual(rosterChanges, 1)
+    }
+
+    /// Renaming reaches the prompt, not just the label — and it says which
+    /// character, since several are live at once.
+    func testEditingAProfileAnnouncesWhichOneChanged() {
+        let kai = SecretaryProfile(name: "Kai")
+        let (library, _) = makeLibrary(
+            ProfileSelection(profiles: [.miku, kai], activeID: .some(SecretaryProfile.miku.id))
+        )
+        var announced: [String] = []
+        library.onProfileChange = { (profile: SecretaryProfile) in announced.append(profile.displayName) }
+
+        var renamed = kai
+        renamed.name = "Kai the second"
+        library.update(renamed)
+
+        XCTAssertEqual(announced, ["Kai the second"])
     }
 
     /// The character's picture is read from disk, which SwiftUI can't observe.

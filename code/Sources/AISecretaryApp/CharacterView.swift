@@ -11,6 +11,9 @@ struct CharacterView: View {
     let machine: AssistantStateMachine
     let secretary: Secretary
     let profiles: ProfileLibrary
+    /// Whose face this is. Every character on the desktop draws her own, so the
+    /// picture is looked up by id rather than by "whichever profile is active".
+    let profileID: UUID
     let appearance: Appearance
     let onTap: () -> Void
 
@@ -69,7 +72,7 @@ struct CharacterView: View {
         .onTapGesture(perform: onTap)
     }
 
-    /// The active profile's picture, falling back to the legacy drop-in file and
+    /// This character's picture, falling back to the legacy drop-in file and
     /// then to the built-in avatar. A profile with no picture at all is normal,
     /// so the last fallback has to hold up on its own.
     @ViewBuilder
@@ -87,7 +90,7 @@ struct CharacterView: View {
     private var artworkImage: NSImage? {
         // Read the revision so an upload or a profile switch invalidates this.
         _ = profiles.artworkRevision
-        if let url = profiles.artworkFileURL, let image = NSImage(contentsOf: url) {
+        if let url = profiles.artworkFileURL(for: profileID), let image = NSImage(contentsOf: url) {
             return image
         }
         return NSImage(contentsOf: CharacterAsset.url)

@@ -129,15 +129,25 @@ final class CharacterInstance {
 
     // MARK: - Windows
 
+    /// Kept so it can be taken off again. Left on, an observer for a window
+    /// that has gone still fires — which did not matter while there was one
+    /// character for the life of the process and does the moment characters can
+    /// be deleted.
+    private var moveObserver: NSObjectProtocol?
+
     /// Builds both windows and puts them where they go. Separate from `init`
     /// because it reaches for the screen, and because the callbacks it installs
     /// point back at whoever owns this instance.
-    func buildWindows(onClose: @escaping () -> Void) {
+    ///
+    /// - Parameter ordinal: how many characters were already on the desktop, so
+    ///   she stands clear of them rather than exactly on top.
+    func buildWindows(ordinal: Int, onClose: @escaping () -> Void) {
         let characterHost = FirstMouseHostingView(
             rootView: CharacterView(
                 machine: stateMachine,
                 secretary: secretary,
                 profiles: profiles,
+                profileID: profileID,
                 appearance: appearance,
                 onTap: { [weak self] in self?.toggleChatPanel() }
             )
@@ -164,6 +174,7 @@ final class CharacterInstance {
                 backendStatus: backendStatus,
                 appearance: appearance,
                 profiles: profiles,
+                profileID: profileID,
                 layout: chatLayout,
                 onClose: onClose,
                 onPin: { [weak self] spec in self?.infoWindows.open(spec) }
@@ -186,8 +197,21 @@ final class CharacterInstance {
         secretary.onPinWindow = { [weak self] spec in self?.infoWindows.open(spec) }
         infoWindows.onCountChanged = { [weak self] in self?.onDismissableChanged?() }
 
-        positionInitialWindows()
+        positionInitialWindows(ordinal: ordinal)
         observeWindowMovement()
+    }
+
+    /// Takes her off the desktop for good. Both windows, her pinned panes, and
+    /// the observer that would otherwise outlive them.
+    func tearDown() {
+        if let moveObserver { NotificationCenter.default.removeObserver(moveObserver) }
+        moveObserver = nil
+        infoWindows.clearAll()
+        chatPanel?.orderOut(nil)
+        characterPanel?.orderOut(nil)
+        isChatVisible = false
+        isCharacterVisible = false
+        onDismissableChanged?()
     }
 
     /// Lets the window own its size and the hosted view fill it.
@@ -199,11 +223,12 @@ final class CharacterInstance {
         return container
     }
 
-    private func positionInitialWindows() {
+    private func positionInitialWindows(ordinal: Int) {
         guard let screen = NSScreen.main else { return }
         let visibleFrame = screen.visibleFrame
 
         let characterOrigin = CharacterLaunch.origin(
+            ordinal: ordinal,
             characterSize: characterPanel.frame.size,
             visibleFrame: visibleFrame,
             screenFrame: screen.frame
@@ -214,7 +239,7 @@ final class CharacterInstance {
     }
 
     private func observeWindowMovement() {
-        NotificationCenter.default.addObserver(
+        moveObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.didMoveNotification,
             object: characterPanel,
             queue: .main

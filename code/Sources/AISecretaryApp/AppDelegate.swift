@@ -30,28 +30,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     private var hotKeys: GlobalHotKeys?
     /// Watches this app's own key events for ⌘H; see `watchForHideShortcut`.
     private var hideKeyMonitor: Any?
+    /// Who the usage window adds up. Kept in step by `reconcileCharacters`.
+    private let usageRoster = UsageRoster()
     private lazy var usageWindow = UsageWindow(
-        secretary: focused.secretary,
+        roster: usageRoster,
         appearance: appearance,
         backend: focused.backend
     )
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        let character = CharacterInstance(
-            profileID: profiles.activeID,
-            profiles: profiles,
-            appearance: appearance,
-            registry: registry,
-            backendStatus: backendStatus,
-            detector: detector,
-            // The one place that should touch the real files. Everywhere else —
-            // every test — gets the in-memory defaults and cannot reach them.
-            conversationStore: FileConversationStore(fileURL: historyFile(for: profiles.activeID)),
-            attachmentStore: FileAttachmentStore()
-        )
-        characters = [character]
-        character.onDismissableChanged = { [weak self] in self?.refreshHotKeyClaim() }
-        character.buildWindows(onClose: { [weak self] in self?.focused.hideChatPanel() })
+        // Every profile is a character, and every character is on the desktop.
+        reconcileCharacters()
+        // Adding or deleting a profile is adding or deleting a character; the
+        // roster follows the library rather than being kept in step by hand.
+        profiles.onRosterChange = { [weak self] in self?.reconcileCharacters() }
 
         detectBackend()
 
@@ -62,9 +54,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
             self?.applyControlAppearance()
         }
         applyControlAppearance()
-        // Switching profile has to reach the prompt as well as the pictures.
-        profiles.onActiveChange = { [weak self] profile in
-            self?.focused.secretary.apply(profile: profile)
+        // Renaming or re-describing a character has to reach her prompt, not
+        // just her label.
+        profiles.onProfileChange = { [weak self] profile in
+            self?.character(profile.id)?.secretary.apply(profile: profile)
         }
 
         statusBar = StatusBarController(
@@ -82,7 +75,56 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
         refreshHotKeyClaim()
         watchForHideShortcut()
 
-        character.showCharacter()
+        characters.forEach { $0.showCharacter() }
+    }
+
+    // MARK: - The roster
+
+    /// Brings the characters on screen into line with the profiles that exist.
+    ///
+    /// Written as a reconcile rather than as "add this one" / "remove that one"
+    /// so that add, delete and launch are the same code path — the alternative
+    /// is three places that can disagree about who is on the desktop.
+    private func reconcileCharacters() {
+        let wanted = profiles.profiles.map(\.id)
+
+        characters
+            .filter { !wanted.contains($0.profileID) }
+            .forEach { $0.tearDown() }
+        characters.removeAll { !wanted.contains($0.profileID) }
+
+        for id in wanted where character(id) == nil {
+            let fresh = makeCharacter(id, ordinal: characters.count)
+            characters.append(fresh)
+            fresh.showCharacter()
+        }
+
+        usageRoster.characters = characters.map {
+            (name: profiles.profile($0.profileID).displayName, secretary: $0.secretary)
+        }
+        applyControlAppearance()
+        refreshHotKeyClaim()
+    }
+
+    private func makeCharacter(_ id: UUID, ordinal: Int) -> CharacterInstance {
+        let character = CharacterInstance(
+            profileID: id,
+            profiles: profiles,
+            appearance: appearance,
+            registry: registry,
+            backendStatus: backendStatus,
+            detector: detector,
+            // The one place that should touch the real files. Everywhere else —
+            // every test — gets the in-memory defaults and cannot reach them.
+            conversationStore: FileConversationStore(fileURL: historyFile(for: id)),
+            attachmentStore: FileAttachmentStore()
+        )
+        character.onDismissableChanged = { [weak self] in self?.refreshHotKeyClaim() }
+        character.buildWindows(
+            ordinal: ordinal,
+            onClose: { [weak character] in character?.hideChatPanel() }
+        )
+        return character
     }
 
     /// This character's own history file, adopting the one everybody shared
@@ -150,9 +192,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
         case .clearPinned(let id):
             character(id)?.infoWindows.clearAll()
         case .newCharacter:
-            // Stage 4. Until then the row is honest about existing and does
-            // nothing, rather than being hidden and then appearing later.
-            break
+            // Cloned from whoever is focused, so "another one like this" is one
+            // click. What she inherits and what she is called are decided by
+            // `newCharacterDraft`; adding her to the library brings her window
+            // up through `reconcileCharacters`.
+            let template = focused.map { profiles.profile($0.profileID) } ?? profiles.active
+            let fresh = newCharacterDraft(from: template, existing: profiles.profiles)
+            profiles.add(fresh)
+            character(fresh.id)?.openChat()
         case .showTokenUsage:
             usageWindow.toggle()
         case .showAbout:

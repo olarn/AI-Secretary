@@ -160,3 +160,33 @@ public enum UsageFormat {
         return lines.joined(separator: "\n")
     }
 }
+
+/// Everybody's usage added up, for the one Token Usage window the app has.
+///
+/// The window is at the root of the menu because the figures are the machine's
+/// bill, not one character's — but each character keeps her own session, so the
+/// total has to be made rather than read.
+///
+/// Two fields deliberately do not sum:
+///
+/// - **`contextWindow`** is a property of the model, not a quantity. Adding two
+///   200k windows to get 400k would say the context is twice as big as any
+///   character actually has. The largest reported one is kept, so "how full is
+///   the context" is still answered against a real window.
+/// - **`lastTurnContextTokens`** is how full one session's context is right
+///   now, and the fullest is the one worth knowing about — summing would report
+///   a session nobody is in.
+public func totalUsage(_ parts: [SessionUsage]) -> SessionUsage {
+    parts.reduce(.empty) { running, part in
+        SessionUsage(
+            turns: running.turns + part.turns,
+            inputTokens: running.inputTokens + part.inputTokens,
+            outputTokens: running.outputTokens + part.outputTokens,
+            cacheWriteTokens: running.cacheWriteTokens + part.cacheWriteTokens,
+            cacheReadTokens: running.cacheReadTokens + part.cacheReadTokens,
+            costUSD: running.costUSD + part.costUSD,
+            contextWindow: [running.contextWindow, part.contextWindow].compactMap { $0 }.max(),
+            lastTurnContextTokens: max(running.lastTurnContextTokens, part.lastTurnContextTokens)
+        )
+    }
+}

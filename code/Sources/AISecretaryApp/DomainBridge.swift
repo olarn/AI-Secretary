@@ -36,6 +36,10 @@ extension ProfileLibrary {
     /// The active profile's picture as a plain optional, for the character view.
     var artworkFileURL: URL? { artworkURL().toOptional() }
 
+    /// One character's own picture. Two on the desktop drawing the same face
+    /// would be two characters nobody can tell apart.
+    func artworkFileURL(for id: UUID) -> URL? { artworkURL(for: id).toOptional() }
+
     /// Stores a chosen picture. Returns the note to show, or `nil` on success.
     func setArtworkReportingProblem(pngData: Data, for id: UUID) -> String? {
         setArtwork(pngData: pngData, for: id).fold({ $0.reason }, { _ in nil })

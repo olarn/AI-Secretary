@@ -201,3 +201,56 @@ final class StatusMenuTests: XCTestCase {
         )
     }
 }
+
+/// Adding up what several characters have spent, for the one usage window.
+final class TotalUsageTests: XCTestCase {
+    private func usage(
+        turns: Int = 0,
+        input: Int = 0,
+        cost: Double = 0,
+        window: Int? = nil,
+        lastTurn: Int = 0
+    ) -> SessionUsage {
+        SessionUsage(
+            turns: turns, inputTokens: input, outputTokens: 0,
+            cacheWriteTokens: 0, cacheReadTokens: 0,
+            costUSD: cost, contextWindow: window, lastTurnContextTokens: lastTurn
+        )
+    }
+
+    func testNobodySpendsNothing() {
+        XCTAssertEqual(totalUsage([]), .empty)
+    }
+
+    func testTheCountableFiguresAddUp() {
+        let total = totalUsage([
+            usage(turns: 2, input: 100, cost: 0.5),
+            usage(turns: 3, input: 40, cost: 0.25),
+        ])
+
+        XCTAssertEqual(total.turns, 5)
+        XCTAssertEqual(total.inputTokens, 140)
+        XCTAssertEqual(total.costUSD, 0.75, accuracy: 0.0001)
+    }
+
+    /// The one that would be wrong if it summed: two 200k windows are not a
+    /// 400k window, and "how full is the context" would then be measured
+    /// against a size no character actually has.
+    func testTheContextWindowIsTheLargestNotTheSum() {
+        let total = totalUsage([usage(window: 200_000), usage(window: 1_000_000)])
+
+        XCTAssertEqual(total.contextWindow, 1_000_000)
+    }
+
+    /// Likewise: the fullest session is the one worth knowing about. Summing
+    /// would report a session nobody is in.
+    func testTheLastTurnContextIsTheFullestNotTheSum() {
+        let total = totalUsage([usage(lastTurn: 30_000), usage(lastTurn: 12_000)])
+
+        XCTAssertEqual(total.lastTurnContextTokens, 30_000)
+    }
+
+    func testAnUnknownWindowDoesNotEraseAKnownOne() {
+        XCTAssertEqual(totalUsage([usage(window: nil), usage(window: 200_000)]).contextWindow, 200_000)
+    }
+}

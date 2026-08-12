@@ -15,6 +15,9 @@ struct ChatPanelView: View {
     let backendStatus: BackendStatus
     let appearance: Appearance
     let profiles: ProfileLibrary
+    /// Which character's window this is. Passed to the Profile panel, which
+    /// edits her and nobody else.
+    let profileID: UUID
     let layout: ChatBubbleLayout
     let onClose: () -> Void
     /// Pins one box into its own floating window. The same door the ```window
@@ -1746,6 +1749,7 @@ struct ChatPanelView: View {
                 case .profile:
                     ProfileSettingsView(
                         profiles: profiles,
+                        profileID: profileID,
                         appearance: appearance,
                         secretary: secretary
                     )

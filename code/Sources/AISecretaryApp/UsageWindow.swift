@@ -12,15 +12,26 @@ import SecretaryCore
 /// park it. It floats above other apps like the rest of this app's windows, and
 /// it follows the conversation live — `Secretary.sessionUsage` is observed, so a
 /// window opened before the first question fills in as answers arrive.
+/// Who is on the desktop, for the one usage window.
+///
+/// Observable rather than a snapshot taken when the window opens: the window is
+/// built once and kept, so a character created while it is up would otherwise
+/// never appear in it.
+@MainActor
+@Observable
+final class UsageRoster {
+    var characters: [(name: String, secretary: Secretary)] = []
+}
+
 @MainActor
 final class UsageWindow: NSObject, NSWindowDelegate {
     private var window: NSPanel?
-    private let secretary: Secretary
+    private let roster: UsageRoster
     private let appearance: Appearance
     private let plan: PlanUsageModel
 
-    init(secretary: Secretary, appearance: Appearance, backend: ChatBackend) {
-        self.secretary = secretary
+    init(roster: UsageRoster, appearance: Appearance, backend: ChatBackend) {
+        self.roster = roster
         self.appearance = appearance
         self.plan = PlanUsageModel(backend: backend)
     }
@@ -69,7 +80,7 @@ final class UsageWindow: NSObject, NSWindowDelegate {
         panel.delegate = self
         panel.appearance = appearance.colors.controlAppearance
         panel.contentView = NSHostingView(
-            rootView: UsageView(secretary: secretary, appearance: appearance, plan: plan)
+            rootView: UsageView(roster: roster, appearance: appearance, plan: plan)
         )
         panel.center()
         panel.makeKeyAndOrderFront(nil)
@@ -94,7 +105,7 @@ private struct UsageView: View {
     /// not a view inside the chat panel.
     private var theme: Palette { appearance.colors }
 
-    @Bindable var secretary: Secretary
+    let roster: UsageRoster
     let appearance: Appearance
     @Bindable var plan: PlanUsageModel
     /// Re-read every half minute so the relative times move on their own. The
@@ -109,7 +120,30 @@ private struct UsageView: View {
     @State private var showActivity = true
     @State private var showConversation = true
 
-    private var usage: SessionUsage { secretary.sessionUsage }
+    /// Everybody's figures added together. The window is at the root of the
+    /// menu because the bill is the machine's, but each character keeps her own
+    /// session, so the total is made here rather than read off one of them.
+    private var usage: SessionUsage { totalUsage(roster.characters.map(\.secretary.sessionUsage)) }
+
+    /// Who spent what, shown only when there is more than one of them —
+    /// a breakdown of one row is just the total again.
+    @ViewBuilder
+    private var perCharacter: some View {
+        if roster.characters.count > 1 {
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(Array(roster.characters.enumerated()), id: \.offset) { _, entry in
+                    HStack {
+                        Text(entry.name)
+                            .foregroundStyle(theme.mutedText.color)
+                        Spacer()
+                        Text("\(entry.secretary.sessionUsage.turns) turns")
+                            .foregroundStyle(theme.primaryText.color)
+                            .font(.system(size: 11, design: .monospaced))
+                    }
+                }
+            }
+        }
+    }
 
     var body: some View {
         // Scrolled, because the content grows: plan limits, however many weekly
@@ -128,7 +162,14 @@ private struct UsageView: View {
         VStack(alignment: .leading, spacing: 12) {
             planSection
             Divider()
-            sectionHeader("This conversation", isExpanded: $showConversation)
+            // Named for what it now adds up. It was "This conversation" while
+            // there was one; with several characters the figures are every
+            // live session together, and calling that a conversation would be
+            // a number that matches nothing on screen.
+            sectionHeader(
+                roster.characters.count > 1 ? "All conversations" : "This conversation",
+                isExpanded: $showConversation
+            )
             if !showConversation {
                 EmptyView()
             } else if usage.turns == 0 {
@@ -144,6 +185,7 @@ private struct UsageView: View {
                     row("Cache read", usage.cacheReadTokens)
                     row("Total", usage.totalTokens, emphasised: true)
                 }
+                perCharacter
                 Divider()
                 VStack(alignment: .leading, spacing: 3) {
                     Text("\(UsageFormat.cost(usage.costUSD)) over \(usage.turns) turn\(usage.turns == 1 ? "" : "s")")
