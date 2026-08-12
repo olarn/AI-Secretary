@@ -66,7 +66,11 @@ final class StatusBarController {
     private func build(_ spec: StatusMenuItem) -> NSMenuItem {
         let item = NSMenuItem(
             title: spec.title,
-            action: spec.action == nil ? nil : #selector(Target.perform(_:)),
+            // Not `perform(_:)`: `NSObject` already has one — `performSelector:`
+            // — so `#selector(Target.perform(_:))` resolves to *that*, every row
+            // in the menu goes dead, and nothing crashes or warns. Cost half an
+            // hour of clicking a menu that drew perfectly and did nothing.
+            action: spec.action == nil ? nil : #selector(Target.menuItemClicked(_:)),
             keyEquivalent: spec.shortcut?.rawValue ?? ""
         )
         if spec.shortcut != nil { item.keyEquivalentModifierMask = [.command] }
@@ -112,7 +116,7 @@ final class StatusBarController {
         private unowned let controller: StatusBarController
         init(controller: StatusBarController) { self.controller = controller }
 
-        @objc func perform(_ sender: Any?) {
+        @objc func menuItemClicked(_ sender: Any?) {
             guard let box = (sender as? NSMenuItem)?.representedObject as? Box else { return }
             controller.perform(box.action)
         }
