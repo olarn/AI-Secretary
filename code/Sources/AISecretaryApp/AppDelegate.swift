@@ -51,9 +51,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
         )
         characters = [character]
         character.onDismissableChanged = { [weak self] in self?.refreshHotKeyClaim() }
-        character.onVisibilityChanged = { [weak self] visible in
-            self?.statusBar?.setCharacterVisible(visible)
-        }
         character.buildWindows(onClose: { [weak self] in self?.focused.hideChatPanel() })
 
         detectBackend()
@@ -71,27 +68,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
         }
 
         statusBar = StatusBarController(
-            onOpenChat: { [weak self] in self?.focused.openChat() },
-            onToggleCharacter: { [weak self] in self?.focused.toggleCharacterVisibility() ?? true },
-            onShowUsage: { [weak self] in self?.usageWindow.toggle() },
-            onNewConversation: { [weak self] in
-                self?.focused.secretary.newConversation()
-                // Starting a conversation means having one. Clearing the slate
-                // behind a hidden window would leave nothing to show for the
-                // click, and the bubble being closed is a common reason to
-                // reach for the menu in the first place.
-                self?.focused.openChat()
-            },
-            history: { [weak self] in self?.focused.secretary.historyRows() ?? [] },
-            onResumeConversation: { [weak self] id in
-                self?.focused.secretary.resumeConversation(id)
-                // Reopening a conversation from the menu means wanting to look
-                // at it, and the bubble may well be hidden — that is often why
-                // the menu was used at all.
-                self?.focused.openChat()
-            },
-            onClearHistory: { [weak self] in self?.focused.secretary.clearHistory() },
-            windows: { [weak self] in self?.focused.infoWindows }
+            menu: { [weak self] in self?.menuState() ?? [] },
+            perform: { [weak self] action in self?.perform(action) }
         )
 
         // Esc is claimed from the whole system, so the bubble answers it while
@@ -105,6 +83,74 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
         watchForHideShortcut()
 
         character.showCharacter()
+    }
+
+    // MARK: - The status bar menu
+
+    /// Reads the current state of every character for `statusBarMenu`, which
+    /// decides what the menu contains. Gathering, not deciding.
+    private func menuState() -> [StatusMenuEntry] {
+        statusBarMenu(
+            summary: AppInfo.summary,
+            characters: characters.map { character in
+                CharacterMenuState(
+                    id: character.profileID,
+                    name: profiles.profiles.first { $0.id == character.profileID }?.displayName
+                        ?? profiles.active.displayName,
+                    isVisible: character.isCharacterVisible,
+                    history: character.secretary.historyRows(),
+                    pinned: character.infoWindows.set.windows.map {
+                        PinnedMenuRow(id: $0.id, title: $0.title)
+                    }
+                )
+            }
+        )
+    }
+
+    /// Applies what a menu row asked for. Every case names the character it is
+    /// about, so nothing here has to guess which one the click meant.
+    private func perform(_ action: StatusMenuAction) {
+        switch action {
+        case .toggleCharacter(let id):
+            character(id)?.toggleCharacterVisibility()
+        case .newChat(let id):
+            guard let character = character(id) else { return }
+            character.secretary.newConversation()
+            // Starting a conversation means having one. Clearing the slate
+            // behind a hidden window would leave nothing to show for the click,
+            // and the bubble being closed is a common reason to reach for the
+            // menu in the first place.
+            character.openChat()
+        case .resumeConversation(let id, let conversation):
+            guard let character = character(id) else { return }
+            character.secretary.resumeConversation(conversation)
+            // Reopening a conversation from the menu means wanting to look at
+            // it, and the bubble may well be hidden — that is often why the
+            // menu was used at all.
+            character.openChat()
+        case .clearHistory(let id):
+            character(id)?.secretary.clearHistory()
+        case .showPinned(let id, let window):
+            character(id)?.infoWindows.show(window)
+        case .showAllPinned(let id):
+            character(id)?.infoWindows.showAll()
+        case .clearPinned(let id):
+            character(id)?.infoWindows.clearAll()
+        case .newCharacter:
+            // Stage 4. Until then the row is honest about existing and does
+            // nothing, rather than being hidden and then appearing later.
+            break
+        case .showTokenUsage:
+            usageWindow.toggle()
+        case .showAbout:
+            AboutPanel.show()
+        case .quit:
+            NSApp.terminate(nil)
+        }
+    }
+
+    private func character(_ id: UUID) -> CharacterInstance? {
+        characters.first { $0.profileID == id }
     }
 
     /// ⌘H, taken from this app's own event stream while one of its windows has

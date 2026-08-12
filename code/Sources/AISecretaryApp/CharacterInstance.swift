@@ -49,8 +49,6 @@ final class CharacterInstance {
     /// The claim is system-wide and singular, so the decision is not hers to
     /// make — she only reports that her answer changed.
     var onDismissableChanged: (() -> Void)?
-    /// Told when her own visibility changed, so the menu's wording can follow.
-    var onVisibilityChanged: ((Bool) -> Void)?
 
     /// What the character view asks for at 1×, measured from the view itself
     /// rather than written down here — a hard-coded window that was a few points
@@ -327,7 +325,6 @@ final class CharacterInstance {
     func showCharacter() {
         isCharacterVisible = true
         characterPanel.orderFrontRegardless()
-        onVisibilityChanged?(true)
     }
 
     /// Shows or hides the floating character. Returns the new visibility so the
@@ -341,7 +338,6 @@ final class CharacterInstance {
             if isChatVisible { hideChatPanel() }
             characterPanel.orderOut(nil)
         }
-        onVisibilityChanged?(isCharacterVisible)
         return isCharacterVisible
     }
 
