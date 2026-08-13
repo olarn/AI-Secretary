@@ -439,6 +439,16 @@ final class CharacterInstance {
 
     func hideChatPanel() {
         isChatVisible = false
+        // Esc closes the chat; Esc again puts her away. Only the local monitor
+        // can carry that second press, and it needs one of our windows to hold
+        // the keyboard — closing the chat dropped it entirely, so the second
+        // press reached nothing. Driven in the running app: two presses, chat
+        // gone, character still there.
+        //
+        // This hands over a keyboard we already had; it never takes one. That
+        // is why the character panel still refuses key status on a click, where
+        // taking it would mean taking it from the app behind.
+        if isCharacterVisible, chatPanel.isKeyWindow { characterPanel.makeKey() }
         // Esc goes back to whichever app the user is actually in the moment
         // there is nothing left to put away.
         onDismissableChanged?()
