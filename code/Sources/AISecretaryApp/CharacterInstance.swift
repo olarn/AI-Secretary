@@ -31,11 +31,13 @@ final class CharacterInstance {
     let secretary: Secretary
     let infoWindows: InfoWindows
 
-    private let appearance: Appearance
+    /// Hers since 13-1. Not private: the app-wide windows have no look of their
+    /// own and borrow the focused character's.
+    let appearance: Appearance
     private let profiles: ProfileLibrary
-    /// Shared across characters in this phase — see the plan's note on where it
-    /// splits. Held so `buildWindows` can hand the panel the same instance the
-    /// Secretary was given.
+    /// Hers since 13-1, and the file behind it is hers too. Held so
+    /// `buildWindows` can hand the panel the same instance the Secretary was
+    /// given.
     private let registry: ProjectRegistry
     private let backendStatus: BackendStatus
 
@@ -50,6 +52,11 @@ final class CharacterInstance {
     /// make — she only reports that her answer changed.
     var onDismissableChanged: (() -> Void)?
 
+    /// Told when this character is the one being worked with. Token Usage,
+    /// About and the ⌘+/⌘− shortcuts have no character of their own and follow
+    /// whoever this last named.
+    var onUsed: (() -> Void)?
+
     /// What the character view asks for at 1×, measured from the view itself
     /// rather than written down here — a hard-coded window that was a few points
     /// too small clipped the halo into a flat edge across the top of the head.
@@ -57,7 +64,7 @@ final class CharacterInstance {
 
     /// The window follows the S/M/L choice; `CharacterView` scales to match.
     private var characterSize: CGSize {
-        let factor = appearance.settings.appScale.factor
+        let factor = appearance.settings.characterScale.factor
         return CGSize(
             width: characterBaseSize.width * factor,
             height: characterBaseSize.height * factor
@@ -95,7 +102,7 @@ final class CharacterInstance {
     /// the avatar. Scaled with the character, since the inset it compensates for
     /// scales too.
     private var characterGap: CGFloat {
-        -14 * appearance.settings.appScale.factor
+        -14 * appearance.settings.characterScale.factor
     }
 
     init(
@@ -341,6 +348,12 @@ final class CharacterInstance {
         infoWindows.applyControlAppearance(controls)
     }
 
+    /// The same, from her own theme. Her windows are lit by her settings now,
+    /// so nobody outside has to know which they are.
+    func applyOwnControlAppearance() {
+        applyControlAppearance(appearance.colors.controlAppearance)
+    }
+
     // MARK: - Visibility
 
     /// Anything Esc would put away for this character.
@@ -391,6 +404,10 @@ final class CharacterInstance {
     func showChatPanel() {
         isChatVisible = true
         onDismissableChanged?()
+        // Opening her chat is the clearest statement of which character the
+        // person is working with, and the app-wide windows have to borrow one
+        // character's look from somewhere.
+        onUsed?()
         // The display may have changed since launch; re-clamp before showing,
         // against the screen the character is on rather than whichever one
         // happens to be "main" at the time.

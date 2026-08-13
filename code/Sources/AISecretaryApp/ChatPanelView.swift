@@ -1500,7 +1500,7 @@ struct ChatPanelView: View {
 
             themeRow
 
-            appScaleRow
+            characterScaleRow
 
             stepperRow(
                 label: "Text size",
@@ -1546,12 +1546,17 @@ struct ChatPanelView: View {
         }
     }
 
-    /// How large the character and her window are drawn. It sat in Profile,
-    /// which made the size of the app a property of who was wearing it —
-    /// switching secretary didn't resize anything, and nothing here does.
-    private var appScaleRow: some View {
-        choiceRow("App size", AppScale.allCases.map { scale in
-            (scale.label, appearance.settings.appScale == scale, { appearance.selectAppScale(scale) })
+    /// How large this character is drawn.
+    ///
+    /// It was called "App size" while there was one character and every setting
+    /// was the app's. It only ever scaled the character, and now that each has
+    /// her own it scales exactly one of them, so the old name described neither
+    /// what it does nor who it does it to. (It sat in Profile before that,
+    /// which was wrong for the opposite reason: with one character at a time,
+    /// switching secretary would have resized the app under you.)
+    private var characterScaleRow: some View {
+        choiceRow("Character size", CharacterScale.allCases.map { scale in
+            (scale.label, appearance.settings.characterScale == scale, { appearance.selectCharacterScale(scale) })
         })
     }
 

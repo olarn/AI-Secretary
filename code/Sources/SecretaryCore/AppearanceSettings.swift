@@ -3,7 +3,7 @@ import Foundation
 
 /// How big the floating character is on the desktop: three fixed steps, both
 /// measured from the current size so they can't compound.
-public enum AppScale: String, CaseIterable, Sendable, Codable {
+public enum CharacterScale: String, CaseIterable, Sendable, Codable {
     case small, medium, large
 
     /// `medium` is what the app has always shipped as, so it's 1.0 and the
@@ -57,7 +57,7 @@ public struct AppearanceSettings: Equatable, Sendable {
     public private(set) var fontSize: Double
     public private(set) var chatWidth: Double
     public private(set) var chatHeight: Double
-    public var appScale: AppScale
+    public var characterScale: CharacterScale
     /// Which colours the windows are painted with. Not clamped to anything —
     /// unlike the sizes, every value is as valid as every other.
     public var theme: ThemeChoice
@@ -74,10 +74,10 @@ public struct AppearanceSettings: Equatable, Sendable {
         chatHeight: Double = Self.defaultHeight,
         maxWidth: Double = Self.defaultWidth,
         maxHeight: Double = Self.defaultHeight,
-        appScale: AppScale = .medium,
+        characterScale: CharacterScale = .medium,
         theme: ThemeChoice = .system
     ) {
-        self.appScale = appScale
+        self.characterScale = characterScale
         self.theme = theme
         self.fontSize = min(max(fontSize, Self.minFontSize), Self.maxFontSize)
         self.maxHeight = max(maxHeight, Self.defaultHeight)
@@ -198,20 +198,20 @@ public struct StoredAppearance: Equatable, Sendable {
     public var fontSize: Double
     public var chatWidth: Double
     public var chatHeight: Double
-    public var appScale: AppScale
+    public var characterScale: CharacterScale
     public var theme: ThemeChoice
 
     public init(
         fontSize: Double = AppearanceSettings.defaultFontSize,
         chatWidth: Double = AppearanceSettings.defaultWidth,
         chatHeight: Double = AppearanceSettings.defaultHeight,
-        appScale: AppScale = .medium,
+        characterScale: CharacterScale = .medium,
         theme: ThemeChoice = .system
     ) {
         self.fontSize = fontSize
         self.chatWidth = chatWidth
         self.chatHeight = chatHeight
-        self.appScale = appScale
+        self.characterScale = characterScale
         self.theme = theme
     }
 }
@@ -223,15 +223,42 @@ public protocol AppearanceStoring: AnyObject, Sendable {
 }
 
 public final class UserDefaultsAppearanceStore: AppearanceStoring, @unchecked Sendable {
-    private let fontKey = "appearance.fontSize"
-    private let widthKey = "appearance.chatWidth"
-    private let heightKey = "appearance.chatHeight"
-    private let scaleKey = "appearance.appScale"
-    private let themeKey = "appearance.theme"
+    // The names on disk, unchanged. `appScale` reads oddly now that the type is
+    // `CharacterScale`, and renaming it would quietly discard the S/M/L choice
+    // of everyone who had made one — a key is a promise to whatever wrote it.
+    private static let settingNames = (
+        font: "fontSize",
+        width: "chatWidth",
+        height: "chatHeight",
+        scale: "appScale",
+        theme: "theme"
+    )
     private let defaults: UserDefaults
+    private let character: UUID?
 
-    public init(defaults: UserDefaults = .standard) {
+    /// - Parameter character: whose look this is. `nil` means the app-wide keys
+    ///   written before each character had her own, which every character still
+    ///   reads as her starting point — see `load`.
+    public init(defaults: UserDefaults = .standard, character: UUID? = nil) {
         self.defaults = defaults
+        self.character = character
+    }
+
+    private func key(_ setting: String) -> String {
+        appearanceKey(setting, character: character)
+    }
+
+    /// Her own value, or the shared one, or the default.
+    ///
+    /// The middle step is what keeps the app looking the way it did: nothing is
+    /// renamed or moved when characters get their own settings, so on the first
+    /// launch after this every character reads the one look that was there and
+    /// they all match. She stops reading it the moment she is changed, because
+    /// from then on she has a value of her own.
+    private func read<T>(_ setting: String, _ decode: (Any) -> T?) -> T? {
+        let mine = character.flatMap { _ in defaults.object(forKey: key(setting)) }
+        let shared = defaults.object(forKey: appearanceKey(setting, character: nil))
+        return (mine ?? shared).flatMap(decode)
     }
 
     /// `object(forKey:)` rather than `double(forKey:)` so an unset key falls
@@ -240,25 +267,27 @@ public final class UserDefaultsAppearanceStore: AppearanceStoring, @unchecked Se
     /// scale — written by a build with different steps — also falls back rather
     /// than throwing.
     public func load() -> StoredAppearance {
-        StoredAppearance(
-            fontSize: (defaults.object(forKey: fontKey) as? Double) ?? AppearanceSettings.defaultFontSize,
-            chatWidth: (defaults.object(forKey: widthKey) as? Double) ?? AppearanceSettings.defaultWidth,
-            chatHeight: (defaults.object(forKey: heightKey) as? Double) ?? AppearanceSettings.defaultHeight,
-            appScale: Option.fromOptional(defaults.string(forKey: scaleKey))
-                .flatMap { Option.fromOptional(AppScale(rawValue: $0)) }^
-                .getOrElse(.medium),
-            theme: Option.fromOptional(defaults.string(forKey: themeKey))
-                .flatMap { Option.fromOptional(ThemeChoice(rawValue: $0)) }^
-                .getOrElse(.system)
+        let names = Self.settingNames
+        return StoredAppearance(
+            fontSize: read(names.font) { $0 as? Double } ?? AppearanceSettings.defaultFontSize,
+            chatWidth: read(names.width) { $0 as? Double } ?? AppearanceSettings.defaultWidth,
+            chatHeight: read(names.height) { $0 as? Double } ?? AppearanceSettings.defaultHeight,
+            characterScale: read(names.scale) { ($0 as? String).flatMap(CharacterScale.init(rawValue:)) } ?? .medium,
+            theme: read(names.theme) { ($0 as? String).flatMap(ThemeChoice.init(rawValue:)) } ?? .system
         )
     }
 
+    /// Writes only under this character's keys. The shared ones are left where
+    /// they are: they are what a character who has never been changed is still
+    /// reading, and overwriting them with one character's choice would move
+    /// everybody who hasn't chosen yet.
     public func save(_ appearance: StoredAppearance) {
-        defaults.set(appearance.fontSize, forKey: fontKey)
-        defaults.set(appearance.chatWidth, forKey: widthKey)
-        defaults.set(appearance.chatHeight, forKey: heightKey)
-        defaults.set(appearance.appScale.rawValue, forKey: scaleKey)
-        defaults.set(appearance.theme.rawValue, forKey: themeKey)
+        let names = Self.settingNames
+        defaults.set(appearance.fontSize, forKey: key(names.font))
+        defaults.set(appearance.chatWidth, forKey: key(names.width))
+        defaults.set(appearance.chatHeight, forKey: key(names.height))
+        defaults.set(appearance.characterScale.rawValue, forKey: key(names.scale))
+        defaults.set(appearance.theme.rawValue, forKey: key(names.theme))
     }
 }
 

@@ -120,20 +120,20 @@ final class AppearanceSettingsTests: XCTestCase {
     /// Asked for: three steps, S and L being ±30% — both measured from M, so
     /// they can't compound into a runaway size.
     func testTheThreeAppSizesAreRelativeToMedium() {
-        XCTAssertEqual(AppScale.medium.factor, 1.0)
-        XCTAssertEqual(AppScale.small.factor, 0.7, accuracy: 0.0001)
-        XCTAssertEqual(AppScale.large.factor, 1.3, accuracy: 0.0001)
-        XCTAssertEqual(AppScale.allCases.count, 3)
+        XCTAssertEqual(CharacterScale.medium.factor, 1.0)
+        XCTAssertEqual(CharacterScale.small.factor, 0.7, accuracy: 0.0001)
+        XCTAssertEqual(CharacterScale.large.factor, 1.3, accuracy: 0.0001)
+        XCTAssertEqual(CharacterScale.allCases.count, 3)
     }
 
     func testTheCurrentSizeIsTheDefault() {
-        XCTAssertEqual(AppearanceSettings().appScale, .medium)
+        XCTAssertEqual(AppearanceSettings().characterScale, .medium)
     }
 
     func testTheAppSizeIsRemembered() {
         let store = InMemoryAppearanceStore()
-        store.save(StoredAppearance(appScale: .large))
-        XCTAssertEqual(store.load().appScale, .large)
+        store.save(StoredAppearance(characterScale: .large))
+        XCTAssertEqual(store.load().characterScale, .large)
     }
 
     /// A scale written by a build with different steps must not break loading.
@@ -142,7 +142,7 @@ final class AppearanceSettingsTests: XCTestCase {
         defaults.removePersistentDomain(forName: "AppearanceScaleFallbackTests")
         defaults.set("enormous", forKey: "appearance.appScale")
 
-        XCTAssertEqual(UserDefaultsAppearanceStore(defaults: defaults).load().appScale, .medium)
+        XCTAssertEqual(UserDefaultsAppearanceStore(defaults: defaults).load().characterScale, .medium)
     }
 
     func testTheThemeIsSavedAndReloaded() {
@@ -180,7 +180,7 @@ final class AppearanceSettingsTests: XCTestCase {
                 fontSize: settings.fontSize,
                 chatWidth: settings.chatWidth,
                 chatHeight: settings.chatHeight,
-                appScale: settings.appScale
+                characterScale: settings.characterScale
             )
         )
 

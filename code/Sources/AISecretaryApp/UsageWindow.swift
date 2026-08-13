@@ -27,12 +27,14 @@ final class UsageRoster {
 final class UsageWindow: NSObject, NSWindowDelegate {
     private var window: NSPanel?
     private let roster: UsageRoster
-    private let appearance: Appearance
     private let plan: PlanUsageModel
+    /// Whose look the contents were built from. This window belongs to the app
+    /// rather than to a character, so it borrows one — and has to notice when
+    /// the character it borrowed from is no longer the one being worked with.
+    private var builtFor: ObjectIdentifier?
 
-    init(roster: UsageRoster, appearance: Appearance, backend: ChatBackend) {
+    init(roster: UsageRoster, backend: ChatBackend) {
         self.roster = roster
-        self.appearance = appearance
         self.plan = PlanUsageModel(backend: backend)
     }
 
@@ -43,11 +45,11 @@ final class UsageWindow: NSObject, NSWindowDelegate {
         window?.appearance = controls
     }
 
-    func toggle() {
-        if isOpen { close() } else { show() }
+    func toggle(using appearance: Appearance) {
+        if isOpen { close() } else { show(using: appearance) }
     }
 
-    func show() {
+    func show(using appearance: Appearance) {
         // Nothing in this app takes focus by itself, so without activating, the
         // window opens behind whatever is in front and reads as "nothing
         // happened" — the same trap the About window and the pickers hit.
@@ -56,6 +58,16 @@ final class UsageWindow: NSObject, NSWindowDelegate {
         plan.startPolling()
 
         if let window {
+            // Reopening after working with a different character: her theme and
+            // text size are what this should be wearing now, and a hosting view
+            // built from somebody else's will never notice.
+            if builtFor != ObjectIdentifier(appearance) {
+                window.appearance = appearance.colors.controlAppearance
+                window.contentView = NSHostingView(
+                    rootView: UsageView(roster: roster, appearance: appearance, plan: plan)
+                )
+                builtFor = ObjectIdentifier(appearance)
+            }
             window.makeKeyAndOrderFront(nil)
             return
         }
@@ -85,6 +97,7 @@ final class UsageWindow: NSObject, NSWindowDelegate {
         panel.center()
         panel.makeKeyAndOrderFront(nil)
         window = panel
+        builtFor = ObjectIdentifier(appearance)
     }
 
     func close() {

@@ -29,7 +29,7 @@ struct CharacterView: View {
     var body: some View {
         content
             .fixedSize()
-            .scaleEffect(appearance.settings.appScale.factor)
+            .scaleEffect(appearance.settings.characterScale.factor)
     }
 
     private var content: some View {

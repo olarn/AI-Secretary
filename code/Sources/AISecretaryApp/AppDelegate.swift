@@ -12,7 +12,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     // Secretary, her windows, her Claude Code session, and since 13-1 the
     // projects she may work in — lives in `CharacterInstance`.
     private let backendStatus = BackendStatus()
-    private let appearance = Appearance()
     private let profiles = ProfileLibrary()
     /// Where Claude Code is — the machine's answer, found once and handed to
     /// every character. The session built on top of it is hers; this is not.
@@ -21,9 +20,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     /// The characters on the desktop. One for now; the point of the type is
     /// that this becomes several without the delegate changing shape.
     private var characters: [CharacterInstance] = []
-    /// The one the menu and the app-wide shortcuts act on. With a single
-    /// character it is simply that character.
-    private var focused: CharacterInstance! { characters.first }
+    /// The one the menu and the app-wide shortcuts act on: whoever was last
+    /// worked with, falling back to the first on the desktop.
+    ///
+    /// It matters more since 13-1 than it did when it was simply
+    /// `characters.first`. Token Usage and About have no look of their own, so
+    /// this is also the character whose theme and text size they borrow.
+    private var focused: CharacterInstance! {
+        lastUsed.flatMap(character) ?? characters.first
+    }
+    private var lastUsed: UUID?
 
     private var statusBar: StatusBarController!
     private var hotKeys: GlobalHotKeys?
@@ -33,7 +39,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     private let usageRoster = UsageRoster()
     private lazy var usageWindow = UsageWindow(
         roster: usageRoster,
-        appearance: appearance,
         backend: focused.backend
     )
 
@@ -46,12 +51,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
 
         detectBackend()
 
-        // Resizing an NSPanel is imperative work, so the model calls back here
-        // rather than the delegate re-deriving it during a view update.
-        appearance.onChange = { [weak self] in
-            self?.characters.forEach { $0.applyWindowSizes() }
-            self?.applyControlAppearance()
-        }
         applyControlAppearance()
         // Renaming or re-describing a character has to reach her prompt, not
         // just her label.
@@ -111,7 +110,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
         let character = CharacterInstance(
             profileID: id,
             profiles: profiles,
-            appearance: appearance,
+            appearance: Appearance(character: id),
             registry: ProjectRegistry(store: FileProjectStore(fileURL: projectsFile(for: id))),
             backendStatus: backendStatus,
             detector: detector,
@@ -121,6 +120,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
             attachmentStore: FileAttachmentStore()
         )
         character.onDismissableChanged = { [weak self] in self?.refreshHotKeyClaim() }
+        character.onUsed = { [weak self] in self?.lastUsed = id }
+        // Her settings resize and re-light her own windows, and nobody else's.
+        // This was one callback for the whole app when there was one look to
+        // apply; now applying one character's theme to all of them is precisely
+        // the bug.
+        character.appearance.onChange = { [weak character] in
+            character?.applyWindowSizes()
+            character?.applyOwnControlAppearance()
+        }
         character.buildWindows(
             ordinal: ordinal,
             onClose: { [weak character] in character?.hideChatPanel() }
@@ -215,7 +223,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
             profiles.add(fresh)
             character(fresh.id)?.openChat()
         case .showTokenUsage:
-            usageWindow.toggle()
+            usageWindow.toggle(using: focused.appearance)
         case .showAbout:
             AboutPanel.show()
         case .quit:
@@ -305,9 +313,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     /// ⌘+ / ⌘−, doing exactly what the +/− buttons in Settings do. Wired here
     /// rather than in the panel because the shortcut has to work whenever the
     /// app is active, including when the chat is closed.
-    func increaseTextSize(_ sender: Any?) { appearance.increaseFontSize() }
+    ///
+    /// It resizes the text of one character — whoever was last worked with —
+    /// now that the size is hers rather than the app's. A shortcut that changed
+    /// all of them would be the one thing on this screen that still treats them
+    /// as one.
+    func increaseTextSize(_ sender: Any?) { focused?.appearance.increaseFontSize() }
 
-    func decreaseTextSize(_ sender: Any?) { appearance.decreaseFontSize() }
+    func decreaseTextSize(_ sender: Any?) { focused?.appearance.decreaseFontSize() }
 
     /// ⌘H. Goes through the same toggle the status bar item uses; the character
     /// reports back so the menu's wording doesn't go stale.
@@ -315,7 +328,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
 
     func showAbout(_ sender: Any?) { AboutPanel.show() }
 
-    func toggleUsageWindow(_ sender: Any?) { usageWindow.toggle() }
+    func toggleUsageWindow(_ sender: Any?) { usageWindow.toggle(using: focused.appearance) }
 
     /// Finds Claude Code off the main thread. The fast path is a handful of
     /// `stat` calls, but the fallback launches the user's login shell, which can
@@ -332,10 +345,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
         Task.detached(priority: .utility) { detector.resolve() }
     }
 
-    /// Re-lights every window the app owns when the theme changes.
+    /// Re-lights every window, each character from her own theme.
+    ///
+    /// Token Usage has no theme of its own and takes the focused character's,
+    /// which is the same one it was built with unless the person has since gone
+    /// and worked with somebody else — `show(using:)` catches that case.
     private func applyControlAppearance() {
-        let controls = appearance.colors.controlAppearance
-        characters.forEach { $0.applyControlAppearance(controls) }
-        usageWindow.applyControlAppearance(controls)
+        characters.forEach { $0.applyOwnControlAppearance() }
+        usageWindow.applyControlAppearance(focused?.appearance.colors.controlAppearance)
     }
 }

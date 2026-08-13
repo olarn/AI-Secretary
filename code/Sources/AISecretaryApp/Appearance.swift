@@ -2,8 +2,13 @@ import AppKit
 import Observation
 import SecretaryCore
 
-/// The live text-size and window-height choice, shared by the panel that
-/// changes it and the window that has to resize.
+/// One character's look: her text size, her window height, how big she is
+/// drawn, and her theme. Shared by the panel that changes it and the window
+/// that has to resize.
+///
+/// One of these per character since 13-1. The app-wide windows — Token Usage,
+/// About — have no character of their own, so they follow whichever character
+/// was used last; see `AppDelegate.focused`.
 ///
 /// The rules live in `AppearanceSettings`; this holds the current value,
 /// persists every change, and tells the window when to resize. `onChange` is a
@@ -23,6 +28,10 @@ final class Appearance {
     @ObservationIgnored var onChange: (() -> Void)?
     @ObservationIgnored private var systemThemeObserver: NSObjectProtocol?
 
+    convenience init(character: UUID) {
+        self.init(store: UserDefaultsAppearanceStore(character: character))
+    }
+
     init(store: AppearanceStoring = UserDefaultsAppearanceStore()) {
         self.store = store
         self.systemIsDark = Self.readSystemIsDark()
@@ -37,7 +46,7 @@ final class Appearance {
             chatHeight: saved.chatHeight,
             maxWidth: screen.map(Self.usableWidth) ?? saved.chatWidth,
             maxHeight: screen.map { Double($0.height) } ?? saved.chatHeight,
-            appScale: saved.appScale,
+            characterScale: saved.characterScale,
             theme: saved.theme
         )
         watchSystemTheme()
@@ -105,7 +114,7 @@ final class Appearance {
     func decreaseFontSize() { mutate { $0.decreaseFontSize() } }
     func increaseHeight() { mutate { $0.increaseHeight() } }
     func decreaseHeight() { mutate { $0.decreaseHeight() } }
-    func selectAppScale(_ scale: AppScale) { mutate { $0.appScale = scale } }
+    func selectCharacterScale(_ scale: CharacterScale) { mutate { $0.characterScale = scale } }
     func selectTheme(_ theme: ThemeChoice) { mutate { $0.theme = theme } }
     func widenChat() { mutate { $0.widenChat() } }
     func restoreChatWidth() { mutate { $0.restoreChatWidth() } }
@@ -128,7 +137,7 @@ final class Appearance {
         // return, so it goes through the same callback as a resize.
         let needsRelayout = updated.chatHeight != settings.chatHeight
             || updated.chatWidth != settings.chatWidth
-            || updated.appScale != settings.appScale
+            || updated.characterScale != settings.characterScale
             || updated.theme != settings.theme
         settings = updated
         store.save(
@@ -136,7 +145,7 @@ final class Appearance {
                 fontSize: updated.fontSize,
                 chatWidth: updated.chatWidth,
                 chatHeight: updated.chatHeight,
-                appScale: updated.appScale,
+                characterScale: updated.characterScale,
                 theme: updated.theme
             )
         )
