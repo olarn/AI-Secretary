@@ -82,6 +82,9 @@ public final class ClaudeCodeProvider: ChatProvider, SkillInstalling, @unchecked
     /// tool_use id -> (name, input), so a refusal (which carries only the id)
     /// can be reported with what it was trying to do.
     private var _pendingToolUses: [String: (name: String, input: [String: Any])] = [:]
+    /// The process kept alive between turns. Nil while a turn is using it —
+    /// see `takeWarm` — and nil when the last one was ended.
+    private var _warm: WarmProcess?
 
     public init(installation: ClaudeCodeInstallation, configuration: Configuration = Configuration()) {
         self.installation = installation
@@ -186,63 +189,175 @@ public final class ClaudeCodeProvider: ChatProvider, SkillInstalling, @unchecked
         configuration: Configuration,
         continuation: ChatStream.Continuation
     ) async throws -> TurnOutcome {
+        let key = WarmProcessKey(
+            workingDirectory: configuration.workingDirectory,
+            additionalDirectories: configuration.additionalDirectories,
+            allowedTools: configuration.allowedTools,
+            permissionMode: configuration.permissionMode,
+            browserEnabled: configuration.browserEnabled,
+            model: model.toOptional()?.id,
+            effort: effort.toOptional()?.rawValue,
+            system: system.toOptional(),
+            session: resume
+        )
+
+        // The process from the last turn, if it is still the right process and
+        // still alive. Comparing the key is the whole invalidation story: every
+        // way the configuration can change goes through `configuration` or
+        // `sessionID`, and both are read into the key here.
+        let reused = takeWarm(matching: key)
+        let warm: WarmProcess
+        if let reused {
+            warm = reused
+        } else {
+            warm = try startWarm(
+                key: key, model: model, effort: effort,
+                system: system, resume: resume, configuration: configuration
+            )
+        }
+
+        guard let line = warmTurnInputLine(prompt: prompt) else {
+            throw ChatError.claudeCodeFailed("could not encode the message")
+        }
+        do {
+            try warm.send(line)
+        } catch {
+            // A process that died quietly between turns. One retry on a fresh
+            // one, because from the person's side nothing has happened yet.
+            guard reused != nil else {
+                throw ChatError.claudeCodeFailed(error.localizedDescription)
+            }
+            logger.info("Warm Claude Code process was gone; starting a new one")
+            return try await runTurn(
+                prompt: prompt, model: model, effort: effort, system: system,
+                resume: resume, configuration: configuration, continuation: continuation
+            )
+        }
+
+        logger.info("Claude Code turn started (warm=\(reused != nil, privacy: .public))")
+        return try await readTurn(from: warm, wasReused: reused != nil, continuation: continuation)
+    }
+
+    /// Reads one turn's worth of events, stopping at the result line.
+    ///
+    /// Stopping there is what keeps two turns apart down one process: read past
+    /// it and the next turn's events land on the last turn's bubble.
+    private func readTurn(
+        from warm: WarmProcess,
+        wasReused: Bool,
+        continuation: ChatStream.Continuation
+    ) async throws -> TurnOutcome {
+        var emittedText = false
+        do {
+            while let line = try await warm.nextLine() {
+                try Task.checkCancellation()
+                let finished = Self.isTurnResult(line)
+                for event in handle(line: line) {
+                    if case .textDelta = event { emittedText = true }
+                    continuation.yield(.right(event))
+                }
+                if finished {
+                    // Whatever session it is serving, it is serving it now —
+                    // including one it minted itself, which the next turn has
+                    // to recognise or it would start over.
+                    keepWarm(warm.adopting(session: sessionID))
+                    return .finished
+                }
+            }
+        } catch {
+            // Cancellation included: a half-answered process cannot be handed
+            // to the next turn, so it goes rather than being kept.
+            warm.terminate()
+            throw error
+        }
+
+        // Out of lines with no result: the process ended mid-turn.
+        warm.terminate()
+        let detail = warm.errorText()
+
+        // Only worth retrying if nothing reached the user yet — a mid-turn
+        // failure would otherwise replay the answer from the top.
+        if warm.key.session != nil, !emittedText, Self.isMissingSession(detail) {
+            logger.info("Resumed session was gone; starting a fresh one")
+            return .staleSession
+        }
+
+        throw ChatError.claudeCodeFailed(
+            detail.isEmpty ? "Claude Code stopped without answering" : String(detail.suffix(400))
+        )
+    }
+
+    /// The line that ends a turn. `--output-format stream-json` sends exactly
+    /// one of these per turn, after everything it had to say.
+    static func isTurnResult(_ line: String) -> Bool {
+        guard let data = line.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return false }
+        return object["type"] as? String == "result"
+    }
+
+    private func startWarm(
+        key: WarmProcessKey,
+        model: Option<ChatModel>,
+        effort: Option<Effort>,
+        system: Option<String>,
+        resume: String?,
+        configuration: Configuration
+    ) throws -> WarmProcess {
         let process = Process()
         process.executableURL = installation.executableURL
-        process.arguments = Self.arguments(
-            prompt: prompt, model: model, effort: effort, system: system,
+        process.arguments = Self.launchArguments(
+            model: model, effort: effort, system: system,
             resume: resume, configuration: configuration
         )
         process.currentDirectoryURL = configuration.workingDirectory
         process.environment = Self.childEnvironment(for: installation)
 
+        let input = Pipe()
         let output = Pipe()
         let errors = Pipe()
+        process.standardInput = input
         process.standardOutput = output
         process.standardError = errors
-        process.standardInput = FileHandle.nullDevice
 
         do {
             try process.run()
         } catch {
             throw ChatError.claudeCodeFailed(error.localizedDescription)
         }
+        return WarmProcess(process: process, input: input, output: output, errors: errors, key: key)
+    }
 
-        logger.info("Claude Code turn started (resume=\(resume != nil, privacy: .public))")
-
-        var emittedText = false
-        do {
-            for try await line in output.fileHandleForReading.bytes.lines {
-                try Task.checkCancellation()
-                for event in handle(line: line) {
-                    if case .textDelta = event { emittedText = true }
-                    continuation.yield(.right(event))
-                }
+    /// The kept process, if it is the one this turn wants and is still running.
+    /// Taken out rather than borrowed: a turn owns it until it hands it back,
+    /// so a second turn can never read the same stream.
+    private func takeWarm(matching key: WarmProcessKey) -> WarmProcess? {
+        stateLock.withLock {
+            guard let warm = _warm else { return nil }
+            guard key.canBeServed(by: warm.key), warm.isRunning else {
+                warm.terminate()
+                _warm = nil
+                return nil
             }
-        } catch {
-            process.terminate()
-            throw error
+            _warm = nil
+            return warm
         }
+    }
 
-        process.waitUntilExit()
-        guard process.terminationStatus != 0 else { return .finished }
-
-        let detail = String(
-            decoding: errors.fileHandleForReading.readDataToEndOfFile(),
-            as: UTF8.self
-        ).trimmingCharacters(in: .whitespacesAndNewlines)
-
-        // Only worth retrying if nothing reached the user yet — a mid-turn
-        // failure would otherwise replay the answer from the top.
-        if resume != nil, !emittedText, Self.isMissingSession(detail) {
-            logger.info("Resumed session was gone; starting a fresh one")
-            return .staleSession
+    private func keepWarm(_ warm: WarmProcess) {
+        stateLock.withLock {
+            _warm?.terminate()
+            _warm = warm
         }
+    }
 
-        throw ChatError.claudeCodeFailed(
-            detail.isEmpty
-                ? "exited with code \(process.terminationStatus)"
-                : String(detail.suffix(400))
-        )
+    /// Ends the kept process. The next turn starts a new one and resumes the
+    /// session by id, so nothing is lost but the warmth.
+    public func stopWarmProcess() {
+        stateLock.withLock {
+            _warm?.terminate()
+            _warm = nil
+        }
     }
 
     static func isMissingSession(_ message: String) -> Bool {
@@ -505,8 +620,12 @@ public final class ClaudeCodeProvider: ChatProvider, SkillInstalling, @unchecked
         return .right(text)
     }
 
-    static func arguments(
-        prompt: String,
+    /// The command line for one long-lived process.
+    ///
+    /// Every flag here is fixed for that process's whole life — which is why
+    /// `WarmProcessKey` exists and why a turn that wants any of them different
+    /// gets a new process rather than a new flag.
+    static func launchArguments(
         model: Option<ChatModel>,
         effort: Option<Effort>,
         system: Option<String>,
@@ -515,6 +634,15 @@ public final class ClaudeCodeProvider: ChatProvider, SkillInstalling, @unchecked
     ) -> [String] {
         var arguments = [
             "--output-format", "stream-json",
+            // Turns arrive one JSON line at a time down stdin, so the process
+            // outlives the turn. Measured worth: first text 5.47s → 1.15s.
+            //
+            // It also retires an old hazard rather than working around it. The
+            // message used to be a command-line argument, and one beginning
+            // with a dash was read as a flag — `unknown option '- A…'` — which
+            // is why it had to go last, behind `--`. A JSON string on stdin is
+            // not parsed as anything, so no message can be mistaken for a flag.
+            "--input-format", "stream-json",
             "--verbose",
             "--include-partial-messages",
             "--permission-mode", configuration.permissionMode
@@ -539,13 +667,7 @@ public final class ClaudeCodeProvider: ChatProvider, SkillInstalling, @unchecked
         if let resume { arguments += ["--resume", resume] }
         arguments += system.filter { !$0.isEmpty }^
             .fold({ [] }, { ["--append-system-prompt", $0] })
-        // The message goes last, behind `--`, so the CLI can never mistake it
-        // for a flag. Passed as the value of `-p` it did: a message beginning
-        // "- A" died with `unknown option '- A…'`, and any message starting
-        // with a dash — a bullet list, a shell flag being asked about — was
-        // unsendable. Everything after `--` is a positional argument, so no
-        // other flag may follow it.
-        arguments += ["-p", "--", prompt]
+        arguments += ["-p"]
         return arguments
     }
 

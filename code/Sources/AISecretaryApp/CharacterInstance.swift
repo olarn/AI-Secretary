@@ -211,6 +211,10 @@ final class CharacterInstance {
     /// Takes her off the desktop for good. Both windows, her pinned panes, and
     /// the observer that would otherwise outlive them.
     func tearDown() {
+        // Her Claude Code process outlives the turn now, so it has to be ended
+        // deliberately — nothing else will. A deleted character that left one
+        // running would be an invisible process nobody could account for.
+        backend.stopWarmProcess()
         if let moveObserver { NotificationCenter.default.removeObserver(moveObserver) }
         moveObserver = nil
         infoWindows.clearAll()

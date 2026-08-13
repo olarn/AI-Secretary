@@ -6,13 +6,18 @@ import XCTest
 ///
 /// Reported from use: a reply that began "- A" came back as
 /// `error: unknown option '- A…'`. Passed as the value of `-p`, a message
-/// starting with a dash is read as an option, so bullet lists — and any
-/// question about a flag — were unsendable. Confirmed against the real CLI
-/// that moving it behind `--` sends it verbatim.
+/// starting with a dash was read as an option, so bullet lists — and any
+/// question about a flag — were unsendable. The fix at the time was to put the
+/// message last, behind `--`.
+///
+/// Since the move to `--input-format stream-json` the message is not on the
+/// command line at all: it goes down stdin as a JSON string, which nothing
+/// parses as a flag. That retires the hazard rather than guarding it, so these
+/// tests now assert the two things that make that true — the message travels
+/// intact, and it never reaches the argument list.
 final class DashPromptTests: XCTestCase {
-    private func arguments(_ prompt: String) -> [String] {
-        ClaudeCodeProvider.arguments(
-            prompt: prompt,
+    private func launchArguments() -> [String] {
+        ClaudeCodeProvider.launchArguments(
             model: .none(),
             effort: .none(),
             system: .some("be brief"),
@@ -21,48 +26,49 @@ final class DashPromptTests: XCTestCase {
         )
     }
 
+    private func sentText(_ prompt: String) -> String? {
+        guard let line = warmTurnInputLine(prompt: prompt),
+              let data = line.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let message = object["message"] as? [String: Any],
+              let content = message["content"] as? [[String: Any]]
+        else { return nil }
+        return content.first?["text"] as? String
+    }
+
     /// The exact message that failed.
-    func testAMessageStartingWithADashIsNotReadAsAFlag() {
+    func testTheMessageThatUsedToBeReadAsAFlagTravelsIntact() {
         let prompt = "- A\n- เอา get current date ก่อน 1 API"
-        let args = arguments(prompt)
-        guard let separator = args.firstIndex(of: "--") else {
-            return XCTFail("Expected a -- separator. Got: \(args)")
-        }
-        XCTAssertEqual(args[separator - 1], "-p")
-        XCTAssertEqual(args.last, prompt)
+
+        XCTAssertEqual(sentText(prompt), prompt)
+        XCTAssertFalse(launchArguments().contains(prompt))
     }
 
-    /// Everything after `--` is positional, so the message has to be the last
-    /// argument. A flag appended later would be swallowed into the prompt.
-    func testNothingFollowsTheMessage() {
-        let args = arguments("hello")
-        XCTAssertEqual(args.last, "hello")
-        XCTAssertEqual(args.firstIndex(of: "--"), args.count - 2)
-    }
-
-    /// The separator must appear once. A message that is literally "--" is a
-    /// positional after the real separator, not a second one.
-    func testAMessageThatIsJustDashesIsStillTheMessage() {
-        let args = arguments("--")
-        XCTAssertEqual(args.last, "--")
-        XCTAssertEqual(args.filter { $0 == "--" }.count, 2)
-        XCTAssertEqual(args[args.count - 3], "-p")
-    }
-
-    /// The other flags must still be there, and still ahead of the separator,
-    /// or they would be read as part of the message.
-    func testTheFlagsStillPrecedeTheMessage() {
-        let args = arguments("hi")
-        let separator = args.firstIndex(of: "--") ?? args.count
-        for flag in ["--output-format", "--permission-mode", "--chrome", "--resume", "--append-system-prompt"] {
-            guard let at = args.firstIndex(of: flag) else {
-                return XCTFail("\(flag) went missing. Got: \(args)")
-            }
-            XCTAssertLessThan(at, separator, "\(flag) must come before --")
+    func testEveryShapeThatLooksLikeAFlagSurvives() {
+        for prompt in ["--", "-p", "--resume evil", "-", "--append-system-prompt x"] {
+            XCTAssertEqual(sentText(prompt), prompt, "Mangled: \(prompt)")
         }
     }
 
-    func testAnOrdinaryMessageIsUnaffected() {
-        XCTAssertEqual(arguments("what changed today?").last, "what changed today?")
+    /// Newlines are the reason this is one JSON line rather than raw text: the
+    /// newline is what tells the CLI the message is over, so a message
+    /// containing them must not end it early.
+    func testAMessageWithNewlinesIsStillOneLine() {
+        guard let line = warmTurnInputLine(prompt: "first\nsecond\nthird") else {
+            return XCTFail("Expected a line")
+        }
+
+        XCTAssertEqual(line.filter { $0 == "\n" }.count, 1)
+        XCTAssertTrue(line.hasSuffix("\n"))
+        XCTAssertEqual(sentText("first\nsecond\nthird"), "first\nsecond\nthird")
+    }
+
+    /// No prompt on the command line at all, whatever it says.
+    func testTheCommandLineCarriesNoMessage() {
+        let args = launchArguments()
+
+        XCTAssertEqual(args.last, "-p")
+        XCTAssertFalse(args.contains("--"))
+        XCTAssertTrue(args.contains("--input-format"))
     }
 }

@@ -360,6 +360,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     /// can't leave the key claimed by a window that's already gone.
     func applicationWillTerminate(_ notification: Notification) {
         hotKeys?.releaseAll()
+        // A kept Claude Code process is not a child that ends when we do —
+        // quitting without this leaves one `claude` per character running with
+        // nothing attached to them.
+        characters.forEach { $0.backend.stopWarmProcess() }
     }
 
     /// Launching the app again while it is already running.

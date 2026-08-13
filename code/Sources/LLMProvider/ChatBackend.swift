@@ -38,6 +38,14 @@ public protocol WorkspaceScopedProvider: AnyObject, Sendable {
     var supportsBrowser: Bool { get }
     /// Connects or disconnects the browser for subsequent turns.
     func setBrowserEnabled(_ enabled: Bool)
+    /// Ends any process the backend is keeping warm between turns.
+    ///
+    /// Needed because a process that no longer exits after each turn is not
+    /// ended by anything else: quitting the app or deleting a character would
+    /// otherwise leave one running with nothing attached to it. The session
+    /// itself survives — the next turn resumes it by id and simply pays the
+    /// cold start again.
+    func stopWarmProcess()
 }
 
 /// Defaults for backends that have no browser to offer, so a provider only
@@ -45,6 +53,8 @@ public protocol WorkspaceScopedProvider: AnyObject, Sendable {
 public extension WorkspaceScopedProvider {
     var supportsBrowser: Bool { false }
     func setBrowserEnabled(_ enabled: Bool) {}
+    /// Nothing kept, nothing to end — true of every backend but the real one.
+    func stopWarmProcess() {}
 }
 
 extension ClaudeCodeProvider: WorkspaceScopedProvider {
@@ -273,6 +283,10 @@ public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, @unchecke
             return _claudeCode
         }
         provider?.setBrowserEnabled(enabled)
+    }
+
+    public func stopWarmProcess() {
+        lock.withLock { _claudeCode }?.stopWarmProcess()
     }
 
     /// What the user's own Claude Code is set up to use — read from their

@@ -5,8 +5,7 @@ import XCTest
 /// one.
 final class BrowserToolsTests: XCTestCase {
     private func arguments(browserEnabled: Bool) -> [String] {
-        ClaudeCodeProvider.arguments(
-            prompt: "what does this page say?",
+        ClaudeCodeProvider.launchArguments(
             model: .none(),
             effort: .none(),
             system: .none(),

@@ -88,8 +88,7 @@ final class ClaudeCodeProviderLaunchTests: XCTestCase {
         system: String? = nil,
         configuration: ClaudeCodeProvider.Configuration = .init()
     ) -> [String] {
-        ClaudeCodeProvider.arguments(
-            prompt: "hello",
+        ClaudeCodeProvider.launchArguments(
             model: Option.fromOptional(model),
             effort: Option.fromOptional(effort),
             system: Option.fromOptional(system),
@@ -122,8 +121,6 @@ final class ClaudeCodeProviderLaunchTests: XCTestCase {
 
     func testAsksForTheStreamingJSONProtocolWeParse() {
         let args = arguments()
-        // `-p` moved to the end, behind `--`, so a message beginning with a
-        // dash isn't read as a flag. See DashPromptTests.
         XCTAssertTrue(args.contains("-p"))
         XCTAssertTrue(args.contains("stream-json"))
         XCTAssertTrue(args.contains("--include-partial-messages"),
