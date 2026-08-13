@@ -199,10 +199,13 @@ final class ChatHistoryTests: XCTestCase {
         await exchange(secretary, "hello")
         let before = secretary.transcript.map(\.text)
 
+        // Not empty any more: the conversation being had is filed as it goes.
+        let historyBefore = secretary.history.map(\.id)
+
         secretary.resumeConversation(UUID())
 
         XCTAssertEqual(secretary.transcript.map(\.text), before)
-        XCTAssertTrue(secretary.history.isEmpty)
+        XCTAssertEqual(secretary.history.map(\.id), historyBefore)
     }
 
     // MARK: - The turn after reopening
@@ -251,10 +254,22 @@ final class ChatHistoryTests: XCTestCase {
         )
     }
 
-    /// Once the memory is gone, the live conversation is no longer that archived
-    /// one — putting it away must not overwrite the original with a thread the
-    /// model never actually continued.
-    func testALostSessionUnlinksTheLiveChatFromItsArchivedRow() async {
+    /// Losing the backend's memory does **not** split the conversation in two.
+    ///
+    /// This asserted the opposite until 0.13.210, and the old reasoning was
+    /// sound at the time: the live chat was no longer the archived thread, so
+    /// filing it under that row would overwrite the original with a thread the
+    /// model never continued. It only held because filing happened once, on the
+    /// way out.
+    ///
+    /// Filing now happens every turn, and under the old rule this case produced
+    /// two rows for one conversation on screen — one holding a prefix of the
+    /// other — which is worse than what it was protecting against. What is
+    /// given up: the archived row is no longer frozen at the moment the session
+    /// died. It grows with the continuation and records the new session id,
+    /// which is the honest description of what is on screen; the old id pointed
+    /// at a thread that had already gone.
+    func testALostSessionKeepsOneRowForOneConversation() async {
         let provider = SpyWorkspaceProvider()
         let secretary = makeSecretary(provider: provider)
         await exchange(secretary, "old thread")
@@ -270,7 +285,73 @@ final class ChatHistoryTests: XCTestCase {
         await exchange(secretary, "carry on")
         secretary.newConversation()
 
-        XCTAssertEqual(secretary.history.count, 2, "The original row survives beside the new thread")
+        XCTAssertEqual(secretary.history.count, 1, "One conversation on screen is one row")
+        XCTAssertTrue(
+            secretary.history[0].entries.contains { $0.text.contains("Starting fresh") },
+            "and it carries what was said after the memory went"
+        )
+    }
+
+
+    // MARK: - Filed while it is still being had
+
+    /// The history menu used to show nothing until you had started a *second*
+    /// conversation: the one you were having — the only one you might want back
+    /// after a crash — was the one that wasn't there.
+    func testTheConversationBeingHadIsInTheHistoryFromItsFirstTurn() async {
+        let secretary = makeSecretary(provider: SpyWorkspaceProvider())
+
+        await exchange(secretary, "what is the plan")
+
+        XCTAssertEqual(secretary.history.count, 1)
+        XCTAssertEqual(secretary.history.first?.title, "what is the plan")
+    }
+
+    /// And it is marked as the one you are in, so reopening it from the menu is
+    /// visibly a no-op rather than an invisible one.
+    func testTheLiveConversationIsTickedInTheMenu() async {
+        let secretary = makeSecretary(provider: SpyWorkspaceProvider())
+
+        await exchange(secretary, "hello")
+
+        XCTAssertEqual(secretary.historyRows().map(\.isCurrent), [true])
+    }
+
+    /// A conversation updates its own row. Filing every turn under a fresh id
+    /// would grow the menu by one row per exchange.
+    func testFurtherTurnsUpdateTheSameRowRatherThanAddingOne() async {
+        let secretary = makeSecretary(provider: SpyWorkspaceProvider())
+
+        await exchange(secretary, "first")
+        let id = secretary.history.first?.id
+        await exchange(secretary, "second")
+
+        XCTAssertEqual(secretary.history.count, 1)
+        XCTAssertEqual(secretary.history.first?.id, id)
+        XCTAssertTrue(secretary.history[0].entries.contains { $0.text == "second" })
+    }
+
+    /// Starting a new one leaves the old row alone and takes the tick with it —
+    /// the new conversation has said nothing, so it has no row yet.
+    func testANewConversationLeavesTheFiledOneBehind() async {
+        let secretary = makeSecretary(provider: SpyWorkspaceProvider())
+        await exchange(secretary, "first")
+
+        secretary.newConversation()
+
+        XCTAssertEqual(secretary.history.count, 1)
+        XCTAssertEqual(secretary.historyRows().map(\.isCurrent), [false])
+    }
+
+    /// Still nothing filed for a conversation nobody has spoken in, so opening
+    /// the app and pressing New Conversation twice pushes no blank rows.
+    func testAnEmptyConversationIsNotFiled() {
+        let secretary = makeSecretary(provider: SpyWorkspaceProvider())
+
+        secretary.newConversation()
+        secretary.newConversation()
+
+        XCTAssertTrue(secretary.history.isEmpty)
     }
 
     // MARK: - Clearing

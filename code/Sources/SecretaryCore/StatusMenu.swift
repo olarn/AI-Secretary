@@ -116,24 +116,30 @@ public enum StatusMenuEntry: Equatable, Sendable {
 /// The whole tree, from `menu.pdf`.
 ///
 /// ```text
-/// AI Secretary 0.10.x (sha)
-/// ├ Characters ▸ ── Miku ▸ ── Show/Hide Character
-/// │               ├ Anya ▸     New chat
-/// │               └ New Character…  Chat History ▸
-/// ├ Token Usage                     ─────────
-/// ├ About AI Secretary              Pinned Messages ▸
-/// └ Quit AI Secretary
+/// AI Secretary 0.13.x
+/// ├ Miku ▸ ──────── Show/Hide Character
+/// ├ Anya ▸          New chat
+/// ├ New Character…  Chat History ▸
+/// ├ Token Usage     ─────────
+/// ├ About           Pinned Messages ▸
+/// └ Quit
 /// ```
 ///
-/// Everything about a conversation hangs off the character it belongs to;
-/// only the three rows that are about the app stay at the root.
+/// Everything about a conversation hangs off the character it belongs to; only
+/// the three rows that are about the app stay at the root.
+///
+/// The characters used to sit one level further in, under a "Characters" row.
+/// That row held nothing of its own — it existed to be hovered past — so the
+/// owner asked for it gone and the characters moved up into its place.
 public func statusBarMenu(summary: String, characters: [CharacterMenuState]) -> [StatusMenuEntry] {
     [
-        // A label, not a row to click: it answers "which build am I running"
+        // A label, not a row to click: it answers "which version am I running"
         // without opening anything.
         .item(StatusMenuItem(title: summary, isEnabled: false)),
         .separator,
-        .item(StatusMenuItem(title: "Characters", submenu: charactersSubmenu(characters))),
+    ]
+    + charactersSubmenu(characters)
+    + [
         .separator,
         .item(StatusMenuItem(title: "Token Usage", action: .showTokenUsage, shortcut: .commandU)),
         .item(StatusMenuItem(title: "About \(AppInfo.name)", action: .showAbout)),
@@ -143,10 +149,20 @@ public func statusBarMenu(summary: String, characters: [CharacterMenuState]) -> 
 }
 
 private func charactersSubmenu(_ characters: [CharacterMenuState]) -> [StatusMenuEntry] {
-    characters.map { .item(StatusMenuItem(title: $0.name, submenu: characterSubmenu($0))) }
+    characters.map { character in
+        .item(StatusMenuItem(
+            title: character.name,
+            // Clicking her name shows or hides her, which is the thing anyone
+            // wants from a character row often enough to be worth a click
+            // rather than a hover and a second click. Her submenu is still
+            // there for everything else.
+            action: .toggleCharacter(character: character.id),
+            submenu: characterSubmenu(character)
+        ))
+    }
     + [
-        .separator,
-        // Always last, so its position doesn't move as characters come and go.
+        // Always after them, so its position doesn't move as characters come
+        // and go.
         .item(StatusMenuItem(title: "New Character…", action: .newCharacter)),
     ]
 }

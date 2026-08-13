@@ -346,6 +346,13 @@ final class CharacterInstance {
     /// Anything Esc would put away for this character.
     var hasDismissableWindow: Bool { isChatVisible || !infoWindows.set.isEmpty }
 
+    /// Whether one of her windows is the one being typed in. What makes Esc
+    /// hers rather than another character's.
+    var holdsKeyboard: Bool {
+        guard let key = NSApp.keyWindow else { return false }
+        return key === chatPanel || key === characterPanel || infoWindows.holds(key)
+    }
+
     /// Puts the character on screen. Safe when she is already showing.
     func showCharacter() {
         isCharacterVisible = true

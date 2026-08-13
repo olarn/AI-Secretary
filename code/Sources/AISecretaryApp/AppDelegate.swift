@@ -69,8 +69,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
         // the user is typing in another app. Only Esc, and only while the chat
         // is showing — see `GlobalShortcut` for why ⌘H is not in this list.
         hotKeys = GlobalHotKeys(actions: [
-            // Esc means "put away whatever is in front".
-            .closeChat: { [weak self] in self?.focused.dismissFrontmost() }
+            // Esc means "put away whatever is in front" — for whichever
+            // character that is. `dismissTarget` decides; this only asks the
+            // windows who has the keyboard.
+            .closeChat: { [weak self] in self?.dismissWhateverIsInFront() }
         ])
         refreshHotKeyClaim()
         watchForHideShortcut()
@@ -211,6 +213,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
 
     private func character(_ id: UUID) -> CharacterInstance? {
         characters.first { $0.profileID == id }
+    }
+
+    /// Esc. The system grants the key once, so one character has to be picked;
+    /// the rule is `dismissTarget`, and this gathers what it needs.
+    private func dismissWhateverIsInFront() {
+        let target = dismissTarget(characters.map {
+            DismissCandidate(
+                id: $0.profileID,
+                holdsKeyboard: $0.holdsKeyboard,
+                hasDismissable: $0.hasDismissableWindow
+            )
+        })
+        target.flatMap(character)?.dismissFrontmost()
     }
 
     /// ⌘H, taken from this app's own event stream while one of its windows has

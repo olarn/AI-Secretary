@@ -314,9 +314,13 @@ public final class Secretary {
     @ObservationIgnored private var activityEntryID: Option<UUID> = .none()
     @ObservationIgnored private var conversation: [ChatMessage] = []
     @ObservationIgnored private let conversationStore: ConversationStoring
-    /// Which archived conversation the live one *is*, when it was reopened from
-    /// history. Putting it away again updates that row rather than adding a
-    /// second one — reopening a thread and closing it is the same thread.
+    /// Which row in the history menu the conversation on screen *is*.
+    ///
+    /// Set when a conversation is reopened from history, and minted on the
+    /// first turn worth filing otherwise — because a conversation is now filed
+    /// as it goes rather than only on the way out. Either way it is what makes
+    /// the next turn update that row instead of adding a second one, and what
+    /// ticks the row you are already in.
     @ObservationIgnored private var resumedConversationID: Option<UUID> = .none()
     @ObservationIgnored private var streamingTask: Task<Void, Never>?
     /// The transcript entry the current reply is being written into.
@@ -602,6 +606,9 @@ public final class Secretary {
         instructionMemory = InstructionMemory()
         // The backend keeps its own thread; ours going quiet is not enough.
         (chatProvider as? WorkspaceScopedProvider)?.resetConversation()
+        // The conversation that was on screen has been filed; what comes next
+        // is a different one and mints its own id on its first real turn.
+        resumedConversationID = .none()
 
         transcript.append(TranscriptEntry(
             speaker: .secretary,
@@ -625,7 +632,15 @@ public final class Secretary {
 
     // MARK: - Chat history
 
-    /// Files the live conversation under the history menu.
+    /// Files the conversation on screen under the history menu, and keeps it
+    /// filed as it grows.
+    ///
+    /// Called at the end of every turn as well as when a conversation is put
+    /// away. It used to run only on the way out, which meant the history menu
+    /// showed nothing until you had started a *second* conversation — the one
+    /// you were having, the only one you might want to reopen after a crash,
+    /// was the one that wasn't there. Archiving keeps the same id, so a
+    /// conversation updates its own row rather than growing a new one per turn.
     ///
     /// Does nothing when nobody said anything, so opening the app and pressing
     /// New Conversation twice doesn't push two blank rows in front of ten real
@@ -636,6 +651,9 @@ public final class Secretary {
         guard worthArchiving(entries) else { return nil }
 
         let id = resumedConversationID.getOrElse(UUID())
+        // Held from here on, so the next turn updates this row. Also what makes
+        // the menu tick the conversation you are actually in.
+        resumedConversationID = .some(id)
         // Keep the title a reopened conversation already had. It was derived
         // from its opening message, which hasn't changed, and re-deriving it
         // would let a menu row rename itself for no reason the person can see.
@@ -651,7 +669,6 @@ public final class Secretary {
             ),
             into: history
         )
-        resumedConversationID = .none()
         return persistHistory()
     }
 
@@ -2120,7 +2137,10 @@ public final class Secretary {
             kind: .divider,
             text: "I've lost my memory of everything above — Claude Code no longer has that thread. You can still read it, but I'm answering from this message on."
         ))
-        resumedConversationID = .none()
+        // The id deliberately stays. It used to be dropped here, which was
+        // harmless while archiving happened once on the way out; now that a
+        // conversation is filed as it goes, dropping it would split what is
+        // plainly one conversation on screen into two rows in the menu.
     }
 
     private func complete(stopReason: Option<String>, usage: Option<ChatUsage>, _ run: inout ReplyRun) {
@@ -2256,6 +2276,14 @@ public final class Secretary {
         // reading: nothing opens a panel, and nothing is read, until the person
         // presses it and chooses the file themselves.
         if let asking = wanting.asking { fileRequest = .some(asking) }
+
+        // File it now, not when it is put away. Every ending goes through here
+        // — answered, refused, failed — so the conversation you are having is
+        // in the history menu from its first turn, and survives the app dying
+        // mid-thought. A failed write is deliberately not announced: the
+        // conversation is still on screen, unlike the `newConversation` case
+        // where losing it silently is the whole risk.
+        archiveCurrentConversation()
     }
 
     /// Appends a step, collapsing an immediate repeat — several thinking blocks

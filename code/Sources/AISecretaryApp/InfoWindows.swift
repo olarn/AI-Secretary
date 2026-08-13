@@ -114,6 +114,12 @@ final class InfoWindows: NSObject, NSWindowDelegate {
     /// key asks this first so that Esc means "put this away" when a pane is in
     /// front, and "close the chat" otherwise.
     @discardableResult
+    /// Whether one of these panes is the window being typed in — asked by the
+    /// character who owns them, so Esc goes to her.
+    func holds(_ window: NSWindow) -> Bool {
+        panels.values.contains { $0 === window }
+    }
+
     func hideKeyWindow() -> Bool {
         guard let key = NSApp.keyWindow,
               let id = panels.first(where: { $0.value === key })?.key

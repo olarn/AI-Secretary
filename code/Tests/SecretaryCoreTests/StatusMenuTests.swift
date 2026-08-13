@@ -48,13 +48,17 @@ final class StatusMenuTests: XCTestCase {
 
     // MARK: - The shape
 
-    func testTheRootHoldsOnlyWhatIsAboutTheAppItself() {
+    /// The characters sit at the root now. They used to hang under a
+    /// "Characters" row that held nothing of its own and existed to be hovered
+    /// past.
+    func testTheCharactersSitAtTheRootWithTheAppRows() {
         let menu = statusBarMenu(summary: "AI Secretary 0.13.209", characters: [state(miku, "Miku")])
 
         XCTAssertEqual(titles(menu), [
             "AI Secretary 0.13.209",
             "—",
-            "Characters",
+            "Miku",
+            "New Character…",
             "—",
             "Token Usage",
             "About AI Secretary",
@@ -73,23 +77,32 @@ final class StatusMenuTests: XCTestCase {
         XCTAssertNil(header?.action)
     }
 
-    func testEveryCharacterGetsARowAndNewCharacterIsAlwaysLast() {
+    func testEveryCharacterGetsARowAndNewCharacterFollowsThem() {
         let menu = statusBarMenu(summary: "x", characters: [state(miku, "Miku"), state(anya, "Anya")])
 
-        XCTAssertEqual(titles(submenu(menu, "Characters")), ["Miku", "Anya", "—", "New Character…"])
+        XCTAssertEqual(titles(menu).dropFirst(2).prefix(3), ["Miku", "Anya", "New Character…"])
     }
 
     /// With nobody on the desktop the row that makes somebody is still there.
     func testNewCharacterSurvivesAnEmptyRoster() {
         let menu = statusBarMenu(summary: "x", characters: [])
 
-        XCTAssertEqual(titles(submenu(menu, "Characters")), ["—", "New Character…"])
+        XCTAssertEqual(titles(menu).dropFirst(2).first, "New Character…")
+    }
+
+    /// Clicking her name shows or hides her. It used to do nothing at all,
+    /// because the row was only ever a lid on a submenu.
+    func testACharacterRowBothTogglesHerAndOpensHerSubmenu() {
+        let menu = statusBarMenu(summary: "x", characters: [state(miku, "Miku")])
+
+        XCTAssertEqual(item(menu, "Miku")?.action, .toggleCharacter(character: miku))
+        XCTAssertNotNil(item(menu, "Miku")?.submenu)
     }
 
     func testACharacterCarriesHerOwnConversationAndHerOwnPanes() {
         let menu = statusBarMenu(summary: "x", characters: [state(miku, "Miku")])
 
-        XCTAssertEqual(titles(submenu(menu, "Characters", "Miku")), [
+        XCTAssertEqual(titles(submenu(menu, "Miku")), [
             "Hide Character",
             "New chat",
             "Chat History",
@@ -104,22 +117,22 @@ final class StatusMenuTests: XCTestCase {
         let showing = statusBarMenu(summary: "x", characters: [state(miku, "Miku", visible: true)])
         let hidden = statusBarMenu(summary: "x", characters: [state(miku, "Miku", visible: false)])
 
-        XCTAssertEqual(titles(submenu(showing, "Characters", "Miku")).first, "Hide Character")
-        XCTAssertEqual(titles(submenu(hidden, "Characters", "Miku")).first, "Show Character")
+        XCTAssertEqual(titles(submenu(showing, "Miku")).first, "Hide Character")
+        XCTAssertEqual(titles(submenu(hidden, "Miku")).first, "Show Character")
     }
 
     func testAnEmptyHistoryIsGreyedAndSaysSo() {
         let menu = statusBarMenu(summary: "x", characters: [state(miku, "Miku")])
 
-        XCTAssertEqual(item(submenu(menu, "Characters", "Miku"), "Chat History")?.isEnabled, false)
-        XCTAssertEqual(titles(submenu(menu, "Characters", "Miku", "Chat History")), ["No past conversations"])
+        XCTAssertEqual(item(submenu(menu, "Miku"), "Chat History")?.isEnabled, false)
+        XCTAssertEqual(titles(submenu(menu, "Miku", "Chat History")), ["No past conversations"])
     }
 
     func testAnEmptyPinnedListIsGreyedAndSaysSo() {
         let menu = statusBarMenu(summary: "x", characters: [state(miku, "Miku")])
 
-        XCTAssertEqual(item(submenu(menu, "Characters", "Miku"), "Pinned Messages")?.isEnabled, false)
-        XCTAssertEqual(titles(submenu(menu, "Characters", "Miku", "Pinned Messages")), ["Nothing pinned yet"])
+        XCTAssertEqual(item(submenu(menu, "Miku"), "Pinned Messages")?.isEnabled, false)
+        XCTAssertEqual(titles(submenu(menu, "Miku", "Pinned Messages")), ["Nothing pinned yet"])
     }
 
     func testHistoryListsConversationsThenClearAll() {
@@ -131,11 +144,11 @@ final class StatusMenuTests: XCTestCase {
             ]),
         ])
 
-        XCTAssertEqual(titles(submenu(menu, "Characters", "Miku", "Chat History")), [
+        XCTAssertEqual(titles(submenu(menu, "Miku", "Chat History")), [
             "Second Brain", "Ask about games…", "—", "Clear All",
         ])
         XCTAssertEqual(
-            item(submenu(menu, "Characters", "Miku", "Chat History"), "Second Brain")?.action,
+            item(submenu(menu, "Miku", "Chat History"), "Second Brain")?.action,
             .resumeConversation(character: miku, conversation: one)
         )
     }
@@ -149,7 +162,7 @@ final class StatusMenuTests: XCTestCase {
                 ConversationMenuRow(id: UUID(), label: "This one", isCurrent: true),
             ]),
         ])
-        let history = submenu(menu, "Characters", "Miku", "Chat History")
+        let history = submenu(menu, "Miku", "Chat History")
 
         XCTAssertEqual(item(history, "Older")?.isChecked, false)
         XCTAssertEqual(item(history, "This one")?.isChecked, true)
@@ -161,11 +174,11 @@ final class StatusMenuTests: XCTestCase {
             state(miku, "Miku", pinned: [PinnedMenuRow(id: pane, title: "Costs")]),
         ])
 
-        XCTAssertEqual(titles(submenu(menu, "Characters", "Miku", "Pinned Messages")), [
+        XCTAssertEqual(titles(submenu(menu, "Miku", "Pinned Messages")), [
             "Costs", "—", "Show All", "Clear All",
         ])
         XCTAssertEqual(
-            item(submenu(menu, "Characters", "Miku", "Pinned Messages"), "Costs")?.action,
+            item(submenu(menu, "Miku", "Pinned Messages"), "Costs")?.action,
             .showPinned(character: miku, window: pane)
         )
     }
@@ -179,11 +192,11 @@ final class StatusMenuTests: XCTestCase {
         let menu = statusBarMenu(summary: "x", characters: [state(miku, "Miku"), state(anya, "Anya")])
 
         XCTAssertEqual(
-            item(submenu(menu, "Characters", "Anya"), "New chat")?.action,
+            item(submenu(menu, "Anya"), "New chat")?.action,
             .newChat(character: anya)
         )
         XCTAssertEqual(
-            item(submenu(menu, "Characters", "Miku"), "New chat")?.action,
+            item(submenu(menu, "Miku"), "New chat")?.action,
             .newChat(character: miku)
         )
     }
@@ -196,7 +209,7 @@ final class StatusMenuTests: XCTestCase {
         XCTAssertEqual(item(menu, "Token Usage")?.shortcut, .commandU)
         XCTAssertEqual(item(menu, "Quit AI Secretary")?.shortcut, .commandQ)
         XCTAssertEqual(
-            item(submenu(menu, "Characters", "Miku"), "Hide Character")?.shortcut,
+            item(submenu(menu, "Miku"), "Hide Character")?.shortcut,
             .commandH
         )
     }
