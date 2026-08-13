@@ -116,13 +116,18 @@ public struct DeniedTool: Equatable, Sendable {
     public let name: String
     /// What it was going to act on — a path, or the command — for display.
     public let target: Option<String>
-    /// Permission rule that would allow this, in Claude Code's syntax.
-    public let rule: String
+    /// The permission rules that would allow this, in Claude Code's syntax.
+    ///
+    /// Plural since 0.13.219, and that was the bug: one refused `Bash` call can
+    /// need several, because Claude Code requires every operation in a `&&`
+    /// chain to be permitted separately. A single rule covered the first one
+    /// and the retry was refused again — see `bashPermissionRules`.
+    public let rules: [String]
 
-    public init(name: String, target: Option<String>, rule: String) {
+    public init(name: String, target: Option<String>, rules: [String]) {
         self.name = name
         self.target = target
-        self.rule = rule
+        self.rules = rules
     }
 
     /// One line a human can decide on.

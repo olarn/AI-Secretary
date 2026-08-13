@@ -155,7 +155,7 @@ final class BrowserAccessTests: XCTestCase {
             DeniedTool(
                 name: BrowserTools.rule(for: "computer"),
                 target: .none(),
-                rule: BrowserTools.rule(for: "computer")
+                rules: [BrowserTools.rule(for: "computer")]
             )
         ]
         secretary.submit("scroll down the page")
@@ -178,7 +178,7 @@ final class BrowserAccessTests: XCTestCase {
             DeniedTool(
                 name: BrowserTools.rule(for: "computer"),
                 target: .none(),
-                rule: BrowserTools.rule(for: "computer")
+                rules: [BrowserTools.rule(for: "computer")]
             )
         ]
         secretary.submit("scroll down the page")

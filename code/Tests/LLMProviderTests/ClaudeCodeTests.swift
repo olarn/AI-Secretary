@@ -377,7 +377,7 @@ final class ClaudeCodeRefusalTests: XCTestCase {
         {"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_1","is_error":true,"content":"Claude requested permissions to write to /tmp/p/out.txt, but you haven't granted it yet."}]}}
         """#)
 
-        XCTAssertEqual(events, [.toolDenied(DeniedTool(name: "Write", target: .some("/tmp/p/out.txt"), rule: "Write"))])
+        XCTAssertEqual(events, [.toolDenied(DeniedTool(name: "Write", target: .some("/tmp/p/out.txt"), rules: ["Write"]))])
     }
 
     /// An ordinary tool failure is not a permission problem — offering to widen
@@ -409,13 +409,13 @@ final class ClaudeCodeRefusalTests: XCTestCase {
     /// Approving one command must not hand over the whole shell.
     func testABashRefusalNarrowsToTheCommandThatWasTried() {
         let denied = ClaudeCodeProvider.describe(tool: "Bash", input: ["command": "npm test --watch=false"])
-        XCTAssertEqual(denied.rule, "Bash(npm test *)")
+        XCTAssertEqual(denied.rules, ["Bash(npm test *)"])
         XCTAssertEqual(denied.target, .some("npm test --watch=false"))
     }
 
     func testAFileToolRuleIsJustTheToolName() {
         let denied = ClaudeCodeProvider.describe(tool: "Edit", input: ["file_path": "/tmp/a.txt"])
-        XCTAssertEqual(denied.rule, "Edit")
+        XCTAssertEqual(denied.rules, ["Edit"])
         XCTAssertEqual(denied.summary, "Edit: /tmp/a.txt")
     }
 
@@ -428,6 +428,29 @@ final class ClaudeCodeRefusalTests: XCTestCase {
             XCTAssertTrue(ClaudeCodeProvider.isPermissionRefusal(message), "Missed: \(message)")
         }
         XCTAssertFalse(ClaudeCodeProvider.isPermissionRefusal("File does not exist."))
+    }
+
+    /// A command with more than one operation is refused in the plural, which
+    /// is not a substring of the singular. Missing it meant the app read the
+    /// refusal as an ordinary failure and offered nothing — the owner's
+    /// `cd … && python3 …` had no way forward at all.
+    ///
+    /// Copied from Claude Code 2.1.229 rather than paraphrased.
+    func testTheRefusalForACommandWithSeveralOperationsIsRecognised() {
+        XCTAssertTrue(ClaudeCodeProvider.isPermissionRefusal(
+            "This Bash command contains multiple operations. The following parts "
+            + "require approval: cd \"/Users/o/TISCO - AI Sharing\", python3 -c \"import pptx\""
+        ))
+    }
+
+    /// Being sent outside the working directory is refused too, but no rule
+    /// widens it — it needs a different directory, not a permission. Reading it
+    /// as widenable would offer a grant that changes nothing.
+    func testBeingBlockedFromLeavingTheWorkingDirectoryIsNotAPermissionToWiden() {
+        XCTAssertFalse(ClaudeCodeProvider.isPermissionRefusal(
+            "cd in '/Users/o/elsewhere' was blocked. For security, Claude Code may "
+            + "only change directories to the allowed working directory."
+        ))
     }
 }
 

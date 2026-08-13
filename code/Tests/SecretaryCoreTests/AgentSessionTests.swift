@@ -413,7 +413,7 @@ final class AgentSessionTests: XCTestCase {
     // MARK: - Widening permissions after a refusal
 
     private func denyWrite() -> DeniedTool {
-        DeniedTool(name: "Write", target: .some("/tmp/agent-fixture/out.txt"), rule: "Write")
+        DeniedTool(name: "Write", target: .some("/tmp/agent-fixture/out.txt"), rules: ["Write"])
     }
 
     /// Claude Code refuses un-granted tools mid-turn rather than asking, so the
@@ -501,7 +501,7 @@ final class AgentSessionTests: XCTestCase {
         let secretary = makeSecretary(projects: [project(grantingAgent: true)])
         provider.denialsForNextTurn = [
             denyWrite(),
-            DeniedTool(name: "Bash", target: .some("npm test"), rule: "Bash(npm test *)"),
+            DeniedTool(name: "Bash", target: .some("npm test"), rules: ["Bash(npm test *)"]),
             denyWrite()
         ]
         secretary.submit("set the project up")

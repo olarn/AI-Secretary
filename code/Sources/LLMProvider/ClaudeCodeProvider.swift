@@ -264,6 +264,12 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
         var phrases = [
             "haven't granted",
             "requires approval",
+            // Plural, and not a substring of the singular: a command with more
+            // than one operation is refused with "The following parts require
+            // approval: …". Without this line that refusal read as an ordinary
+            // failure, so nothing was offered and the wall had no door — every
+            // `cd … && python3 …` the owner tried landed here.
+            "require approval",
             "requested permissions"
         ]
         // The browser tools word their refusal differently — "Claude in Chrome
@@ -300,19 +306,24 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
     /// Turns a refused call into something a human can decide on, plus the rule
     /// that would allow it.
     ///
-    /// Bash is narrowed to the command that was actually attempted — approving
-    /// one `npm test` must not hand over the whole shell.
+    /// Bash is narrowed to the commands that were actually attempted —
+    /// approving one `npm test` must not hand over the whole shell — and it is
+    /// commands, plural: see `bashPermissionRules` for why one rule for the
+    /// whole line left the person approving something that then failed anyway.
     static func describe(tool name: String, input: [String: Any]) -> DeniedTool {
         if name == "Bash", let command = input["command"] as? String {
-            let head = command.split(separator: " ").prefix(2).joined(separator: " ")
-            return DeniedTool(name: name, target: .some(command), rule: "Bash(\(head) *)")
+            return DeniedTool(
+                name: name,
+                target: .some(command),
+                rules: bashPermissionRules(for: command)
+            )
         }
         let target = Option.fromOptional(
             (input["file_path"] as? String)
                 ?? (input["path"] as? String)
                 ?? (input["url"] as? String)
         )
-        return DeniedTool(name: name, target: target, rule: name)
+        return DeniedTool(name: name, target: target, rules: [name])
     }
 
     // MARK: - Wire format

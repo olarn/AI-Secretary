@@ -1717,7 +1717,7 @@ public final class Secretary {
         guard !denied.isEmpty, let prompt = activeRequestText.toOptional() else { return }
         let project = lastProject.getOrElse(Self.scratchProject)
 
-        let rules = denied.map(\.rule).reduced()
+        let rules = denied.flatMap(\.rules).reduced()
         guard !rules.isEmpty else { return }
 
         let inBrowser = denied.contains { BrowserTools.changesState($0.name) }
@@ -1729,7 +1729,8 @@ public final class Secretary {
             // What it will do, not the rule that permits it: nobody can weigh
             // `mcp__claude-in-chrome__navigate`.
             commandSummary: denied.map { tool in
-                BrowserTools.humanDescription(for: tool.name)^.getOrElse(tool.rule)
+                BrowserTools.humanDescription(for: tool.name)^
+                    .getOrElse(tool.rules.joined(separator: ", "))
             }.joined(separator: ", "),
             rationale: "Retry with these tools allowed"
         )
