@@ -80,6 +80,10 @@ public enum PlannedOperation: Equatable, Sendable {
     /// `.localWrite`, so it asks every single time — this is the door to
     /// changing the user's files.
     case widenAgentTools(rules: [String], prompt: String)
+    /// Install a skill the assistant says it needs, then ask again.
+    /// `.dependencyInstalling`, so it is asked every time: this puts software
+    /// on the person's machine.
+    case installSkill(plugin: String, prompt: String)
 
     public var actionClass: ActionClass {
         switch self {
@@ -91,6 +95,7 @@ public enum PlannedOperation: Equatable, Sendable {
         // Approve-once: the grant is per project, and the prompt says so.
         case .startAgent: return .readOnly
         case .widenAgentTools: return .localWrite
+        case .installSkill: return .dependencyInstalling
         }
     }
 
@@ -104,6 +109,8 @@ public enum PlannedOperation: Equatable, Sendable {
         case .startAgent: return "Let Claude Code read and work in this project"
         case .widenAgentTools(let rules, _):
             return "Allow \(rules.joined(separator: ", ")) for the rest of this session"
+        case .installSkill(let plugin, _):
+            return "Install the \(plugin) skill from your Claude Code marketplaces"
         }
     }
 }
@@ -1761,6 +1768,97 @@ public final class Secretary {
         pendingDecision = .some(.approval(request, operation: .widenAgentTools(rules: rules, prompt: prompt)))
     }
 
+    /// The assistant says it needs a skill it hasn't got, and asks to install it.
+    ///
+    /// The same try-refuse-ask-retry shape as widening tools, and asked for the
+    /// same reason: nothing about "what this assistant can do" changes without
+    /// somebody being shown the change and agreeing to it. Installing software
+    /// is on the charter's approval list, so this is `.dependencyInstalling` and
+    /// is never remembered — a skill installed once stays installed, but the
+    /// permission to install does not carry to the next one.
+    ///
+    /// Where it comes from is not negotiable: `claude plugin install` resolves a
+    /// bare name against the marketplaces the person has already added, so this
+    /// can reach nothing they have not already chosen to trust (owner's
+    /// decision, 2026-08-13). It is also why an "MS Office" skill cannot arrive
+    /// this way — there is no such plugin in the official marketplace.
+    private func offerToInstallSkill(_ plugin: String, taskID: String) {
+        guard let prompt = activeRequestText.toOptional() else { return }
+        let project = lastProject.getOrElse(Self.scratchProject)
+        let request = ApprovalRequest(
+            taskID: taskID,
+            toolID: Self.claudeCodeToolID,
+            actionClass: .dependencyInstalling,
+            project: project,
+            commandSummary: "claude plugin install \(plugin)",
+            rationale: "Install a skill this needs"
+        )
+        audit.record(AuditEntry(taskID: taskID, kind: .approvalRequested, detail: request.commandSummary))
+
+        say(.secretary, """
+            I need the **\(plugin)** skill for this, and it isn't installed.
+
+            • `claude plugin install \(plugin)`
+
+            It comes from the Claude Code marketplaces you've already added, and \
+            it stays installed afterwards. Shall I? I'll try your request again \
+            once it's in.
+            """)
+        pendingDecision = .some(.approval(request, operation: .installSkill(plugin: plugin, prompt: prompt)))
+    }
+
+    /// Installs, says how it went, and asks the question again.
+    ///
+    /// The rescan is the point: a skill Claude Code has just installed is not in
+    /// `availableSkills` until something looks, and the retry would run without
+    /// the very thing that was installed for it.
+    private func installSkillAndRetry(plugin: String, prompt: String, in project: Project) {
+        guard let installer = chatProvider as? SkillInstalling else {
+            say(.secretary, "I can't install skills without Claude Code.")
+            return
+        }
+        let taskID = activeTaskID.getOrElse("-")
+        // The turn that asked for this has already finished, so the machine is
+        // back at IDLE and `.beginExecuting` from there is an invalid
+        // transition — the same trap `widenAndRetry` documents. Re-enter through
+        // the front door so the character is visibly busy while the installer
+        // runs, which can take a while.
+        stateMachine.send(.userBeganInput, reason: "installing \(plugin)", taskID: .some(taskID))
+        stateMachine.send(.beginInterpreting, reason: "installing \(plugin)", taskID: .some(taskID))
+        Task { @MainActor [weak self] in
+            let outcome = await installer.installSkill(named: plugin)
+            guard let self else { return }
+            outcome.fold(
+                { failure in
+                    self.audit.record(AuditEntry(taskID: taskID, kind: .failed, detail: failure))
+                    self.finish(
+                        success: false,
+                        message: "Couldn't install \(plugin): \(failure)",
+                        reason: "install failed",
+                        toolStatus: "error"
+                    )
+                },
+                { _ in
+                    self.audit.record(
+                        AuditEntry(taskID: taskID, kind: .executionFinished, detail: "installed \(plugin)")
+                    )
+                    // The point of the rescan: Claude Code has the skill now,
+                    // but `availableSkills` was read before it existed, and the
+                    // retry would run without the very thing installed for it.
+                    self.refreshAvailableSkills()
+                    self.say(.secretary, "Installed **\(plugin)**. Trying that again.")
+                    self.lastProject = .some(project)
+                    if let scoped = self.chatProvider as? WorkspaceScopedProvider {
+                        self.prepareWorkspace(primary: .some(project), on: scoped)
+                    }
+                    // The request itself is already the last user turn.
+                    _ = prompt
+                    self.streamReply(messages: self.conversation, taskID: taskID)
+                }
+            )
+        }
+    }
+
     /// The set of projects changed while a conversation was going.
     ///
     /// Adding a project is nearly always a correction: the person asked for
@@ -2236,6 +2334,12 @@ public final class Secretary {
         // reply is whole, like the rest: a half-written block would put a
         // button up asking for half a sentence.
         let wanting = success ? AttachBlock.parse(asked.body) : AttachBlock(body: asked.body, asking: nil)
+        // A skill the assistant says it needs. Read once the reply is whole,
+        // like the rest — and only from a marker, so "you'd need the pptx
+        // skill for that" stays a sentence rather than becoming a button.
+        let needing = success
+            ? SkillInstallBlock.parse(wanting.body)
+            : SkillInstallBlock(body: wanting.body, plugin: nil)
         if let missing = blocked.missing,
            let request = conversation.last(where: { $0.role == .user })?.content {
             outstanding = OutstandingRequest(request: request, missing: missing)
@@ -2285,6 +2389,10 @@ public final class Secretary {
         // reading: nothing opens a panel, and nothing is read, until the person
         // presses it and chooses the file themselves.
         if let asking = wanting.asking { fileRequest = .some(asking) }
+        // Last of all, because it puts a card up and the card is about the turn
+        // that just ended. Only ever a card: nothing is installed until someone
+        // reads what it names and says yes.
+        if let plugin = needing.plugin { offerToInstallSkill(plugin, taskID: taskID) }
 
         // File it now, not when it is put away. Every ending goes through here
         // — answered, refused, failed — so the conversation you are having is
@@ -2309,7 +2417,8 @@ public final class Secretary {
         let blocked = BlockedBlock.parse(pinned.body)
         let planned = PlanBlock.parse(blocked.body)
         let watched = WatchBlock.parse(planned.body)
-        return AttachBlock.parse(RunBlock.parse(watched.body).body).body
+        let asked = AttachBlock.parse(RunBlock.parse(watched.body).body)
+        return SkillInstallBlock.parse(asked.body).body
     }
 
     /// - Parameter replyID: the bubble being written, when there is one. With
@@ -2443,6 +2552,10 @@ public final class Secretary {
             widenAndRetry(rules: rules, prompt: prompt, in: project)
             return
         }
+        if case .installSkill(let plugin, let prompt) = operation {
+            installSkillAndRetry(plugin: plugin, prompt: prompt, in: project)
+            return
+        }
         if case .startAgent(let prompt) = operation {
             if project.allows(tool: Self.claudeCodeToolID) {
                 lastProject = .some(project)
@@ -2524,6 +2637,10 @@ public final class Secretary {
         }
         if case .widenAgentTools(let rules, let prompt) = operation {
             widenAndRetry(rules: rules, prompt: prompt, in: project)
+            return
+        }
+        if case .installSkill(let plugin, let prompt) = operation {
+            installSkillAndRetry(plugin: plugin, prompt: prompt, in: project)
             return
         }
 
@@ -2609,7 +2726,7 @@ public final class Secretary {
             </file>
             """ + (wasTruncated ? "\n(Only the first \(readContextMaxBytes / 1024) KB is shown here.)" : "")
 
-        case .understand, .followInstructions, .watch, .startAgent, .widenAgentTools:
+        case .understand, .followInstructions, .watch, .startAgent, .widenAgentTools, .installSkill:
             // These write their own history: the model's reply is the record.
             return
         }
@@ -2980,7 +3097,7 @@ public final class Secretary {
 
     private func toolID(for operation: PlannedOperation) -> String {
         switch operation {
-        case .startAgent, .widenAgentTools: return Self.claudeCodeToolID
+        case .startAgent, .widenAgentTools, .installSkill: return Self.claudeCodeToolID
         case .git: return adapter.toolID
         // Understanding reads through the same adapter, so it is gated by the
         // same project allowlist entry. What makes it stricter is its action
@@ -3001,6 +3118,7 @@ public final class Secretary {
             return "watch \(op.displayPath.isEmpty ? "this project folder" : op.displayPath) for changes"
         case .startAgent: return "run Claude Code here"
         case .widenAgentTools(let rules, _): return rules.joined(separator: ", ")
+        case .installSkill(let plugin, _): return "claude plugin install \(plugin)"
         }
     }
 
@@ -3014,7 +3132,7 @@ public final class Secretary {
             return fileAdapter.run(.readFile(relativePath: op.relativePath), in: project)
         case .watch:
             preconditionFailure("watching is handled before adapter dispatch")
-        case .startAgent, .widenAgentTools:
+        case .startAgent, .widenAgentTools, .installSkill:
             preconditionFailure("agent operations are handled before adapter dispatch")
         }
     }
@@ -3134,6 +3252,8 @@ public final class Secretary {
         \(Self.loopPrompt)
 
         \(Self.attachPrompt)
+
+        \(Self.installSkillPrompt)
 
         \(browserNote)
 
@@ -3477,6 +3597,26 @@ public final class Secretary {
     /// rows here", which is the work the person came to hand over, and "give me
     /// the path", which nobody knows off the top of their head and which a
     /// sandboxed build could not open anyway.
+    /// Only in the agent prompt: without Claude Code there is nothing to install
+    /// into, and nothing that would use the skill afterwards.
+    private static let installSkillPrompt = """
+    If a job needs a Claude Code skill you haven't got, you can ask for it. End \
+    your message with a block like this, and nothing after it:
+
+    ```install-skill
+    canva
+    ```
+
+    One name, and only a plugin from the marketplaces the person has already \
+    added — a bare name, never a URL, a path or a flag. The app shows them what \
+    would be installed and asks; if they agree it installs it and runs your \
+    request again with the skill available. Ask only when the skill is what is \
+    actually missing. If you can do the job with the tools you have — a script, \
+    a library you can install into the project — do that instead; and if you \
+    are not sure the plugin exists, say what you need in words rather than \
+    guessing a name.
+    """
+
     private static let attachPrompt = """
     When you need data that is in a file they have — a spreadsheet of rows to \
     enter, a document to work from, a screenshot of the form — end your message \

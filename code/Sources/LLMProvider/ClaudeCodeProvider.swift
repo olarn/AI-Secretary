@@ -21,7 +21,7 @@ import os
 /// - Conversation history lives in Claude Code's own session, resumed by ID.
 ///   Only the newest user turn is sent; re-sending our transcript would
 ///   duplicate what the session already holds.
-public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
+public final class ClaudeCodeProvider: ChatProvider, SkillInstalling, @unchecked Sendable {
     /// Where and how a turn may run. Set by the orchestration layer before a
     /// turn; the permission story is a launch-time allowlist because the CLI
     /// denies un-granted tools outright rather than asking mid-turn.
@@ -463,6 +463,47 @@ public final class ClaudeCodeProvider: ChatProvider, @unchecked Sendable {
     }
 
     // MARK: - Launch
+
+    // MARK: - Installing a skill
+
+    /// Runs `claude plugin install` for a name a human has just approved.
+    ///
+    /// The name is checked again here rather than trusted from the caller. It
+    /// began life in a model's reply, and the check is one comparison against a
+    /// character set — cheap enough that the version which cannot be reached by
+    /// forgetting a call is the one to have.
+    public func installSkill(named plugin: String) async -> Either<String, String> {
+        guard validSkillPluginName(plugin) else {
+            return .left("“\(plugin)” isn't a plugin name I'm willing to hand to the installer.")
+        }
+        let process = Process()
+        process.executableURL = installation.executableURL
+        process.arguments = skillInstallArguments(plugin: plugin)
+        process.environment = Self.childEnvironment(for: installation)
+
+        let output = Pipe()
+        process.standardOutput = output
+        process.standardError = output
+        process.standardInput = FileHandle.nullDevice
+
+        do {
+            try process.run()
+        } catch {
+            return .left(error.localizedDescription)
+        }
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+
+        let text = String(data: data, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard process.terminationStatus == 0 else {
+            // The installer's own words: it is the thing that knows the name
+            // isn't in any marketplace the person has added, and that is the
+            // most likely reason to be here.
+            return .left(text.isEmpty ? "The installer exited \(process.terminationStatus)." : text)
+        }
+        return .right(text)
+    }
 
     static func arguments(
         prompt: String,

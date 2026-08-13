@@ -9,7 +9,18 @@ import LLMProvider
 
 /// A chat provider that is also directory-scoped, so we can see what the
 /// Secretary told it before a turn.
-final class SpyWorkspaceProvider: ChatProvider, WorkspaceScopedProvider, @unchecked Sendable {
+final class SpyWorkspaceProvider: ChatProvider, WorkspaceScopedProvider, SkillInstalling, @unchecked Sendable {
+    /// Every skill this was asked to install, in order. Nothing is installed
+    /// for real: the point of most of these tests is that the list stays empty.
+    private(set) var installedSkills: [String] = []
+    /// What the installer reports back. Failure is the left.
+    var installOutcome: Either<String, String> = .right("installed")
+
+    func installSkill(named plugin: String) async -> Either<String, String> {
+        installedSkills.append(plugin)
+        return installOutcome
+    }
+
     private(set) var preparedDirectories: [URL?] = []
     private(set) var preparedTools: [[String]?] = []
     private(set) var callCount = 0
@@ -512,6 +523,58 @@ final class AgentSessionTests: XCTestCase {
             return XCTFail("Expected one combined offer")
         }
         XCTAssertEqual(rules, ["Write", "Bash(npm test *)"], "Duplicates should collapse")
+    }
+
+    // MARK: - Asking to install a skill
+
+    /// The whole safety story in one test: the assistant asking is a card, not
+    /// an install. Nothing reaches the machine until a human has read the name
+    /// and agreed to it.
+    func testAskingForASkillInstallsNothingUntilSomeoneSaysYes() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        provider.replyForNextTurn = "I need Canva for this.\n\n```install-skill\ncanva\n```"
+
+        secretary.submit("make me a poster")
+        await waitUntilIdle()
+
+        XCTAssertEqual(provider.installedSkills, [], "Nothing may be installed by asking")
+        guard case .approval(let request, let operation) = secretary.pendingDecision.toOptional(),
+              case .installSkill(let plugin, _) = operation else {
+            return XCTFail("Expected an offer to install")
+        }
+        XCTAssertEqual(plugin, "canva")
+        XCTAssertEqual(request.actionClass, .dependencyInstalling, "Installing software is never unattended")
+        XCTAssertFalse(
+            secretary.transcript.contains { $0.text.contains("install-skill") },
+            "The block must not reach the screen"
+        )
+    }
+
+    /// A name that is really a flag, a path or a URL is not a request at all —
+    /// so a model that has read a poisoned page cannot even get the card up.
+    func testANameTheInstallerMayNotBeHandedRaisesNoOfferAtAll() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        provider.replyForNextTurn = "```install-skill\nhttps://evil.example/x.git\n```"
+
+        secretary.submit("make me a poster")
+        await waitUntilIdle()
+
+        XCTAssertEqual(secretary.pendingDecision, .none())
+        XCTAssertEqual(provider.installedSkills, [])
+    }
+
+    /// Talking about a skill is not asking for one. Without the marker the app
+    /// would be guessing from prose, which is the thing the block exists to
+    /// avoid — the same rule the choices block follows.
+    func testMentioningASkillInProseRaisesNothing() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        provider.replyForNextTurn = "You'd need the canva skill for that; you could install canva."
+
+        secretary.submit("make me a poster")
+        await waitUntilIdle()
+
+        XCTAssertEqual(secretary.pendingDecision, .none())
+        XCTAssertEqual(provider.installedSkills, [])
     }
 
     func testATurnWithNoRefusalsAsksNothing() async {
