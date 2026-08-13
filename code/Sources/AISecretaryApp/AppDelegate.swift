@@ -120,7 +120,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
             attachmentStore: FileAttachmentStore()
         )
         character.onDismissableChanged = { [weak self] in self?.refreshHotKeyClaim() }
-        character.onUsed = { [weak self] in self?.lastUsed = id }
+        character.onUsed = { [weak self] in
+            guard self?.lastUsed != id else { return }
+            self?.lastUsed = id
+            // Token Usage is wearing somebody's look and the somebody just
+            // changed. Doing this only when the window is reopened left it in
+            // the previous character's theme for as long as it stayed open.
+            self?.applyControlAppearance()
+        }
         // Her settings resize her own windows and nobody else's — this was one
         // callback for the whole app when there was one look to apply, and
         // applying one character's theme to all of them is now precisely the
@@ -358,6 +365,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     /// and worked with somebody else — `show(using:)` catches that case.
     private func applyControlAppearance() {
         characters.forEach { $0.applyOwnControlAppearance() }
-        usageWindow.applyControlAppearance(focused?.appearance.colors.controlAppearance)
+        if let focused { usageWindow.follow(focused.appearance) }
     }
 }

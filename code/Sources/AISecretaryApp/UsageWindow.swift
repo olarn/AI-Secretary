@@ -40,9 +40,25 @@ final class UsageWindow: NSObject, NSWindowDelegate {
 
     var isOpen: Bool { window?.isVisible ?? false }
 
-    /// Re-lights an already-open window when the theme changes.
-    func applyControlAppearance(_ controls: NSAppearance?) {
-        window?.appearance = controls
+    /// Puts this window in one character's look and keeps it there.
+    ///
+    /// Two things have to move together and were split before, which showed as
+    /// a window wearing half of each: the AppKit control appearance, which a
+    /// SwiftUI body cannot return, and the hosting view, which observes the
+    /// `Appearance` it was built with and so never notices a *different*
+    /// character being focused. Re-lighting one without rebuilding the other
+    /// gave a light title bar over a dark body.
+    ///
+    /// Cheap to call often: the rebuild only happens when the character has
+    /// actually changed.
+    func follow(_ appearance: Appearance) {
+        guard let window else { return }
+        window.appearance = appearance.colors.controlAppearance
+        guard builtFor != ObjectIdentifier(appearance) else { return }
+        window.contentView = NSHostingView(
+            rootView: UsageView(roster: roster, appearance: appearance, plan: plan)
+        )
+        builtFor = ObjectIdentifier(appearance)
     }
 
     func toggle(using appearance: Appearance) {
@@ -58,16 +74,7 @@ final class UsageWindow: NSObject, NSWindowDelegate {
         plan.startPolling()
 
         if let window {
-            // Reopening after working with a different character: her theme and
-            // text size are what this should be wearing now, and a hosting view
-            // built from somebody else's will never notice.
-            if builtFor != ObjectIdentifier(appearance) {
-                window.appearance = appearance.colors.controlAppearance
-                window.contentView = NSHostingView(
-                    rootView: UsageView(roster: roster, appearance: appearance, plan: plan)
-                )
-                builtFor = ObjectIdentifier(appearance)
-            }
+            follow(appearance)
             window.makeKeyAndOrderFront(nil)
             return
         }
