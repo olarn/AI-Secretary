@@ -110,6 +110,12 @@ final class InfoWindows: NSObject, NSWindowDelegate {
         panels[id]?.orderOut(nil)
     }
 
+    /// ⌘H: all of them off the screen, all still in the menu. The counterpart
+    /// of `showAll`.
+    func hideAll() {
+        panels.values.forEach { $0.orderOut(nil) }
+    }
+
     /// Hides whichever pane is frontmost, and says whether it did. The Esc hot
     /// key asks this first so that Esc means "put this away" when a pane is in
     /// front, and "close the chat" otherwise.

@@ -372,16 +372,30 @@ final class CharacterInstance {
         characterPanel.orderFrontRegardless()
     }
 
+    /// Takes the character off the desktop, along with her chat. Safe when she
+    /// is already hidden, which is what makes it usable from ⌘H — a toggle
+    /// applied to everyone brings back whoever was already away.
+    func hideCharacter() {
+        isCharacterVisible = false
+        if isChatVisible { hideChatPanel() }
+        characterPanel.orderOut(nil)
+    }
+
+    /// Everything of hers, off the screen: her pinned panes as well as the
+    /// bubble and the character. What ⌘H means by "the whole app".
+    func hideEverythingOfHers() {
+        infoWindows.hideAll()
+        hideCharacter()
+    }
+
     /// Shows or hides the floating character. Returns the new visibility so the
     /// menu can relabel its item. Hiding the character also hides the chat.
     @discardableResult
     func toggleCharacterVisibility() -> Bool {
-        isCharacterVisible.toggle()
         if isCharacterVisible {
-            characterPanel.orderFrontRegardless()
+            hideCharacter()
         } else {
-            if isChatVisible { hideChatPanel() }
-            characterPanel.orderOut(nil)
+            showCharacter()
         }
         return isCharacterVisible
     }

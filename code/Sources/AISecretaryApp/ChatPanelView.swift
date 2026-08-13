@@ -1945,13 +1945,16 @@ struct ChatPanelView: View {
         arrowKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             guard event.modifierFlags.isDisjoint(with: [.command, .option, .control])
             else { return event }
-            // Escape closes the panel, wherever the focus happens to be —
-            // `.onExitCommand` was already declared and never fired on this
-            // non-activating panel, which is why pressing it did nothing.
-            if event.keyCode == 53 {
-                onClose()
-                return nil
-            }
+            // Escape is deliberately not handled here. It used to be, because
+            // `.onExitCommand` never fired on this non-activating panel — but
+            // this view is built once and never torn down, so the monitor
+            // outlived the panel it was closing and swallowed Esc for the whole
+            // app whether the chat was showing or not. Esc now has a single
+            // owner in `AppDelegate`, over one ladder in `dismissDecision`,
+            // because it means three different things depending on what is on
+            // screen and a key that means three things needs one place to say
+            // which.
+            //
             // 126 is Up, 125 is Down. Which feature they belong to is decided
             // in one place — see `ArrowKeyOwner` — so the picker, history
             // recall and caret movement can never each take a turn at the same

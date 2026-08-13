@@ -35,6 +35,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     private var hotKeys: GlobalHotKeys?
     /// Watches this app's own key events for ⌘H; see `watchForHideShortcut`.
     private var hideKeyMonitor: Any?
+    /// The same, for Esc with nothing left to put away; see `watchForDismissKey`.
+    private var dismissKeyMonitor: Any?
+    /// Who ⌘H took off the desktop, so reopening puts back exactly them.
+    private var hiddenByShortcut: Set<UUID> = []
     /// Who the usage window adds up. Kept in step by `reconcileCharacters`.
     private let usageRoster = UsageRoster()
     private lazy var usageWindow = UsageWindow(
@@ -68,12 +72,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
         // is showing — see `GlobalShortcut` for why ⌘H is not in this list.
         hotKeys = GlobalHotKeys(actions: [
             // Esc means "put away whatever is in front" — for whichever
-            // character that is. `dismissTarget` decides; this only asks the
+            // character that is. `dismissDecision` decides; this only asks the
             // windows who has the keyboard.
-            .closeChat: { [weak self] in self?.dismissWhateverIsInFront() }
+            .closeChat: { [weak self] in self?.dismissWhateverIsInFront(trigger: .hotKey) }
         ])
         refreshHotKeyClaim()
         watchForHideShortcut()
+        watchForDismissKey()
 
         characters.forEach { $0.showCharacter() }
     }
@@ -249,16 +254,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     }
 
     /// Esc. The system grants the key once, so one character has to be picked;
-    /// the rule is `dismissTarget`, and this gathers what it needs.
-    private func dismissWhateverIsInFront() {
-        let target = dismissTarget(characters.map {
-            DismissCandidate(
-                id: $0.profileID,
-                holdsKeyboard: $0.holdsKeyboard,
-                hasDismissable: $0.hasDismissableWindow
-            )
-        })
-        target.flatMap(character)?.dismissFrontmost()
+    /// the rule is `dismissDecision`, and this gathers what it needs.
+    ///
+    /// - Returns: whether it acted, which the local monitor needs in order to
+    ///   decide whether to swallow the keystroke or hand it on.
+    @discardableResult
+    private func dismissWhateverIsInFront(trigger: DismissTrigger) -> Bool {
+        let decision = dismissDecision(
+            characters.map {
+                DismissCandidate(
+                    id: $0.profileID,
+                    holdsKeyboard: $0.holdsKeyboard,
+                    hasDismissable: $0.hasDismissableWindow,
+                    isCharacterVisible: $0.isCharacterVisible
+                )
+            },
+            trigger: trigger
+        )
+        guard let decision, let character = character(decision.id) else { return false }
+
+        switch decision.step {
+        case .dismissWindow: character.dismissFrontmost()
+        case .hideCharacter: character.hideCharacter()
+        }
+        return true
+    }
+
+    /// Esc once more, with the chat already closed: she goes away too.
+    ///
+    /// A *local* monitor, and that is the entire design. Esc could not be added
+    /// to the system-wide claim — `GlobalShortcut` is a receipt for what that
+    /// costs, and a character is visible nearly all the time, so claiming Esc
+    /// while she is on screen is claiming it permanently. Locally, the key only
+    /// reaches us when one of our own windows holds the keyboard, which is also
+    /// the only situation in which "hide her" is what the person meant.
+    ///
+    /// It cannot double up with the hot key: `dismissDecision` returns nothing
+    /// for a local press while anything is dismissable, so exactly one of the
+    /// two paths answers any given press.
+    private func watchForDismissKey() {
+        dismissKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self, event.keyCode == 53 else { return event }
+            return dismissWhateverIsInFront(trigger: .ownWindow) ? nil : event
+        }
     }
 
     /// ⌘H, taken from this app's own event stream while one of its windows has
@@ -288,11 +326,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
         }
     }
 
-    /// What ⌘H does: the character and the chat both go away, which is what the
-    /// menu item has always done. An accessory app has no Dock tile to come back
-    /// from, so `NSApplication.hide` would leave nothing to click.
+    /// What ⌘H does: the whole app leaves the screen — every character, every
+    /// chat, every pinned pane, Token Usage and About.
+    ///
+    /// `NSApplication.hide` is not it. An accessory app has no Dock tile to come
+    /// back from, and its own panels are `hidesOnDeactivate: false` precisely so
+    /// that clicking into another app does not take the companion away — which
+    /// leaves this as the one thing that can honestly mean "all of it, now".
+    ///
+    /// Written as `hide`, never `toggle`: applied to a roster, a toggle brings
+    /// back whoever was already away, so ⌘H would have shown a character
+    /// instead of hiding one.
     private func hideEverything() {
-        characters.filter(\.isCharacterVisible).forEach { $0.toggleCharacterVisibility() }
+        hiddenByShortcut = Set(characters.filter(\.isCharacterVisible).map(\.profileID))
+        characters.forEach { $0.hideEverythingOfHers() }
+        usageWindow.close()
+        // The About window is AppKit's, opened by
+        // `orderFrontStandardAboutPanel`, and there is no handle to it — this
+        // sweep is how it goes away, and it also catches anything a later phase
+        // puts on screen without telling this method about it.
+        NSApp.windows.filter(\.isVisible).forEach { $0.orderOut(nil) }
     }
 
     /// Esc is worth claiming only while something is on screen to dismiss —
@@ -317,7 +370,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     /// can't see it. Hiding is for getting it out of the way for a moment, not
     /// a setting to be remembered, so reopening always brings it back.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
-        focused?.showCharacter()
+        // Exactly who ⌘H took away, since ⌘H can now take away several. Coming
+        // back with one character when three went is the kind of asymmetry that
+        // reads as a lost character rather than as a shortcut.
+        let returning = characters.filter { hiddenByShortcut.contains($0.profileID) }
+        (returning.isEmpty ? [focused].compactMap { $0 } : returning).forEach { $0.showCharacter() }
+        hiddenByShortcut = []
         return true
     }
 
