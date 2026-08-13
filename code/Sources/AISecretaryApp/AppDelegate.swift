@@ -121,13 +121,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
         )
         character.onDismissableChanged = { [weak self] in self?.refreshHotKeyClaim() }
         character.onUsed = { [weak self] in self?.lastUsed = id }
-        // Her settings resize and re-light her own windows, and nobody else's.
-        // This was one callback for the whole app when there was one look to
-        // apply; now applying one character's theme to all of them is precisely
-        // the bug.
-        character.appearance.onChange = { [weak character] in
+        // Her settings resize her own windows and nobody else's — this was one
+        // callback for the whole app when there was one look to apply, and
+        // applying one character's theme to all of them is now precisely the
+        // bug.
+        //
+        // The re-lighting still goes through the app-wide sweep, though, and
+        // that is not a leftover. Token Usage has no theme of its own and is
+        // wearing the focused character's; when she changes hers while it is
+        // open, nothing else would tell it. Driven at 0.13.216 before this
+        // line existed: its body went light and its title bar stayed dark.
+        character.appearance.onChange = { [weak self, weak character] in
             character?.applyWindowSizes()
-            character?.applyOwnControlAppearance()
+            self?.applyControlAppearance()
         }
         character.buildWindows(
             ordinal: ordinal,
