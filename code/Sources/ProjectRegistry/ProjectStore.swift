@@ -45,11 +45,56 @@ public final class FileProjectStore: ProjectStoring, @unchecked Sendable {
         self.fileURL = fileURL ?? FileProjectStore.defaultURL
     }
 
+    /// Where the registry lived while every character shared one. Still read
+    /// once, to be adopted — see `adoptLegacyProjects`.
     public static var defaultURL: URL {
+        supportDirectory.appendingPathComponent("projects.json")
+    }
+
+    /// One file per character.
+    ///
+    /// A project row is not a bookmark: it carries `allowedTools`, so the file
+    /// is the character's allowlist. Sharing it means approving Claude Code for
+    /// one character approves it for all of them, which is the thing this
+    /// separation is for.
+    public static func url(forCharacter id: UUID) -> URL {
+        supportDirectory.appendingPathComponent("projects-\(id.uuidString).json")
+    }
+
+    private static var supportDirectory: URL {
         FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("AISecretary", isDirectory: true)
-            .appendingPathComponent("projects.json")
+    }
+
+    /// Hands the shared registry to a character, once.
+    ///
+    /// The decision is `perCharacterFileMigration`; this reads the two `exists`
+    /// answers off the disk and applies what it says. Returns what it decided
+    /// so a caller can see whether anything moved.
+    @discardableResult
+    public static func adoptLegacyProjects(
+        for id: UUID,
+        fileManager: FileManager = .default
+    ) -> Either<ProjectStoreError, FileMigration> {
+        let legacy = defaultURL
+        let mine = url(forCharacter: id)
+        let decision = perCharacterFileMigration(
+            legacy: legacy,
+            perCharacter: mine,
+            legacyExists: fileManager.fileExists(atPath: legacy.path),
+            perCharacterExists: fileManager.fileExists(atPath: mine.path)
+        )
+        guard case .adopt(let from, let to) = decision else { return .right(decision) }
+        return attempt {
+            try fileManager.createDirectory(
+                at: to.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try fileManager.moveItem(at: from, to: to)
+        }
+        .mapLeft { ProjectStoreError.writeFailed(path: to.path, message: $0.localizedDescription) }^
+        .map { decision }^
     }
 
     public func load() -> Either<ProjectStoreError, [Project]> {

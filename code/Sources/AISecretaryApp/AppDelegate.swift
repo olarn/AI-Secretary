@@ -8,10 +8,9 @@ import LLMProvider
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     // What belongs to the app rather than to any one character: the look, the
-    // roster, where work may run, and the single status bar item. A character's
-    // own world — her Secretary, her windows, her Claude Code session — lives
-    // in `CharacterInstance`.
-    private let registry = ProjectRegistry()
+    // roster, and the single status bar item. A character's own world — her
+    // Secretary, her windows, her Claude Code session, and since 13-1 the
+    // projects she may work in — lives in `CharacterInstance`.
     private let backendStatus = BackendStatus()
     private let appearance = Appearance()
     private let profiles = ProfileLibrary()
@@ -113,7 +112,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
             profileID: id,
             profiles: profiles,
             appearance: appearance,
-            registry: registry,
+            registry: ProjectRegistry(store: FileProjectStore(fileURL: projectsFile(for: id))),
             backendStatus: backendStatus,
             detector: detector,
             // The one place that should touch the real files. Everywhere else —
@@ -140,6 +139,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     private func historyFile(for id: UUID) -> URL {
         _ = FileConversationStore.adoptLegacyHistory(for: id)
         return FileConversationStore.url(forCharacter: id)
+    }
+
+    /// This character's own project registry, adopting the one everybody shared
+    /// before characters had their own. Same shape as `historyFile`, and the
+    /// failure is discarded for the same reason.
+    ///
+    /// What she adopts is an allowlist, not a list of folders: a project row
+    /// carries the tools approved for it. Whoever is built first takes it, and
+    /// nobody else inherits those approvals — which is the whole point, and is
+    /// also why a second character starts with none.
+    private func projectsFile(for id: UUID) -> URL {
+        _ = FileProjectStore.adoptLegacyProjects(for: id)
+        return FileProjectStore.url(forCharacter: id)
     }
 
     // MARK: - The status bar menu

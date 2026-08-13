@@ -1,18 +1,13 @@
 import Foundation
+import ProjectRegistry
 
 /// What to do with the history file written before characters had their own.
 ///
-/// The decision is here and the move is in the adapter, for the usual reason:
-/// a migration that only runs on a machine that has the old file is a migration
-/// nobody can test by running it, and getting it wrong costs the person every
-/// conversation they have had.
-public enum ConversationFileMigration: Equatable, Sendable {
-    /// Nothing to do — either there is no old file, or this character already
-    /// has one of her own and adopting would overwrite it.
-    case none
-    /// Rename the old file to be this character's.
-    case adopt(from: URL, to: URL)
-}
+/// This was the first per-character migration and the shape it found is now
+/// shared with the project registry, which needed the same decision word for
+/// word. The name stays because the history file's callers read better with
+/// it, and because it is the name its tests know.
+public typealias ConversationFileMigration = FileMigration
 
 /// - Parameters:
 ///   - legacyExists: whether `conversations.json` is on disk.
@@ -26,6 +21,10 @@ public func conversationFileMigration(
     legacyExists: Bool,
     perCharacterExists: Bool
 ) -> ConversationFileMigration {
-    guard legacyExists, !perCharacterExists else { return .none }
-    return .adopt(from: legacy, to: perCharacter)
+    perCharacterFileMigration(
+        legacy: legacy,
+        perCharacter: perCharacter,
+        legacyExists: legacyExists,
+        perCharacterExists: perCharacterExists
+    )
 }
