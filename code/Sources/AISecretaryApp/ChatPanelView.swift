@@ -1619,6 +1619,13 @@ struct ChatPanelView: View {
                     Spacer()
                     Button {
                         addProjectNote = registry.removeReportingProblem(id: project.id)
+                        // Taking a project away is the same event as adding
+                        // one, and the half that matters more: the running
+                        // session keeps the working directory it was given
+                        // until something re-scopes it, so without this the
+                        // assistant goes on working in a folder that is no
+                        // longer approved.
+                        secretary.projectsDidChange()
                     } label: {
                         Image(systemName: "minus.circle")
                     }

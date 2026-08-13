@@ -108,4 +108,64 @@ final class SkillsSessionTests: XCTestCase {
         XCTAssertTrue(system.contains("grilling"), system)
         XCTAssertFalse(system.contains("brainstorming"), "Unselected skills must not be named as chosen")
     }
+
+    // MARK: - The list follows her own projects
+
+    /// A project brings its own `.claude/skills`, so registering one has to
+    /// re-scan. It did not: the list was built at launch and left there, and
+    /// the skill that arrived with the project stayed invisible until somebody
+    /// pressed the refresh button — which is only discoverable if you already
+    /// know it is needed.
+    func testRegisteringAProjectBringsItsSkillsIntoTheList() {
+        let registry = ProjectRegistry(store: InMemoryProjectStore())
+        let projectSkill = SkillInfo(
+            id: "swift-functional-programming",
+            name: "swift-functional-programming",
+            summary: "Bow, in this repo.",
+            scope: .project
+        )
+        let secretary = Secretary(
+            stateMachine: machine,
+            registry: registry,
+            adapter: SpyAdapter(),
+            fileAdapter: SpyFileAdapter(),
+            classify: RuleBasedIntentClassifier().classify,
+            audit: AuditLog(),
+            chatProvider: provider,
+            // The real one reads `<path>/.claude/skills`; this stands in for
+            // the disk by answering out of the paths it is handed.
+            discoverSkills: { paths in paths.isEmpty ? self.skills : self.skills + [projectSkill] }
+        )
+        XCTAssertEqual(secretary.availableSkills, skills)
+
+        _ = registry.add(Project(name: "AI Secretary", path: "/tmp/ai-secretary"))
+        secretary.projectsDidChange()
+
+        XCTAssertEqual(secretary.availableSkills, skills + [projectSkill])
+    }
+
+    /// And the scan happens even where there is no workspace to re-scope.
+    /// `projectsDidChange` used to leave through a guard on the provider before
+    /// it reached anything about skills, so on a machine without Claude Code
+    /// the list never moved at all.
+    func testTheListIsRescannedEvenWithoutAWorkspaceToRescope() {
+        let registry = ProjectRegistry(store: InMemoryProjectStore())
+        var installed = skills
+        provider.hasWorkspaceTools = false
+        let secretary = Secretary(
+            stateMachine: machine,
+            registry: registry,
+            adapter: SpyAdapter(),
+            fileAdapter: SpyFileAdapter(),
+            classify: RuleBasedIntentClassifier().classify,
+            audit: AuditLog(),
+            chatProvider: provider,
+            discoverSkills: { _ in installed }
+        )
+
+        installed = [skills[1]]
+        secretary.projectsDidChange()
+
+        XCTAssertEqual(secretary.availableSkills, [skills[1]])
+    }
 }

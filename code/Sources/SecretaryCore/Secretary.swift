@@ -1774,6 +1774,14 @@ public final class Secretary {
     /// directory already does. The app's own `conversation` carries the context
     /// across that, so nothing is lost by starting a new one.
     public func projectsDidChange() {
+        // A project brings its own `.claude/skills` with it, so the list of
+        // skills follows the list of projects — and it does so whether or not
+        // there is a workspace here to re-scope, which is why this is above the
+        // guard. It was below nothing at all: the list was scanned at launch
+        // and never again, so a skill that arrived with a project stayed
+        // invisible until somebody found the refresh button.
+        refreshAvailableSkills()
+
         guard let scoped = chatProvider as? WorkspaceScopedProvider,
               scoped.hasWorkspaceTools
         else { return }
