@@ -147,6 +147,44 @@ final class CharacterHandOffTests: XCTestCase {
         XCTAssertGreaterThan(miku.transcript.count, before, "…but it is said out loud that it was dropped")
     }
 
+    /// The answer has to reach *her*, not just the screen.
+    ///
+    /// Claude Code is sent only the newest user message — it keeps the thread
+    /// itself — so an answer appended to the conversation array goes somewhere
+    /// nobody reads. Driven on 2026-08-14: two characters answered, both
+    /// answers were on screen, and asked to summarise them Miku said there was
+    /// nothing to summarise. She was right about what she had been told.
+    func testAnAnswerIsCarriedIntoTheNextThingSheIsAsked() async {
+        anyaProvider.replyForNextTurn = "Vios is 190,000"
+        miku.submit("ขอให้ Anya หาราคาให้หน่อย")
+        await waitUntil { self.saidAnything(self.miku, containing: "Anya answered") }
+
+        mikuProvider.replyForNextTurn = "ok"
+        miku.submit("สรุปให้หน่อย")
+        await waitUntilIdle(mikuMachine)
+
+        let sent = mikuProvider.lastMessages.last?.content ?? ""
+        XCTAssertTrue(sent.contains("Vios is 190,000"), "Got: \(sent)")
+        XCTAssertTrue(sent.contains("สรุปให้หน่อย"), "and what she was actually asked")
+    }
+
+    /// Carried once. A second question must not be handed the same answer
+    /// again, or she reports it twice.
+    func testAnAnswerIsOnlyCarriedOnce() async {
+        anyaProvider.replyForNextTurn = "Vios is 190,000"
+        miku.submit("ขอให้ Anya หาราคาให้หน่อย")
+        await waitUntil { self.saidAnything(self.miku, containing: "Anya answered") }
+
+        mikuProvider.replyForNextTurn = "ok"
+        miku.submit("สรุปให้หน่อย")
+        await waitUntilIdle(mikuMachine)
+        mikuProvider.replyForNextTurn = "ok"
+        miku.submit("แล้วอย่างอื่นล่ะ")
+        await waitUntilIdle(mikuMachine)
+
+        XCTAssertFalse((mikuProvider.lastMessages.last?.content ?? "").contains("Vios is 190,000"))
+    }
+
     // MARK: - Asking when unsure
 
     /// The owner's own scenario writes "อาเนีย" for a character named "Anya".

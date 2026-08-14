@@ -625,6 +625,20 @@ public final class Secretary {
     /// A hand-off waiting on the person to say who it is for.
     private var pendingDelegation: Option<PendingDelegation> = .none()
 
+    /// Answers that have reached the screen but not yet the character.
+    ///
+    /// `ClaudeCodeProvider` sends **only the newest user message** — Claude Code
+    /// holds the thread itself and is rejoined with `--resume` — so appending an
+    /// arriving answer to `conversation` puts it somewhere nobody reads. Driven
+    /// on 2026-08-14: two characters answered, both answers were on screen, and
+    /// asked to summarise them Miku said *"ยังไม่มีอะไรให้สรุปเลยค่ะ — เรายังไม่ได้คุย
+    /// หรือทำงานอะไรกันในเซสชันนี้เลย"*. She was right about what she had been told.
+    ///
+    /// They ride along with whatever is said next instead, which costs no extra
+    /// turn and reaches her at the moment she needs them. Answers belonging to a
+    /// plan are not held here — the follow-up prompt quotes those itself.
+    private var unseenReports: [String] = []
+
     /// Whether anything passed between characters in this conversation.
     ///
     /// The other reason a conversation is worth filing. Hers may contain no
@@ -723,6 +737,7 @@ public final class Secretary {
         planDeadline?.cancel()
         planDeadline = nil
         relayedThisConversation = false
+        unseenReports = []
         instructionMemory = InstructionMemory()
         // The backend keeps its own thread; ours going quiet is not enough.
         (chatProvider as? WorkspaceScopedProvider)?.resetConversation()
@@ -1219,15 +1234,21 @@ public final class Secretary {
                 { ok in
                     self.sentErrands.removeAll { $0.correlationID == ok.correlationID }
                     self.say(.secretary, relayReportLine(from: ok.fromName, body: ok.body))
+                    // Whether this belongs to a plan has to be asked before
+                    // `collect` takes it: the follow-up quotes those answers
+                    // itself, and holding them here as well would say
+                    // everything twice.
+                    let inPlan = self.plan.toOptional()?.awaiting[ok.correlationID] != nil
                     self.collect(ok)
-                    // Into the conversation as well as onto the screen: the
-                    // person can see the answer, so the model has to know it
-                    // arrived or the next turn will contradict what is on
-                    // screen — the same reason a stopped reply is written back.
-                    self.conversation.append(ChatMessage(
-                        role: .user,
-                        content: "[\(ok.fromName) answered what you passed on: \(ok.body)]"
-                    ))
+                    // Held for the next thing said to her, not appended to
+                    // `conversation`: the person can see the answer, so she has
+                    // to know it arrived or her next turn will contradict what
+                    // is on screen.
+                    if !inPlan {
+                        self.unseenReports.append(
+                            "[\(ok.fromName) answered what you passed on: \(ok.body)]"
+                        )
+                    }
                 }
             )
         }
@@ -2125,7 +2146,12 @@ public final class Secretary {
             prepareWorkspace(primary: primary, on: scoped)
         }
 
-        conversation.append(ChatMessage(role: .user, content: text))
+        // Answers that arrived while she was idle ride along with whatever is
+        // said next. See `unseenReports` for why they cannot simply be appended
+        // to `conversation`.
+        let told = unseenReports.isEmpty ? text : (unseenReports + [text]).joined(separator: "\n\n")
+        unseenReports = []
+        conversation.append(ChatMessage(role: .user, content: told))
         streamReply(messages: conversation, taskID: taskID)
     }
 

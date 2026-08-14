@@ -4,7 +4,7 @@ A macOS desktop companion: a floating animated character that lives on your
 desktop, talks to you in chat, and gets work done through the Claude Code you
 already have installed.
 
-Version 0.14.243. macOS 14+. Not shipped — this is a working repository.
+Version 0.14.244. macOS 14+. Not shipped — this is a working repository.
 
 ## What it actually is
 
@@ -52,7 +52,7 @@ Phases 1–14 of the charter are done. Voice is not started.
 
 ```bash
 cd code
-swift build            # or: swift test   (1,061 tests)
+swift build            # or: swift test   (1,063 tests)
 ./scripts/package-app.sh
 open AISecretary.app
 ```
