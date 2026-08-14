@@ -72,8 +72,16 @@ func isCommand(_ entry: TranscriptEntry) -> Bool {
 /// greeting arrive and pressing New Conversation must not leave a row behind —
 /// the history would fill with threads nobody had, and the ten real ones would
 /// fall off the end to make room for them.
-public func worthArchiving(_ entries: [TranscriptEntry]) -> Bool {
-    entries.contains { $0.speaker == .user && $0.kind == .message && !isCommand($0) }
+///
+/// `relayed` is the second way for something to have happened, and it exists
+/// because of what "somebody" quietly meant: a `.user` turn. A character who
+/// spent her whole conversation doing another character's errand never has one
+/// — every line in her transcript is hers — so the entire exchange was dropped
+/// on the floor. Measured on 2026-08-14: Pikachu and Ditto both answered a
+/// relayed request, both showed it on screen, and neither conversation file was
+/// touched, while the character who *sent* it filed hers normally.
+public func worthArchiving(_ entries: [TranscriptEntry], relayed: Bool = false) -> Bool {
+    relayed || entries.contains { $0.speaker == .user && $0.kind == .message && !isCommand($0) }
 }
 
 /// The conversation as it should be filed.

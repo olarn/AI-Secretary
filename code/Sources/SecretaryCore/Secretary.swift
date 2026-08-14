@@ -625,6 +625,14 @@ public final class Secretary {
     /// A hand-off waiting on the person to say who it is for.
     private var pendingDelegation: Option<PendingDelegation> = .none()
 
+    /// Whether anything passed between characters in this conversation.
+    ///
+    /// The other reason a conversation is worth filing. Hers may contain no
+    /// `.user` turn at all — a whole exchange can be somebody else's errand,
+    /// arriving, being worked and being answered, with the person who owns the
+    /// desktop never typing a word into it.
+    private var relayedThisConversation = false
+
     /// Errands sent together, with the person's own next step waiting on them.
     private var plan: Option<ErrandPlan> = .none()
     /// Gives up on whoever has not answered, so one silent character cannot
@@ -711,6 +719,10 @@ public final class Secretary {
         sentErrands = []
         answering = .none()
         pendingDelegation = .none()
+        plan = .none()
+        planDeadline?.cancel()
+        planDeadline = nil
+        relayedThisConversation = false
         instructionMemory = InstructionMemory()
         // The backend keeps its own thread; ours going quiet is not enough.
         (chatProvider as? WorkspaceScopedProvider)?.resetConversation()
@@ -756,7 +768,7 @@ public final class Secretary {
     @discardableResult
     private func archiveCurrentConversation() -> String? {
         let entries = archivableEntries(transcript)
-        guard worthArchiving(entries) else { return nil }
+        guard worthArchiving(entries, relayed: relayedThisConversation) else { return nil }
 
         let id = resumedConversationID.getOrElse(UUID())
         // Held from here on, so the next turn updates this row. Also what makes
@@ -1148,6 +1160,10 @@ public final class Secretary {
     /// talking to her now did not ask for their turn to be pushed aside, and
     /// the queue already knows how to hold something whole until its turn.
     public func receive(_ message: CharacterMessage) {
+        // Whatever else happens, something passed between characters here — so
+        // this conversation is worth keeping even if the person never types
+        // into it.
+        relayedThisConversation = true
         switch message.kind {
         case .errand:
             let asked = relayedErrandPrompt(from: message.fromName, body: message.body)
@@ -1218,6 +1234,7 @@ public final class Secretary {
     /// and no character who *sent* one did. The hand-off being in writing on
     /// both sides is the whole promise; in writing until quit is not it.
     private func fileConversationNow() {
+        relayedThisConversation = true
         archiveCurrentConversation()
     }
 

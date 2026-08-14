@@ -315,6 +315,40 @@ final class CharacterHandOffTests: XCTestCase {
         XCTAssertEqual(anya.queuedMessages.count, 0, "and it runs when she is free")
     }
 
+    /// A character can spend a whole conversation on somebody else's errand
+    /// without the person typing a word into it — every line is hers. Filing
+    /// used to require a `.user` turn, so that entire exchange was dropped:
+    /// measured on 2026-08-14, both characters who answered a relayed request
+    /// showed it on screen and neither conversation file was touched.
+    func testAConversationThatWasOnlyAnErrandIsStillFiled() async {
+        let store = InMemoryConversationStore()
+        let machine = AssistantStateMachine()
+        let provider = SpyWorkspaceProvider()
+        provider.hasWorkspaceTools = false
+        provider.replyForNextTurn = "About 420,000 baht."
+        let pikachu = Secretary(
+            stateMachine: machine,
+            registry: ProjectRegistry(store: InMemoryProjectStore(projects: [])),
+            profile: SecretaryProfile(id: UUID(), name: "Pikachu"),
+            chatProvider: provider,
+            conversationStore: store
+        )
+
+        pikachu.receive(CharacterMessage(
+            from: mikuID, fromName: "Miku", to: pikachu.profile.id,
+            kind: .errand, body: "find the price"
+        ))
+        await waitUntilIdle(machine)
+
+        XCTAssertFalse(
+            pikachu.history.isEmpty,
+            "an errand she answered is a conversation she had"
+        )
+        let filed = pikachu.history[0].entries.map(\.text).joined(separator: "\n")
+        XCTAssertTrue(filed.contains("Miku passed this on"))
+        XCTAssertTrue(filed.contains("420,000 baht"))
+    }
+
     // MARK: - The assistant's own hand-off block
 
     /// The path that did not exist when Ditto went looking for one.
