@@ -163,6 +163,11 @@ private func charactersSubmenu(_ characters: [CharacterMenuState]) -> [StatusMen
         ))
     }
     + (characters.isEmpty ? [] : [
+        // The rule above it is "one row per character"; this one is about all
+        // of them at once, so it is not another name in that list and the line
+        // says so. It goes inside the same condition, because a separator with
+        // nothing under it is a line drawn for no reason.
+        .separator,
         .item(StatusMenuItem(
             title: allCharactersTitle(characters),
             action: .toggleAllCharacters

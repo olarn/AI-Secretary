@@ -58,6 +58,7 @@ final class StatusMenuTests: XCTestCase {
             "AI Secretary 0.13.209",
             "—",
             "Miku",
+            "—",
             "Hide All",
             "New Character…",
             "—",
@@ -81,7 +82,10 @@ final class StatusMenuTests: XCTestCase {
     func testEveryCharacterGetsARowAndNewCharacterFollowsThem() {
         let menu = statusBarMenu(summary: "x", characters: [state(miku, "Miku"), state(anya, "Anya")])
 
-        XCTAssertEqual(titles(menu).dropFirst(2).prefix(4), ["Miku", "Anya", "Hide All", "New Character…"])
+        XCTAssertEqual(
+            titles(menu).dropFirst(2).prefix(5),
+            ["Miku", "Anya", "—", "Hide All", "New Character…"]
+        )
     }
 
     /// With nobody on the desktop the row that makes somebody is still there.

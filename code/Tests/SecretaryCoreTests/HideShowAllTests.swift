@@ -50,6 +50,33 @@ final class HideShowAllTests: XCTestCase {
         XCTAssertEqual(all.map { $0 + 1 }, titles.firstIndex(of: "New Character…"))
     }
 
+    /// The rows above it are one per character; this one is about all of them
+    /// at once, and the line is what says it is not another name in that list.
+    func testALineSeparatesItFromTheCharacterRows() {
+        let menu = statusBarMenu(
+            summary: "x",
+            characters: [state("Miku", visible: true), state("Anya", visible: true)]
+        )
+        guard let row = menu.firstIndex(where: {
+            if case .item(let item) = $0 { return item.action == .toggleAllCharacters }
+            return false
+        }) else { return XCTFail("no Hide All row") }
+
+        XCTAssertEqual(menu[row - 1], .separator)
+    }
+
+    /// A separator with nothing under it is a line drawn for no reason, so it
+    /// goes when the row does.
+    func testTheLineGoesWithTheRowOnAnEmptyRoster() {
+        let menu = statusBarMenu(summary: "x", characters: [])
+        // Header, separator, then straight to New Character… — no second line.
+        let titles = menu.map { entry -> String in
+            if case .item(let item) = entry { return item.title }
+            return "—"
+        }
+        XCTAssertEqual(Array(titles.prefix(3)), ["x", "—", "New Character…"])
+    }
+
     /// The rule on its own, apart from the row it happens to be printed in.
     func testTheTitleIsDecidedByWhoIsVisible() {
         XCTAssertEqual(allCharactersTitle([state("a", visible: true)]), "Hide All")
