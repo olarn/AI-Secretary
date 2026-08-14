@@ -95,6 +95,53 @@ final class TranscriptScrollPinTests: XCTestCase {
         XCTAssertTrue(pin.isFollowing, "Nobody scrolled — that was the content growing")
     }
 
+    // MARK: - When the view has to scroll back to the end
+
+    /// The case this was written for: the running commentary is an entry
+    /// *above* the reply being written and it grows in place, so every step of
+    /// a tool run pushed the newest text further out of sight while the number
+    /// of messages and the length of the last one — all the old trigger
+    /// watched — stayed exactly the same.
+    func testTheEndBeingPushedOutOfSightAsksForAScroll() {
+        let pin = TranscriptScrollPin()
+        XCTAssertTrue(pin.isBehind(distanceBelowFold: 18),
+                      "Following, and the end is below the fold — put it back")
+    }
+
+    /// Where following already put it. Scrolling again would move nothing, and
+    /// asking for it on every layout pass is how a scroll and a measurement
+    /// chase each other.
+    func testTheEndSittingAtTheBottomEdgeAsksForNothing() {
+        let pin = TranscriptScrollPin()
+        XCTAssertFalse(pin.isBehind(distanceBelowFold: 0))
+        XCTAssertFalse(pin.isBehind(distanceBelowFold: TranscriptScrollPin.settled))
+    }
+
+    /// A transcript shorter than the view: the end sits well above the bottom
+    /// edge and there is nowhere to scroll to.
+    func testAnEndAboveTheBottomEdgeAsksForNothing() {
+        XCTAssertFalse(TranscriptScrollPin().isBehind(distanceBelowFold: -200))
+    }
+
+    /// The whole point of the pin: someone reading back is not dragged to the
+    /// bottom, however far below the fold the end has gone.
+    func testAReaderWhoScrolledBackIsNotScrolledAnywhere() {
+        var pin = TranscriptScrollPin()
+        pin.readerScrolledUp()
+        XCTAssertFalse(pin.isBehind(distanceBelowFold: 600))
+    }
+
+    /// The two thresholds answer different questions and must not be merged:
+    /// what still counts as *being* at the bottom is generous, what counts as
+    /// *already* at the bottom is not. One number for both would either yank a
+    /// reader a line off the end or let the reply sink a line below it.
+    func testDriftIsCorrectedLongBeforeItCountsAsHavingLeftTheBottom() {
+        let pin = TranscriptScrollPin()
+        XCTAssertLessThan(TranscriptScrollPin.settled, TranscriptScrollPin.tolerance)
+        XCTAssertTrue(pin.isBehind(distanceBelowFold: TranscriptScrollPin.tolerance - 1),
+                      "Inside the tolerance is still out of place, and gets put back")
+    }
+
     // MARK: - Which scrolls are the reader taking over
 
     func testScrollingBackThroughTheConversationIsTakingOver() {

@@ -733,11 +733,15 @@ struct ChatPanelView: View {
                     // genuinely was. Scaled to the text size, because the amount
                     // that goes missing scales with it too.
                     //
-                    // Reporting is only ever "the bottom is on screen", never
-                    // the opposite: content growing under a reader who hasn't
-                    // moved pushes this strip off screen too, and that must not
-                    // be read as them scrolling away. Leaving is the scroll
-                    // wheel's business, in `startWatchingScroll`.
+                    // Where this strip is relative to the bottom edge is the
+                    // only input following has: it says both "the bottom is on
+                    // screen" — which is the only thing that may switch
+                    // following back on — and "the end has been pushed out of
+                    // sight", which is what asks for a scroll. What it must
+                    // never be read as is the reader scrolling away, since
+                    // content growing under a reader who hasn't moved looks
+                    // identical from here. Leaving is the scroll wheel's
+                    // business alone, in `startWatchingScroll`.
                     Color.clear
                         .frame(height: appearance.settings.fontSize)
                         .id(Self.endOfTranscript)
@@ -761,12 +765,25 @@ struct ChatPanelView: View {
             // turn of the wheel. It read correctly and never ran; the same
             // reading in global coordinates fires throughout.
             .onPreferenceChange(TranscriptTailKey.self) { endOfContent in
+                let distance = endOfContent - bottomEdge
                 // Assigned only when the answer changes: writing to `@State`
                 // invalidates the view whether or not the value differs, and
                 // this arrives on every token.
                 var pin = scrollPin
-                pin.update(distanceBelowFold: endOfContent - bottomEdge)
+                pin.update(distanceBelowFold: distance)
                 if pin != scrollPin { scrollPin = pin }
+                // The one place following is decided, and it is decided from
+                // where the end of the content actually is rather than from a
+                // guess about what might have moved it. Scrolling changes this
+                // measurement, which arrives here again — and converges, since
+                // the end sitting at the bottom edge is `settled` and asks for
+                // nothing further.
+                //
+                // Unanimated: an animated scroll is still moving when the next
+                // token arrives and asks for another one, and the two fight
+                // each other into a visible judder.
+                guard pin.isBehind(distanceBelowFold: distance) else { return }
+                proxy.scrollTo(Self.endOfTranscript, anchor: .bottom)
             }
             // A conversation only ever gets shorter by being replaced — started
             // again, or an older one loaded — and that is the moment the parses
@@ -777,33 +794,17 @@ struct ChatPanelView: View {
                 guard after < before else { return }
                 partsCache.keepingOnly(Set(secretary.transcript.map(\.id)))
             }
-            // Fires on streamed text too, not just new entries: a reply grows
-            // inside one entry, and following only new entries would leave the
-            // answer scrolling out of view as it arrives.
-            .onChange(of: transcriptSignature) {
-                guard scrollPin.isFollowing else { return }
-                // To the very end, not to the last message: the last message's
-                // bottom is a line of text short of the end, which left the
-                // breathing room under it permanently off screen and made "am I
-                // at the bottom?" a question about a strip nobody could see.
-                //
-                // Unanimated: an animated scroll is still moving when the next
-                // token arrives and asks for another one, and the two fight
-                // each other into a visible judder.
-                proxy.scrollTo(Self.endOfTranscript, anchor: .bottom)
-            }
         }
     }
 
     /// The strip below the last message: what following scrolls to, and what
     /// being at the bottom is measured against.
+    ///
+    /// Scrolled to, rather than to the last message: the last message's bottom
+    /// is a line of text short of the end, which left the breathing room under
+    /// it permanently off screen and made "am I at the bottom?" a question
+    /// about a strip nobody could see.
     private static let endOfTranscript = "end-of-transcript"
-
-    /// Changes whenever anything visible changes — a new entry, or more text in
-    /// the last one.
-    private var transcriptSignature: String {
-        "\(secretary.transcript.count):\(secretary.transcript.last?.text.count ?? 0)"
-    }
 
     @ViewBuilder
     private func messageBubble(_ entry: TranscriptEntry) -> some View {

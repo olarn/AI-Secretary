@@ -64,6 +64,39 @@ public struct TranscriptScrollPin: Equatable, Sendable {
     public mutating func follow() {
         isFollowing = true
     }
+
+    /// Closer than this to the bottom edge and the end is already where
+    /// following would put it, so scrolling again would move nothing.
+    ///
+    /// Deliberately far smaller than `tolerance`, which answers a different
+    /// question. `tolerance` is how far out of sight the end may be while the
+    /// reader still counts as *at the bottom* — generous, because a token lands
+    /// a layout pass before the scroll that follows it. This is how far out of
+    /// place the end may be before we *put it back* — near zero, because
+    /// anything we tolerate here is drift the reader watches accumulate.
+    /// Sharing one number would mean choosing between yanking a reader who is
+    /// one line off and letting the answer sink 24pt below the fold.
+    public static let settled: Double = 0.5
+
+    /// Whether the end of the transcript has been pushed below the bottom edge
+    /// while we are supposed to be following it — the whole condition for
+    /// scrolling back to the end, decided from the measurement itself.
+    ///
+    /// This is what replaced watching the transcript for changes. A change
+    /// signature has to be able to name every cause of movement in advance, and
+    /// the one that shipped could not: it was the number of messages and the
+    /// length of the last one, while the running commentary grows *in place*,
+    /// in an entry inserted *above* the reply being written. Neither number
+    /// moved, so nothing scrolled, and every step of a tool run pushed the
+    /// newest text a line further out of sight.
+    ///
+    /// A position cannot miss a cause. The commentary growing, a viewport that
+    /// shrank because an approval card appeared, a font size change, a window
+    /// resize — all of them move the end of the content, and this sees them
+    /// without knowing which one happened.
+    public func isBehind(distanceBelowFold: Double) -> Bool {
+        isFollowing && distanceBelowFold > Self.settled
+    }
 }
 
 /// Whether a scroll wheel/trackpad event is the reader moving back through the
