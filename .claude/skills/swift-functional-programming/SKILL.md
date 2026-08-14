@@ -35,6 +35,7 @@ Every stored property in a domain type is `let`. A change is a function from old
 - **Do instead:** `granting`, `archiving`, `attaching` — build the new collection with `map`/`filter`/`reduce` and return it.
 - **In this repo:** `PermissionGrants.granting`, `WebSiteGrants.granting(host:)`, `archiving(_:into:limit:)`.
 - **Exception, stated once:** the single `@Observable` store (`Secretary`) holds `var`s because SwiftUI observes them. It holds values; it does not compute inside them.
+- **The exception covers the store's own observed properties and nothing nested in it.** A `private struct` declared *inside* the store file is still a domain value: five `var`s mutated through an `inout` parameter (`ReplyRun` in `Secretary.swift`, measured 2026-08-14) is §2 broken, not orchestrator licence. Give it `let`s and `-ing` methods, or pass the fields separately.
 
 ### 3. A function is data — store it, list it, pass it
 
@@ -68,6 +69,7 @@ A new requirement is a new small function joined to the chain — not a `Bool` o
 `map`/`flatMap` on `Option` and `Either` all the way through the domain. The unwrap belongs at the boundary that has to *act* — the view bridge, or the caller that shows a message.
 
 - **Signal:** `.toOptional()`, `if let`, or `getOrElse` in the middle of domain code, followed by more logic on the unwrapped value.
+- **Signal, the storage variant:** a property typed `Option<A>` whose *every* reader is `guard let x = prop.toOptional() else { return }`. That satisfies "absence is Option" at the declaration and defeats it at all 57 use sites — the measured count in `Secretary.swift` on 2026-08-14. §8 licenses `guard` in edge code that has to act; it does not license unwrapping the same property in every method. Unwrap once at the method that acts and pass the plain value down, or `fold` at that single point — if a property is only ever guard-let-unwrapped, the type is documentation, not protection.
 - **Do instead:** keep mapping, and let `fold` be the last step: `webSiteHost(of: url).fold({ … }, { … })`.
 - **Reminder:** `^` after every `map`/`flatMap` on these types, or the result is `Kind<…>` and won't type-check.
 
@@ -157,6 +159,7 @@ This repo's idiom is the defaulted parameter, and it is already everywhere: `con
 - A test that passes in the morning and fails after midnight, or one that needed `XCTAssertTrue(x.contains(…))` because the exact value couldn't be predicted.
 - A function you can't call twice in a test and compare the two results.
 - A parameter list that looks pure while the body says `Date()` three lines down — this is the one that hides, because the signature lies.
+- **The injection defeated one call deep.** A function takes `homeDirectory:` or `fileManager:` as a parameter, then a helper it calls reaches `FileManager.default` anyway — or the store injects a `fileAdapter` and still calls `FileManager.default` beside it. Both shipped (`SkillDiscovery.scan`, `Secretary`'s scratch-directory paths, measured 2026-08-14). The check: the injected value must be the *only* route to that dependency in the whole call tree, or the parameter is a decoy that makes tests pass while the code reads the real disk.
 
 **How to check, in one line:** call it twice with the same arguments and assert the results are equal. If that assertion can't be written, the function isn't deterministic yet.
 
@@ -307,6 +310,8 @@ Reviewing is this list read against someone else's diff; refactoring is this lis
 - No new `Bool` parameter that switches behaviour — that is two functions.
 - No `for` where `map`/`filter`/`reduce`/`traverse` says it; no `if let`/`guard let` chain where one `flatMap` chain or a `fold` says it.
 - No `Date()`, `UUID()`, `FileManager` or `random` inside a domain function — the clock arrives as `now: Date = Date()`, everything else as a value the caller already read.
+- An injected dependency (`fileManager:`, `homeDirectory:`, an adapter) is the only route to that resource in the whole call tree — no `FileManager.default` one helper down from the injection point.
+- An `Option`-typed property has at least one reader that composes on it (`map`/`fold`); if every reader is `guard let … .toOptional()`, unwrap once at the acting method instead.
 - No function body wrapped in one big `if` — invert it to a `guard` and return early, and check the negation, the old `else`, the code after the block, and the return value before calling it done.
 - …and none of the above turned into a combinator nobody asked for: if the functional version is harder to read, the plain one wins.
 - No `throws` in a domain function; failures are on the left of `Either`.
