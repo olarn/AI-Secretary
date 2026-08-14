@@ -13,6 +13,11 @@ import AppKit
 struct MessageTextView: NSViewRepresentable {
     let text: AttributedString
     let fontSize: Double
+    /// Which face the conversation is set in. Passed alongside the size for the
+    /// same reason the size is passed at all: this is AppKit, so it needs a
+    /// concrete `NSFont` at the moment the storage is built, not a SwiftUI
+    /// modifier applied to it afterwards.
+    let font: FontChoice
     /// Passed in rather than read from the environment: the text is drawn by
     /// AppKit into an `NSTextStorage`, so it needs `NSColor` values at the
     /// moment the storage is built — `labelColor` and `linkColor` follow the
@@ -50,7 +55,7 @@ struct MessageTextView: NSViewRepresentable {
             .foregroundColor: palette.accent.nsColor,
             .cursor: NSCursor.pointingHand
         ]
-        let styled = Self.styled(text, fontSize: fontSize, palette: palette)
+        let styled = Self.styled(text, fontSize: fontSize, font: font, palette: palette)
         if view.textStorage?.isEqual(to: styled) != true {
             view.textStorage?.setAttributedString(styled)
         }
@@ -117,8 +122,8 @@ struct MessageTextView: NSViewRepresentable {
     /// Measured with a fixed palette, which is not a shortcut: colour has no
     /// effect on line breaking or on the width of a glyph, and threading the
     /// live theme through a pure measurement would suggest it did.
-    static func naturalWidth(_ text: AttributedString, fontSize: Double) -> Double {
-        let styled = Self.styled(text, fontSize: fontSize, palette: .dark)
+    static func naturalWidth(_ text: AttributedString, fontSize: Double, font: FontChoice) -> Double {
+        let styled = Self.styled(text, fontSize: fontSize, font: font, palette: .dark)
         return ceil(
             styled.boundingRect(
                 with: CGSize(width: unboundedWidth, height: .greatestFiniteMagnitude),
@@ -127,17 +132,18 @@ struct MessageTextView: NSViewRepresentable {
         )
     }
 
-    /// The transcript is monospaced; markdown emphasis keeps that face and only
-    /// changes weight/slant, so a bold word doesn't jump to a different font.
+    /// Markdown emphasis keeps the chosen face and only changes weight and
+    /// slant, so a bold word doesn't jump to a different font.
     static func styled(
         _ text: AttributedString,
         fontSize: Double,
+        font: FontChoice,
         palette: Palette
     ) -> NSAttributedString {
         let result = NSMutableAttributedString(attributedString: NSAttributedString(text))
         let size = CGFloat(fontSize)
-        let plain = NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
-        let bold = NSFont.monospacedSystemFont(ofSize: size, weight: .bold)
+        let plain = Self.face(font, size: size, weight: .regular)
+        let bold = Self.face(font, size: size, weight: .bold)
 
         let base: [NSAttributedString.Key: Any] = [
             .font: plain,
@@ -145,16 +151,23 @@ struct MessageTextView: NSViewRepresentable {
         ]
         result.addAttributes(base, range: NSRange(location: 0, length: result.length))
 
+        // Weight and slant resolved together, in one write per run. They used to
+        // be two independent `if`s writing the whole font each time, and the
+        // second overwrote the first: `***bold italic***` carries both intents,
+        // so it came out italic and lost its weight entirely.
         for run in text.runs {
             guard let intent = run.inlinePresentationIntent else { continue }
-            let range = NSRange(run.range, in: text)
-            if intent.contains(.stronglyEmphasized) {
-                result.addAttribute(.font, value: bold, range: range)
-            }
-            if intent.contains(.emphasized) {
-                let italic = NSFontManager.shared.convert(plain, toHaveTrait: .italicFontMask)
-                result.addAttribute(.font, value: italic, range: range)
-            }
+            let strong = intent.contains(.stronglyEmphasized)
+            let slanted = intent.contains(.emphasized)
+            guard strong || slanted else { continue }
+            let weighted = strong ? bold : plain
+            // A family with no italic face is left upright rather than faked —
+            // `convert(_:toHaveTrait:)` hands back the font unchanged, which is
+            // the honest outcome.
+            let face = slanted
+                ? NSFontManager.shared.convert(weighted, toHaveTrait: .italicFontMask)
+                : weighted
+            result.addAttribute(.font, value: face, range: NSRange(run.range, in: text))
         }
 
         // Link colour is applied by `linkTextAttributes`, but the foreground
@@ -167,6 +180,53 @@ struct MessageTextView: NSViewRepresentable {
             result.addAttribute(.foregroundColor, value: palette.accent.nsColor, range: range)
         }
         return result
+    }
+
+    /// The `NSFont` for a choice, built from the system face rather than from a
+    /// family name.
+    ///
+    /// This is the whole reason the setting exists. The transcript used to ask
+    /// for `monospacedSystemFont`, and SF Mono has no Thai glyphs, so every Thai
+    /// word fell out of it into whatever the system reached for next — Ayuthaya,
+    /// measured on 2026-08-14, which is wide and heavy enough that it was
+    /// reported as the chat being bold. Nothing was bold. A design asked for
+    /// this way is resolved per script, so each language gets that design's own
+    /// face instead of a fallback nobody chose.
+    ///
+    /// Falls back to the plain system font at every step: an unavailable design
+    /// should cost the shape, never the text.
+    static func face(_ choice: FontChoice, size: CGFloat, weight: NSFont.Weight) -> NSFont {
+        let system = NSFont.systemFont(ofSize: size, weight: weight)
+        guard let descriptor = system.fontDescriptor.withDesign(choice.systemDesign),
+              let face = NSFont(descriptor: descriptor, size: size)
+        else { return system }
+        return face
+    }
+}
+
+extension FontChoice {
+    /// Kept out of `SecretaryCore`, where the type lives: the enum is the
+    /// choice, and this is AppKit's name for it.
+    var systemDesign: NSFontDescriptor.SystemDesign {
+        switch self {
+        case .system: return .default
+        case .rounded: return .rounded
+        case .serif: return .serif
+        case .monospaced: return .monospaced
+        }
+    }
+
+    /// The same choice for the parts of a message SwiftUI draws itself — table
+    /// cells, and the options under a question. They are the conversation too,
+    /// and a table set in a different face from the paragraph above it reads as
+    /// a rendering bug.
+    var swiftUIDesign: Font.Design {
+        switch self {
+        case .system: return .default
+        case .rounded: return .rounded
+        case .serif: return .serif
+        case .monospaced: return .monospaced
+        }
     }
 }
 

@@ -211,6 +211,90 @@ final class AppearanceSettingsTests: XCTestCase {
         XCTAssertEqual(reloaded.chatWidth, AppearanceSettings.defaultWidth)
     }
 
+    // MARK: - Which face the conversation is set in
+
+    /// The default that fixed the reported bug. The chat used to be drawn with
+    /// `monospacedSystemFont`, which has no Thai glyphs, so Thai fell through to
+    /// Ayuthaya — wide and heavy enough to be reported as the chat being bold,
+    /// while nothing in the app had ever asked for bold.
+    func testTheConversationIsSetInTheSystemFaceByDefault() {
+        XCTAssertEqual(AppearanceSettings().font, .system)
+        XCTAssertEqual(StoredAppearance().font, .system)
+    }
+
+    func testTheChosenFaceSurvivesQuitting() {
+        let name = "AppearanceFontRoundTripTests"
+        let defaults = UserDefaults(suiteName: name)!
+        defaults.removePersistentDomain(forName: name)
+        let store = UserDefaultsAppearanceStore(defaults: defaults)
+
+        store.save(StoredAppearance(font: .serif))
+
+        XCTAssertEqual(store.load().font, .serif)
+    }
+
+    /// Nobody upgrading has this key, and the face they had was monospaced.
+    /// Falling back to what they were looking at would keep the bug they
+    /// reported, so the fallback is deliberately the new default rather than
+    /// the old behaviour.
+    func testAMissingStoredFaceFallsBackToTheSystemFace() {
+        let name = "AppearanceFontFallbackTests"
+        let defaults = UserDefaults(suiteName: name)!
+        defaults.removePersistentDomain(forName: name)
+        defaults.set(14.0, forKey: "appearance.fontSize")
+
+        XCTAssertEqual(UserDefaultsAppearanceStore(defaults: defaults).load().font, .system)
+    }
+
+    /// A face written by a build with different choices must not throw away the
+    /// rest of the look on the way past.
+    func testAnUnrecognisedFaceFallsBackWithoutLosingTheOtherSettings() {
+        let name = "AppearanceFontUnknownTests"
+        let defaults = UserDefaults(suiteName: name)!
+        defaults.removePersistentDomain(forName: name)
+        defaults.set("blackletter", forKey: "appearance.fontDesign")
+        defaults.set(18.0, forKey: "appearance.fontSize")
+
+        let reloaded = UserDefaultsAppearanceStore(defaults: defaults).load()
+        XCTAssertEqual(reloaded.font, .system)
+        XCTAssertEqual(reloaded.fontSize, 18)
+    }
+
+    /// Every choice offered has to be one the settings row can round-trip, or a
+    /// button in it silently does nothing.
+    func testEveryOfferedFaceHasALabelAnExplanationAndSurvives() {
+        let name = "AppearanceFontAllCasesTests"
+        let defaults = UserDefaults(suiteName: name)!
+        for choice in FontChoice.allCases {
+            defaults.removePersistentDomain(forName: name)
+            let store = UserDefaultsAppearanceStore(defaults: defaults)
+            store.save(StoredAppearance(font: choice))
+            XCTAssertEqual(store.load().font, choice)
+            XCTAssertFalse(choice.label.isEmpty)
+            XCTAssertFalse(choice.explanation.isEmpty)
+        }
+    }
+
+    /// The face is a per-character setting like every other, and reads the
+    /// shared value until she has one of her own.
+    func testACharacterReadsTheSharedFaceUntilSheIsGivenOne() {
+        let name = "AppearanceFontPerCharacterTests"
+        let defaults = UserDefaults(suiteName: name)!
+        defaults.removePersistentDomain(forName: name)
+        let her = UUID()
+        defaults.set("serif", forKey: "appearance.fontDesign")
+
+        let hers = UserDefaultsAppearanceStore(defaults: defaults, character: her)
+        XCTAssertEqual(hers.load().font, .serif, "Nothing of her own yet — she reads the shared look")
+
+        hers.save(StoredAppearance(font: .rounded))
+        XCTAssertEqual(hers.load().font, .rounded)
+        XCTAssertEqual(
+            UserDefaultsAppearanceStore(defaults: defaults).load().font, .serif,
+            "Her choice must not move everyone who hasn't made one"
+        )
+    }
+
     // MARK: - Window width
 
     func testWidthStartsAtTheDefaultAndIsItsFloor() {

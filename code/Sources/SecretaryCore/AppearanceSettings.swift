@@ -61,6 +61,9 @@ public struct AppearanceSettings: Equatable, Sendable {
     /// Which colours the windows are painted with. Not clamped to anything —
     /// unlike the sizes, every value is as valid as every other.
     public var theme: ThemeChoice
+    /// Which face the conversation is set in. Unclamped for the same reason as
+    /// the theme: there is no such thing as a value out of range.
+    public var font: FontChoice
 
     /// The most the bubble may become: the usable area of the screen it's on.
     /// Deliberately not persisted — the display can change between launches, so
@@ -75,10 +78,12 @@ public struct AppearanceSettings: Equatable, Sendable {
         maxWidth: Double = Self.defaultWidth,
         maxHeight: Double = Self.defaultHeight,
         characterScale: CharacterScale = .medium,
-        theme: ThemeChoice = .system
+        theme: ThemeChoice = .system,
+        font: FontChoice = .system
     ) {
         self.characterScale = characterScale
         self.theme = theme
+        self.font = font
         self.fontSize = min(max(fontSize, Self.minFontSize), Self.maxFontSize)
         self.maxHeight = max(maxHeight, Self.defaultHeight)
         self.maxWidth = max(maxWidth, Self.defaultWidth)
@@ -200,19 +205,22 @@ public struct StoredAppearance: Equatable, Sendable {
     public var chatHeight: Double
     public var characterScale: CharacterScale
     public var theme: ThemeChoice
+    public var font: FontChoice
 
     public init(
         fontSize: Double = AppearanceSettings.defaultFontSize,
         chatWidth: Double = AppearanceSettings.defaultWidth,
         chatHeight: Double = AppearanceSettings.defaultHeight,
         characterScale: CharacterScale = .medium,
-        theme: ThemeChoice = .system
+        theme: ThemeChoice = .system,
+        font: FontChoice = .system
     ) {
         self.fontSize = fontSize
         self.chatWidth = chatWidth
         self.chatHeight = chatHeight
         self.characterScale = characterScale
         self.theme = theme
+        self.font = font
     }
 }
 
@@ -231,7 +239,8 @@ public final class UserDefaultsAppearanceStore: AppearanceStoring, @unchecked Se
         width: "chatWidth",
         height: "chatHeight",
         scale: "appScale",
-        theme: "theme"
+        theme: "theme",
+        fontDesign: "fontDesign"
     )
     private let defaults: UserDefaults
     private let character: UUID?
@@ -273,7 +282,8 @@ public final class UserDefaultsAppearanceStore: AppearanceStoring, @unchecked Se
             chatWidth: read(names.width) { $0 as? Double } ?? AppearanceSettings.defaultWidth,
             chatHeight: read(names.height) { $0 as? Double } ?? AppearanceSettings.defaultHeight,
             characterScale: read(names.scale) { ($0 as? String).flatMap(CharacterScale.init(rawValue:)) } ?? .medium,
-            theme: read(names.theme) { ($0 as? String).flatMap(ThemeChoice.init(rawValue:)) } ?? .system
+            theme: read(names.theme) { ($0 as? String).flatMap(ThemeChoice.init(rawValue:)) } ?? .system,
+            font: read(names.fontDesign) { ($0 as? String).flatMap(FontChoice.init(rawValue:)) } ?? .system
         )
     }
 
@@ -288,6 +298,7 @@ public final class UserDefaultsAppearanceStore: AppearanceStoring, @unchecked Se
         defaults.set(appearance.chatHeight, forKey: key(names.height))
         defaults.set(appearance.characterScale.rawValue, forKey: key(names.scale))
         defaults.set(appearance.theme.rawValue, forKey: key(names.theme))
+        defaults.set(appearance.font.rawValue, forKey: key(names.fontDesign))
     }
 }
 

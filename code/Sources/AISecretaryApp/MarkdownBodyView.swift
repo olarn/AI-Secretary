@@ -13,6 +13,10 @@ struct MarkdownBodyView: View {
 
     let text: String
     let fontSize: Double
+    /// Which face the prose and the table cells are set in. Code blocks ignore
+    /// it — a fenced block is monospaced because its alignment carries meaning,
+    /// whatever the conversation around it is set in.
+    let font: FontChoice
     /// For the language label above a code block, which is a caption rather than
     /// part of the content.
     let secondaryFontSize: Double
@@ -31,6 +35,7 @@ struct MarkdownBodyView: View {
                     MessageTextView(
                         text: MessageMarkdown.attributed(body),
                         fontSize: fontSize,
+                        font: font,
                         palette: theme
                     )
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -50,7 +55,7 @@ struct MarkdownBodyView: View {
                 GridRow {
                     ForEach(Array(table.header.enumerated()), id: \.offset) { _, cell in
                         Text(MessageMarkdown.attributed(cell))
-                            .font(.system(size: fontSize, weight: .bold))
+                            .font(.system(size: fontSize, weight: .bold, design: font.swiftUIDesign))
                     }
                 }
                 Divider().gridCellUnsizedAxes(.horizontal)
@@ -58,7 +63,7 @@ struct MarkdownBodyView: View {
                     GridRow {
                         ForEach(Array(row.enumerated()), id: \.offset) { _, cell in
                             Text(MessageMarkdown.attributed(cell))
-                                .font(.system(size: fontSize))
+                                .font(.system(size: fontSize, design: font.swiftUIDesign))
                         }
                     }
                 }

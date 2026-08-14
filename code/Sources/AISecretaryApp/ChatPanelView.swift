@@ -1042,12 +1042,14 @@ struct ChatPanelView: View {
                         MessageTextView(
                             text: MessageMarkdown.attributed(body),
                             fontSize: appearance.settings.fontSize,
+                            font: appearance.settings.font,
                             palette: theme
                         )
                         .frame(
                             maxWidth: MessageTextView.naturalWidth(
                                 MessageMarkdown.attributed(body),
-                                fontSize: appearance.settings.fontSize
+                                fontSize: appearance.settings.fontSize,
+                                font: appearance.settings.font
                             ),
                             alignment: .leading
                         )
@@ -1147,7 +1149,11 @@ struct ChatPanelView: View {
                 GridRow {
                     ForEach(Array(table.header.enumerated()), id: \.offset) { _, cell in
                         Text(inlineMarkdown(cell))
-                            .font(.system(size: appearance.settings.fontSize, weight: .bold))
+                            .font(.system(
+                                size: appearance.settings.fontSize,
+                                weight: .bold,
+                                design: appearance.settings.font.swiftUIDesign
+                            ))
                     }
                 }
                 Divider().gridCellUnsizedAxes(.horizontal)
@@ -1155,7 +1161,10 @@ struct ChatPanelView: View {
                     GridRow {
                         ForEach(Array(row.enumerated()), id: \.offset) { _, cell in
                             Text(inlineMarkdown(cell))
-                                .font(.system(size: appearance.settings.fontSize))
+                                .font(.system(
+                                    size: appearance.settings.fontSize,
+                                    design: appearance.settings.font.swiftUIDesign
+                                ))
                         }
                     }
                 }
@@ -1503,6 +1512,8 @@ struct ChatPanelView: View {
 
             characterScaleRow
 
+            fontRow
+
             stepperRow(
                 label: "Text size",
                 value: "\(Int(appearance.settings.fontSize))pt",
@@ -1541,6 +1552,22 @@ struct ChatPanelView: View {
                 (choice.label, appearance.settings.theme == choice, { appearance.selectTheme(choice) })
             })
             Text(appearance.settings.theme.explanation)
+                .font(.system(size: appearance.settings.hintFontSize))
+                .foregroundStyle(theme.mutedText.color)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// Built from `FontChoice.allCases`, the same way the theme row is.
+    ///
+    /// Sits above Text size because the two are read together and the face is
+    /// the coarser choice of the pair: which font, then how big.
+    private var fontRow: some View {
+        VStack(alignment: .leading, spacing: appearance.settings.panelSpacing * 0.5) {
+            choiceRow("Font", FontChoice.allCases.map { choice in
+                (choice.label, appearance.settings.font == choice, { appearance.selectFont(choice) })
+            })
+            Text(appearance.settings.font.explanation)
                 .font(.system(size: appearance.settings.hintFontSize))
                 .foregroundStyle(theme.mutedText.color)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1892,7 +1919,10 @@ struct ChatPanelView: View {
                             Text(option)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        .font(.system(size: appearance.settings.fontSize))
+                        .font(.system(
+                            size: appearance.settings.fontSize,
+                            design: appearance.settings.font.swiftUIDesign
+                        ))
                         .padding(.vertical, 3)
                         .padding(.horizontal, 6)
                         .background(

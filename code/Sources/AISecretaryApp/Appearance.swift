@@ -47,7 +47,8 @@ final class Appearance {
             maxWidth: screen.map(Self.usableWidth) ?? saved.chatWidth,
             maxHeight: screen.map { Double($0.height) } ?? saved.chatHeight,
             characterScale: saved.characterScale,
-            theme: saved.theme
+            theme: saved.theme,
+            font: saved.font
         )
         watchSystemTheme()
     }
@@ -116,6 +117,7 @@ final class Appearance {
     func decreaseHeight() { mutate { $0.decreaseHeight() } }
     func selectCharacterScale(_ scale: CharacterScale) { mutate { $0.characterScale = scale } }
     func selectTheme(_ theme: ThemeChoice) { mutate { $0.theme = theme } }
+    func selectFont(_ font: FontChoice) { mutate { $0.font = font } }
     func widenChat() { mutate { $0.widenChat() } }
     func restoreChatWidth() { mutate { $0.restoreChatWidth() } }
     func resizeChat(width: Double, height: Double) {
@@ -146,7 +148,8 @@ final class Appearance {
                 chatWidth: updated.chatWidth,
                 chatHeight: updated.chatHeight,
                 characterScale: updated.characterScale,
-                theme: updated.theme
+                theme: updated.theme,
+                font: updated.font
             )
         )
         if needsRelayout { onChange?() }

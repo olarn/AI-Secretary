@@ -192,6 +192,7 @@ private struct InfoWindowView: View {
             MarkdownBodyView(
                 text: spec.body,
                 fontSize: appearance.settings.fontSize,
+                font: appearance.settings.font,
                 secondaryFontSize: appearance.settings.secondaryFontSize
             )
             .padding(16)
