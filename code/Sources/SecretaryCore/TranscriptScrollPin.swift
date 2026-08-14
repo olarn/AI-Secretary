@@ -29,12 +29,6 @@ import Foundation
 /// arithmetic, and there is no clock in here at all — every function below
 /// returns the same answer for the same arguments.
 public struct TranscriptScrollPin: Equatable, Sendable {
-    /// How far past the bottom edge the end of the transcript may sit and still
-    /// count as "on screen", in points. Some slack is needed: a token lands one
-    /// layout pass before the scroll that follows it, and that pass measures the
-    /// end a line below the fold.
-    public static let tolerance: Double = 24
-
     /// Follows by default — a fresh conversation is at the bottom already.
     public private(set) var isFollowing = true
 
@@ -49,12 +43,23 @@ public struct TranscriptScrollPin: Equatable, Sendable {
     /// Call whenever the end of the transcript is measured against the bottom
     /// edge of the view: positive means it sits below the fold.
     ///
-    /// Only ever latches on. A larger distance is the ambiguous one — it is
-    /// what both a reader scrolling up and a reply growing look like — so it is
-    /// evidence of nothing and is left alone. The end coming back on screen is
-    /// unambiguous.
+    /// Re-arms only within `settled` of the fold — the same threshold
+    /// `isBehind` uses to call the reader already there, not a wider one of
+    /// its own. A wider one used to live here, on the theory that "still
+    /// basically at the bottom" ought to be more forgiving than "already
+    /// exactly at the bottom". It wasn't a free choice: `readerScrolledUp` is
+    /// never allowed to consume the scroll event that reported it (see
+    /// `startWatchingScroll`), so the reader's own short scroll up still moves
+    /// the content, and the very next call here measures that scroll's own
+    /// resulting position — not a later, separate trip back down. A short flick
+    /// lands well within any generous slack, so a wide threshold undid it on
+    /// the spot, which is why scrolling up sometimes took two or three tries
+    /// before it held. A reader who genuinely scrolls back down always
+    /// converges on the same near-zero rest position `isBehind` already
+    /// trusts — the scroll view has nowhere further to give past its own
+    /// bottom — so nothing legitimate is lost by asking for that here too.
     public mutating func update(distanceBelowFold: Double) {
-        guard distanceBelowFold <= Self.tolerance else { return }
+        guard distanceBelowFold <= Self.settled else { return }
         isFollowing = true
     }
 
@@ -66,16 +71,17 @@ public struct TranscriptScrollPin: Equatable, Sendable {
     }
 
     /// Closer than this to the bottom edge and the end is already where
-    /// following would put it, so scrolling again would move nothing.
-    ///
-    /// Deliberately far smaller than `tolerance`, which answers a different
-    /// question. `tolerance` is how far out of sight the end may be while the
-    /// reader still counts as *at the bottom* — generous, because a token lands
-    /// a layout pass before the scroll that follows it. This is how far out of
-    /// place the end may be before we *put it back* — near zero, because
-    /// anything we tolerate here is drift the reader watches accumulate.
-    /// Sharing one number would mean choosing between yanking a reader who is
-    /// one line off and letting the answer sink 24pt below the fold.
+    /// following would put it, so scrolling again would move nothing — and, by
+    /// the same measure, close enough to count as *at* the bottom in the first
+    /// place. One number answers both questions now. Two used to: this one,
+    /// strict, for "stop nudging it, it's there"; a much wider one for "still
+    /// counts as there" when deciding whether to resume following after a
+    /// scroll. The wider one existed to forgive a token landing a layout pass
+    /// before the scroll that follows it — but `update` only reads that
+    /// forgiveness when following is already on, where it changes nothing, and
+    /// it was reached on the one path where it did change something: the
+    /// reader's own short scroll up, whose resulting position it forgave right
+    /// back into following. See `update` for the rest of that story.
     public static let settled: Double = 0.5
 
     /// Whether the end of the transcript has been pushed below the bottom edge

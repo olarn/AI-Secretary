@@ -22,19 +22,25 @@ final class TranscriptScrollPinTests: XCTestCase {
         XCTAssertTrue(pin.isFollowing)
     }
 
-    /// The end of the transcript lands a layout pass before the scroll that
-    /// follows it, so "on screen" has to allow a line's worth of slack.
-    func testJustBelowTheFoldStillCountsAsTheEnd() {
+    /// The reported bug: a scroll-up event is never consumed, so the reader's
+    /// own short flick still moves the content natively and is measured a
+    /// moment later. That measurement must not read as "already back at the
+    /// bottom" just because the flick was short — it is the same gesture that
+    /// `readerScrolledUp` already recorded, not a separate return trip. A wide
+    /// re-arm threshold used to live in `update` and, being generous by
+    /// design, undid every flick shorter than it — which is why scrolling up
+    /// sometimes took two or three tries before it stuck.
+    func testAShortFlickUpDoesNotImmediatelyResumeFollowing() {
         var pin = TranscriptScrollPin()
         pin.readerScrolledUp()
-        pin.update(distanceBelowFold: TranscriptScrollPin.tolerance - 1)
-        XCTAssertTrue(pin.isFollowing)
+        pin.update(distanceBelowFold: 15)
+        XCTAssertFalse(pin.isFollowing, "This is the flick's own resulting position, not a return to the bottom")
     }
 
     func testFurtherBelowTheFoldDoesNot() {
         var pin = TranscriptScrollPin()
         pin.readerScrolledUp()
-        pin.update(distanceBelowFold: TranscriptScrollPin.tolerance + 1)
+        pin.update(distanceBelowFold: TranscriptScrollPin.settled + 1)
         XCTAssertFalse(pin.isFollowing, "Still short of the end — nothing to resume from")
     }
 
@@ -131,15 +137,14 @@ final class TranscriptScrollPinTests: XCTestCase {
         XCTAssertFalse(pin.isBehind(distanceBelowFold: 600))
     }
 
-    /// The two thresholds answer different questions and must not be merged:
-    /// what still counts as *being* at the bottom is generous, what counts as
-    /// *already* at the bottom is not. One number for both would either yank a
-    /// reader a line off the end or let the reply sink a line below it.
-    func testDriftIsCorrectedLongBeforeItCountsAsHavingLeftTheBottom() {
+    /// `isBehind` and `update` share one threshold now — see `update`'s doc
+    /// for why the second, wider one they used to have was the bug rather
+    /// than a legitimate second question. Below `settled` and following stays
+    /// or resumes without a scroll; anything past it is still out of place.
+    func testDriftPastSettledIsStillOutOfPlace() {
         let pin = TranscriptScrollPin()
-        XCTAssertLessThan(TranscriptScrollPin.settled, TranscriptScrollPin.tolerance)
-        XCTAssertTrue(pin.isBehind(distanceBelowFold: TranscriptScrollPin.tolerance - 1),
-                      "Inside the tolerance is still out of place, and gets put back")
+        XCTAssertTrue(pin.isBehind(distanceBelowFold: TranscriptScrollPin.settled + 1),
+                      "Past settled is still out of place, and gets put back")
     }
 
     // MARK: - Which scrolls are the reader taking over
