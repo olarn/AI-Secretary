@@ -166,6 +166,31 @@ final class ProjectMemoryBehaviourTests: XCTestCase {
         XCTAssertTrue(said(secretary).contains("project"), "Got: \(said(secretary))")
     }
 
+    /// One decision is pending at a time. A reply that both asks for a skill
+    /// and asks to remember something cannot have two cards, and the note is
+    /// the less urgent of the two — but it is *said*, not dropped. Every other
+    /// refusal in this feature is spoken, and this was the one that swallowed.
+    func testWhenAnotherCardIsAlreadyUpTheNoteIsSaidRatherThanDropped() async {
+        provider.replyForNextTurn = """
+            I need a skill for this.
+
+            ```install-skill
+            pptx
+            ```
+
+            ```remember
+            A fact worth keeping
+            ```
+            """
+        let secretary = makeSecretary(projects: [project()])
+        secretary.submit("hello")
+        await waitUntilIdle()
+
+        XCTAssertTrue(written.isEmpty)
+        XCTAssertTrue(said(secretary).contains("A fact worth keeping"),
+                      "It must not vanish in silence. Got: \(said(secretary))")
+    }
+
     // MARK: - The prompt
 
     func testSheIsToldAboutTheMemoryOnlyWhileAProjectIsOpen() async {

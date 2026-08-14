@@ -250,6 +250,16 @@ public func memorySavedLine(_ note: MemoryNote, project: String) -> String {
         + "ทั้งผมและ `claude` ในเทอร์มินัลจะอ่านเจอรอบหน้า"
 }
 
+/// One decision is pending at a time, and something else got there first.
+///
+/// Said rather than swallowed, like every other refusal here. Dropping it in
+/// silence would leave her believing it was kept — the same failure the write
+/// error is announced for, and rare enough that nobody would ever find it by
+/// using the app.
+public func memoryBusyLine(_ note: MemoryNote) -> String {
+    "ยังมีเรื่องอื่นรอคุณตอบอยู่ ผมเลยยังไม่ได้เก็บ “\(note.title)” — บอกอีกทีหลังตอบเรื่องนั้นเสร็จได้ครับ"
+}
+
 public func memoryFailedLine(_ note: MemoryNote, reason: String) -> String {
     "เขียน “\(note.title)” ลง memory ไม่สำเร็จ — \(reason)"
 }

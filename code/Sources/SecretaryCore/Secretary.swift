@@ -2943,8 +2943,12 @@ public final class Secretary {
         // is pending at a time, and a note is the less urgent of the two — the
         // skill install is blocking the answer, the note is about keeping
         // something once the answer is given.
-        if let note = keeping.note, pendingDecision.isEmpty {
-            offerToRemember(note, taskID: taskID)
+        if let note = keeping.note {
+            if pendingDecision.isEmpty {
+                offerToRemember(note, taskID: taskID)
+            } else {
+                say(.secretary, memoryBusyLine(note))
+            }
         }
 
         // File it now, not when it is put away. Every ending goes through here
