@@ -84,6 +84,11 @@ public enum PlannedOperation: Equatable, Sendable {
     /// `.dependencyInstalling`, so it is asked every time: this puts software
     /// on the person's machine.
     case installSkill(plugin: String, prompt: String)
+    /// Keep something about this project in its Claude Code memory.
+    /// `.localWrite` — it writes a file, and it writes it *outside* every
+    /// registered project, into the directory the person's own terminal
+    /// sessions read back.
+    case rememberNote(MemoryNote)
 
     public var actionClass: ActionClass {
         switch self {
@@ -96,6 +101,7 @@ public enum PlannedOperation: Equatable, Sendable {
         case .startAgent: return .readOnly
         case .widenAgentTools: return .localWrite
         case .installSkill: return .dependencyInstalling
+        case .rememberNote: return .localWrite
         }
     }
 
@@ -111,6 +117,8 @@ public enum PlannedOperation: Equatable, Sendable {
             return "Allow \(rules.joined(separator: ", ")) for the rest of this session"
         case .installSkill(let plugin, _):
             return "Install the \(plugin) skill from your Claude Code marketplaces"
+        case .rememberNote:
+            return "Keep this in the project's memory, where your terminal will read it too"
         }
     }
 }
@@ -340,6 +348,10 @@ public final class Secretary {
     /// call to `SkillDiscovery.discover`, so a test can supply a fixed list
     /// instead of whatever happens to be installed on the machine running it.
     @ObservationIgnored private let discoverSkills: ([String]) -> [SkillInfo]
+    /// How a note reaches the project's memory directory. A closure for the
+    /// same reason as `discoverSkills`: the real one writes into the person's
+    /// own `~/.claude`, which is not somewhere a test may go.
+    @ObservationIgnored private let saveProjectMemory: (MemoryNote, String) -> Either<String, URL>
 
     @ObservationIgnored private var activeTaskID: Option<String> = .none()
     /// The user's own words for the request in flight, so a completed tool run
@@ -433,7 +445,14 @@ public final class Secretary {
         // real one copies the person's files onto disk, which no test should
         // have to remember to opt out of.
         attachmentStore: AttachmentStaging = InMemoryAttachmentStore(),
-        discoverSkills: @escaping ([String]) -> [SkillInfo] = { SkillDiscovery.discover(projectPaths: $0) }
+        discoverSkills: @escaping ([String]) -> [SkillInfo] = { SkillDiscovery.discover(projectPaths: $0) },
+        // The real one writes into `~/.claude/projects/<slug>/memory/`, which is
+        // the person's own Claude Code memory and not a directory a test may
+        // touch. Unlike the history and attachment stores there is no in-memory
+        // twin to default to, because there is nothing to read back — so the
+        // default is the real one and every test passes its own temporary home.
+        saveProjectMemory: @escaping (MemoryNote, String) -> Either<String, URL>
+            = { FileProjectMemoryStore().save($0, forProjectAt: $1) }
     ) {
         self.profile = profile
         self.stateMachine = stateMachine
@@ -455,6 +474,7 @@ public final class Secretary {
         // app for the part of it that remembers.
         self.history = conversationStore.load().getOrElse([])
         self.discoverSkills = discoverSkills
+        self.saveProjectMemory = saveProjectMemory
         // The provider is told at startup, not only when the switch is flipped:
         // a preference that survives quitting has to survive relaunching too.
         (chatProvider as? WorkspaceScopedProvider)?.setBrowserEnabled(self.browserEnabled)
@@ -2255,6 +2275,62 @@ public final class Secretary {
         pendingDecision = .some(.approval(request, operation: .installSkill(plugin: plugin, prompt: prompt)))
     }
 
+    /// Puts a card up for something the assistant asked to keep.
+    ///
+    /// Three things have to be true before the card appears, and each is a
+    /// refusal rather than a silent drop:
+    ///
+    /// - **A project is open.** With none, the working directory is the scratch
+    ///   folder and there is no project for a fact to be about. Memory filed
+    ///   there would be filed against a project the person never chose.
+    /// - **The note does not read as an instruction.** This is the one thing
+    ///   memory adds that no other block does: it is model-written text that
+    ///   will be re-read as context on every later turn — by this app, and by
+    ///   the person's own terminal in that project. `instructionRisks` already
+    ///   knows the shapes, and the refusal is said out loud rather than logged.
+    /// - **The person says yes.** `.localWrite`, so the card comes every time.
+    ///   Approve-once was the alternative and was rejected: the grant would be
+    ///   to write into `~/.claude`, which is not the project the person
+    ///   approved, and each note is a different sentence to weigh.
+    private func offerToRemember(_ note: MemoryNote, taskID: String) {
+        guard let project = lastProject.toOptional() else {
+            say(.secretary, """
+                ผมยังไม่ได้เปิด project ไหนอยู่ เลยยังไม่มี memory ที่จะเก็บ “\(note.title)” ลงไปครับ \
+                เปิด project ก่อนแล้วบอกใหม่ได้เลย
+                """)
+            return
+        }
+
+        let risks = instructionRisks(fileText: note.body, steps: [note.title])
+        guard risks.isEmpty else {
+            audit.record(AuditEntry(taskID: taskID, kind: .approvalDenied, detail: "memory note refused: \(note.title)"))
+            say(.secretary, memoryRefusedLine(note, risks: risks))
+            return
+        }
+
+        proceed(operation: .rememberNote(note), project: project)
+    }
+
+    /// Writes it, and says what landed where.
+    ///
+    /// Announced on both outcomes. A note the person approved and that then
+    /// failed to write is the case where silence is worst: they would go on
+    /// believing it was remembered, and only find out weeks later when nothing
+    /// recalled it.
+    private func rememberNote(_ note: MemoryNote, in project: Project) {
+        let taskID = activeTaskID.getOrElse("-")
+        saveProjectMemory(note, project.path).fold(
+            { reason in
+                audit.record(AuditEntry(taskID: taskID, kind: .failed, detail: "memory write failed: \(reason)"))
+                say(.secretary, memoryFailedLine(note, reason: reason))
+            },
+            { url in
+                audit.record(AuditEntry(taskID: taskID, kind: .executionFinished, detail: "remembered: \(url.lastPathComponent)"))
+                say(.secretary, memorySavedLine(note, project: project.name))
+            }
+        )
+    }
+
     /// Installs, says how it went, and asks the question again.
     ///
     /// The rescan is the point: a skill Claude Code has just installed is not in
@@ -2794,6 +2870,12 @@ public final class Secretary {
         let handing = success
             ? HandOffBlock.parse(needing.body)
             : HandOffBlock(body: needing.body, request: nil)
+        // Something she wants kept about this project. Read once the reply is
+        // whole, like the rest — half a block would file half a fact, and this
+        // is the one block whose output the person's own terminal reads back.
+        let keeping = success
+            ? RememberBlock.parse(handing.body)
+            : RememberBlock(body: handing.body, note: nil)
         if let missing = blocked.missing,
            let request = conversation.last(where: { $0.role == .user })?.content {
             outstanding = OutstandingRequest(request: request, missing: missing)
@@ -2818,7 +2900,7 @@ public final class Secretary {
         // If this turn was another character's errand, the answer goes back
         // now — after the state machine has settled, so what is sent is a
         // finished answer rather than one still closing.
-        reportBackIfAnswering(handing.body)
+        reportBackIfAnswering(keeping.body)
 
         // Her own request to pass something on. After the report above, so a
         // character answering an errand can hand a piece of it to a third
@@ -2857,6 +2939,13 @@ public final class Secretary {
         // that just ended. Only ever a card: nothing is installed until someone
         // reads what it names and says yes.
         if let plugin = needing.plugin { offerToInstallSkill(plugin, taskID: taskID) }
+        // After it, and only if it didn't already claim the card: one decision
+        // is pending at a time, and a note is the less urgent of the two — the
+        // skill install is blocking the answer, the note is about keeping
+        // something once the answer is given.
+        if let note = keeping.note, pendingDecision.isEmpty {
+            offerToRemember(note, taskID: taskID)
+        }
 
         // File it now, not when it is put away. Every ending goes through here
         // — answered, refused, failed — so the conversation you are having is
@@ -2882,7 +2971,8 @@ public final class Secretary {
         let planned = PlanBlock.parse(blocked.body)
         let watched = WatchBlock.parse(planned.body)
         let asked = AttachBlock.parse(RunBlock.parse(watched.body).body)
-        return HandOffBlock.parse(SkillInstallBlock.parse(asked.body).body).body
+        let handed = HandOffBlock.parse(SkillInstallBlock.parse(asked.body).body)
+        return RememberBlock.parse(handed.body).body
     }
 
     /// - Parameter replyID: the bubble being written, when there is one. With
@@ -3094,6 +3184,13 @@ public final class Secretary {
             beginWatching(request, in: project)
             return
         }
+        // Reached only through the card: `.localWrite` never satisfies
+        // `canRunUnattended`, so `decidePermission` always routes it through
+        // `.needsApproval` first.
+        if case .rememberNote(let note) = operation {
+            rememberNote(note, in: project)
+            return
+        }
         if case .startAgent(let prompt) = operation {
             lastProject = .some(project)
             beginAgentSession(prompt: prompt, in: project)
@@ -3190,7 +3287,8 @@ public final class Secretary {
             </file>
             """ + (wasTruncated ? "\n(Only the first \(readContextMaxBytes / 1024) KB is shown here.)" : "")
 
-        case .understand, .followInstructions, .watch, .startAgent, .widenAgentTools, .installSkill:
+        case .understand, .followInstructions, .watch, .startAgent, .widenAgentTools,
+             .installSkill, .rememberNote:
             // These write their own history: the model's reply is the record.
             return
         }
@@ -3561,7 +3659,7 @@ public final class Secretary {
 
     private func toolID(for operation: PlannedOperation) -> String {
         switch operation {
-        case .startAgent, .widenAgentTools, .installSkill: return Self.claudeCodeToolID
+        case .startAgent, .widenAgentTools, .installSkill, .rememberNote: return Self.claudeCodeToolID
         case .git: return adapter.toolID
         // Understanding reads through the same adapter, so it is gated by the
         // same project allowlist entry. What makes it stricter is its action
@@ -3583,6 +3681,8 @@ public final class Secretary {
         case .startAgent: return "run Claude Code here"
         case .widenAgentTools(let rules, _): return rules.joined(separator: ", ")
         case .installSkill(let plugin, _): return "claude plugin install \(plugin)"
+        case .rememberNote(let note):
+            return memoryApprovalSummary(note, project: lastProject.map(\.name)^.getOrElse("this project"))
         }
     }
 
@@ -3596,7 +3696,7 @@ public final class Secretary {
             return fileAdapter.run(.readFile(relativePath: op.relativePath), in: project)
         case .watch:
             preconditionFailure("watching is handled before adapter dispatch")
-        case .startAgent, .widenAgentTools, .installSkill:
+        case .startAgent, .widenAgentTools, .installSkill, .rememberNote:
             preconditionFailure("agent operations are handled before adapter dispatch")
         }
     }
@@ -3659,8 +3759,14 @@ public final class Secretary {
         let withNeighbours = directoryPrompt(characterDirectory(directorySnapshot(), excluding: profile.id))
             .map { base + "\n\n" + $0 }^
             .getOrElse(base)
-        guard let outstanding else { return withNeighbours }
-        return withNeighbours + "\n\n" + outstanding.reminder
+        // Only with a project open — see `offerToRemember`, which refuses for
+        // the same reason. Telling her about a memory she cannot file anything
+        // into would be an invitation to try.
+        let withMemory = lastProject
+            .map { withNeighbours + "\n\n" + memoryPrompt(projectName: $0.name) }^
+            .getOrElse(withNeighbours)
+        guard let outstanding else { return withMemory }
+        return withMemory + "\n\n" + outstanding.reminder
     }
 
     /// For a backend that has its own file tools and is already running inside
