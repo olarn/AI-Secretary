@@ -124,11 +124,33 @@ public enum PlannedOperation: Equatable, Sendable {
 public struct QueuedMessage: Equatable, Sendable {
     public let text: String
     public let attachments: [Attachment]
+    /// The errand this message is answering, when it arrived from another
+    /// character rather than from the person.
+    ///
+    /// It rides in the queue for the same reason the attachments do: by the
+    /// time the message runs, whatever was known when it was accepted is gone,
+    /// and an answer with no errand behind it has nowhere to go back to.
+    public let errand: Option<CharacterMessage>
 
-    public init(text: String, attachments: [Attachment] = []) {
+    public init(
+        text: String,
+        attachments: [Attachment] = [],
+        errand: Option<CharacterMessage> = .none()
+    ) {
         self.text = text
         self.attachments = attachments
+        self.errand = errand
     }
+}
+
+/// A hand-off that needs the person to say who it is for.
+///
+/// The words are kept whole so that answering the question runs the request
+/// that prompted it, rather than the single name that was picked.
+struct PendingDelegation: Equatable, Sendable {
+    let errand: String
+    let candidates: [CharacterCard]
+    let attachments: [Attachment]
 }
 
 /// The state of one streaming reply, threaded through the handlers as a value.
@@ -307,6 +329,12 @@ public final class Secretary {
     /// Last project actually worked in, so follow-up commands don't need
     /// "in <project>" repeated on every line.
     @ObservationIgnored private var lastProject: Option<Project> = .none()
+
+    /// The name of the project she has open, for the roster the other
+    /// characters see. The name and nothing else — `CharacterCard` carries no
+    /// path on purpose, so knowing where someone is working never becomes
+    /// access to it.
+    public var openProjectName: Option<String> { lastProject.map(\.name)^ }
     @ObservationIgnored private var _sessionAgentTools: Set<String> = []
     /// Sites the person has agreed the assistant may work in, this session.
     @ObservationIgnored private var webSites = WebSiteGrants()
@@ -470,9 +498,19 @@ public final class Secretary {
             return
         }
 
-        // Slash commands are above this on purpose: `/watch stop` and `/run
-        // stop` are how you call something off, and they have to work while
-        // that something is running.
+        // Before the busy check, deliberately: passing something to another
+        // character is not work for this one, so there is nothing to wait for.
+        if handOff(trimmed, attachments: carried) { return }
+
+        routeToTurn(trimmed, attachments: carried)
+    }
+
+    /// Runs a message now, or asks whether it should wait.
+    ///
+    /// Slash commands are handled above this on purpose: `/watch stop` and
+    /// `/run stop` are how you call something off, and they have to work while
+    /// that something is running.
+    private func routeToTurn(_ trimmed: String, attachments carried: [Attachment]) {
         if stateMachine.state.isBusy {
             say(.secretary, """
                 I'm still on the last one. Shall this wait its turn, or does it \
@@ -544,6 +582,30 @@ public final class Secretary {
     /// relaunch would fire work nobody was there to see asked for.
     private(set) var queue: [QueuedMessage] = []
 
+    // MARK: - The other characters on the desktop
+
+    /// Who else is here, asked afresh at the start of every turn.
+    ///
+    /// A closure rather than a stored array so it cannot go stale: a character
+    /// added, renamed, or moved to another model between two turns is in the
+    /// next prompt without anyone having to remember to push it across.
+    @ObservationIgnored public var directorySnapshot: () -> [CharacterCard] = { [] }
+
+    /// Hands a message to whoever does the delivering — `CharacterBus` in the
+    /// app, a closure in tests. Unset means she is the only one here.
+    @ObservationIgnored public var onSend: ((CharacterMessage) -> Void)?
+
+    /// Errands sent and not yet answered. Session-only, like the grants and the
+    /// queue: one that outlived a relaunch would have nobody left to answer it.
+    private(set) var sentErrands: [OutstandingErrand] = []
+
+    /// The errand this turn is answering, when it came from another character
+    /// rather than from the person.
+    private var answering: Option<CharacterMessage> = .none()
+
+    /// A hand-off waiting on the person to say who it is for.
+    private var pendingDelegation: Option<PendingDelegation> = .none()
+
     /// What is waiting, in words. The files waiting with them are the queue's
     /// business, not the panel's — it counts them and shows what was typed.
     public var queuedMessages: [String] { queue.map(\.text) }
@@ -610,6 +672,13 @@ public final class Secretary {
         fileRequest = .none()
         stagedThisSession = false
         attachmentStore.clear()
+        // Session-only, like the grants above. An errand outstanding across a
+        // new conversation would report an answer into a transcript that no
+        // longer holds the question, and a hand-off waiting on a name would be
+        // answered by the first thing typed in the fresh one.
+        sentErrands = []
+        answering = .none()
+        pendingDelegation = .none()
         instructionMemory = InstructionMemory()
         // The backend keeps its own thread; ours going quiet is not enough.
         (chatProvider as? WorkspaceScopedProvider)?.resetConversation()
@@ -842,8 +911,153 @@ public final class Secretary {
               !stateMachine.state.isBusy, !pendingDecision.isDefined
         else { return }
         let next = queue.removeFirst()
+        // Set before the turn starts, so that when it ends the answer knows
+        // which errand it belongs to.
+        answering = next.errand
         say(.secretary, "Now, the one that was waiting:")
         beginTurn(next.text, attachments: next.attachments)
+    }
+
+    // MARK: - Passing work to another character
+
+    /// Whether this message was about somebody else, and has been dealt with.
+    ///
+    /// This is the one place prose is read for an action, and it is allowed to
+    /// be because of what it does when it is unsure: it asks. The charter's
+    /// rule is not "never read prose", it is never *act* on a guess.
+    private func handOff(_ trimmed: String, attachments carried: [Attachment]) -> Bool {
+        if let waiting = pendingDelegation.toOptional() {
+            pendingDelegation = .none()
+            return answerHandOff(waiting, with: trimmed)
+        }
+        switch delegationIntent(in: trimmed, directory: directorySnapshot()) {
+        case .none:
+            return false
+        case .confident(let card, let errand):
+            send(errand, to: card)
+            return true
+        case .unsure(let candidates, let errand):
+            pendingDelegation = .some(PendingDelegation(
+                errand: errand, candidates: candidates, attachments: carried
+            ))
+            askWhoTakesIt(candidates)
+            return true
+        }
+    }
+
+    /// Asks in the conversation, using the same marked block the assistant uses
+    /// for its own questions — so the picker, the arrow keys and the "send the
+    /// option's own words" rule all work already, with no new UI.
+    private func askWhoTakesIt(_ candidates: [CharacterCard]) {
+        say(.secretary, """
+            \(delegationQuestion(candidates))
+
+            ```choices
+            \(delegationChoices(candidates).joined(separator: "\n"))
+            ```
+            """)
+    }
+
+    private func answerHandOff(_ waiting: PendingDelegation, with picked: String) -> Bool {
+        guard picked != answerItYourselfChoice else {
+            routeToTurn(waiting.errand, attachments: waiting.attachments)
+            return true
+        }
+        guard let card = waiting.candidates.first(
+            where: { $0.name.caseInsensitiveCompare(picked) == .orderedSame }
+        ) else {
+            // Typing something else instead of picking drops the hand-off —
+            // said out loud, for the same reason dropping a pending decision is:
+            // a request that quietly evaporates is indistinguishable from one
+            // that was carried out.
+            say(.secretary, "(I've kept that one rather than passing it on.)")
+            return false
+        }
+        send(waiting.errand, to: card)
+        return true
+    }
+
+    private func send(_ errand: String, to card: CharacterCard) {
+        let message = CharacterMessage(
+            from: profile.id,
+            fromName: profile.displayName,
+            to: card.id,
+            kind: .errand,
+            body: errand
+        )
+        relayDeliverable(
+            message,
+            known: Set(directorySnapshot().map(\.id)),
+            outstanding: sentErrands,
+            recipientName: card.name
+        ).fold(
+            { self.say(.secretary, relayRefusalLine($0, to: card.name)) },
+            { ok in
+                self.sentErrands.append(OutstandingErrand(
+                    correlationID: ok.correlationID, from: ok.from, to: ok.to, sentAt: ok.sentAt
+                ))
+                self.say(.secretary, relaySentLine(to: card.name))
+                self.onSend?(ok)
+            }
+        )
+    }
+
+    /// Something another character on this desktop has sent her.
+    ///
+    /// An errand joins the ordinary queue rather than interrupting: the person
+    /// talking to her now did not ask for their turn to be pushed aside, and
+    /// the queue already knows how to hold something whole until its turn.
+    public func receive(_ message: CharacterMessage) {
+        switch message.kind {
+        case .errand:
+            say(.secretary, relayReceivedLine(from: message.fromName))
+            let asked = relayedErrandPrompt(from: message.fromName, body: message.body)
+            guard !stateMachine.state.isBusy, !queuePaused,
+                  !pendingDecision.isDefined, queue.isEmpty
+            else {
+                queue.append(QueuedMessage(text: asked, errand: .some(message)))
+                return
+            }
+            answering = .some(message)
+            beginTurn(asked)
+
+        case .report:
+            relayAcceptableReport(message, outstanding: sentErrands).fold(
+                { self.say(.secretary, relayRefusalLine($0, to: message.fromName)) },
+                { ok in
+                    self.sentErrands.removeAll { $0.correlationID == ok.correlationID }
+                    self.say(.secretary, relayReportLine(from: ok.fromName, body: ok.body))
+                    // Into the conversation as well as onto the screen: the
+                    // person can see the answer, so the model has to know it
+                    // arrived or the next turn will contradict what is on
+                    // screen — the same reason a stopped reply is written back.
+                    self.conversation.append(ChatMessage(
+                        role: .user,
+                        content: "[\(ok.fromName) answered what you passed on: \(ok.body)]"
+                    ))
+                }
+            )
+        }
+    }
+
+    /// Sends this turn's answer back, when the turn was somebody else's errand.
+    ///
+    /// Called for every ending, including a failed one: a character left
+    /// waiting on an answer that is never coming is worse than being told it
+    /// went wrong.
+    private func reportBackIfAnswering(_ body: String) {
+        guard let errand = answering.toOptional() else { return }
+        answering = .none()
+        let answer = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        onSend?(CharacterMessage(
+            from: profile.id,
+            fromName: profile.displayName,
+            to: errand.from,
+            kind: .report,
+            body: answer.isEmpty ? "I couldn't get anywhere with that one." : answer,
+            correlationID: errand.correlationID,
+            hops: errand.hops + 1
+        ))
     }
 
     public func resolvePendingApproval(granted: Bool) {
@@ -2361,6 +2575,11 @@ public final class Secretary {
         stateMachine.send(success ? .succeeded : .failed, reason: success ? "chat reply delivered" : "chat failed", taskID: .some(taskID))
         stateMachine.send(.acknowledge, reason: "result delivered", taskID: .some(taskID))
         activeTaskID = .none()
+        // If this turn was another character's errand, the answer goes back
+        // now — after the state machine has settled, so what is sent is a
+        // finished answer rather than one still closing.
+        reportBackIfAnswering(needing.body)
+
         // After the state machine is back to idle, so the announcement lands in
         // a settled conversation and a loop asked for mid-reply can't fire into
         // the reply that asked for it.
@@ -3189,8 +3408,14 @@ public final class Secretary {
         // Named, verbatim, for this one turn. A standing rule about "messages
         // that supply the missing piece" was already in the prompt and was not
         // enough; the request itself has to be in front of the model.
-        guard let outstanding else { return base }
-        return base + "\n\n" + outstanding.reminder
+        // Who else is on the desktop, read fresh for this turn. Absent when she
+        // is the only one here, which is the overwhelmingly common case and
+        // should cost the prompt nothing.
+        let withNeighbours = directoryPrompt(characterDirectory(directorySnapshot(), excluding: profile.id))
+            .map { base + "\n\n" + $0 }^
+            .getOrElse(base)
+        guard let outstanding else { return withNeighbours }
+        return withNeighbours + "\n\n" + outstanding.reminder
     }
 
     /// For a backend that has its own file tools and is already running inside

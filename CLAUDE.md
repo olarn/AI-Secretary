@@ -368,7 +368,7 @@ already made once, and the ungated key-posting variants were deleted on purpose.
 **ทุกครั้งที่แก้ code ต้อง bump version** ตามแพตเทิร์น `major.phase.change`
 
 - `major` — 0 ไปจนกว่าจะ public เจ้าของจะเป็นคนบอกเองว่าเมื่อไหร่
-- `phase` — phase ที่กำลังทำอยู่ **ตอนนี้คือ 13 และนี่คือที่เดียวในรีโปที่เขียนเลขนี้**
+- `phase` — phase ที่กำลังทำอยู่ **ตอนนี้คือ 14 และนี่คือที่เดียวในรีโปที่เขียนเลขนี้**
   ห้าม derive จากหัวข้อที่สูงสุดในไฟล์ backlog เพราะหัวข้อไม่ได้บอก phase ปัจจุบัน
   ทั้งสองทาง — `PRODUCT_BACKLOG.md` จบที่เฟสที่ ship ไปแล้ว ส่วน
   `PRODUCT_BACKLOG_NEXT_SPRINTS.md` มีเฟสที่ยังไม่เริ่ม

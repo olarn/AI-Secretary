@@ -31,6 +31,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     }
     private var lastUsed: UUID?
 
+    /// How the characters reach each other. Asks for the roster rather than
+    /// holding it, so a character added or deleted needs nothing rewired.
+    private lazy var bus = CharacterBus(roster: { [weak self] in self?.characters ?? [] })
+
     private var statusBar: StatusBarController!
     private var hotKeys: GlobalHotKeys?
     /// Watches this app's own key events for ⌘H; see `watchForHideShortcut`.
@@ -125,6 +129,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
             attachmentStore: FileAttachmentStore()
         )
         character.onDismissableChanged = { [weak self] in self?.refreshHotKeyClaim() }
+        // Who else is on the desktop, and how to reach them. Read at the start
+        // of each turn rather than pushed, so a character added or renamed
+        // mid-session is simply there in the next prompt.
+        character.secretary.directorySnapshot = { [weak self] in
+            self?.bus.directory(excluding: id) ?? []
+        }
+        character.secretary.onSend = { [weak self] message in self?.bus.deliver(message) }
         character.onUsed = { [weak self] in
             guard self?.lastUsed != id else { return }
             self?.lastUsed = id

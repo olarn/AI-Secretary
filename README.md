@@ -4,7 +4,7 @@ A macOS desktop companion: a floating animated character that lives on your
 desktop, talks to you in chat, and gets work done through the Claude Code you
 already have installed.
 
-Version 0.13.228. macOS 14+. Not shipped — this is a working repository.
+Version 0.14.229. macOS 14+. Not shipped — this is a working repository.
 
 ## What it actually is
 
@@ -36,7 +36,15 @@ and it says so.
   borrows the session that is already open rather than fetching the page
   anonymously. Reading is pre-approved; scrolling, clicking and typing ask
   first, and the card says plainly that one grant covers all three.
-- **Be several people.** Profiles with their own name, picture and manner.
+- **Be several people.** Profiles with their own name, picture and manner —
+  each one a character on the desktop with her own projects, settings and
+  Claude Code session.
+- **Pass work between them.** Ask one to have another do something and she
+  forwards it, says so, and reads out the answer when it comes back. Both
+  conversations show the hand-off in writing. A character can see who else is
+  around, what model they're on and the *name* of the project they have open —
+  and nothing more: the message carries no path and no permission, so the one
+  who takes it works under her own approvals or refuses.
 
 Phases 1–6 of the charter are done. Voice, and companions talking to each
 other, are not started.

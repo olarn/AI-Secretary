@@ -2,25 +2,10 @@
 
 งานของ sprint ที่กำลังทำอยู่ ติ๊กแล้วคือ ship แล้ว
 
-ว่างอยู่ — Phase 13-2 (Small improvement) ship แล้วที่ v0.13.223, 13-3
-(Performance Improvement) ที่ v0.13.224 และ 13-4 (Font) ที่ v0.13.228
-ทั้งหมดย้ายไปอยู่ `PRODUCT_BACKLOG.md` ตามกติกาใน charter หัวข้อ
-"Where the backlog lives"
-หยิบเฟสถัดไปมาจาก `PRODUCT_BACKLOG_NEXT_SPRINTS.md`
+ว่างอยู่ — Phase 14.1 (Character คุยกันเอง) และ 14.2 (ทำงานร่วมกันได้) ship แล้วที่
+v0.14.229 ทั้งคู่ ย้ายไปอยู่ `PRODUCT_BACKLOG.md` ตามกติกาใน charter หัวข้อ
+"Where the backlog lives" — ลงมือแล้วเป็นกลไกเดียวกัน จึงบันทึกรวมเป็นหัวข้อเดียว
 
-## Phase 14: Work as a team
-
-## Phase 14.1: Character คุยกันเอง
-- [ ] characters 2 ตัวหรือมากกว่า สามารถคุยกันได้
-  1. [ ] แต่ละ character จะรู้ว่า มี character ตัวอื่นอยู่ และถาม character ตัวอื่นได้ ว่าใช้ model อะไรทำงานอยู่
-  2. [ ] ส่งข้อความถามตอบกันได้ 
-
-## Phase 14.2: Character สามารถทำงานร่วมกันได้
-  - [ ] character รู้ได้ว่า อีกตัวกำลังทำงานกับ project ไหน แต่ไม่มีสิทธิ์ถ้า project ของอีก character ไม่ใช่ project ที่ตัวเองทำอยู่
-  - [ ] user ขอให้ character ที่คุยอยู่กับ user ขอให้ character อื่นทำงานให้ได้ เช่น (กำลังคุยกับ Miku)
-    - user: Miku (เปิด Project Second Brain อยู่) "ช่วยขอให้อาเนีย หาราคา honda ปี 2020 ให้หน่อย (อานียต่อ MCP rate_book อยู่)"
-    - Miku จะส่งข้อความไปหาอาเนียและบอก user ว่าส่งไปหาอาเนียแล้ว
-    - อาเนีย: จะบอกว่ารับทราบ (ทวนข้อความใน chat ตัวเอง) แล้วทำงาน
-    - เมื่ออาเนียทำงานเสร็จ ก็จะตอบใน chat ตัวเอง แล้วบอกว่า ส่งกลับให้ Miku
-    - Miku ได้รับ message และงานจากอาเนีย ก็จะ report ให้ user ทราบใน chat
-- [ ] จำลองอีก 2-3 scenario เพื่อ make sure ว่าทำงานได้เหมือนกัน
+หยิบเฟสถัดไปมาจาก `PRODUCT_BACKLOG_NEXT_SPRINTS.md` — เฟสถัดไปตามลำดับคือ 14.3
+(instruction / task log ร่วมกัน) ซึ่ง **ยังติดด่าน**: บรรทัด `## TODO: Design App
+Architecture ก่อน` ที่หัวไฟล์นั้น เจ้าของต้องลบเอง
