@@ -143,6 +143,22 @@ public struct QueuedMessage: Equatable, Sendable {
     }
 }
 
+/// Errands sent together, and what to do when their answers are in.
+///
+/// Held by the character who sent them. The follow-up is the person's own step
+/// 2, kept here rather than forwarded: the characters answering step 1 were
+/// never asked to do it, and half of them could not if they tried.
+struct ErrandPlan: Equatable, Sendable {
+    /// Who is still to answer, by correlation id and name.
+    var awaiting: [UUID: String]
+    var answers: [RelayAnswer]
+    /// Sent to, then never answered — or never reachable at all.
+    var missing: [String]
+    let thenDo: String
+
+    var isComplete: Bool { awaiting.isEmpty }
+}
+
 /// A hand-off that needs the person to say who it is for.
 ///
 /// The words are kept whole so that answering the question runs the request
@@ -151,6 +167,9 @@ struct PendingDelegation: Equatable, Sendable {
     let errand: String
     let candidates: [CharacterCard]
     let attachments: [Attachment]
+    /// The person's later steps, if they numbered them. Kept across the
+    /// question so that answering "Pikachu" still leaves step 2 to be done.
+    let thenDo: Option<String>
 }
 
 /// The state of one streaming reply, threaded through the handlers as a value.
@@ -606,6 +625,19 @@ public final class Secretary {
     /// A hand-off waiting on the person to say who it is for.
     private var pendingDelegation: Option<PendingDelegation> = .none()
 
+    /// Errands sent together, with the person's own next step waiting on them.
+    private var plan: Option<ErrandPlan> = .none()
+    /// Gives up on whoever has not answered, so one silent character cannot
+    /// hold the person's step 2 for the rest of the session.
+    @ObservationIgnored private var planDeadline: Task<Void, Never>?
+
+    /// How long to wait for an answer before carrying on without it.
+    ///
+    /// Injectable for the same reason a clock is: the behaviour worth testing
+    /// is what happens when somebody never replies, and a test that has to wait
+    /// fifteen real minutes to see it is a test nobody runs.
+    @ObservationIgnored public var errandPatience: TimeInterval = CharacterRelay.errandDeadline
+
     /// What is waiting, in words. The files waiting with them are the queue's
     /// business, not the panel's — it counts them and shows what was typed.
     public var queuedMessages: [String] { queue.map(\.text) }
@@ -930,15 +962,24 @@ public final class Secretary {
             pendingDelegation = .none()
             return answerHandOff(waiting, with: trimmed)
         }
-        switch delegationIntent(in: trimmed, directory: directorySnapshot()) {
+        // A numbered request is a plan: step 1 goes out, the rest waits here
+        // for the answers. Forwarding the whole thing sent step 2 to the people
+        // who were only ever asked step 1.
+        let steps = stepwise(trimmed)
+        let asking = steps?.first ?? trimmed
+
+        switch delegationIntent(in: asking, directory: directorySnapshot()) {
         case .none:
             return false
-        case .confident(let card, let errand):
-            send(errand, to: card)
+        case .confident(let cards, let errand):
+            send(errand, to: cards, thenDo: Option.fromOptional(steps?.rest))
             return true
         case .unsure(let candidates, let errand):
             pendingDelegation = .some(PendingDelegation(
-                errand: errand, candidates: candidates, attachments: carried
+                errand: errand,
+                candidates: candidates,
+                attachments: carried,
+                thenDo: Option.fromOptional(steps?.rest)
             ))
             askWhoTakesIt(candidates)
             return true
@@ -974,7 +1015,7 @@ public final class Secretary {
             say(.secretary, "(I've kept that one rather than passing it on.)")
             return false
         }
-        send(waiting.errand, to: card)
+        send(waiting.errand, to: [card], thenDo: waiting.thenDo)
         return true
     }
 
@@ -997,33 +1038,108 @@ public final class Secretary {
             fileConversationNow()
             return
         }
-        send(request.message, to: card)
+        send(request.message, to: [card])
     }
 
-    private func send(_ errand: String, to card: CharacterCard) {
-        let message = CharacterMessage(
-            from: profile.id,
-            fromName: profile.displayName,
-            to: card.id,
-            kind: .errand,
-            body: errand
-        )
-        relayDeliverable(
-            message,
-            known: Set(directorySnapshot().map(\.id)),
-            outstanding: sentErrands,
-            recipientName: card.name
-        ).fold(
-            { self.say(.secretary, relayRefusalLine($0, to: card.name)) },
-            { ok in
-                self.sentErrands.append(OutstandingErrand(
-                    correlationID: ok.correlationID, from: ok.from, to: ok.to, sentAt: ok.sentAt
-                ))
-                self.say(.secretary, relaySentLine(to: card.name))
-                self.onSend?(ok)
+    /// Sends one errand to one or several characters, and remembers the
+    /// person's next step if there is one.
+    ///
+    /// Whoever cannot be reached is dropped from the plan *here*, before any
+    /// waiting starts, and said out loud — the person asked two people and is
+    /// owed the news that it became one, at the moment it became one rather
+    /// than fifteen minutes later.
+    private func send(_ errand: String, to cards: [CharacterCard], thenDo: Option<String> = .none()) {
+        let known = Set(directorySnapshot().map(\.id))
+        var awaiting: [UUID: String] = [:]
+        var unreachable: [String] = []
+
+        for card in cards {
+            let message = CharacterMessage(
+                from: profile.id,
+                fromName: profile.displayName,
+                to: card.id,
+                kind: .errand,
+                body: errand
+            )
+            relayDeliverable(
+                message,
+                known: known,
+                outstanding: sentErrands,
+                recipientName: card.name
+            ).fold(
+                { error in
+                    unreachable.append(card.name)
+                    self.say(.secretary, relayRefusalLine(error, to: card.name))
+                },
+                { ok in
+                    self.sentErrands.append(OutstandingErrand(
+                        correlationID: ok.correlationID, from: ok.from, to: ok.to, sentAt: ok.sentAt
+                    ))
+                    awaiting[ok.correlationID] = card.name
+                    self.onSend?(ok)
+                }
+            )
+        }
+
+        if !awaiting.isEmpty {
+            say(.secretary, relayFanOutLine(to: cards.filter { awaiting.values.contains($0.name) }.map(\.name)))
+        }
+
+        thenDo.fold({ }, { next in
+            guard !awaiting.isEmpty else {
+                // Nobody took step 1, so there is nothing for step 2 to work
+                // from. Better said now than attempted on no data.
+                self.say(.secretary, "Nobody could take that first part, so I've left the rest of it.")
+                return
             }
-        )
+            self.plan = .some(ErrandPlan(
+                awaiting: awaiting, answers: [], missing: unreachable, thenDo: next
+            ))
+            self.armPlanDeadline()
+        })
         fileConversationNow()
+    }
+
+    /// Files an answer against the plan waiting on it, and runs the person's
+    /// next step once nobody is left to hear from.
+    private func collect(_ report: CharacterMessage) {
+        guard var open = plan.toOptional(), open.awaiting[report.correlationID] != nil else { return }
+        open.awaiting.removeValue(forKey: report.correlationID)
+        open.answers.append(RelayAnswer(name: report.fromName, body: report.body))
+        plan = .some(open)
+        runFollowUp()
+    }
+
+    /// Gives up on whoever has not answered by the deadline and carries on with
+    /// what did arrive.
+    ///
+    /// The person's instruction was to go on once the answers were in; one
+    /// character that never replies must not turn that into never.
+    private func armPlanDeadline() {
+        planDeadline?.cancel()
+        planDeadline = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(self?.errandPatience ?? CharacterRelay.errandDeadline) * 1_000_000_000)
+            guard !Task.isCancelled, let self, var plan = self.plan.toOptional() else { return }
+            plan.missing.append(contentsOf: plan.awaiting.values)
+            plan.awaiting = [:]
+            self.plan = .some(plan)
+            self.runFollowUp()
+        }
+    }
+
+    /// Runs the person's later steps, once the answers are in or time is up.
+    private func runFollowUp() {
+        guard let ready = plan.toOptional(), ready.isComplete else { return }
+        plan = .none()
+        planDeadline?.cancel()
+        planDeadline = nil
+        if !ready.missing.isEmpty {
+            say(.secretary, relayUnavailableLine(ready.missing))
+        }
+        routeToTurn(
+            followUpPrompt(answers: ready.answers, missing: ready.missing, thenDo: ready.thenDo),
+            attachments: []
+        )
     }
 
     /// Something another character on this desktop has sent her.
@@ -1034,16 +1150,41 @@ public final class Secretary {
     public func receive(_ message: CharacterMessage) {
         switch message.kind {
         case .errand:
-            say(.secretary, relayReceivedLine(from: message.fromName))
             let asked = relayedErrandPrompt(from: message.fromName, body: message.body)
             guard !stateMachine.state.isBusy, !queuePaused,
                   !pendingDecision.isDefined, queue.isEmpty
             else {
+                // Taken, not refused. She is mid-something for the person in
+                // front of her, and pushing that aside for another character's
+                // errand is not hers to decide.
                 queue.append(QueuedMessage(text: asked, errand: .some(message)))
+                say(.secretary, relayQueuedHereLine(from: message.fromName, ahead: queue.count))
+                // Told back, because a queue and being ignored look identical
+                // from the other end.
+                onSend?(CharacterMessage(
+                    from: profile.id,
+                    fromName: profile.displayName,
+                    to: message.from,
+                    kind: .accepted,
+                    body: "\(queue.count)",
+                    correlationID: message.correlationID,
+                    hops: message.hops + 1
+                ))
+                fileConversationNow()
                 return
             }
+            say(.secretary, relayReceivedLine(from: message.fromName))
             answering = .some(message)
             beginTurn(asked)
+
+        case .accepted:
+            // Only news, never an answer: the errand stays outstanding and the
+            // plan keeps waiting. The clock restarts, though — somebody has it,
+            // and timing out work that is genuinely queued would be wrong.
+            guard sentErrands.contains(where: { $0.correlationID == message.correlationID }) else { return }
+            say(.secretary, relayAcceptedLine(from: message.fromName, ahead: Int(message.body) ?? 1))
+            if plan.isDefined { armPlanDeadline() }
+            fileConversationNow()
 
         case .report:
             defer { fileConversationNow() }
@@ -1052,6 +1193,7 @@ public final class Secretary {
                 { ok in
                     self.sentErrands.removeAll { $0.correlationID == ok.correlationID }
                     self.say(.secretary, relayReportLine(from: ok.fromName, body: ok.body))
+                    self.collect(ok)
                     // Into the conversation as well as onto the screen: the
                     // person can see the answer, so the model has to know it
                     // arrived or the next turn will contradict what is on

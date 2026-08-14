@@ -81,6 +81,19 @@ final class CharacterHandOffTests: XCTestCase {
         said(secretary).contains { $0.contains(needle) }
     }
 
+    /// Waits for something to become true rather than for a guessed number of
+    /// milliseconds. A relayed answer takes as long as the other character's
+    /// whole turn, which is not a duration a test should be predicting.
+    private func waitUntil(
+        _ timeout: TimeInterval = 3,
+        _ condition: @MainActor () -> Bool
+    ) async {
+        let deadline = Date().addingTimeInterval(timeout)
+        while !condition() && Date() < deadline {
+            try? await Task.sleep(nanoseconds: 5_000_000)
+        }
+    }
+
     // MARK: - The scenario from the backlog
 
     /// Miku is asked to have Anya do something. Miku says she passed it on;
@@ -202,6 +215,104 @@ final class CharacterHandOffTests: XCTestCase {
 
         await waitUntilIdle(anyaMachine)
         XCTAssertTrue(saidAnything(anya, containing: "Miku passed this on"))
+    }
+
+    // MARK: - One request, several people, then a step of her own
+
+    /// The owner's own two-step example: ask two characters, then merge what
+    /// they send back. Ditto is a third Secretary wired into the same bus.
+    func testOneRequestGoesToTwoAndTheFollowUpRunsOnBothAnswers() async {
+        let dittoID = UUID()
+        let dittoMachine = AssistantStateMachine()
+        let dittoProvider = SpyWorkspaceProvider()
+        dittoProvider.hasWorkspaceTools = false
+        let ditto = make(id: dittoID, name: "Ditto", machine: dittoMachine, provider: dittoProvider)
+
+        let cards = [
+            CharacterCard(id: anyaID, name: "Anya", model: "Opus 5", effort: "Default"),
+            CharacterCard(id: dittoID, name: "Ditto", model: "Opus 5", effort: "Default"),
+        ]
+        miku.directorySnapshot = { cards }
+        miku.onSend = { m in
+            if m.to == self.anyaID { self.anya.receive(m) } else { ditto.receive(m) }
+        }
+        anya.onSend = { [weak self] in self?.miku.receive($0) }
+        ditto.onSend = { [weak self] in self?.miku.receive($0) }
+
+        anyaProvider.replyForNextTurn = "Vios 190,000"
+        dittoProvider.replyForNextTurn = "City 195,000"
+        mikuProvider.replyForNextTurn = "Merged and saved."
+
+        miku.submit("""
+            1. ขอข้อมูลราคารถมือสอง จาก Anya และ Ditto
+            2. เมื่อได้ข้อมูลทั้ง 2 ชุด ให้รวมข้อมูล แล้วบันทึกลง file ใน project
+            """)
+
+        XCTAssertTrue(saidAnything(miku, containing: "Passed this on to Anya and Ditto"))
+        await waitUntilIdle(anyaMachine)
+        await waitUntilIdle(dittoMachine)
+        await waitUntilIdle(mikuMachine)
+
+        // Step 2 ran on the sender, with both answers in front of it — and the
+        // characters answering step 1 were never handed step 2.
+        XCTAssertEqual(mikuProvider.callCount, 1, "the follow-up is the sender's only turn")
+        let followUp = mikuProvider.lastMessages.map(\.content).joined(separator: "\n")
+        XCTAssertTrue(followUp.contains("Vios 190,000"), "Got: \(followUp)")
+        XCTAssertTrue(followUp.contains("City 195,000"))
+        XCTAssertTrue(followUp.contains("บันทึกลง file"))
+
+        let toAnya = anyaProvider.lastMessages.map(\.content).joined(separator: "\n")
+        XCTAssertFalse(toAnya.contains("บันทึกลง file"), "step 2 is not theirs to do")
+    }
+
+    /// Asked for two and only one ever answers: carry on with the one, and say
+    /// which is missing rather than passing off one answer as two.
+    func testASilentCharacterDoesNotHoldUpTheFollowUpForever() async {
+        miku.errandPatience = 1.5
+        let goneID = UUID()
+        let cards = [
+            CharacterCard(id: anyaID, name: "Anya", model: "Opus 5", effort: "Default"),
+            CharacterCard(id: goneID, name: "Ditto", model: "Opus 5", effort: "Default"),
+        ]
+        miku.directorySnapshot = { cards }
+        // Only Anya is actually wired up; Ditto is on the roster and nowhere else.
+        miku.onSend = { [weak self] m in if m.to == self?.anyaID { self?.anya.receive(m) } }
+        anya.onSend = { [weak self] in self?.miku.receive($0) }
+
+        anyaProvider.replyForNextTurn = "Vios 190,000"
+        mikuProvider.replyForNextTurn = "Merged what there was."
+
+        miku.submit("1. ขอข้อมูล จาก Anya และ Ditto\n2. รวมข้อมูล แล้วบันทึกลง file")
+        // Anya's answer, however long her turn takes — then Ditto's silence
+        // running out of patience.
+        await waitUntil { self.saidAnything(self.miku, containing: "Anya answered") }
+        await waitUntil { self.mikuProvider.callCount == 1 }
+        await waitUntilIdle(mikuMachine)
+
+        XCTAssertEqual(mikuProvider.callCount, 1, "one answer is enough to carry on with")
+        let followUp = mikuProvider.lastMessages.map(\.content).joined(separator: "\n")
+        XCTAssertTrue(followUp.contains("Vios 190,000"), "Got: \(followUp)")
+        XCTAssertTrue(followUp.contains("Ditto did not answer"), "Got: \(followUp)")
+        XCTAssertFalse(followUp.contains("Anya did not answer"), "she did answer")
+    }
+
+    /// Being busy is not being ignored — but it looks exactly like it from the
+    /// other end unless somebody says so.
+    func testAnErrandThatHasToWaitIsAcknowledgedBackToTheSender() async {
+        anyaProvider.replyForNextTurn = "answering the person"
+        anya.submit("hello, are you there?")
+
+        miku.submit("ขอให้ Anya ช่วยดูหน่อย")
+
+        XCTAssertTrue(saidAnything(anya, containing: "I'm on something else"))
+        XCTAssertTrue(
+            saidAnything(miku, containing: "Anya has it"),
+            "the sender has to be told it is queued. Got: \(said(miku))"
+        )
+        XCTAssertTrue(saidAnything(miku, containing: "Still waiting"))
+
+        await waitUntilIdle(anyaMachine)
+        XCTAssertEqual(anya.queuedMessages.count, 0, "and it runs when she is free")
     }
 
     // MARK: - The assistant's own hand-off block

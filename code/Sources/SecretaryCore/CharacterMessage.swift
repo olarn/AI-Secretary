@@ -16,8 +16,15 @@ import Foundation
 /// delivery is still a function call.
 public struct CharacterMessage: Equatable, Sendable, Identifiable {
     /// An errand expects an answer; a report is that answer. A question is just
-    /// an errand whose answer happens to be words, so it needs no third case.
-    public enum Kind: Equatable, Sendable { case errand, report }
+    /// an errand whose answer happens to be words, so it needs no case of its
+    /// own.
+    ///
+    /// `accepted` is the third because silence and a queue look identical from
+    /// the other end. A character who is mid-conversation takes the errand and
+    /// works through it when she gets there — correct, and indistinguishable
+    /// from being ignored unless she says so. It closes nothing: the errand is
+    /// still outstanding and the answer still has to come.
+    public enum Kind: Equatable, Sendable { case errand, accepted, report }
 
     public let id: UUID
     public let from: UUID
@@ -189,6 +196,23 @@ public func relaySentLine(to name: String) -> String {
 /// should be able to see where the work came from before it starts.
 public func relayReceivedLine(from name: String) -> String {
     "← \(name) passed this on from you. Taking a look."
+}
+
+/// In the recipient's chat, when she is mid-something and the errand has to
+/// wait its turn.
+public func relayQueuedHereLine(from name: String, ahead: Int) -> String {
+    let place = ahead <= 1 ? "next" : "\(ahead) along in the queue"
+    return "← \(name) passed this on from you. I'm on something else, so it's \(place)."
+}
+
+/// In the sender's chat, when the other end has taken it but not started.
+///
+/// Without this the sender says "passed it on" and then nothing happens for as
+/// long as the other character is busy — which reads exactly like being
+/// ignored, and is the one thing a hand-off must never look like.
+public func relayAcceptedLine(from name: String, ahead: Int) -> String {
+    let place = ahead <= 1 ? "starting it next" : "\(ahead) along in her queue"
+    return "· \(name) has it — she's on something else, so it's \(place). Still waiting."
 }
 
 /// In the sender's chat, when the answer comes back.

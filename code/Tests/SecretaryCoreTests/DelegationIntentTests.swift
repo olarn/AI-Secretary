@@ -23,7 +23,7 @@ final class DelegationIntentTests: XCTestCase {
         guard case .confident(let to, let errand) = read("ช่วยขอให้ Anya หาราคา honda ปี 2020 ให้หน่อย") else {
             return XCTFail("expected a confident reading")
         }
-        XCTAssertEqual(to.name, "Anya")
+        XCTAssertEqual(to.map(\.name), ["Anya"])
         XCTAssertEqual(errand, "ช่วยขอให้ Anya หาราคา honda ปี 2020 ให้หน่อย")
     }
 
@@ -31,7 +31,7 @@ final class DelegationIntentTests: XCTestCase {
         guard case .confident(let to, _) = read("ask Anya to look up the price") else {
             return XCTFail("expected a confident reading")
         }
-        XCTAssertEqual(to.name, "Anya")
+        XCTAssertEqual(to.map(\.name), ["Anya"])
     }
 
     /// The whole sentence travels, uncut. Cutting "ช่วยขอให้อาเนีย" off the front
@@ -48,7 +48,7 @@ final class DelegationIntentTests: XCTestCase {
         guard case .confident(let to, _) = read("ask anya to check") else {
             return XCTFail("expected a confident reading")
         }
-        XCTAssertEqual(to.name, "Anya")
+        XCTAssertEqual(to.map(\.name), ["Anya"])
     }
 
     // MARK: - Unsure — the case the whole enum exists for
@@ -65,8 +65,34 @@ final class DelegationIntentTests: XCTestCase {
         XCTAssertTrue(errand.contains("honda"))
     }
 
-    func testTwoNamesInOneSentenceAsksWhichOne() {
-        guard case .unsure(let candidates, _) = read("ขอให้ Anya กับ Ditto ช่วยดูให้หน่อย") else {
+    /// Two names *joined* are two recipients, not an ambiguity. Asking "which
+    /// one?" here is the app deciding the person misspoke.
+    func testTwoNamesJoinedByAndGoToBothOfThem() {
+        guard case .confident(let to, _) = read("ขอข้อมูลราคารถมือสอง จาก Anya และ Ditto") else {
+            return XCTFail("expected both of them")
+        }
+        XCTAssertEqual(to.map(\.name), ["Anya", "Ditto"])
+    }
+
+    func testEnglishJoinsThemTheSameWay() {
+        guard case .confident(let to, _) = read("ask Anya and Ditto for a price comparison") else {
+            return XCTFail("expected both of them")
+        }
+        XCTAssertEqual(to.map(\.name), ["Anya", "Ditto"])
+    }
+
+    func testThaiKapJoinsThemToo() {
+        guard case .confident(let to, _) = read("ขอให้ Anya กับ Ditto ช่วยดูให้หน่อย") else {
+            return XCTFail("expected both of them")
+        }
+        XCTAssertEqual(to.map(\.name), ["Anya", "Ditto"])
+    }
+
+    /// With nothing joining them, the second name is as likely to be an aside
+    /// as a recipient — "tell Anya that Ditto finished" is not a request to
+    /// Ditto. That still asks.
+    func testTwoNamesWithNothingJoiningThemStillAsks() {
+        guard case .unsure(let candidates, _) = read("บอก Anya ว่า Ditto ทำเสร็จแล้ว") else {
             return XCTFail("expected an unsure reading")
         }
         XCTAssertEqual(candidates.map(\.name), ["Anya", "Ditto"])
@@ -124,7 +150,7 @@ final class DelegationIntentTests: XCTestCase {
         ) else {
             return XCTFail("expected a confident reading")
         }
-        XCTAssertEqual(to.name, "Miku (Second Brain)")
+        XCTAssertEqual(to.map(\.name), ["Miku (Second Brain)"])
     }
 
     /// A Thai profile name is matched as it is written — this is the owner's
@@ -136,7 +162,7 @@ final class DelegationIntentTests: XCTestCase {
         ) else {
             return XCTFail("expected a confident reading")
         }
-        XCTAssertEqual(to.name, "อาเนีย")
+        XCTAssertEqual(to.map(\.name), ["อาเนีย"])
     }
 
     /// A short first word is not trusted — "The Assistant" must not make every

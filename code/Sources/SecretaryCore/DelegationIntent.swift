@@ -13,7 +13,26 @@ public enum DelegationReading: Equatable, Sendable {
     case none
     /// Someone is meant to be asked and it isn't clear who.
     case unsure(candidates: [CharacterCard], errand: String)
-    case confident(to: CharacterCard, errand: String)
+    /// Send it — to one character, or to several at once.
+    ///
+    /// Plural since 0.14.236. "จาก Pikachu และ Ditto" is one request of two
+    /// people, and reading it as an ambiguity to be resolved by picking one was
+    /// the app deciding the person had misspoken. Two names joined by *and* are
+    /// two recipients; two names with nothing joining them are still a
+    /// question.
+    case confident(to: [CharacterCard], errand: String)
+}
+
+/// Words that turn a list of names into "both of them".
+///
+/// Without one, two names in a sentence are as likely to be a comparison, an
+/// aside, or a message *about* one of them — so the conjunction is what carries
+/// the plural, and its absence is what keeps the question.
+let conjunctions = ["และ", "กับ", "ทั้ง", " and ", ",", "&", "+"]
+
+func namesAreJoined(in text: String) -> Bool {
+    let haystack = text.lowercased()
+    return conjunctions.contains { haystack.contains($0) }
 }
 
 /// Phrases that name a third party by their shape alone — the person is asking
@@ -106,8 +125,12 @@ public func delegationIntent(in text: String, directory: [CharacterCard]) -> Del
     // work to a character they never named, and there is no undo for that.
     switch (named.count, handOff, addressed) {
     case (1, true, _):
-        return .confident(to: named[0], errand: errand)
-    // Two names and a verb: which of them is a coin toss.
+        return .confident(to: named, errand: errand)
+    // Several names joined by *and* is one request of all of them — the
+    // owner's "จาก Pikachu และ Ditto". Without the conjunction the second name
+    // is as likely to be an aside as a recipient, so that still asks.
+    case (2..., _, true) where namesAreJoined(in: errand):
+        return .confident(to: named, errand: errand)
     case (2..., _, true):
         return .unsure(candidates: named, errand: errand)
     // A name and a weaker verb — "อาเนียบอกว่าอะไรนะ" is a question *about* her,
