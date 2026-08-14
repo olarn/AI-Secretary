@@ -3681,8 +3681,7 @@ public final class Secretary {
         case .startAgent: return "run Claude Code here"
         case .widenAgentTools(let rules, _): return rules.joined(separator: ", ")
         case .installSkill(let plugin, _): return "claude plugin install \(plugin)"
-        case .rememberNote(let note):
-            return memoryApprovalSummary(note, project: lastProject.map(\.name)^.getOrElse("this project"))
+        case .rememberNote(let note): return memoryApprovalSummary(note)
         }
     }
 

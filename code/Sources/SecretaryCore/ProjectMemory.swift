@@ -224,11 +224,17 @@ public struct RememberBlock: Equatable, Sendable {
 
 /// The card's one-line summary of what will be written where.
 ///
-/// Names the *directory*, not just the project: the whole point someone needs
-/// to weigh is that this lands in their Claude Code memory and their terminal
-/// will read it too.
-public func memoryApprovalSummary(_ note: MemoryNote, project: String) -> String {
-    "remember “\(note.title)” for \(project), in your Claude Code memory"
+/// **No project name in it.** The sentence it lands in already ends with "in
+/// \(project)", and the first drive of this produced "…for my-mcp-server, in
+/// your Claude Code memory in my-mcp-server?" — the name twice in one question.
+///
+/// It does say *outside the project folder*, because the card's own subtitle
+/// for a `.localWrite` reads "Writes files in the project", which is not where
+/// this goes. That subtitle is shared with every other local write and is right
+/// for all of them, so the correction belongs here rather than in
+/// `ActionClass`.
+public func memoryApprovalSummary(_ note: MemoryNote) -> String {
+    "keep “\(note.title)” in your Claude Code memory (outside the project folder)"
 }
 
 public func memorySavedLine(_ note: MemoryNote, project: String) -> String {
