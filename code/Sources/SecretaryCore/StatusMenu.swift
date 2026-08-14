@@ -58,6 +58,8 @@ public struct CharacterMenuState: Identifiable, Equatable, Sendable {
 /// invent an action and the tests can name every one that exists.
 public enum StatusMenuAction: Equatable, Sendable {
     case toggleCharacter(character: UUID)
+    /// Everyone off the desktop, or everyone back on.
+    case toggleAllCharacters
     case newChat(character: UUID)
     case resumeConversation(character: UUID, conversation: UUID)
     case clearHistory(character: UUID)
@@ -160,11 +162,28 @@ private func charactersSubmenu(_ characters: [CharacterMenuState]) -> [StatusMen
             submenu: characterSubmenu(character)
         ))
     }
+    + (characters.isEmpty ? [] : [
+        .item(StatusMenuItem(
+            title: allCharactersTitle(characters),
+            action: .toggleAllCharacters
+        )),
+    ])
     + [
         // Always after them, so its position doesn't move as characters come
         // and go.
         .item(StatusMenuItem(title: "New Character…", action: .newCharacter)),
     ]
+}
+
+/// One row for both directions, and which one it is comes from the desktop
+/// rather than from a remembered state.
+///
+/// **Anyone still on screen means the row hides.** A count — "most of them are
+/// away, so this is Show" — would leave a visible character behind on a row
+/// that said Hide, and the one you can see is the one you wanted gone. Only
+/// when there is nobody left does it turn around and offer to bring them back.
+public func allCharactersTitle(_ characters: [CharacterMenuState]) -> String {
+    characters.contains(where: \.isVisible) ? "Hide All" : "Show All"
 }
 
 private func characterSubmenu(_ character: CharacterMenuState) -> [StatusMenuEntry] {

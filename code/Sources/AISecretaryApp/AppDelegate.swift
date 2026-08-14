@@ -43,6 +43,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     private var dismissKeyMonitor: Any?
     /// Who ⌘H took off the desktop, so reopening puts back exactly them.
     private var hiddenByShortcut: Set<UUID> = []
+    /// Who had a chat open when everything went away, so "Show All" can put the
+    /// conversation back rather than only the characters.
+    private var chatsHiddenByShortcut: Set<UUID> = []
     /// Who the usage window adds up. Kept in step by `reconcileCharacters`.
     private let usageRoster = UsageRoster()
     private lazy var usageWindow = UsageWindow(
@@ -219,6 +222,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
         switch action {
         case .toggleCharacter(let id):
             character(id)?.toggleCharacterVisibility()
+        case .toggleAllCharacters:
+            if characters.contains(where: \.isCharacterVisible) { hideEverything() }
+            else { showEverything() }
         case .newChat(let id):
             guard let character = character(id) else { return }
             character.secretary.newConversation()
@@ -350,6 +356,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     /// instead of hiding one.
     private func hideEverything() {
         hiddenByShortcut = Set(characters.filter(\.isCharacterVisible).map(\.profileID))
+        // Taken before they close, because that is the only moment it is
+        // knowable — and it is what "bring it all back" has to mean.
+        chatsHiddenByShortcut = Set(characters.filter(\.isChatVisible).map(\.profileID))
         characters.forEach { $0.hideEverythingOfHers() }
         usageWindow.close()
         // The About window is AppKit's, opened by
@@ -357,6 +366,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
         // sweep is how it goes away, and it also catches anything a later phase
         // puts on screen without telling this method about it.
         NSApp.windows.filter(\.isVisible).forEach { $0.orderOut(nil) }
+    }
+
+    /// The other half of the menu's one row: everybody back on the desktop,
+    /// with the chat that was open when they left.
+    ///
+    /// Symmetric with `hideEverything` on purpose — what went away is what
+    /// comes back. Restoring the characters but not the conversation would make
+    /// "Show All" a different act from undoing "Hide All", and the bubble that
+    /// vanished is usually the reason the menu is being opened again.
+    ///
+    /// Nothing is opened that was not open. If no chat was showing, none
+    /// appears: a window arriving unasked is worse than one that stayed shut.
+    private func showEverything() {
+        // Anyone the roster gained while everything was away comes back too —
+        // a character created behind a hidden desktop must not stay invisible
+        // with no row that would reveal her.
+        characters.forEach { $0.showCharacter() }
+        characters
+            .filter { chatsHiddenByShortcut.contains($0.profileID) }
+            .forEach { $0.openChat() }
+        hiddenByShortcut = []
+        chatsHiddenByShortcut = []
     }
 
     /// Esc is worth claiming only while something is on screen to dismiss —
