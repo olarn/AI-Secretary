@@ -44,11 +44,33 @@ let addressPhrases = [
 /// name, which is a better failure than every message being read as an errand.
 let shortestMatchableName = 2
 
+/// A *first word* has to clear a higher bar than a whole name, because it is a
+/// guess about what somebody is called rather than what they are called.
+/// Three was not enough: "The Assistant" offered "the", which appears in most
+/// English sentences ever typed. "Miku" is four.
+let shortestMatchableFirstWord = 4
+
+/// The ways a character can be named in a sentence.
+///
+/// Her whole profile name, and — when it is several words — the first of them.
+/// Profiles carry what they are for as well as who they are: the one on this
+/// machine is called **Miku (Second Brain)**, and nobody types that. Without the
+/// first word she could not be addressed at all, which would have shipped as
+/// "it works for one of my characters and not the other".
+///
+/// Only the first word, and only when it is long enough to be worth trusting:
+/// "The" and "Dr" would match half of everything.
+func namesFor(_ card: CharacterCard) -> [String] {
+    let full = card.name.trimmingCharacters(in: .whitespaces).lowercased()
+    let first = full.split(separator: " ").first.map(String.init) ?? full
+    let extras = first != full && first.count >= shortestMatchableFirstWord ? [first] : []
+    return ([full] + extras).filter { $0.count >= shortestMatchableName }
+}
+
 private func mentioned(_ directory: [CharacterCard], in text: String) -> [CharacterCard] {
     let haystack = text.lowercased()
-    return directory.filter {
-        let name = $0.name.trimmingCharacters(in: .whitespaces).lowercased()
-        return name.count >= shortestMatchableName && haystack.contains(name)
+    return directory.filter { card in
+        namesFor(card).contains { haystack.contains($0) }
     }
 }
 

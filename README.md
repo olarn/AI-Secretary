@@ -4,7 +4,7 @@ A macOS desktop companion: a floating animated character that lives on your
 desktop, talks to you in chat, and gets work done through the Claude Code you
 already have installed.
 
-Version 0.14.229. macOS 14+. Not shipped — this is a working repository.
+Version 0.14.230. macOS 14+. Not shipped — this is a working repository.
 
 ## What it actually is
 
@@ -46,14 +46,13 @@ and it says so.
   and nothing more: the message carries no path and no permission, so the one
   who takes it works under her own approvals or refuses.
 
-Phases 1–6 of the charter are done. Voice, and companions talking to each
-other, are not started.
+Phases 1–14 of the charter are done. Voice is not started.
 
 ## Getting started
 
 ```bash
 cd code
-swift build            # or: swift test   (401 tests)
+swift build            # or: swift test   (1,018 tests)
 ./scripts/package-app.sh
 open AISecretary.app
 ```

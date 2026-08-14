@@ -110,6 +110,42 @@ final class DelegationIntentTests: XCTestCase {
         XCTAssertEqual(delegationIntent(in: "สรุปให้หน่อย", directory: [tiny]), .none)
     }
 
+    // MARK: - Names as they really are on this machine
+
+    /// A profile carries what it is for as well as who it is. The one on the
+    /// owner's machine is called **Miku (Second Brain)**, and nobody types that
+    /// — so the first word has to work, or she cannot be addressed at all.
+    func testACharacterWithAQualifiedNameCanBeCalledByHerFirstWord() {
+        let miku = CharacterCard(
+            id: UUID(), name: "Miku (Second Brain)", model: "Opus 5", effort: "Default"
+        )
+        guard case .confident(let to, _) = delegationIntent(
+            in: "ขอให้ Miku ช่วยดูให้หน่อย", directory: [miku]
+        ) else {
+            return XCTFail("expected a confident reading")
+        }
+        XCTAssertEqual(to.name, "Miku (Second Brain)")
+    }
+
+    /// A Thai profile name is matched as it is written — this is the owner's
+    /// real second character, and the scenario in the backlog is about her.
+    func testAThaiProfileNameIsMatchedAsWritten() {
+        let anya = CharacterCard(id: UUID(), name: "อาเนีย", model: "Opus 5", effort: "Default")
+        guard case .confident(let to, _) = delegationIntent(
+            in: "ช่วยขอให้อาเนีย หาราคา honda ปี 2020 ให้หน่อย", directory: [anya]
+        ) else {
+            return XCTFail("expected a confident reading")
+        }
+        XCTAssertEqual(to.name, "อาเนีย")
+    }
+
+    /// A short first word is not trusted — "The Assistant" must not make every
+    /// sentence containing "the" a hand-off.
+    func testAShortFirstWordIsNotUsedAsAName() {
+        let vague = CharacterCard(id: UUID(), name: "The Assistant", model: "Opus 5", effort: "Default")
+        XCTAssertEqual(namesFor(vague), ["the assistant"])
+    }
+
     // MARK: - The way out
 
     /// A false positive on `ขอให้` — which appears in sentences that have
