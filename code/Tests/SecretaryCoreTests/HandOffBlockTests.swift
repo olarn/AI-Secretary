@@ -16,7 +16,7 @@ final class HandOffBlockTests: XCTestCase {
             หาราคา civic 2015 เทียบกับ vios 2015 ให้หน่อย
             ```
             """)
-        XCTAssertEqual(parsed.request?.to, "Pikachu")
+        XCTAssertEqual(parsed.request?.to, ["Pikachu"])
         XCTAssertEqual(parsed.request?.message, "หาราคา civic 2015 เทียบกับ vios 2015 ให้หน่อย")
     }
 
@@ -30,7 +30,29 @@ final class HandOffBlockTests: XCTestCase {
 
     func testALabelledNameIsAccepted() {
         let parsed = HandOffBlock.parse("```to\nto: Pikachu\ncheck the price\n```")
-        XCTAssertEqual(parsed.request?.to, "Pikachu")
+        XCTAssertEqual(parsed.request?.to, ["Pikachu"])
+    }
+
+    /// The block used to take one name, so a character asked for something
+    /// from two people could only reach one — and told the person she would
+    /// "ask them one at a time", which was her describing the limit she had
+    /// been given rather than a choice she made.
+    func testSeveralNamesOnOneLineAllGetIt() {
+        for heading in ["Pikachu, Ditto", "Pikachu และ Ditto", "Pikachu and Ditto", "Pikachu กับ Ditto"] {
+            let parsed = HandOffBlock.parse("```to\n\(heading)\ncheck the price\n```")
+            XCTAssertEqual(parsed.request?.to, ["Pikachu", "Ditto"], "heading: \(heading)")
+        }
+    }
+
+    func testAThreeWayListSplitsToo() {
+        let parsed = HandOffBlock.parse("```to\nPikachu, Ditto และ Miku\ncheck it\n```")
+        XCTAssertEqual(parsed.request?.to, ["Pikachu", "Ditto", "Miku"])
+    }
+
+    /// A name that happens to contain a separator word must not be torn in two.
+    func testAOneNameHeadingStaysOneName() {
+        let parsed = HandOffBlock.parse("```to\nMiku (Second Brain)\ncheck it\n```")
+        XCTAssertEqual(parsed.request?.to, ["Miku (Second Brain)"])
     }
 
     func testSeveralLinesOfMessageAllTravel() {

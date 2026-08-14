@@ -24,10 +24,16 @@ import Foundation
 /// answered rather than guessed at.
 public struct HandOffBlock: Equatable, Sendable {
     public struct Request: Equatable, Sendable {
-        public let to: String
+        /// Everyone named on the first line.
+        ///
+        /// Plural since 0.14.242. It took one name, so a character asked for
+        /// something from two people could only ever reach one — and said so,
+        /// out loud, to the person who had asked for both: *"ขอถามทีละคนก่อนค่ะ"*.
+        /// She was describing the limit of the block she had been given.
+        public let to: [String]
         public let message: String
 
-        public init(to: String, message: String) {
+        public init(to: [String], message: String) {
             self.to = to
             self.message = message
         }
@@ -44,6 +50,21 @@ public struct HandOffBlock: Equatable, Sendable {
         self.request = request
     }
 
+    /// Several names on one line, however they were separated.
+    ///
+    /// A model writes a list the way a person would — commas, `และ`, `and` —
+    /// so all of them are accepted rather than one being mandated and the rest
+    /// silently swallowed as part of a name.
+    static func splitNames(_ heading: String) -> [String] {
+        var working = heading
+        for separator in [",", " และ ", "และ", " กับ ", "กับ", " and ", "&", "+", ";"] {
+            working = working.replacingOccurrences(of: separator, with: "\u{1}")
+        }
+        return working.components(separatedBy: "\u{1}")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+    }
+
     public static func parse(_ text: String) -> HandOffBlock {
         guard let (body, lines) = FencedBlock.split(text, fence: fence),
               let first = lines.first
@@ -52,18 +73,19 @@ public struct HandOffBlock: Equatable, Sendable {
         // `to: Pikachu` reads better in a prompt than a bare name, so the label
         // is accepted and dropped — the same courtesy `WatchBlock` extends to
         // `path:`.
-        let name = first
+        let heading = first
             .replacingOccurrences(of: "to:", with: "", options: .caseInsensitive)
             .trimmingCharacters(in: .whitespaces)
+        let names = splitNames(heading)
         let message = lines.dropFirst().joined(separator: "\n")
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
         // A name with nothing to say is not a request. Sending an empty errand
         // would put "← Ditto passed this on from you" in someone's chat above
         // no question at all.
-        guard !name.isEmpty, !message.isEmpty else {
+        guard !names.isEmpty, !message.isEmpty else {
             return HandOffBlock(body: text, request: nil)
         }
-        return HandOffBlock(body: body, request: Request(to: name, message: message))
+        return HandOffBlock(body: body, request: Request(to: names, message: message))
     }
 }

@@ -1039,18 +1039,28 @@ public final class Secretary {
     /// person's work to whoever happened to sort first.
     private func sendByName(_ request: HandOffBlock.Request) {
         let directory = directorySnapshot()
-        let wanted = request.to.trimmingCharacters(in: .whitespaces).lowercased()
-        guard let card = directory.first(where: { namesFor($0).contains(wanted) })
-            ?? directory.first(where: { namesFor($0).contains { wanted.contains($0) } })
-        else {
+        func resolve(_ name: String) -> CharacterCard? {
+            let wanted = name.trimmingCharacters(in: .whitespaces).lowercased()
+            return directory.first { namesFor($0).contains(wanted) }
+                ?? directory.first { namesFor($0).contains { wanted.contains($0) } }
+        }
+
+        let found = request.to.compactMap(resolve)
+        let unknown = request.to.filter { resolve($0) == nil }
+
+        if !unknown.isEmpty {
             let here = directory.map(\.name).joined(separator: ", ")
             say(.secretary, here.isEmpty
                 ? "There's nobody else on the desktop to pass that to."
-                : "I don't know anyone here called “\(request.to)”. On the desktop right now: \(here).")
+                : "I don't know anyone here called “\(unknown.joined(separator: "”, “"))”. On the desktop right now: \(here).")
+        }
+        // Whoever was named and is here still gets it. Refusing the lot because
+        // one name was wrong would lose the part that was right.
+        guard !found.isEmpty else {
             fileConversationNow()
             return
         }
-        send(request.message, to: [card])
+        send(request.message, to: found)
     }
 
     /// Sends one errand to one or several characters, and remembers the

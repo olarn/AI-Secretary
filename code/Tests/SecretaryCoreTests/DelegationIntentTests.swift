@@ -74,6 +74,18 @@ final class DelegationIntentTests: XCTestCase {
         XCTAssertEqual(to.map(\.name), ["Anya", "Ditto"])
     }
 
+    /// The owner's exact words on 2026-08-14, which reached only one of the
+    /// two. `จาก` on its own carries "from her" in Thai and was not in any
+    /// list, so the whole thing fell through to the model.
+    func testTheBarePrepositionCountsWhenNamesAreOnIt() {
+        guard case .confident(let to, _) = read(
+            "ขอราคา city มือ 2 เทียบกับ civic ของปี 2020 จาก Anya และ Ditto"
+        ) else {
+            return XCTFail("expected both of them")
+        }
+        XCTAssertEqual(to.map(\.name), ["Anya", "Ditto"])
+    }
+
     func testEnglishJoinsThemTheSameWay() {
         guard case .confident(let to, _) = read("ask Anya and Ditto for a price comparison") else {
             return XCTFail("expected both of them")

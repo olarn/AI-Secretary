@@ -366,6 +366,53 @@ final class CharacterHandOffTests: XCTestCase {
         XCTAssertTrue(sent.contains("2015 Civic"))
     }
 
+    /// Whichever route it takes — the person's prose or the assistant's own
+    /// block — asking two people has to reach two people.
+    func testTheAssistantsBlockCanNameSeveralAtOnce() async {
+        let dittoID = UUID()
+        let dittoMachine = AssistantStateMachine()
+        let dittoProvider = SpyWorkspaceProvider()
+        dittoProvider.hasWorkspaceTools = false
+        let ditto = make(id: dittoID, name: "Ditto", machine: dittoMachine, provider: dittoProvider)
+
+        let cards = [
+            CharacterCard(id: anyaID, name: "Anya", model: "Opus 5", effort: "Default"),
+            CharacterCard(id: dittoID, name: "Ditto", model: "Opus 5", effort: "Default"),
+        ]
+        miku.directorySnapshot = { cards }
+        miku.onSend = { m in
+            if m.to == self.anyaID { self.anya.receive(m) } else { ditto.receive(m) }
+        }
+
+        mikuProvider.replyForNextTurn = "Asking both.\n\n```to\nAnya และ Ditto\nfind the price of a 2020 City\n```"
+        anyaProvider.replyForNextTurn = "ok"
+        dittoProvider.replyForNextTurn = "ok"
+
+        miku.submit("what do those two say about prices?")
+        await waitUntilIdle(mikuMachine)
+        await waitUntilIdle(anyaMachine)
+        await waitUntilIdle(dittoMachine)
+
+        XCTAssertEqual(anyaProvider.callCount, 1, "Anya should have been asked")
+        XCTAssertEqual(dittoProvider.callCount, 1, "and so should Ditto")
+        XCTAssertTrue(saidAnything(miku, containing: "Passed this on to Anya and Ditto"))
+    }
+
+    /// One wrong name must not lose the errand for the person who was named
+    /// correctly.
+    func testAWrongNameAlongsideARightOneStillSendsToTheRightOne() async {
+        mikuProvider.replyForNextTurn = "```to\nAnya, Pikachu\ncheck the price\n```"
+        anyaProvider.replyForNextTurn = "ok"
+
+        miku.submit("what's the price?")
+        await waitUntilIdle(mikuMachine)
+        await waitUntilIdle(anyaMachine)
+
+        XCTAssertEqual(anyaProvider.callCount, 1)
+        XCTAssertTrue(saidAnything(miku, containing: "don't know anyone here called"))
+        XCTAssertTrue(saidAnything(miku, containing: "Passed this on to Anya"))
+    }
+
     /// The block must not survive into the bubble as literal typing.
     func testTheBlockDoesNotAppearOnScreen() async {
         mikuProvider.replyForNextTurn = "I'll ask her.\n\n```to\nAnya\ncheck the price\n```"

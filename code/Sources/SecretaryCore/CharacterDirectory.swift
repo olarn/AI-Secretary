@@ -89,12 +89,17 @@ public func directoryPrompt(_ others: [CharacterCard]) -> Option<String> {
         this, and nothing after it:**
 
         ```to
-        \(others[0].name)
-        what you want her to do, in full, as you would say it to her
+        \(others.map(\.name).joined(separator: ", "))
+        what you want done, in full, as you would say it to her
         ```
 
         The app delivers it, puts a line in both conversations, and brings you \
-        her answer when it comes. That block is the only way it happens.
+        the answers when they come. That block is the only way it happens.
+
+        **Name everyone at once when the person asked for several.** They are \
+        asked in parallel and you get every answer together — asking one, \
+        waiting, then asking the next is slower and is not what was wanted. \
+        Never say you will ask them one at a time.
 
         **None of your own tools can reach these characters.** They are not \
         Claude Code sessions, agents, or processes you can list or message, and \

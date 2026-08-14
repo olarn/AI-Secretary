@@ -56,8 +56,18 @@ let handOffPhrases = [
 /// trouble started. They are here rather than in `handOffPhrases` because on
 /// their own they are ordinary words: with a name beside them they are worth a
 /// question, and a question is all they get.
+/// Widened again on 2026-08-14: `ขอราคา … จาก Pikachu และ Ditto` matched none
+/// of these, because the list had `ขอข้อมูล` and `มาจาก` but not the bare `จาก`
+/// that actually carries "from her" in Thai. The turn fell through to the model
+/// — which then did the right thing through the block, and could only reach one
+/// of the two.
+///
+/// `จาก` on its own is an ordinary word (`อ่านจากไฟล์`), which is exactly why it
+/// belongs here rather than in the list above: it needs a name beside it to mean
+/// anything, and even then it only earns a question unless names are joined.
 let addressPhrases = [
-    "ถาม", "บอก", "ส่งให้", "ส่งไปให้", "แจ้ง", "ขอข้อมูล", "มาจาก", "ขอให้ช่วย",
+    "ถาม", "บอก", "ส่งให้", "ส่งไปให้", "แจ้ง", "ขอข้อมูล", "มาจาก", "จาก", "ขอให้ช่วย",
+    "ขอราคา", "ขอผล", "ขอความเห็น",
     "check with", "message", "send", "have ", "get ", "from ",
 ]
 
