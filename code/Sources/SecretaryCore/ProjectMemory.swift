@@ -138,10 +138,18 @@ public struct MemoryNote: Equatable, Sendable {
 
 /// A kebab-case name for a title, in the ASCII range the existing files use.
 ///
-/// Non-ASCII is dropped rather than transliterated: a Thai title yields an
-/// empty stem, which `memoryFileName` turns into a fixed fallback rather than a
-/// file called `.md`. The title itself is what carries the meaning — it is in
-/// the frontmatter, in the index line, and on screen.
+/// Non-ASCII is dropped rather than transliterated, so a title with no ASCII in
+/// it has no stem to make a name from. **The fallback is a fingerprint of the
+/// title, not a fixed word.** A fixed word was what shipped first, and driving
+/// it found the hole: the owner writes in Thai, so every all-Thai fact would
+/// have been filed as `project-note.md` and each one would have silently
+/// replaced the last — with the index line replaced alongside it, so nothing
+/// would even look broken. The fingerprint keeps re-recording the *same* title
+/// idempotent, which is the property the index depends on, while two different
+/// titles stay two different files.
+///
+/// The title itself still carries the meaning: it is in the frontmatter, in the
+/// index line, and on screen. Only the file name is ASCII.
 public func memoryFileName(for title: String) -> String {
     let stem = title.lowercased().utf16.map { unit -> UInt16 in
         let isKept = (unit >= 0x61 && unit <= 0x7A) || (unit >= 0x30 && unit <= 0x39)
@@ -152,7 +160,7 @@ public func memoryFileName(for title: String) -> String {
         .filter { !$0.isEmpty }
         .prefix(6)
         .joined(separator: "-")
-    guard !collapsed.isEmpty else { return "project-note" }
+    guard !collapsed.isEmpty else { return "note-\(InstructionFingerprint.of(title))" }
     return String(collapsed.prefix(60))
 }
 

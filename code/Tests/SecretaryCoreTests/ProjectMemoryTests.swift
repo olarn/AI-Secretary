@@ -96,8 +96,28 @@ final class ProjectMemoryTests: XCTestCase {
     /// would collide with itself.
     func testANonAsciiTitleStillGetsAUsableFileName() {
         let note = MemoryNote(title: "เจ้าของชอบภาษาไทย", body: "x")
-        XCTAssertEqual(note.fileName, "project-note.md")
+        XCTAssertTrue(note.fileName.hasPrefix("note-"), "Got: \(note.fileName)")
+        XCTAssertTrue(note.fileName.hasSuffix(".md"))
         XCTAssertTrue(note.indexLine.contains("เจ้าของชอบภาษาไทย"), "The title still carries the meaning")
+    }
+
+    /// The hole the first drive found. A fixed fallback word filed every
+    /// all-Thai fact as the same file, so the second silently replaced the
+    /// first — and because the index line was replaced with it, nothing looked
+    /// broken. The owner writes in Thai, so this was not a corner.
+    func testTwoDifferentNonAsciiTitlesDoNotOverwriteEachOther() {
+        let first = MemoryNote(title: "เจ้าของชอบภาษาไทย", body: "a")
+        let second = MemoryNote(title: "ห้ามคอมมิตรูป", body: "b")
+        XCTAssertNotEqual(first.fileName, second.fileName)
+    }
+
+    /// …while the same title recorded twice still lands on one file, which is
+    /// what makes `memoryIndex` able to replace rather than accumulate.
+    func testTheSameNonAsciiTitleAlwaysGetsTheSameFile() {
+        XCTAssertEqual(
+            MemoryNote(title: "เจ้าของชอบภาษาไทย", body: "a").fileName,
+            MemoryNote(title: "เจ้าของชอบภาษาไทย", body: "รายละเอียดใหม่").fileName
+        )
     }
 
     func testALongHookIsCutRatherThanWrappingTheIndex() {
