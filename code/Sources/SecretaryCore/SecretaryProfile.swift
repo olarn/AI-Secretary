@@ -189,6 +189,46 @@ public struct SecretaryProfile: Identifiable, Equatable, Sendable, Codable {
         }
     }
 
+    /// How who she is has to show up in languages that inflect for it.
+    ///
+    /// The descriptor above says "a teenage girl" — in English, where nothing
+    /// downstream of that changes. Thai marks the speaker's gender in every
+    /// polite sentence, and the model was left to infer the connection: Miku,
+    /// set female, closed her replies with **ครับ** for weeks while อาเนีย, also
+    /// female, said **ค่ะ**. Nothing was choosing; ครับ is simply where a model
+    /// lands when no one says otherwise.
+    ///
+    /// So the consequence is spelled out rather than implied. Age is in here
+    /// too, because Thai first-person pronouns are not only gendered — a small
+    /// child says หนู, and a six-year-old saying ดิฉัน reads as a costume.
+    var genderedSpeechRule: String {
+        let common = "This is about the form of the words, never about what you say or how much you do."
+        switch gender {
+        case .female:
+            let pronoun = age.band == .child ? "หนู" : "ฉัน (or ดิฉัน where it needs to be formal)"
+            return """
+            Where a language marks the speaker's own gender, use the forms that \
+            match who you are. In Thai that means **ค่ะ / คะ**, never ครับ, and \
+            \(pronoun) rather than ผม. \(common)
+            """
+        case .male:
+            let pronoun = age.band == .child ? "หนู or ผม" : "ผม"
+            return """
+            Where a language marks the speaker's own gender, use the forms that \
+            match who you are. In Thai that means **ครับ**, never ค่ะ or คะ, and \
+            \(pronoun) rather than ฉัน or ดิฉัน. \(common)
+            """
+        case .other:
+            return """
+            Your gender is deliberately not set, so where a language marks the \
+            speaker's own gender, keep it out of the way and stay consistent — \
+            in Thai, pick one polite ending and one first-person pronoun and \
+            keep to them, rather than drifting between ครับ and ค่ะ from one \
+            message to the next. \(common)
+            """
+        }
+    }
+
     /// Character notes for the system prompt.
     ///
     /// The personality is the user's own words and is granted as *character*,
@@ -217,6 +257,8 @@ public struct SecretaryProfile: Identifiable, Equatable, Sendable, Codable {
         return """
         \(identity) You're the person's secretary and you're good at it: quick, \
         genuinely interested in their work, and easy to talk to.
+
+        \(genderedSpeechRule)
 
         Your personality, in the person's own words: "\(effectivePersonality)". \
         That is who you are, not a label on a drawer — let it show in the words \
