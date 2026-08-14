@@ -956,6 +956,7 @@ public final class Secretary {
             \(delegationChoices(candidates).joined(separator: "\n"))
             ```
             """)
+        fileConversationNow()
     }
 
     private func answerHandOff(_ waiting: PendingDelegation, with picked: String) -> Bool {
@@ -975,6 +976,28 @@ public final class Secretary {
         }
         send(waiting.errand, to: card)
         return true
+    }
+
+    /// Her own ```to block: a name she typed, matched against who is here.
+    ///
+    /// An unrecognised name is said out loud rather than guessed at. She has
+    /// the roster in front of her, so getting it wrong means she meant somebody
+    /// who is not here — and picking the nearest spelling would send the
+    /// person's work to whoever happened to sort first.
+    private func sendByName(_ request: HandOffBlock.Request) {
+        let directory = directorySnapshot()
+        let wanted = request.to.trimmingCharacters(in: .whitespaces).lowercased()
+        guard let card = directory.first(where: { namesFor($0).contains(wanted) })
+            ?? directory.first(where: { namesFor($0).contains { wanted.contains($0) } })
+        else {
+            let here = directory.map(\.name).joined(separator: ", ")
+            say(.secretary, here.isEmpty
+                ? "There's nobody else on the desktop to pass that to."
+                : "I don't know anyone here called “\(request.to)”. On the desktop right now: \(here).")
+            fileConversationNow()
+            return
+        }
+        send(request.message, to: card)
     }
 
     private func send(_ errand: String, to card: CharacterCard) {
@@ -1000,6 +1023,7 @@ public final class Secretary {
                 self.onSend?(ok)
             }
         )
+        fileConversationNow()
     }
 
     /// Something another character on this desktop has sent her.
@@ -1022,6 +1046,7 @@ public final class Secretary {
             beginTurn(asked)
 
         case .report:
+            defer { fileConversationNow() }
             relayAcceptableReport(message, outstanding: sentErrands).fold(
                 { self.say(.secretary, relayRefusalLine($0, to: message.fromName)) },
                 { ok in
@@ -1038,6 +1063,20 @@ public final class Secretary {
                 }
             )
         }
+    }
+
+    /// Writes the conversation out now, without a turn having ended.
+    ///
+    /// Everything else that reaches the transcript arrives during a turn, and
+    /// `finishChat` files the conversation on its way out. The relay lines do
+    /// not: forwarding an errand deliberately costs the sender no turn, and an
+    /// answer arrives while she is idle. Left alone they lived in memory only —
+    /// found on 2026-08-14 by grepping the saved conversations, where every
+    /// character who *received* an errand had the line (a turn ran right after)
+    /// and no character who *sent* one did. The hand-off being in writing on
+    /// both sides is the whole promise; in writing until quit is not it.
+    private func fileConversationNow() {
+        archiveCurrentConversation()
     }
 
     /// Sends this turn's answer back, when the turn was somebody else's errand.
@@ -2554,6 +2593,12 @@ public final class Secretary {
         let needing = success
             ? SkillInstallBlock.parse(wanting.body)
             : SkillInstallBlock(body: wanting.body, plugin: nil)
+        // The assistant asking to pass something to another character. Read
+        // once the reply is whole, like the rest — a half-written block would
+        // name half a character and send half a sentence.
+        let handing = success
+            ? HandOffBlock.parse(needing.body)
+            : HandOffBlock(body: needing.body, request: nil)
         if let missing = blocked.missing,
            let request = conversation.last(where: { $0.role == .user })?.content {
             outstanding = OutstandingRequest(request: request, missing: missing)
@@ -2578,7 +2623,12 @@ public final class Secretary {
         // If this turn was another character's errand, the answer goes back
         // now — after the state machine has settled, so what is sent is a
         // finished answer rather than one still closing.
-        reportBackIfAnswering(needing.body)
+        reportBackIfAnswering(handing.body)
+
+        // Her own request to pass something on. After the report above, so a
+        // character answering an errand can hand a piece of it to a third
+        // without the two crossing.
+        if let request = handing.request { sendByName(request) }
 
         // After the state machine is back to idle, so the announcement lands in
         // a settled conversation and a loop asked for mid-reply can't fire into
@@ -2637,7 +2687,7 @@ public final class Secretary {
         let planned = PlanBlock.parse(blocked.body)
         let watched = WatchBlock.parse(planned.body)
         let asked = AttachBlock.parse(RunBlock.parse(watched.body).body)
-        return SkillInstallBlock.parse(asked.body).body
+        return HandOffBlock.parse(SkillInstallBlock.parse(asked.body).body).body
     }
 
     /// - Parameter replyID: the bubble being written, when there is one. With

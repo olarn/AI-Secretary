@@ -31,9 +31,15 @@ let handOffPhrases = [
 /// half the polite sentences in Thai, and "send" is usually about a file — so
 /// they never reach a confident reading. With a name beside them they are worth
 /// a question, and no more than a question.
+/// Widened on 2026-08-14 from what the owner actually typed. `ขอข้อมูล … มาจาก
+/// Pikachu` and `ขอข้อมูล Pikachu รถ …` are plainly hand-offs and matched none
+/// of the original list, so the turn went to the model — which is where the
+/// trouble started. They are here rather than in `handOffPhrases` because on
+/// their own they are ordinary words: with a name beside them they are worth a
+/// question, and a question is all they get.
 let addressPhrases = [
-    "ถาม", "บอก", "ส่งให้", "ส่งไปให้", "แจ้ง",
-    "check with", "message", "send", "have ", "get ",
+    "ถาม", "บอก", "ส่งให้", "ส่งไปให้", "แจ้ง", "ขอข้อมูล", "มาจาก", "ขอให้ช่วย",
+    "check with", "message", "send", "have ", "get ", "from ",
 ]
 
 /// A name short enough to appear inside ordinary words is not looked for.

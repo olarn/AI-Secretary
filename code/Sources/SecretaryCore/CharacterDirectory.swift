@@ -83,8 +83,25 @@ public func directoryPrompt(_ others: [CharacterCard]) -> Option<String> {
         You can see their names, their model and effort, and the name of the \
         project each has open. That is all you can see: you cannot read their \
         files, their projects or their conversations, and there is no path you \
-        could ask for. If the person wants one of them to do something, say so \
-        plainly — the app carries the message, and both of you will see it in \
-        writing.
+        could ask for.
+
+        **To send one of them something, end your message with a block like \
+        this, and nothing after it:**
+
+        ```to
+        \(others[0].name)
+        what you want her to do, in full, as you would say it to her
+        ```
+
+        The app delivers it, puts a line in both conversations, and brings you \
+        her answer when it comes. That block is the only way it happens.
+
+        **None of your own tools can reach these characters.** They are not \
+        Claude Code sessions, agents, or processes you can list or message, and \
+        anything that looks like it would message them reaches something else \
+        entirely. Never tell the person you have contacted, messaged, sent to \
+        or heard from another character unless you used the block above in this \
+        conversation and saw the app's own line confirming it — a report of \
+        something that did not happen is worse than saying you couldn't.
         """)
 }

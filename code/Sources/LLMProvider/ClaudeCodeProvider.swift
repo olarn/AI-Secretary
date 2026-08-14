@@ -71,6 +71,27 @@ public final class ClaudeCodeProvider: ChatProvider, SkillInstalling, @unchecked
         "Bash(git status *)", "Bash(git diff *)", "Bash(git log *)", "Bash(git branch *)"
     ]
 
+    /// Tools the character must never have, whatever else is allowed.
+    ///
+    /// `--allowedTools` does not do this job: it is an *auto-approve* list, so
+    /// everything left off it still exists and merely asks. These have to be
+    /// denied outright.
+    ///
+    /// Claude Code can message other Claude Code sessions, and the moment a
+    /// character was told other characters existed she reached for exactly
+    /// that. Driven on 2026-08-14: asked to get something from Pikachu, Ditto
+    /// called `ListAgents`, went looking with `ToolSearch`, called
+    /// `SendMessage`, and then told the person **"ส่งสำเร็จแล้วครับ! ข้อความไปถึง
+    /// Pikachu (session my-mcp-server-80)"** — a confident report of something
+    /// that never happened, addressed to a Claude Code session that has nothing
+    /// to do with the character of that name. Pikachu, of course, said nothing.
+    ///
+    /// The tools are real and they work; what they do not do is reach the
+    /// characters on this desktop, and no wording in a prompt makes a tool that
+    /// is right there stop looking like the answer. The relay is the app's job,
+    /// and this is what keeps it the app's job.
+    public static let deniedTools = ["SendMessage", "ListAgents"]
+
     private let installation: ClaudeCodeInstallation
     private let logger = Logger(subsystem: "com.aisecretary.app", category: "ClaudeCodeProvider")
 
@@ -661,6 +682,7 @@ public final class ClaudeCodeProvider: ChatProvider, SkillInstalling, @unchecked
         if !configuration.allowedTools.isEmpty {
             arguments += ["--allowedTools", configuration.allowedTools.joined(separator: ",")]
         }
+        arguments += ["--disallowedTools", ClaudeCodeProvider.deniedTools.joined(separator: ",")]
         for directory in configuration.additionalDirectories {
             arguments += ["--add-dir", directory.path]
         }

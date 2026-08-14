@@ -204,6 +204,61 @@ final class CharacterHandOffTests: XCTestCase {
         XCTAssertTrue(saidAnything(anya, containing: "Miku passed this on"))
     }
 
+    // MARK: - The assistant's own hand-off block
+
+    /// The path that did not exist when Ditto went looking for one.
+    func testAssistantCanAskForSomethingToBePassedOn() async {
+        mikuProvider.replyForNextTurn = "I'll ask her.\n\n```to\nAnya\nfind the price of a 2015 Civic\n```"
+        anyaProvider.replyForNextTurn = "About 420,000 baht."
+
+        miku.submit("get me a price comparison")
+        await waitUntilIdle(mikuMachine)
+        await waitUntilIdle(anyaMachine)
+
+        XCTAssertTrue(saidAnything(miku, containing: "Passed this on to Anya"))
+        XCTAssertTrue(saidAnything(anya, containing: "Miku passed this on"))
+        let sent = anyaProvider.lastMessages.map(\.content).joined(separator: "\n")
+        XCTAssertTrue(sent.contains("2015 Civic"))
+    }
+
+    /// The block must not survive into the bubble as literal typing.
+    func testTheBlockDoesNotAppearOnScreen() async {
+        mikuProvider.replyForNextTurn = "I'll ask her.\n\n```to\nAnya\ncheck the price\n```"
+        anyaProvider.replyForNextTurn = "ok"
+        miku.submit("get me a price")
+        await waitUntilIdle(mikuMachine)
+
+        XCTAssertFalse(saidAnything(miku, containing: "```to"))
+    }
+
+    /// A name that is not on the desktop is answered, not guessed at — sending
+    /// to whoever sorts first would put the person's work somewhere they never
+    /// asked for.
+    func testAnUnknownNameIsSaidOutLoudRatherThanGuessedAt() async {
+        mikuProvider.replyForNextTurn = "```to\nPikachu\ncheck the price\n```"
+        miku.submit("what's the price?")
+        await waitUntilIdle(mikuMachine)
+
+        XCTAssertTrue(
+            saidAnything(miku, containing: "don't know anyone here called"),
+            "Got: \(said(miku))"
+        )
+        XCTAssertEqual(anyaProvider.callCount, 0)
+    }
+
+    /// The prompt has to say plainly that her own tools cannot reach anyone.
+    /// Without it she finds one that looks like it can and reports success.
+    func testThePromptSaysHerOwnToolsCannotReachThem() async {
+        mikuProvider.replyForNextTurn = "ok"
+        miku.submit("hello")
+        await waitUntilIdle(mikuMachine)
+
+        let system = mikuProvider.lastSystem ?? ""
+        XCTAssertTrue(system.contains("```to"), "She needs to be told the way. Got: \(system)")
+        XCTAssertTrue(system.contains("None of your own tools can reach these characters"))
+        XCTAssertTrue(system.contains("Never tell the person you have contacted"))
+    }
+
     // MARK: - The roster reaches the prompt
 
     /// 14.1's first item, answered without a message being sent at all.
