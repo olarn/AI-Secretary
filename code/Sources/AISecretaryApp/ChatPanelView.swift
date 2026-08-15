@@ -66,7 +66,7 @@ struct ChatPanelView: View {
     @State private var addProjectNote: String?
     @State private var settingsNote: String?
     @State private var scrollPin = TranscriptScrollPin()
-    @State private var dragOrigin: DragOrigin?
+    @State private var dragOrigin: ChatResizeDrag?
     /// How tall the message being typed actually is, reported by the field
     /// itself. The box is sized from this and capped at five lines.
     @State private var draftHeight: Double = 0
@@ -340,7 +340,11 @@ struct ChatPanelView: View {
     private var maxMessageBoxHeight: Double { messageLineHeight * Double(Self.inputLineLimit) }
 
     private var messageBoxHeight: Double {
-        min(max(draftHeight, messageLineHeight), maxMessageBoxHeight)
+        SecretaryCore.messageBoxHeight(
+            draft: draftHeight,
+            lineHeight: messageLineHeight,
+            lineLimit: Self.inputLineLimit
+        )
     }
 
     private static let closeButtonSize: Double = 18 * 0.9
@@ -377,54 +381,29 @@ struct ChatPanelView: View {
 
     /// Drag the grip the way you want the bubble to extend, on both axes at once.
     ///
-    /// The edges on the tail's side stay pinned to the character — the tail must
-    /// not slide off it just because the window got bigger — so the bubble only
-    /// ever grows into the two opposite edges, and the drag follows those. Which
-    /// way that is depends on where the bubble has been placed: it grows right
-    /// and up in the usual position, left when mirrored, down when it has been
-    /// flipped below the character.
+    /// The rule — which edges grow, why the directions are captured once at the
+    /// start of the drag, and the oscillation that reading them fresh caused —
+    /// is `ChatResizeDrag` in SecretaryCore, where it has tests. This only
+    /// feeds it the current layout and applies the answer.
     ///
-    /// Note this is keyed to the layout, not to the corner the grip happens to
-    /// be in — only the layout says which edges are free to move. The two agree
-    /// on all four axes now that `GripCorner` puts the grip on the growing
-    /// corner, so the drag reads both ways at once: "the way you want the box to
-    /// extend" and the usual corner-handle "away from the box". They did not
-    /// always. With the grip pinned to the top through a vertical flip, growing
-    /// downward meant dragging down past a grip that stayed put, toward the
-    /// character, with the space being filled behind you.
+    /// Note the drag is keyed to the layout, not to the corner the grip happens
+    /// to be in — only the layout says which edges are free to move. The two
+    /// agree on all four axes now that `GripCorner` puts the grip on the
+    /// growing corner, so the drag reads both ways at once: "the way you want
+    /// the box to extend" and the usual corner-handle "away from the box".
     private func resize(to pointer: CGPoint) {
         let settings = appearance.settings
-        let origin = dragOrigin ?? DragOrigin(
+        let origin = dragOrigin ?? ChatResizeDrag(
             pointer: pointer,
             width: settings.chatWidth,
             height: settings.chatHeight,
-            growsRight: layout.isMirrored ? -1 : 1,
-            // Screen coordinates point up, so this is already "up is taller"
-            // unless the bubble sits below the character and grows downward.
-            growsUp: layout.isFlippedVertically ? -1 : 1
+            isMirrored: layout.isMirrored,
+            isFlippedVertically: layout.isFlippedVertically
         )
         if dragOrigin == nil { dragOrigin = origin }
 
-        appearance.resizeChat(
-            width: origin.width + (pointer.x - origin.pointer.x) * origin.growsRight,
-            height: origin.height + (pointer.y - origin.pointer.y) * origin.growsUp
-        )
-    }
-
-    /// Where the drag started, so every step is measured from one fixed point
-    /// rather than accumulated.
-    struct DragOrigin {
-        let pointer: CGPoint
-        let width: Double
-        let height: Double
-        /// Which way the bubble grows, fixed for the whole drag. Read fresh on
-        /// every event instead, a layout that flips mid-drag inverts the
-        /// gesture: keep dragging the same way and the box shrinks, which
-        /// un-flips it, which grows it again. Measured at the top of the
-        /// screen, the height oscillated 909 → 801 → 933 → 777 in four events,
-        /// the swing widening each time.
-        let growsRight: Double
-        let growsUp: Double
+        let size = origin.size(at: pointer)
+        appearance.resizeChat(width: size.width, height: size.height)
     }
 
     // MARK: - Sections

@@ -1021,3 +1021,13 @@ prompt กับกติกาประกอบมัน ย้ายไป `S
 (รวม assertion แบบ contains 200+ จุดที่ pin ข้อความอยู่) และได้เทสใหม่ 7 ตัวที่เช็ค
 *การตัดสินใจ* ของการประกอบ — ชิ้นไหนโผล่เมื่อไหร่ — ด้วย exact equality ในจุดที่ pin ได้
 ตามที่รายงานติว่า contains ผ่านได้แม้ prompt บวมสองเท่า `Secretary.swift` 4,153 → 3,865
+
+**decision ในชั้นแอปที่ coverage มองไม่เห็น ย้ายเข้า library แล้วห้าตัว (v0.14.255)**
+`AISecretaryApp` ไม่เคยถูก link เข้า test bundle กติกาของ charter คือ rule ที่แอปต้อง*ตัดสิน*
+ต้องเป็น pure function ใน library target ห้าตัวที่รายงานชี้ ย้ายไป
+`SecretaryCore/WindowGeometry.swift` + `AppearanceSettings`: clamp ขนาด info window,
+cascade ต้นทางหน้าต่าง (พร้อมเทสว่าตัวที่เก้าวนกลับ), clamp ความสูง message box,
+`ChatResizeDrag` — สูตร resize + sign flip ที่ doc comment บันทึกบั๊ก oscillation
+(909 → 801 → 933 → 777) ไว้แต่ไม่เคยมีที่ให้เขียนเทส ตอนนี้มี regression test แล้ว —
+และ `captionFontSize` แทนสูตร `max(9, secondaryFontSize - 2)` ที่เขียนซ้ำหกที่ใน
+`UsageWindow` view เหลือแค่ apply คำตอบ เทสใหม่ 11 ตัว ของเดิมผ่านหมดไม่ถูกแก้

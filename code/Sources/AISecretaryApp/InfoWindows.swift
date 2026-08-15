@@ -68,14 +68,8 @@ final class InfoWindows: NSObject, NSWindowDelegate {
         let host = NSHostingView(
             rootView: InfoWindowView(spec: spec, appearance: appearance)
         )
-        // Sized to the content, within reason: a two-row table should not open a
-        // window the height of the screen, and a long one should not try to.
-        let wanted = host.fittingSize
-        let frame = NSRect(
-            x: 0, y: 0,
-            width: min(max(wanted.width + 32, 320), 720),
-            height: min(max(wanted.height + 32, 180), 640)
-        )
+        // The rule is infoWindowSize, in SecretaryCore where it has tests.
+        let frame = NSRect(origin: .zero, size: infoWindowSize(fitting: host.fittingSize))
 
         let panel = NSPanel(
             contentRect: frame,
@@ -153,14 +147,11 @@ final class InfoWindows: NSObject, NSWindowDelegate {
         panel.orderOut(nil)
     }
 
-    /// Cascade, so a second window doesn't land exactly on the first.
+    /// Cascade, so a second window doesn't land exactly on the first. The rule
+    /// is infoWindowOrigin, in SecretaryCore where it has tests.
     private func nextOrigin() -> NSPoint {
         guard let screen = NSScreen.main else { return NSPoint(x: 200, y: 600) }
-        let step = 26.0 * Double(panels.count % 8)
-        return NSPoint(
-            x: screen.visibleFrame.minX + 120 + step,
-            y: screen.visibleFrame.maxY - 80 - step
-        )
+        return infoWindowOrigin(visibleFrame: screen.visibleFrame, existingWindows: panels.count)
     }
 
     // MARK: - NSWindowDelegate

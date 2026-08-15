@@ -210,7 +210,7 @@ private struct UsageView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("\(UsageFormat.cost(usage.costUSD)) over \(usage.turns) turn\(usage.turns == 1 ? "" : "s")")
                     Text(UsageFormat.costNote)
-                        .font(.system(size: max(9, appearance.settings.secondaryFontSize - 2)))
+                        .font(.system(size: appearance.settings.captionFontSize))
                         .foregroundStyle(theme.mutedText.color)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -259,7 +259,7 @@ private struct UsageView: View {
                             activityRow(period)
                         }
                         Text(PlanUsage.activityNote)
-                            .font(.system(size: max(9, appearance.settings.secondaryFontSize - 2)))
+                            .font(.system(size: appearance.settings.captionFontSize))
                             .foregroundStyle(theme.mutedText.color)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -267,7 +267,7 @@ private struct UsageView: View {
 
                 HStack(spacing: 6) {
                     Text("Last updated: \(UsageFormat.age(of: usage.checkedAt, now: tick))")
-                        .font(.system(size: max(9, appearance.settings.secondaryFontSize - 2)))
+                        .font(.system(size: appearance.settings.captionFontSize))
                         .foregroundStyle(theme.mutedText.color)
                     Button { plan.refresh() } label: {
                         Image(systemName: "arrow.clockwise")
@@ -326,7 +326,7 @@ private struct UsageView: View {
             }
             ForEach(period.notes, id: \.self) { note in
                 Text(note)
-                    .font(.system(size: max(9, appearance.settings.secondaryFontSize - 2)))
+                    .font(.system(size: appearance.settings.captionFontSize))
                     .foregroundStyle(theme.mutedText.color)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -347,11 +347,11 @@ private struct UsageView: View {
                 .tint(limit.fraction > 0.85 ? .orange : .accentColor)
             if let resets = limit.resetDescription(now: tick) {
                 Text(resets)
-                    .font(.system(size: max(9, appearance.settings.secondaryFontSize - 2)))
+                    .font(.system(size: appearance.settings.captionFontSize))
                     .foregroundStyle(theme.mutedText.color)
             } else if limit.fraction == 0 {
                 Text("Not used yet")
-                    .font(.system(size: max(9, appearance.settings.secondaryFontSize - 2)))
+                    .font(.system(size: appearance.settings.captionFontSize))
                     .foregroundStyle(theme.mutedText.color)
             }
         }

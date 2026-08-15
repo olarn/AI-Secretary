@@ -181,6 +181,10 @@ public struct AppearanceSettings: Equatable, Sendable {
     /// instead of leaving captions tiny beside 32pt text.
     public var secondaryFontSize: Double { max(9, fontSize - 2) }
     public var footnoteFontSize: Double { max(8, fontSize - 3) }
+    /// A step below secondary — the Token Usage window's table numbers and
+    /// axis labels. Was `max(9, secondaryFontSize - 2)` written out at six
+    /// call sites, which is six chances to update five of them.
+    public var captionFontSize: Double { max(9, secondaryFontSize - 2) }
     /// The explanatory line under a control — "Blank means professional",
     /// "Free text — who she is". Smaller than the row it explains, and
     /// scaled like everything else: these were pinned at 9pt, so the Settings
