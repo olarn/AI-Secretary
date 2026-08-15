@@ -4,9 +4,7 @@ import SecretaryCore
 
 /// The keyboard's second meanings: the choice picker, history recall, and the
 /// event monitors that see keys and wheels before the responder chain does —
-/// which is the only reliable point, as the doc comments below record. Split
-/// out of `ChatPanelView.swift` along the seam the file already had; nothing
-/// here changed in the move.
+/// which is the only reliable point, as the doc comments below record.
 extension ChatPanelView {
     /// What you've sent this session, oldest first.
     ///

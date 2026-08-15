@@ -37,8 +37,7 @@ public func characterStatusTag(for state: AssistantState) -> String? {
     state == .idle ? nil : state.description.uppercased()
 }
 
-/// What to call the character on screen: their name, and what they are doing
-/// when that is anything.
+/// What to call the character on screen.
 ///
 /// One rule in one place because it is shown twice — under the character on the
 /// desktop and at the top of the chat — and two copies would drift the first
@@ -47,8 +46,11 @@ public func characterStatusLabel(name: String, state: AssistantState) -> String 
     characterStatusTag(for: state).map { "\(name) - \($0)" } ?? name
 }
 
-/// Events that can drive a state transition. Carries no UI or tool details;
-/// callers attach a reason/taskID/toolStatus when submitting the event.
+/// Events that can drive a state transition.
+///
+/// Deliberately carries no UI or tool detail — the caller attaches
+/// reason/taskID/toolStatus when submitting, which is what keeps this enum
+/// usable from both the app and the tests.
 public enum AssistantEvent: Equatable, Sendable {
     case userBeganInput
     case beginInterpreting
@@ -92,11 +94,12 @@ public enum TransitionError: Error, Equatable, Sendable {
     case invalidTransition(from: AssistantState, event: AssistantEvent)
 }
 
-/// Pure transition table. No side effects, no UI dependency — this is what
-/// makes the state machine independently unit-testable.
+/// The transition table.
 ///
-/// Absence is `Option.none`, so "this event does nothing in this state" is a
-/// value the caller must handle rather than a `nil` that reads as an oversight.
+/// Kept free of side effects and of any UI dependency so the state machine can
+/// be tested on its own. Absence is `Option.none`, so "this event does nothing
+/// in this state" is a value the caller must handle rather than a `nil` that
+/// reads as an oversight.
 public func nextAssistantState(
     from state: AssistantState,
     on event: AssistantEvent

@@ -5,8 +5,7 @@ import SecretaryCore
 /// The header row: who is speaking, what state she is in, and the badges for
 /// everything standing that can speak on its own — each with its own off
 /// switch, because a turn arriving with nobody typing must have a visible
-/// cause. Split out of `ChatPanelView.swift` along the seam the file already
-/// had; nothing here changed in the move.
+/// cause.
 extension ChatPanelView {
     /// What the assistant is doing right now.
     ///

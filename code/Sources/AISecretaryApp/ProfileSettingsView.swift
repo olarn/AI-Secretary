@@ -291,10 +291,7 @@ struct ProfileSettingsView: View {
         }
     }
 
-    /// A menu showing the value it is set to, with the inherited marker beside
-    /// it rather than inside it.
-    ///
-    /// Outside the menu on purpose: a `Menu` label built from several views
+    /// The inherited marker sits beside the menu, not inside it, on purpose: a `Menu` label built from several views
     /// renders as the chevron alone here, which is why these two rows used to
     /// show their title and no value at all. The value is the one thing the row
     /// exists to say, so it is the only thing in the label.

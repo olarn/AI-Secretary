@@ -19,7 +19,8 @@ import SecretaryCore
 @MainActor
 @Observable
 final class InfoWindows: NSObject, NSWindowDelegate {
-    /// What exists, whether or not it is on screen. The menu is built from this.
+    /// What exists, whether or not it is on screen — a pane put away is still
+    /// here, which is what the menu is built from.
     private(set) var set: InfoWindowSet = .empty
 
     @ObservationIgnored private var panels: [UUID: NSPanel] = [:]
@@ -32,13 +33,12 @@ final class InfoWindows: NSObject, NSWindowDelegate {
         self.appearance = appearance
     }
 
-    /// Opens a pane and shows it. Called when a reply carried a ` ```window `
-    /// block.
-    /// Re-lights every open pinned window when the theme changes.
     func applyControlAppearance(_ controls: NSAppearance?) {
         panels.values.forEach { $0.appearance = controls }
     }
 
+    /// Also the door a ` ```window ` block in a reply comes through, so a pane
+    /// the assistant asks for behaves exactly like one pinned by hand.
     func open(_ spec: InfoWindowSpec) {
         // Already pinned: bring that one forward rather than making a second
         // copy of it. See `InfoWindowSet.matching` for why this is on content

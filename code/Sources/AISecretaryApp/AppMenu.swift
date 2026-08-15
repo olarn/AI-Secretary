@@ -1,8 +1,6 @@
 import AppKit
 import SecretaryCore
 
-/// Builds the application's main menu.
-///
 /// The app runs with `.accessory` activation policy, so this menu is never
 /// *drawn* — there is no menu bar for an agent app. It still has to exist:
 /// `NSApplication` matches command-key equivalents against `mainMenu` before

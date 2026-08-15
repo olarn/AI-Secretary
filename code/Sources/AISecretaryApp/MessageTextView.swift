@@ -113,6 +113,7 @@ struct MessageTextView: NSViewRepresentable {
     /// `sizeThatFits` is deliberate — a representable is treated as fully
     /// stretchy by the surrounding layout no matter what it answers, which is
     /// why "ok?" was drawn in a bubble the full width of the panel.
+    ///
     /// Measured in one pass, deliberately. A reply with newlines in it should be
     /// as wide as its widest line — which is what this returns, because a hard
     /// newline still breaks the line when nothing else does. Splitting the text

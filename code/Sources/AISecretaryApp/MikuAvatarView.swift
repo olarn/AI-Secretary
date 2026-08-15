@@ -90,7 +90,6 @@ private struct EyeView: View {
     }
 }
 
-/// Simple rounded-top bangs silhouette with a soft center part.
 private struct BangsShape: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
@@ -112,7 +111,6 @@ private struct BangsShape: Shape {
     }
 }
 
-/// A small open, smiling mouth.
 private struct SmileShape: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()

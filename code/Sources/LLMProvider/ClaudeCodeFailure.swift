@@ -15,15 +15,12 @@ import Foundation
 public enum ClaudeCodeFailure: Equatable, Sendable {
     /// Installed, but nobody is logged in — or the login expired.
     case notSignedIn
-    /// The subscription's limit for the window has been used up.
     case usageLimitReached
-    /// Claude Code ran but couldn't reach Anthropic.
+    /// Ran, but couldn't reach Anthropic — as opposed to `couldNotStart`.
     case offline
-    /// It couldn't be started at all: missing, not executable, killed by the OS.
+    /// Missing, not executable, or killed by the OS.
     case couldNotStart
-    /// It exited without saying anything useful.
     case silentExit(code: Int)
-    /// Something else. The detail is all there is.
     case unknown
 
     public static func classify(_ detail: String) -> ClaudeCodeFailure {

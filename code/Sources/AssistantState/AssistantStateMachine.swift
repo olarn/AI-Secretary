@@ -4,8 +4,9 @@ import Observation
 import os
 
 /// Owns the current `AssistantState` and the audit trail of transitions.
-/// UI layers observe this; they never mutate `state` directly, only submit
-/// events through `send(_:reason:taskID:toolStatus:)`.
+///
+/// **Never set `state` from outside — submit an event.** A direct write skips
+/// the transition table, the history entry and the log line all at once.
 ///
 /// The decision itself lives in `decideTransition`; this type only holds the
 /// result and logs it, so the transition table stays testable without an object.

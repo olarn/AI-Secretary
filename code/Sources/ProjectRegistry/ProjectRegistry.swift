@@ -22,13 +22,11 @@ public final class ProjectRegistry {
         projects = store.load().getOrElse([])
     }
 
-    /// Whether a project already points at the same directory.
     public func containsProject(atPath path: String) -> Bool {
         projectID(atPath: path)(projects).isDefined
     }
 
-    /// Registers a project unless its directory is already registered, in
-    /// which case the existing entry is kept and this reports `false`. This is
+    /// Reports `false` when that directory was already registered — which is
     /// what keeps "Add project…" from creating duplicate rows for one folder.
     @discardableResult
     public func add(_ project: Project) -> Either<ProjectStoreError, Bool> {
@@ -36,8 +34,6 @@ public final class ProjectRegistry {
         return commit(projects + [project]).map { true }^
     }
 
-    /// Adds a tool to a project's allowlist and persists it.
-    ///
     /// Called at the moment a human approves the capability, never on load — a
     /// project registered before a tool existed must not silently gain it.
     @discardableResult
@@ -58,7 +54,6 @@ public final class ProjectRegistry {
         Option.fromOptional(projects.first { $0.id == id })
     }
 
-    /// Resolves a project reference from user text. See `resolveProject`.
     public func resolve(query: Option<String>) -> ProjectResolution {
         resolveProject(in: projects)(query)
     }

@@ -56,7 +56,6 @@ public struct WarmProcessKey: Equatable, Sendable {
         self.session = session
     }
 
-    /// The same conversation, in the same place, on the same terms.
     public func canBeServed(by running: WarmProcessKey) -> Bool {
         self == running
     }

@@ -3,9 +3,7 @@ import Foundation
 
 /// What may happen to a request that policy did not refuse.
 public enum PermissionOutcome: Equatable, Sendable {
-    /// Nothing stands in the way; run it.
     case allowed
-    /// A human must confirm before this runs.
     case needsApproval(ApprovalRequest)
 }
 
@@ -40,9 +38,6 @@ public func noteToolOutsideAllowlist(
 }
 
 /// Second rail: decide whether this request can run unattended.
-///
-/// Anything with side effects asks every single time. Read-only work asks the
-/// first time a project/tool pair is used and runs unattended after that.
 ///
 /// Curried on the grants so it composes as `flatMap(requireApproval(grants))`.
 public func requireApproval(

@@ -39,9 +39,8 @@ public struct Project: Equatable, Identifiable, Sendable {
 
     public func allows(tool: String) -> Bool { allowedTools.contains(tool) }
 
-    /// A new project with one more tool allowed. Absent when the tool was
-    /// already there, so a caller can tell "granted" from "no change" without
-    /// comparing arrays.
+    /// Absent when the tool was already there, so a caller can tell "granted"
+    /// from "no change" without comparing arrays.
     ///
     /// Built field by field rather than by copying and mutating: every stored
     /// property is a `let`, so "one more tool" is a new value.
@@ -106,13 +105,10 @@ extension Project {
 
 /// Outcome of resolving a user-supplied project reference.
 public enum ProjectResolution: Equatable, Sendable {
-    /// Exactly one project matched — safe to proceed.
     case resolved(Project)
-    /// Nothing matched. Never fall back to guessing a filesystem path.
+    /// **Never fall back to guessing a filesystem path from the query.**
     case notFound(query: String)
-    /// Several matched; the user must pick one explicitly.
     case ambiguous(query: String, candidates: [Project])
-    /// No reference was given and there is no single obvious default.
     case needsSelection(candidates: [Project])
 }
 
@@ -139,8 +135,6 @@ public func resolveProject(
     }
 }
 
-/// With no reference given, a lone project is unambiguous; anything else needs
-/// the user to choose.
 private func defaultProject(in projects: [Project]) -> ProjectResolution {
     projects.count == 1
         ? .resolved(projects[0])

@@ -162,8 +162,7 @@ public final class GitReadOnlyAdapter: CodeToolAdapter {
     }
 }
 
-/// A launched process and the pipe its output arrives on, so the launch rail can
-/// hand both to the collect rail as one value.
+/// One value, so the launch rail can hand both to the collect rail.
 private struct RunningCommand {
     let process: Process
     let pipe: Pipe

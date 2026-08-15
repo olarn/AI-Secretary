@@ -37,9 +37,6 @@ final class WarmProcess: @unchecked Sendable {
         self.key = key
         self.lines = output.fileHandleForReading.bytes.lines.makeAsyncIterator()
 
-        // See 2 above. Bounded, because the only reason to keep it is to
-        // explain a failure, and an afternoon of warnings is not an
-        // explanation.
         drainErrors()
     }
 
@@ -77,8 +74,8 @@ final class WarmProcess: @unchecked Sendable {
         ), errorsSoFar: errorLock.withLock { collectedErrors })
     }
 
-    /// Re-wrapping the same live handles under a new key. Private because
-    /// nothing else may build one of these around a process someone else owns.
+    /// Private because nothing else may build one of these around a process
+    /// someone else owns.
     private init(
         process: Process,
         input: Pipe,
@@ -100,7 +97,8 @@ final class WarmProcess: @unchecked Sendable {
         drainErrors()
     }
 
-    /// Hands one message to the process. Throws if it is no longer there.
+    /// Throws rather than hanging when the process is no longer there, which is
+    /// what lets the caller retry once on a fresh one.
     func send(_ line: String) throws {
         guard process.isRunning else {
             throw ChatError.claudeCodeFailed("Claude Code was no longer running")

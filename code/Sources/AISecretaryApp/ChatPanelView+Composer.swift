@@ -3,18 +3,14 @@ import SwiftUI
 import SecretaryCore
 
 /// The composer: the growing message box, the attachments riding with it, the
-/// file-request card and the ↵ that sends. Split out of `ChatPanelView.swift`
-/// along the seam the file already had; nothing here changed in the move.
+/// file-request card and the ↵ that sends.
 extension ChatPanelView {
     /// Asked for: the message box grows to five lines and then scrolls. Past
     /// five it starts eating the conversation it's replying to.
     static let inputLineLimit = 5
 
-    /// Grows a line at a time as the message gets longer, then stops and
-    /// scrolls: five lines is about as much of the bubble as the input can take
-    /// before the conversation above it stops being readable.
-    /// The box spans the full width now, with the send affordance inside it
-    /// rather than a button beside it.
+    /// The box spans the full width, with the send affordance inside it rather
+    /// than a button beside it.
     var inputRow: some View {
         VStack(alignment: .leading, spacing: appearance.settings.panelSpacing) {
             if let asking = secretary.fileRequestDescription { fileRequestCard(asking) }
@@ -35,16 +31,6 @@ extension ChatPanelView {
         )
     }
 
-    /// The box grows with the message and stops at five lines, after which it
-    /// scrolls — by wheel or trackpad as well as by caret.
-    ///
-    /// The field is left to grow to its full height and a `ScrollView` is what's
-    /// capped, rather than capping the field with `lineLimit`. Both look the same
-    /// until you reach for the wheel: a line-limited field scrolls only to follow
-    /// the caret, and a wheel over it does nothing at all.
-    /// The composer: what is attached, and what is being typed, inside one
-    /// box.
-    ///
     /// The chips live *in* the field rather than above it because that is what
     /// they are — part of the message being written, not a separate thing that
     /// happens to be nearby. Sending takes both, and the box that Return
@@ -61,6 +47,10 @@ extension ChatPanelView {
         .overlay(alignment: .bottomTrailing) { sendGlyph }
     }
 
+    /// The field is left to grow to its full height and a `ScrollView` is what's
+    /// capped, rather than capping the field with `lineLimit`. Both look the same
+    /// until you reach for the wheel: a line-limited field scrolls only to follow
+    /// the caret, and a wheel over it does nothing at all.
     private var messageField: some View {
         ScrollView(.vertical) {
             // The persona's own name, not "the Secretary": the app can be
@@ -156,8 +146,8 @@ extension ChatPanelView {
         .scrollIndicators(.never)
     }
 
-    /// What a chip is a picture of. Says what kind of thing was attached at a
-    /// glance, which is the one question a row of names can't answer.
+    /// Says what kind of thing was attached at a glance, which is the one
+    /// question a row of names can't answer.
     private func attachmentGlyph(_ kind: AttachmentKind) -> String {
         switch kind {
         case .image: return "photo"

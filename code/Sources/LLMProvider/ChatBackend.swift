@@ -10,7 +10,6 @@ public protocol WorkspaceScopedProvider: AnyObject, Sendable {
     /// Applies to the next turn. `allowedTools` of `nil` leaves the current
     /// allowlist alone.
     func prepare(workingDirectory: URL?, additionalDirectories: [URL], allowedTools: [String]?)
-    /// Drops any resumed session so the next turn starts a fresh conversation.
     func resetConversation()
     /// The backend's own handle on the current thread, if it has one.
     ///
@@ -36,7 +35,7 @@ public protocol WorkspaceScopedProvider: AnyObject, Sendable {
     /// user's own Claude Code can: the extension authenticates against their
     /// subscription, so an API-key backend has no way in.
     var supportsBrowser: Bool { get }
-    /// Connects or disconnects the browser for subsequent turns.
+    /// Applies to subsequent turns, not the one in flight.
     func setBrowserEnabled(_ enabled: Bool)
     /// Ends any process the backend is keeping warm between turns.
     ///
@@ -167,8 +166,8 @@ public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, @unchecke
     /// Which copy of Claude Code is in use, once detection has run.
     public var installation: ClaudeCodeInstallation? { detector.installation }
 
-    /// Runs detection if it hasn't run. Safe to call from a background task;
-    /// never call it on the main thread.
+    /// **Never call this on the main thread** — resolving can launch a login
+    /// shell. Idempotent, so a background task may call it freely.
     @discardableResult
     public func resolve() -> ClaudeCodeAvailability {
         let found = detector.resolve()
@@ -180,8 +179,7 @@ public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, @unchecke
         return found
     }
 
-    /// Builds this backend's own provider from a finished detection, carrying
-    /// over anything chosen while there was nothing to carry it to.
+    /// Carries over anything chosen while there was nothing yet to carry it to.
     private func adopt(_ availability: ClaudeCodeAvailability) {
         guard case .available(let installation) = availability else { return }
         lock.lock()

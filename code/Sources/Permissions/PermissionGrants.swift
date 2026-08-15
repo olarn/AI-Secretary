@@ -23,7 +23,6 @@ public struct PermissionGrants: Equatable, Sendable {
         self.keys = keys
     }
 
-    /// A copy of these grants with one more project/tool pair approved.
     public func granting(projectID: UUID, toolID: String) -> PermissionGrants {
         PermissionGrants(keys: keys.union([Key(projectID: projectID, toolID: toolID)]))
     }

@@ -3,9 +3,7 @@ import SwiftUI
 import SecretaryCore
 
 /// The thread itself: the scroller and its follow-the-bottom rule, and how one
-/// message becomes bubbles, tables, code blocks and activity lines. Split out
-/// of `ChatPanelView.swift` along the seam the file already had; nothing here
-/// changed in the move.
+/// message becomes bubbles, tables, code blocks and activity lines.
 extension ChatPanelView {
     var emptyTranscriptHint: String {
         if backendStatus.needsOnboarding {
@@ -254,8 +252,6 @@ extension ChatPanelView {
         }
     }
 
-    /// Who said it and when.
-    ///
     /// `secondaryFontSize`: the header is there to be found, not read, and at
     /// message size it competes with the message.
     private func header(_ entry: TranscriptEntry, style: MessageBubbleStyle) -> some View {
@@ -276,8 +272,6 @@ extension ChatPanelView {
         .foregroundStyle(style.isFailure ? theme.warning.color : theme.mutedText.color)
     }
 
-    /// Pin and copy, in that order left to right.
-    ///
     /// One hover target for both, so moving between them can't make the pair
     /// flicker, and so the pointer leaving either one is the same event.
     private func boxButtons(text: String, box: BoxID, entry: TranscriptEntry) -> some View {
@@ -311,8 +305,6 @@ extension ChatPanelView {
         .help("Pin this box into its own window")
     }
 
-    /// Copies this box, and says so.
-    ///
     /// It sits over the corner of the box, so it is given the panel's own
     /// background behind it — over a line of text with no backing, an icon is
     /// unreadable and looks like a rendering fault.
@@ -346,8 +338,6 @@ extension ChatPanelView {
         }
     }
 
-    /// The bubble itself: the message, in a rounded fill.
-    ///
     /// The fill is the panel's own accent and secondary, not a new palette —
     /// the point of the change is the shape of the conversation, not a different
     /// look.
@@ -403,13 +393,6 @@ extension ChatPanelView {
         return (style.isMine ? theme.bubbleMine : theme.bubbleTheirs).color
     }
 
-    /// A table laid out as a grid, scrolling sideways on its own when it's
-    /// wider than the bubble. Cells use the body text size, not a smaller
-    /// caption: a table is content, so it has to grow with +/- like the rest of
-    /// the answer. Only the table scrolls — the conversation itself
-    /// must not, or every wide answer would drag the whole thread off-screen.
-    /// A fenced block, shown verbatim.
-    ///
     /// Monospaced and scrolled sideways rather than wrapped: wrapping a line of
     /// JSON or a shell command puts a break where none exists, and the reader
     /// can no longer tell what would actually be typed. Same treatment as a
@@ -442,6 +425,10 @@ extension ChatPanelView {
         )
     }
 
+    /// Cells use the body text size, not a smaller caption: a table is content,
+    /// so it has to grow with +/- like the rest of the answer. Only the table
+    /// scrolls sideways — the conversation itself must not, or every wide answer
+    /// would drag the whole thread off screen.
     private func tableView(_ table: MarkdownTable) -> some View {
         ScrollView(.horizontal, showsIndicators: true) {
             Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 4) {
@@ -487,9 +474,8 @@ extension ChatPanelView {
         MessageMarkdown.attributed(text)
     }
 
-    /// What happened, as bare text — no box, no border, no fill.
-    ///
-    /// It still has to read as the app talking about itself rather than as part
+    /// No box, no border, no fill — it still has to read as the app talking
+    /// about itself rather than as part
     /// of an answer, and now that is carried by the type alone: dimmer, smaller,
     /// with the "Working" label above it. A box did the same job louder, and
     /// stacked a frame inside a thread that is already made of frames.

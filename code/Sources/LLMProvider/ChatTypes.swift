@@ -1,7 +1,6 @@
 import FunctionalCore
 import Foundation
 
-/// A single conversational turn sent to or received from the model.
 public struct ChatMessage: Equatable, Sendable {
     public enum Role: String, Sendable { case user, assistant }
 
@@ -46,9 +45,8 @@ public struct ChatModel: Equatable, Sendable {
     /// Words that mean "don't choose for me" — the backend's own default wins.
     static let inheritWords: Set<String> = ["default", "auto", "inherit"]
 
-    /// Resolves a user-supplied model identifier against the allowlist.
-    /// Absent for an unknown name *and* for "default"; callers that need to
-    /// tell those apart should check `meansInherit` first.
+    /// Absent for an unknown name *and* for "default" — callers that need to
+    /// tell those apart must check `meansInherit` first.
     public static func named(_ raw: String) -> Option<ChatModel> {
         let needle = raw.trimmingCharacters(in: .whitespaces).lowercased()
         return Option.fromOptional(aliases[needle])
@@ -78,9 +76,7 @@ public enum Effort: String, CaseIterable, Sendable {
 public struct ChatUsage: Equatable, Sendable {
     public let inputTokens: Int
     public let outputTokens: Int
-    /// Tokens written into the prompt cache.
     public let cacheWriteTokens: Int
-    /// Tokens served from the prompt cache.
     public let cacheReadTokens: Int
     /// What the traffic would bill on the API. Reported even on a subscription,
     /// where nothing is charged per token.
@@ -165,16 +161,13 @@ public struct AgentActivity: Equatable, Sendable, Identifiable {
 /// Events surfaced from a streamed reply. The provider maps the raw Anthropic
 /// SSE event types onto this small, UI-agnostic set.
 public enum ChatStreamEvent: Equatable, Sendable {
-    /// The backend was refused a tool. Only Claude Code emits this.
+    /// Only Claude Code emits this.
     case toolDenied(DeniedTool)
-    /// Progress worth showing while the user waits. Only Claude Code emits this.
+    /// Only Claude Code emits this.
     case activity(AgentActivity)
-    /// The model began thinking (adaptive thinking). No visible text yet.
+    /// Adaptive thinking began. Carries no visible text — there is none to show.
     case thinking
-    /// A chunk of assistant text.
     case textDelta(String)
-    /// The model began a fresh block of text.
-    ///
     /// A turn is not one piece of writing: the model says something, reaches
     /// for a tool, says something else, and each of those is its own content
     /// block. The deltas carry no hint of where one ends, so joining them gave
@@ -199,9 +192,7 @@ public enum ChatStreamEvent: Equatable, Sendable {
 public enum ChatError: Error, Equatable, Sendable, LocalizedError {
     case http(status: Int, message: String)
     case network(String)
-    /// Claude Code isn't installed, or we couldn't find it.
     case claudeCodeNotFound
-    /// The Claude Code process failed to start or exited badly.
     case claudeCodeFailed(String)
 
     public var errorDescription: String? {

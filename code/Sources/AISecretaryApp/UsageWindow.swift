@@ -3,15 +3,6 @@ import SwiftUI
 import LLMProvider
 import SecretaryCore
 
-/// A small window showing what this conversation has spent, meant to be left
-/// open beside the work.
-///
-/// A real titled window rather than a panel inside the chat, for two reasons:
-/// the chat bubble is anchored to the character and closing it must not take
-/// the figures away, and a number you are watching should be somewhere you can
-/// park it. It floats above other apps like the rest of this app's windows, and
-/// it follows the conversation live — `Secretary.sessionUsage` is observed, so a
-/// window opened before the first question fills in as answers arrive.
 /// Who is on the desktop, for the one usage window.
 ///
 /// Observable rather than a snapshot taken when the window opens: the window is
@@ -23,6 +14,12 @@ final class UsageRoster {
     var characters: [(name: String, secretary: Secretary)] = []
 }
 
+/// A real titled window rather than a panel inside the chat, for two reasons:
+/// the chat bubble is anchored to the character and closing it must not take
+/// the figures away, and a number you are watching should be somewhere you can
+/// park it. It floats above other apps like the rest of this app's windows, and
+/// it follows the conversation live — `Secretary.sessionUsage` is observed, so a
+/// window opened before the first question fills in as answers arrive.
 @MainActor
 final class UsageWindow: NSObject, NSWindowDelegate {
     private var window: NSPanel?

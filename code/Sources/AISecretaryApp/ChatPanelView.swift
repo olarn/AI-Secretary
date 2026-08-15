@@ -31,8 +31,6 @@ struct ChatPanelView: View {
     var theme: Palette { appearance.colors }
 
     @State var draft: String = ""
-    /// Which configuration section is open, if any.
-    ///
     /// One selection rather than three independent flags, because three
     /// independent flags allow all three sections open at once — which is how
     /// the panel came to be taller than the window it lives in, pushing the

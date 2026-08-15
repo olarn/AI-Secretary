@@ -7,8 +7,8 @@ import Permissions
 import ToolAdapters
 import LLMProvider
 
-/// A message shown in the conversation transcript. `text` is mutable so a
-/// streamed reply can grow token-by-token in the same entry.
+/// `text` is a `var` so a streamed reply can grow token-by-token in the same
+/// entry rather than appending one per token.
 public struct TranscriptEntry: Identifiable, Equatable, Sendable {
     public enum Speaker: Sendable { case user, secretary }
 

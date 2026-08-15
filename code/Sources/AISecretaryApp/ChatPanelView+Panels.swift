@@ -4,9 +4,7 @@ import SecretaryCore
 
 /// The collapsible configuration sections and the footer that opens them:
 /// Settings, Projects (with the browser switch), Skills, and the height cap
-/// that makes the panel structurally incapable of overflowing. Split out of
-/// `ChatPanelView.swift` along the seam the file already had; nothing here
-/// changed in the move.
+/// that makes the panel structurally incapable of overflowing.
 extension ChatPanelView {
     private var settingsSection: some View {
         VStack(alignment: .leading, spacing: appearance.settings.panelSpacing) {
@@ -79,8 +77,6 @@ extension ChatPanelView {
         }
     }
 
-    /// How large this character is drawn.
-    ///
     /// It was called "App size" while there was one character and every setting
     /// was the app's. It only ever scaled the character, and now that each has
     /// her own it scales exactly one of them, so the old name described neither
@@ -93,8 +89,6 @@ extension ChatPanelView {
         })
     }
 
-    /// A label and one button per choice, with the current one filled.
-    ///
     /// Shared by Theme and App size because they are the same row, and because
     /// they sit next to each other: App size used to mark its current value by
     /// disabling that button, so two adjacent rows said "this is the one you're
@@ -133,8 +127,8 @@ extension ChatPanelView {
         }
     }
 
-    /// One setting, two buttons. A button that can't do anything is disabled
-    /// rather than silently ignored, so reaching a limit reads as a limit.
+    /// A button that can't do anything is disabled rather than silently
+    /// ignored, so reaching a limit reads as a limit.
     private func stepperRow(
         label: String,
         value: String,
@@ -333,10 +327,9 @@ extension ChatPanelView {
         .background(theme.chipFill.color, in: RoundedRectangle(cornerRadius: 8))
     }
 
-    /// The open configuration section, held to a share of the window and given
-    /// its own scroll.
-    ///
-    /// This is what makes the panel structurally incapable of overflowing. The
+    /// Held to a share of the window and given its own scroll, which is what
+    /// makes the panel structurally incapable of overflowing.
+    /// The
     /// surrounding `VStack` has exactly one flexible child — the transcript —
     /// and once that has shrunk to nothing, any further content simply spills
     /// past the bubble: the header goes off the top, the buttons off the

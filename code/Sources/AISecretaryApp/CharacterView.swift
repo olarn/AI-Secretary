@@ -3,10 +3,9 @@ import AppKit
 import AssistantState
 import SecretaryCore
 
-/// Desktop companion character. Displays a locally-provided character image
-/// if the user has placed one (see `CharacterAsset`), otherwise falls back
-/// to the built-in placeholder avatar; a small state badge and tap-to-open
-/// remain the same either way.
+/// Falls back to the built-in placeholder avatar when the user has placed no
+/// picture of her own — see `CharacterAsset`. The badge and tap-to-open behave
+/// the same either way.
 struct CharacterView: View {
     let machine: AssistantStateMachine
     let secretary: Secretary

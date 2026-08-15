@@ -54,8 +54,8 @@ public final class ClaudeCodeDetector: @unchecked Sendable {
         if let known { observer(known) }
     }
 
-    /// Runs detection if it hasn't run. Safe to call from a background task;
-    /// never call it on the main thread.
+    /// **Never call this on the main thread** — the fallback launches the user's
+    /// login shell. A second caller waits for the first caller's answer.
     @discardableResult
     public func resolve() -> ClaudeCodeAvailability {
         if let cached = availability { return cached }

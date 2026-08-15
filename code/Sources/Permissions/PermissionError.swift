@@ -13,8 +13,6 @@ import Foundation
 /// rule that genuinely must not be waved through, and adding the left back
 /// later is a worse change than leaving room for it.
 public enum PermissionError: Error, Equatable, Sendable {
-    /// The tool is not on the project's allowlist.
-    ///
     /// Unused since the allowlist started asking. Left in place as the shape a
     /// real refusal would take, and because `reason` is what the chat would
     /// print if one ever occurred.

@@ -38,8 +38,6 @@ public func validSkillPluginName(_ name: String) -> Bool {
     return name.lowercased().unicodeScalars.allSatisfy(allowed.contains)
 }
 
-/// The command that installs it.
-///
 /// `--yes` because there is no terminal here to answer a prompt, and the
 /// question it would have asked has already been asked on the card. `--scope
 /// user` so an installed skill belongs to the person rather than to whichever

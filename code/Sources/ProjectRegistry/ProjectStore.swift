@@ -69,9 +69,7 @@ public final class FileProjectStore: ProjectStoring, @unchecked Sendable {
 
     /// Hands the shared registry to a character, once.
     ///
-    /// The decision is `perCharacterFileMigration`; this reads the two `exists`
-    /// answers off the disk and applies what it says. Returns what it decided
-    /// so a caller can see whether anything moved.
+    /// Returns what it decided, so a caller can see whether anything moved.
     @discardableResult
     public static func adoptLegacyProjects(
         for id: UUID,

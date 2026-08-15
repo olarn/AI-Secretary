@@ -11,7 +11,6 @@ public enum FileMigration: Equatable, Sendable {
     /// Nothing to do — either there is no old file, or this character already
     /// has one of her own and adopting would overwrite it.
     case none
-    /// Rename the old file to be this character's.
     case adopt(from: URL, to: URL)
 }
 

@@ -128,7 +128,6 @@ public final class ClaudeCodeProvider: ChatProvider, SkillInstalling, @unchecked
         stateLock.withLock { _reportedModel }
     }
 
-    /// Forgets the session so the next turn starts a fresh one.
     public func resetSession() {
         stateLock.withLock { _sessionID = nil }
     }
@@ -259,10 +258,9 @@ public final class ClaudeCodeProvider: ChatProvider, SkillInstalling, @unchecked
         return try await readTurn(from: warm, wasReused: reused != nil, continuation: continuation)
     }
 
-    /// Reads one turn's worth of events, stopping at the result line.
-    ///
-    /// Stopping there is what keeps two turns apart down one process: read past
-    /// it and the next turn's events land on the last turn's bubble.
+    /// Stops at the result line, which is what keeps two turns apart down one
+    /// process: read past it and the next turn's events land on the last turn's
+    /// bubble.
     private func readTurn(
         from warm: WarmProcess,
         wasReused: Bool,
@@ -349,7 +347,6 @@ public final class ClaudeCodeProvider: ChatProvider, SkillInstalling, @unchecked
         return WarmProcess(process: process, input: input, output: output, errors: errors, key: key)
     }
 
-    /// The kept process, if it is the one this turn wants and is still running.
     /// Taken out rather than borrowed: a turn owns it until it hands it back,
     /// so a second turn can never read the same stream.
     private func takeWarm(matching key: WarmProcessKey) -> WarmProcess? {
@@ -425,7 +422,6 @@ public final class ClaudeCodeProvider: ChatProvider, SkillInstalling, @unchecked
         return phrases.contains { message.localizedCaseInsensitiveContains($0) }
     }
 
-    /// A short "what it's doing" line: the tool plus the thing it names.
     static func activityDetail(tool name: String, input: [String: Any]) -> String {
         let argument = (input["query"] as? String)
             ?? (input["command"] as? String)
@@ -517,7 +513,6 @@ public final class ClaudeCodeProvider: ChatProvider, SkillInstalling, @unchecked
             }
     }
 
-    /// Tool results that are refusals, named by the tool they refused.
     private func refusals(in object: [String: Any]) -> [ChatStreamEvent] {
         Self.contentBlocks(of: object)
             .filter { $0["type"] as? String == "tool_result" && $0["is_error"] as? Bool == true }
@@ -597,8 +592,6 @@ public final class ClaudeCodeProvider: ChatProvider, SkillInstalling, @unchecked
             .compactMap { ($0 as? [String: Any])?["contextWindow"] as? Int }
             .max()
     }
-
-    // MARK: - Launch
 
     // MARK: - Installing a skill
 

@@ -36,7 +36,6 @@ public struct ApprovalRequest: Equatable, Sendable {
         self.outsideAllowlist = outsideAllowlist
     }
 
-    /// The same request, marked as reaching past the project's allowlist.
     public func steppingOutsideAllowlist() -> ApprovalRequest {
         ApprovalRequest(
             taskID: taskID,
