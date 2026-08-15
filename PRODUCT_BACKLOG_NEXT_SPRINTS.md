@@ -7,7 +7,7 @@
 **คุมเฉพาะหัวข้อ multi-app / multi-secretary ในไฟล์นี้** (เจ้าของยืนยัน 2026-08-12)
 Liquid Glass, Loop & Notification, Voice และไฟล์ backlog อีกสองไฟล์ ทำได้ตามปกติ
 
-## Phase 14.4: ทำงานด้วยกัน (ต่อ)
+## Phase 14.4: ทำงานด้วยกัน (ต่อ) 
 - [ ] ให้ character มากกว่า 1 ตัว monitor instruction เดียวกัน
 - [ ] ให้ character มากกว่า 1 ตัว monitor task log เดียวกัน เพื่อให้แต่ละตัวเห็นความคืบหน้าของงาน
 - [ ] ให้ character แต่ละตัว ทำตาม instruction ตามขั้นตอนของตัวเอง โดยดูจากชื่อ profile ว่า step ไหน app ตัวไหนจะทำ
