@@ -25,6 +25,19 @@ public struct BubblePlacement: Equatable, Sendable {
     }
 }
 
+/// The gap `placeBubble` keeps between the bubble and each screen edge.
+///
+/// The one owner of this number. It used to live twice in the app layer — once
+/// as the clamp margin handed to `placeBubble` and once, pre-doubled, inside
+/// the max-width rule — and nothing said the second was derived from the first.
+public let bubbleScreenMargin: CGFloat = 8
+
+/// The widest the bubble can be without `placeBubble` clamping it: the screen
+/// minus the margin kept at each side.
+public func usableBubbleWidth(_ visibleFrameWidth: CGFloat) -> CGFloat {
+    visibleFrameWidth - bubbleScreenMargin * 2
+}
+
 /// Clamps into a range, tolerating an inverted one: a bubble taller than the
 /// screen has no valid origin, and the top edge is the less bad end to lose.
 private func clamped(_ value: CGFloat, min lower: CGFloat, max upper: CGFloat) -> CGFloat {

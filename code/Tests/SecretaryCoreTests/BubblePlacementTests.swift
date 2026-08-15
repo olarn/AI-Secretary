@@ -121,4 +121,17 @@ final class BubblePlacementTests: XCTestCase {
         )
         XCTAssertFalse(placement.isMirrored)
     }
+
+    /// A bubble of exactly the usable width lands unclamped at the left margin;
+    /// one point wider and there is no origin that keeps both margins. Pins the
+    /// max-width rule to the clamp it is derived from, so the two cannot drift
+    /// apart again — they were two unrelated constants (8 and 16) until now.
+    func testUsableWidthIsTheWidestPlaceBubbleLeavesUnclamped() {
+        let widest = usableBubbleWidth(screen.width)
+        XCTAssertEqual(widest, screen.width - 16)
+
+        let placement = place(character: standing, bubble: CGSize(width: widest, height: 400))
+        XCTAssertEqual(placement.origin.x, screen.minX + bubbleScreenMargin)
+        XCTAssertEqual(placement.origin.x + widest, screen.maxX - bubbleScreenMargin)
+    }
 }

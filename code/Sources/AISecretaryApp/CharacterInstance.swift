@@ -85,8 +85,6 @@ final class CharacterInstance {
     /// itself so the two can't drift apart. A distance rather than a fraction,
     /// so widening the bubble leaves the tip on the character.
     private var tailTipOffset: CGFloat { SpeechBubbleShape.tailTipOffset }
-    /// Gap kept between the bubble and the screen edge when clamping horizontally.
-    private let screenMargin: CGFloat = 8
     /// How far the bubble is pushed sideways, away from the character, as a
     /// fraction of **the character's** width — not the bubble's.
     ///
@@ -276,7 +274,7 @@ final class CharacterInstance {
             tailTipOffset: tailTipOffset,
             clearance: characterFrame.width * bubbleClearanceFraction,
             gap: characterGap,
-            margin: screenMargin
+            margin: bubbleScreenMargin
         )
 
         chatLayout.isMirrored = placement.isMirrored

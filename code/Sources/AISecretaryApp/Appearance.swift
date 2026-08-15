@@ -88,12 +88,8 @@ final class Appearance {
         }
     }
 
-    /// The margin the layout keeps at each screen edge, so the widest the bubble
-    /// may get is the widest it can be without being clamped anyway.
-    private static let screenMargin: Double = 16
-
     private static func usableWidth(_ visibleFrame: CGRect) -> Double {
-        Double(visibleFrame.width) - screenMargin
+        Double(usableBubbleWidth(visibleFrame.width))
     }
 
     /// Re-applies the limits of the screen the character is actually on. Worth
