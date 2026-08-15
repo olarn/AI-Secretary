@@ -900,7 +900,7 @@ public final class Secretary {
     /// says if the memory turned out to be gone.
     public func resumeConversation(_ id: UUID) {
         guard let target = history.first(where: { $0.id == id }) else { return }
-        guard resumedConversationID.toOptional() != id else { return }
+        guard resumedConversationID != .some(id) else { return }
 
         newConversation()
         // `newConversation` filed whatever was on screen and left its own note;
@@ -916,11 +916,12 @@ public final class Secretary {
         // The thread ran somewhere else. Its memory is of that project's files,
         // while any tool now would run in the current one — worth saying before
         // an answer confidently describes the wrong directory.
-        if let archived = target.projectID.toOptional(),
-           archived != lastProject.toOptional()?.id,
-           let project = registry.projects.first(where: { $0.id == archived }) {
-            note += " It was working in \(project.name)."
-        }
+        target.projectID
+            .filter { self.lastProject.map(\.id)^ != .some($0) }^
+            .flatMap { archived in
+                Option.fromOptional(self.registry.projects.first { $0.id == archived })
+            }^
+            .fold({}, { note += " It was working in \($0.name)." })
         transcript.append(TranscriptEntry(speaker: .secretary, kind: .divider, text: note))
     }
 
@@ -1024,11 +1025,12 @@ public final class Secretary {
         streamingTask?.cancel()
         streamingTask = nil
 
-        let partial = streamingEntryID.toOptional()
-            .flatMap { id in transcript.first { $0.id == id }?.text }?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let partial = streamingEntryID
+            .flatMap { id in Option.fromOptional(self.transcript.first { $0.id == id }?.text) }^
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }^
+            .filter { !$0.isEmpty }^
         closeOffInterruptedReply()
-        if let partial, !partial.isEmpty {
+        partial.fold({}) { partial in
             conversation.append(ChatMessage(role: .assistant, content: partial))
             conversation.append(ChatMessage(
                 role: .user,
@@ -1223,11 +1225,13 @@ public final class Secretary {
     /// Files an answer against the plan waiting on it, and runs the person's
     /// next step once nobody is left to hear from.
     private func collect(_ report: CharacterMessage) {
-        guard var open = plan.toOptional(), open.awaiting[report.correlationID] != nil else { return }
-        open.awaiting.removeValue(forKey: report.correlationID)
-        open.answers.append(RelayAnswer(name: report.fromName, body: report.body))
-        plan = .some(open)
-        runFollowUp()
+        plan.filter { $0.awaiting[report.correlationID] != nil }^.fold({}) { open in
+            var open = open
+            open.awaiting.removeValue(forKey: report.correlationID)
+            open.answers.append(RelayAnswer(name: report.fromName, body: report.body))
+            plan = .some(open)
+            runFollowUp()
+        }
     }
 
     /// Gives up on whoever has not answered by the deadline and carries on with
@@ -1249,7 +1253,10 @@ public final class Secretary {
 
     /// Runs the person's later steps, once the answers are in or time is up.
     private func runFollowUp() {
-        guard let ready = plan.toOptional(), ready.isComplete else { return }
+        plan.filter(\.isComplete)^.fold({}) { ready in runFollowUp(ready) }
+    }
+
+    private func runFollowUp(_ ready: ErrandPlan) {
         plan = .none()
         planDeadline?.cancel()
         planDeadline = nil
@@ -1321,7 +1328,7 @@ public final class Secretary {
                     // `collect` takes it: the follow-up quotes those answers
                     // itself, and holding them here as well would say
                     // everything twice.
-                    let inPlan = self.plan.toOptional()?.awaiting[ok.correlationID] != nil
+                    let inPlan = self.plan.map { $0.awaiting[ok.correlationID] != nil }^.getOrElse(false)
                     self.collect(ok)
                     // Held for the next thing said to her, not appended to
                     // `conversation`: the person can see the answer, so she has
@@ -1358,18 +1365,19 @@ public final class Secretary {
     /// waiting on an answer that is never coming is worse than being told it
     /// went wrong.
     private func reportBackIfAnswering(_ body: String) {
-        guard let errand = answering.toOptional() else { return }
-        answering = .none()
-        let answer = body.trimmingCharacters(in: .whitespacesAndNewlines)
-        onSend?(CharacterMessage(
-            from: profile.id,
-            fromName: profile.displayName,
-            to: errand.from,
-            kind: .report,
-            body: answer.isEmpty ? "I couldn't get anywhere with that one." : answer,
-            correlationID: errand.correlationID,
-            hops: errand.hops + 1
-        ))
+        answering.fold({}) { errand in
+            answering = .none()
+            let answer = body.trimmingCharacters(in: .whitespacesAndNewlines)
+            onSend?(CharacterMessage(
+                from: profile.id,
+                fromName: profile.displayName,
+                to: errand.from,
+                kind: .report,
+                body: answer.isEmpty ? "I couldn't get anywhere with that one." : answer,
+                correlationID: errand.correlationID,
+                hops: errand.hops + 1
+            ))
+        }
     }
 
     public func resolvePendingApproval(granted: Bool) {
@@ -1440,11 +1448,13 @@ public final class Secretary {
     /// answered that question, and asking it again per page would turn the card
     /// into something to dismiss rather than read.
     private func askAboutSite(in text: String, taskID: String) -> Bool {
-        guard let url = webAddress(in: text).toOptional(),
-              let host = webSiteHost(of: url).toOptional(),
-              !webSites.allows(host: host)
-        else { return false }
+        webAddress(in: text)
+            .flatMap { url in webSiteHost(of: url).map { host in (url, host) }^ }^
+            .filter { !self.webSites.allows(host: $0.1) }^
+            .fold({ false }) { self.raiseSiteCard(url: $0.0, host: $0.1, text: text, taskID: taskID) }
+    }
 
+    private func raiseSiteCard(url: URL, host: String, text: String, taskID: String) -> Bool {
         let request = WebTaskRequest(
             taskID: taskID,
             url: url,
@@ -1495,7 +1505,10 @@ public final class Secretary {
 
     /// Clears a waiting card and records that it never happened.
     private func dropPendingDecision() {
-        guard let decision = pendingDecision.toOptional() else { return }
+        pendingDecision.fold({}, dropDecision)
+    }
+
+    private func dropDecision(_ decision: PendingDecision) {
         pendingDecision = .none()
 
         // Typing again while being asked "wait or replace?" answers nothing, so
@@ -1524,16 +1537,17 @@ public final class Secretary {
     }
 
     public func cancelPendingDecision() {
-        guard let decision = pendingDecision.toOptional() else { return }
-        pendingDecision = .none()
-        // A plan turned down has no tool in flight to fail — the turn that
-        // produced it already finished — so it says so and leaves the state
-        // machine where it is.
-        if case .instructionPlan(let plan, _, _) = decision {
-            say(.secretary, "Left \(plan.relativePath) alone — nothing was run.")
-            return
+        pendingDecision.fold({}) { decision in
+            pendingDecision = .none()
+            // A plan turned down has no tool in flight to fail — the turn that
+            // produced it already finished — so it says so and leaves the state
+            // machine where it is.
+            if case .instructionPlan(let plan, _, _) = decision {
+                say(.secretary, "Left \(plan.relativePath) alone — nothing was run.")
+                return
+            }
+            finish(success: false, message: "Cancelled.", reason: "user cancelled")
         }
-        finish(success: false, message: "Cancelled.", reason: "user cancelled")
     }
 
     // MARK: - Slash commands
@@ -1679,12 +1693,10 @@ public final class Secretary {
         // resolution first would ask "may I watch /Users/…/aaa in Second-Brain?"
         // — a question about the wrong folder — and only then discover it was
         // somewhere else entirely.
-        if let outside = request.absoluteTarget.toOptional() {
-            askToWatchOutsideProjects(outside, taskID: taskID)
-            return
-        }
-
-        handleTool(operation: .watch(request), projectQuery: .none())
+        request.absoluteTarget.fold(
+            { self.handleTool(operation: .watch(request), projectQuery: .none()) },
+            { outside in self.askToWatchOutsideProjects(outside, taskID: taskID) }
+        )
     }
 
     /// Asks about a folder that no registered project contains.
@@ -1757,21 +1769,28 @@ public final class Secretary {
     private func beginWatching(_ request: WatchRequest, in project: Project) {
         let taskID = activeTaskID.getOrElse("-")
 
-        guard let url = fileAdapter.resolve(request.relativePath, in: project).toOption().toOptional() else {
+        fileAdapter.resolve(request.relativePath, in: project).fold(
             // Climbed out of the project with `..`, or followed a link that led
             // outside it. Where it landed is a real folder the person can be
             // asked about, so it is — the same question a full path gets, since
             // it is the same situation arrived at by a different spelling.
-            askToWatchOutsideProjects(
-                project.url
-                    .appendingPathComponent(request.displayPath)
-                    .standardizedFileURL
-                    .resolvingSymlinksInPath()
-                    .standardizedFileURL,
-                taskID: taskID
-            )
-            return
-        }
+            { _ in
+                self.askToWatchOutsideProjects(
+                    project.url
+                        .appendingPathComponent(request.displayPath)
+                        .standardizedFileURL
+                        .resolvingSymlinksInPath()
+                        .standardizedFileURL,
+                    taskID: taskID
+                )
+            },
+            { url in self.startWatch(request, in: project, at: url, taskID: taskID) }
+        )
+    }
+
+    /// The half of `beginWatching` that runs once the path resolved inside the
+    /// project: refuse duplicates and the cap, then take the first look.
+    private func startWatch(_ request: WatchRequest, in project: Project, at url: URL, taskID: String) {
         guard FileManager.default.fileExists(atPath: url.path) else {
             finish(
                 success: false,
@@ -1928,13 +1947,19 @@ public final class Secretary {
     private func applyRunRequest(_ request: RunBlock.Request) {
         switch request {
         case .stop:
-            if activeInstructionRun.toOptional()?.isRunning == true {
+            if instructionRunIsRunning {
                 stopInstructionRun(because: "the assistant asked to stop")
             }
         case .start(let path):
-            guard activeInstructionRun.toOptional()?.isRunning != true else { return }
+            guard !instructionRunIsRunning else { return }
             beginInstructionRead(path: path, askedByAssistant: true)
         }
+    }
+
+    /// Whether a run is standing *and* still going — the question all three
+    /// callers were asking through their own unwraps.
+    private var instructionRunIsRunning: Bool {
+        activeInstructionRun.map(\.isRunning)^.getOrElse(false)
     }
 
     // MARK: - Following a file's instructions
@@ -1947,16 +1972,15 @@ public final class Secretary {
     /// that is about to become work.
     private func handleRunCommand(_ argument: String) {
         if argument.isEmpty {
-            guard let run = activeInstructionRun.toOptional(), run.isRunning else {
-                say(.secretary, """
+            activeInstructionRun.filter(\.isRunning)^.fold(
+                { say(.secretary, """
                     Nothing is running.
                     `/run <file>` — read a file in the current project and do what it says. \
                     I'll show you the steps first and start only when you say so.
                     `/run stop` — stop a run part-way.
-                    """)
-                return
-            }
-            say(.secretary, "▶ \(run.progressDescription). `/run stop` to stop.")
+                    """) },
+                { run in say(.secretary, "▶ \(run.progressDescription). `/run stop` to stop.") }
+            )
             return
         }
 
@@ -1965,9 +1989,9 @@ public final class Secretary {
             return
         }
 
-        guard activeInstructionRun.toOptional()?.isRunning != true else {
+        guard !instructionRunIsRunning else {
             say(.secretary, """
-                I'm already working through \(activeInstructionRun.toOptional()?.plan.relativePath ?? "a file"). \
+                I'm already working through \(activeInstructionRun.map(\.plan.relativePath)^.getOrElse("a file")). \
                 `/run stop` first if you want to start something else.
                 """)
             return
@@ -2004,8 +2028,8 @@ public final class Secretary {
             { request in
                 switch request {
                 case .status:
-                    guard let loop = activeLoop.toOptional() else {
-                        say(
+                    activeLoop.fold(
+                        { say(
                             .secretary,
                             """
                             No loop is running.
@@ -2013,17 +2037,16 @@ public final class Secretary {
                             `/loop stop` — stop it
                             Or just ask me to keep track of something and I'll set it up.
                             """
-                        )
-                        return
-                    }
-                    say(
-                        .secretary,
-                        """
-                        ⏱ Checking back every \(loop.intervalDescription) — \
-                        next at \(Self.clock(loop.nextFireAt)), \(loop.firedCount) so far.
-                        What I report: \(loop.note)
-                        `/loop stop` to stop.
-                        """
+                        ) },
+                        { loop in say(
+                            .secretary,
+                            """
+                            ⏱ Checking back every \(loop.intervalDescription) — \
+                            next at \(Self.clock(loop.nextFireAt)), \(loop.firedCount) so far.
+                            What I report: \(loop.note)
+                            `/loop stop` to stop.
+                            """
+                        ) }
                     )
                 case .stop:
                     stopLoop()
@@ -2071,15 +2094,16 @@ public final class Secretary {
     /// Stops the loop. Safe to call when nothing is running, so the view can
     /// wire a button to it without asking first.
     public func stopLoop(because reason: String? = nil) {
-        guard let loop = activeLoop.toOptional() else {
-            say(.secretary, "No loop is running. Start one with `/loop 10m <what to report>`.")
-            return
-        }
-        activeLoop = .none()
-        loopTask?.cancel()
-        loopTask = nil
-        let checks = loop.firedCount == 1 ? "1 check" : "\(loop.firedCount) checks"
-        say(.secretary, "⏱ Loop stopped after \(checks)\(reason.map { " — \($0)" } ?? "").")
+        activeLoop.fold(
+            { say(.secretary, "No loop is running. Start one with `/loop 10m <what to report>`.") },
+            { loop in
+                activeLoop = .none()
+                loopTask?.cancel()
+                loopTask = nil
+                let checks = loop.firedCount == 1 ? "1 check" : "\(loop.firedCount) checks"
+                say(.secretary, "⏱ Loop stopped after \(checks)\(reason.map { " — \($0)" } ?? "").")
+            }
+        )
     }
 
     private func startLoopTimer() {
@@ -2096,8 +2120,10 @@ public final class Secretary {
     /// One look at the clock. Separate from the timer so a test can drive it
     /// with any date it likes instead of waiting for real minutes.
     func tickLoop(now: Date) {
-        guard let loop = activeLoop.toOptional() else { return }
+        activeLoop.fold({}) { loop in tick(loop, now: now) }
+    }
 
+    private func tick(_ loop: LoopSchedule, now: Date) {
         if loop.hasRunTooLong(at: now) {
             stopLoop(because: "it had been running for hours; start another if you still need it")
             return
@@ -2252,7 +2278,11 @@ public final class Secretary {
         // the offer was silently skipped and the action stayed unreachable, the
         // same way it did on the chat path. The grant is per-session, not
         // per-project, so the project is only what the card names.
-        guard !denied.isEmpty, let prompt = activeRequestText.toOptional() else { return }
+        guard !denied.isEmpty else { return }
+        activeRequestText.fold({}) { prompt in offerToWiden(denied, prompt: prompt, taskID: taskID) }
+    }
+
+    private func offerToWiden(_ denied: [DeniedTool], prompt: String, taskID: String) {
         let project = lastProject.getOrElse(Self.scratchProject)
 
         let rules = denied.flatMap(\.rules).reduced()
@@ -2314,7 +2344,12 @@ public final class Secretary {
     /// decision, 2026-08-13). It is also why an "MS Office" skill cannot arrive
     /// this way — there is no such plugin in the official marketplace.
     private func offerToInstallSkill(_ plugin: String, taskID: String) {
-        guard let prompt = activeRequestText.toOptional() else { return }
+        activeRequestText.fold({}) { prompt in
+            offerToInstallSkill(plugin, prompt: prompt, taskID: taskID)
+        }
+    }
+
+    private func offerToInstallSkill(_ plugin: String, prompt: String, taskID: String) {
         let project = lastProject.getOrElse(Self.scratchProject)
         let request = ApprovalRequest(
             taskID: taskID,
@@ -2356,22 +2391,21 @@ public final class Secretary {
     ///   to write into `~/.claude`, which is not the project the person
     ///   approved, and each note is a different sentence to weigh.
     private func offerToRemember(_ note: MemoryNote, taskID: String) {
-        guard let project = lastProject.toOptional() else {
-            say(.secretary, """
+        lastProject.fold(
+            { say(.secretary, """
                 ผมยังไม่ได้เปิด project ไหนอยู่ เลยยังไม่มี memory ที่จะเก็บ “\(note.title)” ลงไปครับ \
                 เปิด project ก่อนแล้วบอกใหม่ได้เลย
-                """)
-            return
-        }
-
-        let risks = instructionRisks(fileText: note.body, steps: [note.title])
-        guard risks.isEmpty else {
-            audit.record(AuditEntry(taskID: taskID, kind: .approvalDenied, detail: "memory note refused: \(note.title)"))
-            say(.secretary, memoryRefusedLine(note, risks: risks))
-            return
-        }
-
-        proceed(operation: .rememberNote(note), project: project)
+                """) },
+            { project in
+                let risks = instructionRisks(fileText: note.body, steps: [note.title])
+                guard risks.isEmpty else {
+                    audit.record(AuditEntry(taskID: taskID, kind: .approvalDenied, detail: "memory note refused: \(note.title)"))
+                    say(.secretary, memoryRefusedLine(note, risks: risks))
+                    return
+                }
+                proceed(operation: .rememberNote(note), project: project)
+            }
+        )
     }
 
     /// Writes it, and says what landed where.
@@ -2472,13 +2506,12 @@ public final class Secretary {
               scoped.hasWorkspaceTools
         else { return }
 
-        let stillThere = lastProject.toOptional().flatMap { previous in
-            approvedProjects.first { $0.id == previous.id }
-        }
-        prepareWorkspace(
-            primary: Option.fromOptional(stillThere ?? approvedProjects.first),
-            on: scoped
-        )
+        let stillThere = lastProject
+            .flatMap { previous in
+                Option.fromOptional(self.approvedProjects.first { $0.id == previous.id })
+            }^
+            .orElse(Option.fromOptional(approvedProjects.first))
+        prepareWorkspace(primary: stillThere, on: scoped)
         resumeLastRequest()
     }
 
@@ -2567,16 +2600,16 @@ public final class Secretary {
         // Remembered before streaming so the system prompt can name the folder
         // the backend is actually standing in.
         lastProject = primary
-        let primaryID = primary.map(\.id)^.toOptional()
+        let primaryID = primary.map(\.id)^
         var others = approvedProjects
-            .filter { $0.id != primaryID }
+            .filter { primaryID != .some($0.id) }
             .map(\.url)
         // The staging folder, once there is something in it. This is the whole
         // reason attachments are copied rather than linked: the backend is
         // opened onto one folder that holds only what was handed over, instead
         // of onto whichever folder the person happened to drag from.
-        if stagedThisSession, let staging = attachmentStore.stagingDirectory.toOptional() {
-            others.append(staging)
+        if stagedThisSession {
+            attachmentStore.stagingDirectory.fold({}) { others.append($0) }
         }
         scoped.prepare(
             workingDirectory: primary.map(\.url)^.getOrElse(Self.scratchDirectory),
@@ -2706,11 +2739,13 @@ public final class Secretary {
     /// One event from the stream. Returns whether the turn is over — the error
     /// rail ends it, everything else is something to render.
     private func apply(_ outcome: Either<ChatError, ChatStreamEvent>, to run: ReplyRun) -> (ReplyRun, isDone: Bool) {
-        guard let event = outcome.toOption().toOptional() else {
-            failReply(outcome.swap().toOption().toOptional(), run)
-            return (run, true)
-        }
-        return (render(event, run), false)
+        outcome.fold(
+            { error in
+                failReply(error, run)
+                return (run, true)
+            },
+            { event in (render(event, run), false) }
+        )
     }
 
     private func render(_ event: ChatStreamEvent, _ run: ReplyRun) -> ReplyRun {
@@ -2956,12 +2991,13 @@ public final class Secretary {
         // After the state machine has settled, for the same reason as the loop:
         // the card and the next step both belong to a finished turn, not to the
         // one still closing.
-        if let request = awaitingPlan.toOptional() {
-            awaitingPlan = .none()
-            if success { proposePlan(from: planned.body, request: request, steps: planned.steps) }
-        } else {
-            advanceInstructionRun(success: success)
-        }
+        awaitingPlan.fold(
+            { advanceInstructionRun(success: success) },
+            { request in
+                awaitingPlan = .none()
+                if success { proposePlan(from: planned.body, request: request, steps: planned.steps) }
+            }
+        )
 
         // Last, so that a step of a run can't start a watch that then reports
         // into the turn that asked for it.
@@ -3030,18 +3066,20 @@ public final class Secretary {
         let existing = activityEntryID
             .flatMap { id in Option.fromOptional(entries.firstIndex { $0.id == id }) }^
 
-        if let index = existing.toOptional() {
-            transcript[index].text = text
-        } else {
-            let entry = TranscriptEntry(speaker: .secretary, kind: .activity, text: text)
-            activityEntryID = .some(entry.id)
-            // Ahead of the bubble being written, when one is: the work happened
-            // before that answer and should read in that order. With no bubble
-            // open, the last one is already finished and this goes after it.
-            let anchor = replyID
-                .flatMap { id in Option.fromOptional(self.transcript.firstIndex { $0.id == id }) }^
-            transcript.insert(entry, at: anchor.getOrElse(transcript.count))
-        }
+        existing.fold(
+            {
+                let entry = TranscriptEntry(speaker: .secretary, kind: .activity, text: text)
+                activityEntryID = .some(entry.id)
+                // Ahead of the bubble being written, when one is: the work
+                // happened before that answer and should read in that order.
+                // With no bubble open, the last one is already finished and
+                // this goes after it.
+                let anchor = replyID
+                    .flatMap { id in Option.fromOptional(self.transcript.firstIndex { $0.id == id }) }^
+                transcript.insert(entry, at: anchor.getOrElse(transcript.count))
+            },
+            { index in transcript[index].text = text }
+        )
     }
 
     /// Flips the running commentary on or off and says so, because the change
@@ -3101,9 +3139,10 @@ public final class Secretary {
         // working there instead of asking again every single message. Only when
         // the user said nothing: an explicit name that doesn't match is still a
         // "not found", never silently redirected somewhere else.
-        if !projectQuery.isDefined, case .needsSelection = resolution,
-           let remembered = lastProject.toOptional(), registry.project(id: remembered.id).isDefined {
-            resolution = .resolved(remembered)
+        if !projectQuery.isDefined, case .needsSelection = resolution {
+            lastProject
+                .filter { self.registry.project(id: $0.id).isDefined }^
+                .fold({}) { resolution = .resolved($0) }
         }
 
         switch resolution {
@@ -3301,7 +3340,12 @@ public final class Secretary {
     /// for a read says so. `summarize <path>` remains the path that asks before
     /// sending and never leaves the file in history.
     private func rememberToolExchange(_ operation: PlannedOperation, output: String) {
-        guard let request = activeRequestText.toOptional() else { return }
+        activeRequestText.fold({}) { request in
+            rememberToolExchange(operation, output: output, request: request)
+        }
+    }
+
+    private func rememberToolExchange(_ operation: PlannedOperation, output: String, request: String) {
 
         let note: String
         switch operation {
@@ -3373,14 +3417,23 @@ public final class Secretary {
                     : .left(.fileNotFound(request.relativePath))
             }^
 
-        guard let contents = read.toOption().toOptional() else {
-            let message = read.swap().toOption().toOptional()
-                .map { $0.errorDescription ?? "\($0)" } ?? "Could not read that file."
-            audit.record(AuditEntry(taskID: taskID, kind: .failed, detail: message))
-            finish(success: false, message: message, reason: "file read failed", toolStatus: "error")
-            return
-        }
+        read.fold(
+            { error in
+                let message = error.errorDescription ?? "\(error)"
+                audit.record(AuditEntry(taskID: taskID, kind: .failed, detail: message))
+                finish(success: false, message: message, reason: "file read failed", toolStatus: "error")
+            },
+            { contents in sendForUnderstanding(request, contents: contents, in: project, taskID: taskID) }
+        )
+    }
 
+    /// The half of `executeUnderstanding` that runs once the file was read.
+    private func sendForUnderstanding(
+        _ request: FileUnderstanding,
+        contents: String,
+        in project: Project,
+        taskID: String
+    ) {
         // The adapter's own cap is generous for local display; sending is a
         // different cost, so it gets a tighter one with a readable explanation
         // rather than an opaque HTTP 400 from the API.
@@ -3444,13 +3497,23 @@ public final class Secretary {
         stateMachine.send(.beginExecuting, reason: summary, taskID: .some(taskID), toolStatus: .some("reading"))
         audit.record(AuditEntry(taskID: taskID, kind: .executionStarted, detail: summary))
 
-        guard let contents = readInstructionFile(request.relativePath, in: project).toOptional() else {
-            let message = "I couldn't read \(request.relativePath) in \(project.name)."
-            audit.record(AuditEntry(taskID: taskID, kind: .failed, detail: message))
-            finish(success: false, message: message, reason: "instruction file unreadable", toolStatus: "error")
-            return
-        }
+        readInstructionFile(request.relativePath, in: project).fold(
+            {
+                let message = "I couldn't read \(request.relativePath) in \(project.name)."
+                audit.record(AuditEntry(taskID: taskID, kind: .failed, detail: message))
+                finish(success: false, message: message, reason: "instruction file unreadable", toolStatus: "error")
+            },
+            { contents in askForPlan(request, contents: contents, in: project, taskID: taskID) }
+        )
+    }
 
+    /// The half of `executeInstructionRead` that runs once the file was read.
+    private func askForPlan(
+        _ request: InstructionRequest,
+        contents: String,
+        in project: Project,
+        taskID: String
+    ) {
         let byteCount = contents.utf8.count
         guard byteCount <= understandMaxBytes else {
             finish(
@@ -3526,38 +3589,39 @@ public final class Secretary {
     /// Turns the model's reply into a plan on the table. Called once the reply
     /// is whole, like every other block — half a plan is a different plan.
     private func proposePlan(from text: String, request: InstructionRequest, steps: [String]) {
-        guard let project = instructionProject.toOptional() else { return }
+        instructionProject.fold({}) { project in
+            guard !steps.isEmpty else {
+                say(.secretary, """
+                    I read \(request.relativePath) but couldn't turn it into a list of steps. \
+                    If it's meant to be instructions, say what you want done and I'll follow it from there.
+                    """)
+                return
+            }
 
-        guard !steps.isEmpty else {
-            say(.secretary, """
-                I read \(request.relativePath) but couldn't turn it into a list of steps. \
-                If it's meant to be instructions, say what you want done and I'll follow it from there.
-                """)
-            return
+            // Fingerprinted from the file, not from the plan: what the run is
+            // pinned to is the document, since that is the thing that can
+            // change underneath it.
+            readInstructionFile(request.relativePath, in: project).fold({}) { contents in
+                let fingerprint = InstructionFingerprint.of(contents)
+                let plan = InstructionPlan(
+                    relativePath: request.relativePath,
+                    fingerprint: fingerprint,
+                    steps: steps
+                )
+                let risks = instructionRisks(fileText: contents, steps: steps)
+                let changed = instructionMemory.hasChanged(path: request.relativePath, fingerprint: fingerprint)
+
+                if !risks.isEmpty {
+                    audit.record(AuditEntry(
+                        taskID: activeTaskID.getOrElse("-"),
+                        kind: .approvalRequested,
+                        detail: "instruction risks in \(request.relativePath): \(risks.map(\.reason).joined(separator: "; "))"
+                    ))
+                }
+
+                pendingDecision = .some(.instructionPlan(plan, risks: risks, changedSinceLastRun: changed))
+            }
         }
-
-        // Fingerprinted from the file, not from the plan: what the run is
-        // pinned to is the document, since that is the thing that can change
-        // underneath it.
-        guard let contents = readInstructionFile(request.relativePath, in: project).toOptional() else { return }
-        let fingerprint = InstructionFingerprint.of(contents)
-        let plan = InstructionPlan(
-            relativePath: request.relativePath,
-            fingerprint: fingerprint,
-            steps: steps
-        )
-        let risks = instructionRisks(fileText: contents, steps: steps)
-        let changed = instructionMemory.hasChanged(path: request.relativePath, fingerprint: fingerprint)
-
-        if !risks.isEmpty {
-            audit.record(AuditEntry(
-                taskID: activeTaskID.getOrElse("-"),
-                kind: .approvalRequested,
-                detail: "instruction risks in \(request.relativePath): \(risks.map(\.reason).joined(separator: "; "))"
-            ))
-        }
-
-        pendingDecision = .some(.instructionPlan(plan, risks: risks, changedSinceLastRun: changed))
     }
 
     /// The user confirmed the steps. From here each one runs as its own turn.
@@ -3580,16 +3644,17 @@ public final class Secretary {
     /// Stops a run. Safe to call when nothing is going, so a button can be
     /// wired to it without asking first.
     public func stopInstructionRun(because reason: String) {
-        guard let run = activeInstructionRun.toOptional(), run.isRunning else {
-            say(.secretary, "Nothing is running. `/run <file>` to start something.")
-            return
-        }
-        let stopped = run.halting(reason: reason)
-        activeInstructionRun = .some(stopped)
-        streamingTask?.cancel()
-        streamingTask = nil
-        closeOffInterruptedReply()
-        say(.secretary, "■ \(stopped.progressDescription).")
+        activeInstructionRun.filter(\.isRunning)^.fold(
+            { say(.secretary, "Nothing is running. `/run <file>` to start something.") },
+            { run in
+                let stopped = run.halting(reason: reason)
+                activeInstructionRun = .some(stopped)
+                streamingTask?.cancel()
+                streamingTask = nil
+                closeOffInterruptedReply()
+                say(.secretary, "■ \(stopped.progressDescription).")
+            }
+        )
     }
 
     /// Sends the next step, after checking the file still says what it said.
@@ -3599,17 +3664,26 @@ public final class Secretary {
     /// step three, and picking up the new wording halfway would be the app
     /// choosing which version of the person's mind to act on.
     private func runNextInstructionStep() {
-        guard let run = activeInstructionRun.toOptional(), run.isRunning else { return }
-        guard let step = run.currentStep.toOptional() else {
-            activeInstructionRun = .some(InstructionRun(plan: run.plan, stepIndex: run.stepIndex, status: .finished))
-            say(.secretary, "✓ Finished all \(run.totalSteps) steps of \(run.plan.relativePath).")
-            return
+        activeInstructionRun.filter(\.isRunning)^.fold({}) { run in
+            run.currentStep.fold(
+                {
+                    activeInstructionRun = .some(InstructionRun(plan: run.plan, stepIndex: run.stepIndex, status: .finished))
+                    say(.secretary, "✓ Finished all \(run.totalSteps) steps of \(run.plan.relativePath).")
+                },
+                { step in
+                    instructionProject.fold({}) { project in
+                        self.perform(step: step, of: run, in: project)
+                    }
+                }
+            )
         }
-        guard let project = instructionProject.toOptional() else { return }
+    }
 
+    /// One step, once the run is known to be live and standing in a project.
+    private func perform(step: String, of run: InstructionRun, in project: Project) {
         let current = readInstructionFile(run.plan.relativePath, in: project)
             .map(InstructionFingerprint.of)^
-        guard current.toOptional() == run.plan.fingerprint else {
+        guard current == .some(run.plan.fingerprint) else {
             let halted = run.halting(reason: "\(run.plan.relativePath) changed while I was working through it")
             activeInstructionRun = .some(halted)
             say(.secretary, """
@@ -3663,22 +3737,26 @@ public final class Secretary {
     /// than no bubble — and a partial one is kept and labelled, because words
     /// the person already read must not vanish from the transcript.
     private func closeOffInterruptedReply() {
-        guard let id = streamingEntryID.toOptional(),
-              let index = transcript.firstIndex(where: { $0.id == id })
-        else { return }
-        streamingEntryID = .none()
-
-        if transcript[index].text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            transcript.remove(at: index)
-        } else {
-            transcript[index].text += "\n\n(stopped part-way)"
-        }
+        streamingEntryID
+            .flatMap { id in Option.fromOptional(self.transcript.firstIndex { $0.id == id }) }^
+            .fold({}) { index in
+                streamingEntryID = .none()
+                if transcript[index].text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    transcript.remove(at: index)
+                } else {
+                    transcript[index].text += "\n\n(stopped part-way)"
+                }
+            }
     }
 
     /// Called when a turn finishes. Moves a run on by one, or stops it.
     private func advanceInstructionRun(success: Bool) {
-        guard let run = activeInstructionRun.toOptional(), run.isRunning else { return }
+        activeInstructionRun.filter(\.isRunning)^.fold({}) { run in
+            advance(run, success: success)
+        }
+    }
 
+    private func advance(_ run: InstructionRun, success: Bool) {
         guard success else {
             let halted = run.halting(reason: "step \(run.stepNumber) didn't finish")
             activeInstructionRun = .some(halted)
@@ -3811,11 +3889,11 @@ public final class Secretary {
     /// Gathers the state `agentSystemPrompt` needs; the words and their
     /// assembly live in `SecretaryPrompts.swift`, as functions of these values.
     private var agentPrompt: String {
-        let lastID = lastProject.map(\.id)^.toOptional()
+        let lastID = lastProject.map(\.id)^
         return agentSystemPrompt(
             profileDescription: profile.promptDescription,
             projectName: lastProject.map(\.name)^,
-            otherProjectNames: approvedProjects.filter { $0.id != lastID }.map(\.name),
+            otherProjectNames: approvedProjects.filter { lastID != .some($0.id) }.map(\.name),
             browserEnabled: browserEnabled,
             webHosts: webSites.sorted,
             sessionTools: sessionAgentTools,

@@ -1045,3 +1045,15 @@ Skills/footer), `+Keys` (arrow-key owner, history recall, monitors) การย
 พิสูจน์ด้วย line-multiset diff: ต่างกันแค่วงเล็บของ extension, doc comment หัวไฟล์ และ
 access level ที่ต้องเปิดข้ามไฟล์ (`@State` ทุกตัวยังประกาศที่ struct — Swift ไม่ให้ประกาศใน
 extension) `private` ที่เหลือในแต่ละไฟล์แปลว่า "ใช้ในไฟล์นี้เท่านั้น" ซึ่งตอนนี้เป็นจริงและอ่านออก
+
+**`.toOptional()` ใน `Secretary.swift` จาก 57 เหลือ 10 (v0.14.258)** ตามข้อ 1 ของรายงาน:
+`Option` ที่ทุกจุดอ่านถูกแกะเป็น `guard let` คือ type ที่เป็นแค่เอกสาร แปลงตามรูปแบบของสกิล —
+เปรียบเทียบใช้ `== .some(x)`, predicate ใช้ `map(...)^.getOrElse(false)` (ตัวซ้ำสามที่ได้ชื่อ
+`instructionRunIsRunning`), การกระทำเมื่อมีค่าใช้ `fold` โดยแตก body ยาวเป็นฟังก์ชันครึ่งหลัง
+(`startWatch`, `askForPlan`, `sendForUnderstanding`, `perform(step:)` ฯลฯ) และ `Either`
+ที่เคยถูกยุบเป็น Option ทิ้ง error (`read.toOption().toOptional()` + `swap()` อ่าน error
+กลับทีหลัง) กลายเป็น `fold` ที่อ่านทั้งสอง rail ตรงๆ สิบจุดที่เหลือแต่ละจุดมีเหตุผลเชิงโครงสร้าง
+ที่ Bow 0.8 ไม่มีทางเลี่ยง: `guard case` ห้าจุด (Option เป็น class จึง pattern-match enum
+ข้างในไม่ได้), ขอบ API ที่รับ Optional ของ Swift, closure ของ `Task` ที่ต้อง `let self`,
+`continue` ใน loop ที่ mutate ตาม index, และ decision ladder สองจุดที่ early-return สามชั้น
+เทสเดิม 1,123 ผ่านโดยไม่ถูกแก้ทุก checkpoint (build+test หลังทุก batch)
