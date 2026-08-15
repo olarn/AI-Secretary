@@ -23,3 +23,8 @@ Architecture ก่อน` ที่หัวไฟล์นั้น เจ้�
   (ส่งพร้อมกัน รอครบ แล้วรันขั้นถัดไปที่ผู้สั่ง) พร้อม timeout และการตัดคนที่ติดต่อไม่ได้
 - [ ] **กัน `ทำซ้ำกัน` / `infinite loop`** — มี hop limit 2, หนึ่งงานต่อคู่ต่อทิศทาง,
   และหมดอายุ 15 นาที ทุกข้อเป็น pure predicate ที่รับ `now:` เป็นพารามิเตอร์สุดท้าย
+
+## Phase 14.4 - thinking animation
+- [ ] เพิ่ม animation เวลาที่ AI กำลังทำงาน โดยแสดง animation 
+  - animation ที่ต้องการคือให้ status icon แสดง Pulsing effect animation คือขยาย/ย่อประมาณ 10%
+  - สี thinking ให้ loop เข้ม/จาง ตรงกับจังหวะ pulse
