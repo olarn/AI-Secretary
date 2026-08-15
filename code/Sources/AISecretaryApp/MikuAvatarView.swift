@@ -142,41 +142,34 @@ private struct Triangle: Shape {
 struct StatusBadge: View {
     let state: AssistantState
 
-    /// Which end of the breath the badge is heading for. One flag drives both
-    /// the size and the fill, which is what keeps them in step — two flags, or
-    /// two animations, and they would drift apart within a few cycles.
-    @State private var atPeak = false
-
     var body: some View {
         let pulse = statusPulse(for: state)
-        Circle()
-            // The fill alone fades. The ring and the glyph are the badge's
-            // outline against the character art behind it, and taking them with
-            // it made the whole thing look like it was switching off.
-            .fill(color.opacity(atPeak ? pulse.dimOpacity : 1))
-            .frame(width: 22, height: 22)
-            .overlay(
-                Image(systemName: symbol)
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(.white)
-            )
-            .overlay(Circle().stroke(.white, lineWidth: 2))
-            .scaleEffect(atPeak ? pulse.peakScale : 1)
-            .animation(breath(pulse), value: atPeak)
-            // Started here rather than by the state change alone, because the
-            // badge is built once and the app can be already busy by the time
-            // it appears.
-            .onAppear { atPeak = pulse.isAnimated }
-            .onChange(of: state) { atPeak = statusPulse(for: state).isAnimated }
-    }
-
-    /// Out and back for ever while she is busy; a short settle when she stops,
-    /// so the badge returns to full size rather than freezing wherever the
-    /// last breath happened to leave it.
-    private func breath(_ pulse: StatusPulse) -> Animation {
-        pulse.isAnimated
-            ? .easeInOut(duration: pulse.halfCycle).repeatForever(autoreverses: true)
-            : .easeOut(duration: 0.2)
+        // Read off the clock rather than animated from a stored flag. See
+        // `pulseProgress` for why: the flag version kept breathing after the
+        // work was finished, and `paused:` here is also what stops the redraw
+        // dead when there is nothing to show.
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !pulse.isAnimated)) { context in
+            let progress = pulseProgress(pulse, at: context.date.timeIntervalSinceReferenceDate)
+            Circle()
+                // Grey at rest, the state's own colour at full stretch. While
+                // she is still, `progress` is 0 for ever and the base colour
+                // is the state's — so success stays green and error stays red
+                // rather than everything settling to grey.
+                .fill(pulse.isAnimated ? Color.gray : color)
+                .overlay(Circle().fill(color.opacity(progress)))
+                .frame(width: 22, height: 22)
+                .overlay(
+                    Image(systemName: symbol)
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(.white)
+                )
+                // The ring and the glyph keep their full strength: they are the
+                // badge's outline against the character art, and fading them
+                // read as the badge switching off rather than breathing.
+                .overlay(Circle().stroke(.white, lineWidth: 2))
+                .scaleEffect(pulseScale(pulse, at: context.date.timeIntervalSinceReferenceDate))
+        }
+        .frame(width: 22, height: 22)
     }
 
     private var color: Color {

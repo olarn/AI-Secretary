@@ -72,6 +72,8 @@ Pid below always means the app's pid:
 | Script | Args | Notes |
 |---|---|---|
 | `cap.sh` | `pid out.png` | The panel at its live bounds. **Start here.** |
+| `capchar.sh` | `pid out.png [nth]` | One character window — the narrow ones — at its live bounds. There is one per profile, hence the index. |
+| `changed.swift` | `a.png b.png` | Bounding box of what differs between two captures, or `identical`. **The only way to check an animation**: one still cannot show a thing moving, and cannot show it has stopped. Caught the 0.14.259 badge still breathing at idle. |
 | `shot.swift` | `pid out.png [height]` | Top `height` points of the window (default 90) — the header strip. |
 | `shotbottom.swift` | `pid out.png` | The bottom strip — the input row and footer. |
 | `diff.swift` | — | Greyscale-diffs `f0.png` against `f1.png`, `f2.png`, … in the working directory. Name frames that way and it reports which ones actually changed. |

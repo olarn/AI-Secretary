@@ -40,9 +40,7 @@ struct CharacterView: View {
             // sake pushed the character over with it, by however much narrower
             // than the halo it happened to be.
             ZStack {
-                Circle()
-                    .fill(stateColor(for: machine.state).opacity(0.25))
-                    .frame(width: 104, height: 104)
+                halo
 
                 characterArt
             }
@@ -70,6 +68,33 @@ struct CharacterView: View {
         .padding(12)
         .contentShape(Rectangle())
         .onTapGesture(perform: onTap)
+    }
+
+    /// The ring the character stands in, which is also where "she is thinking"
+    /// is said loudest — it is the largest thing on the desktop that can change
+    /// colour, and the owner asked for the blink to be the whole frame rather
+    /// than the badge alone.
+    ///
+    /// Grey at rest, the state's colour at full stretch, on the same clock as
+    /// the badge. Same clock, not a shared flag: both read `pulseProgress` from
+    /// the current time, so they cannot drift apart however long they run.
+    ///
+    /// The halo does not scale. It is the frame the character sits in, and a
+    /// frame that changes size drags the character's edges with it.
+    ///
+    /// Deliberately its own `TimelineView`, wrapping only this circle: the one
+    /// above it would rebuild `characterArt` thirty times a second, and that
+    /// reads the picture off disk.
+    private var halo: some View {
+        let pulse = statusPulse(for: machine.state)
+        return TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !pulse.isAnimated)) { context in
+            let progress = pulseProgress(pulse, at: context.date.timeIntervalSinceReferenceDate)
+            Circle()
+                .fill((pulse.isAnimated ? Color.gray : stateColor(for: machine.state)).opacity(0.25))
+                .overlay(Circle().fill(stateColor(for: machine.state).opacity(0.25 * progress)))
+                .frame(width: 104, height: 104)
+        }
+        .frame(width: 104, height: 104)
     }
 
     /// This character's picture, falling back to the legacy drop-in file and
