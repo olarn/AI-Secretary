@@ -17,7 +17,11 @@ Three gates fire at different moments and are deliberately not merged:
 
 ห้าขั้น เรียงตามนี้:
 
-1. commit ใน worktree
+1. commit ใน worktree — **พร้อมบันทึก backlog ในคอมมิตเดียวกัน** ทั้งสองครึ่ง:
+   เขียนสิ่งที่ ship ลง `PRODUCT_BACKLOG.md` **และลบหัวข้อนั้นออกจาก `SPRINT_BACKLOG.md`**
+   กติกาเต็มอยู่ที่ "Where the backlog lives" ที่เขียนไว้ครั้งเดียว ไม่ซ้ำที่นี่ —
+   ที่ต้องมีบรรทัดนี้เพราะกติกานั้นไม่เคยถูกอ้างจากเช็คลิสต์ที่คนไล่ตอนจะปิดงาน
+   ผลคือครึ่งหลัง (ลบหัวข้อ) ถูกลืมซ้ำแล้วซ้ำอีกจนเจ้าของต้องสั่งเอง สองรอบติด (2026-08-15)
 2. เอาขึ้น `main` — fast-forward แล้ว push **ไม่มี PR ไม่มี force ไม่มี merge commit**
    (Principles บอกว่า force-push ต้องขออนุญาต บนเส้นทางนี้คือห้ามขาด ไม่ต้องถาม)
 3. **sync `code/` กลับ** — `cd ~/Desktop/AI-Secretary/code && git pull --ff-only`
