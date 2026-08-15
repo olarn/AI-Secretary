@@ -1012,3 +1012,12 @@ max-width มาจาก `usableBubbleWidth` ที่คูณสองอย�
 ของเจ้าของ จึงไม่ถือ credential เอง — นั่นคือประโยคที่ถูก) module layout เพิ่ม `FunctionalCore`
 ที่เป็นฐานของทุก target แต่ไม่เคยถูกเขียนถึง และ doc comment ใน `AppearanceSettings`
 เลิกยกตัวอย่างด้วยข้อความ Keychain ที่ไม่มีใน UI จริง
+
+**prompt construction แยกออกจาก Secretary แล้ว (v0.14.254)** ~370 บรรทัดของข้อความ
+prompt กับกติกาประกอบมัน ย้ายไป `SecretaryPrompts.swift` เป็นค่าคงที่ใน `SecretaryPrompt`
+กับ pure function (`agentSystemPrompt`, `chatOnlySystemPrompt`, `browserPromptNote`,
+`agentPermissionNote`) — `Secretary` เหลือแค่ property บางๆ ที่รวบ state แล้วเรียก
+เทสเดิม 1105 ผ่านโดยไม่ถูกแก้แม้แต่ตัวเดียว ซึ่งเป็นหลักฐานว่า prompt เท่าเดิมทุกไบต์
+(รวม assertion แบบ contains 200+ จุดที่ pin ข้อความอยู่) และได้เทสใหม่ 7 ตัวที่เช็ค
+*การตัดสินใจ* ของการประกอบ — ชิ้นไหนโผล่เมื่อไหร่ — ด้วย exact equality ในจุดที่ pin ได้
+ตามที่รายงานติว่า contains ผ่านได้แม้ prompt บวมสองเท่า `Secretary.swift` 4,153 → 3,865
