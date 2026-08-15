@@ -142,9 +142,18 @@ private struct Triangle: Shape {
 struct StatusBadge: View {
     let state: AssistantState
 
+    /// Which end of the breath the badge is heading for. One flag drives both
+    /// the size and the fill, which is what keeps them in step — two flags, or
+    /// two animations, and they would drift apart within a few cycles.
+    @State private var atPeak = false
+
     var body: some View {
+        let pulse = statusPulse(for: state)
         Circle()
-            .fill(color)
+            // The fill alone fades. The ring and the glyph are the badge's
+            // outline against the character art behind it, and taking them with
+            // it made the whole thing look like it was switching off.
+            .fill(color.opacity(atPeak ? pulse.dimOpacity : 1))
             .frame(width: 22, height: 22)
             .overlay(
                 Image(systemName: symbol)
@@ -152,6 +161,22 @@ struct StatusBadge: View {
                     .foregroundStyle(.white)
             )
             .overlay(Circle().stroke(.white, lineWidth: 2))
+            .scaleEffect(atPeak ? pulse.peakScale : 1)
+            .animation(breath(pulse), value: atPeak)
+            // Started here rather than by the state change alone, because the
+            // badge is built once and the app can be already busy by the time
+            // it appears.
+            .onAppear { atPeak = pulse.isAnimated }
+            .onChange(of: state) { atPeak = statusPulse(for: state).isAnimated }
+    }
+
+    /// Out and back for ever while she is busy; a short settle when she stops,
+    /// so the badge returns to full size rather than freezing wherever the
+    /// last breath happened to leave it.
+    private func breath(_ pulse: StatusPulse) -> Animation {
+        pulse.isAnimated
+            ? .easeInOut(duration: pulse.halfCycle).repeatForever(autoreverses: true)
+            : .easeOut(duration: 0.2)
     }
 
     private var color: Color {
