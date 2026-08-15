@@ -359,6 +359,9 @@ domain layers import AppKit or SwiftUI:
 
 ```
 Sources/
+  FunctionalCore/    Re-exports Bow, adds Sendable conformances + `attempt`.
+                     The only module that imports Bow; everything below the
+                     app imports this instead
   AssistantState/    State machine: states, events, guarded transitions
   ProjectRegistry/   Project type, JSON persistence, name resolution
   Permissions/       Action classes, approval requests, policy decisions
@@ -366,9 +369,8 @@ Sources/
                      FileToolAdapter + FileReadOnlyAdapter (bound-checked)
   LLMProvider/       ChatProvider protocol; ChatBackend (picks a backend),
                      ClaudeCodeLocator + ClaudeCodeProvider (drives the user's
-                     own Claude Code), ClaudeChatProvider (API-key fallback),
+                     own Claude Code — the app has no API-key path of its own),
                      AnthropicStreamDecoder (pure, testable)
-  Credentials/       CredentialStore + Keychain-backed API-key storage
   SecretaryCore/     Intent classification, chat routing, orchestration, audit
   AISecretaryApp/    SwiftUI + AppKit: FloatingPanel, CharacterView,
                      ChatPanelView, ProjectPicker, AppDelegate

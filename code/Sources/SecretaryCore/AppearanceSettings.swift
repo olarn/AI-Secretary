@@ -181,8 +181,8 @@ public struct AppearanceSettings: Equatable, Sendable {
     /// instead of leaving captions tiny beside 32pt text.
     public var secondaryFontSize: Double { max(9, fontSize - 2) }
     public var footnoteFontSize: Double { max(8, fontSize - 3) }
-    /// The explanatory line under a control — "Stored only in your Keychain",
-    /// "Blank means professional". Smaller than the row it explains, and
+    /// The explanatory line under a control — "Blank means professional",
+    /// "Free text — who she is". Smaller than the row it explains, and
     /// scaled like everything else: these were pinned at 9pt, so the Settings
     /// and Profile panels stayed the same size whatever the text size said.
     public var hintFontSize: Double { max(8, fontSize - 5) }

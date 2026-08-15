@@ -4,7 +4,7 @@ A macOS desktop companion: a floating animated character that lives on your
 desktop, talks to you in chat, and gets work done through the Claude Code you
 already have installed.
 
-Version 0.14.252. macOS 14+. Not shipped — this is a working repository.
+Version 0.14.253. macOS 14+. Not shipped — this is a working repository.
 
 ## What it actually is
 
@@ -91,7 +91,7 @@ something the packaging script can do on its own.
 | [`CLAUDE.md`](CLAUDE.md) | The charter: product vision, permission model, phase-by-phase scope, and the engineering rules this code is held to. **Read this first.** |
 | [`code/`](code/) | The Swift package. Its [README](code/README.md) is the detailed guide — architecture, every module, how to run things. |
 | `code/Sources/` | Domain modules (`AssistantState`, `ProjectRegistry`, `Permissions`, `ToolAdapters`, `LLMProvider`, `SecretaryCore`) and the SwiftUI app. |
-| `code/Tests/` | One suite per module. |
+| `code/Tests/` | One suite per domain module (`FunctionalCore` is re-exports and the app target is exercised by driving the app, not the test bundle). |
 | `initial-implementation-prompt.md` | The original brief, kept for provenance. |
 
 Domain logic is written in a typed functional style on
@@ -107,9 +107,10 @@ own `State`, which would otherwise shadow `@State`. The rules are in the
   approval is asked at the point of impact with a description of what will
   actually happen rather than the name of the rule being granted.
 - Write and browser grants last one session and are never written to disk.
-- Secrets live in the Keychain. `ANTHROPIC_API_KEY` is stripped from the child
-  process environment, so a stray export can't quietly bill your API credit for
-  work you asked to run on your subscription.
+- The app holds no credentials of its own — it drives your installed Claude
+  Code, and `ANTHROPIC_API_KEY` is stripped from the child process environment,
+  so a stray export can't quietly bill your API credit for work you asked to
+  run on your subscription.
 - Model output, web pages, tool results and MCP responses are all treated as
   untrusted input. Links are limited to `http`, `https` and `mailto`.
 - Filesystem access is scoped to folders you registered.

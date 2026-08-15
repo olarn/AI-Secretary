@@ -1005,3 +1005,10 @@ skill และขอจำด้วย โน้ตจะถูกทิ้ง�
 max-width มาจาก `usableBubbleWidth` ที่คูณสองอย่างเปิดเผย พร้อมเทสที่ pin ว่า bubble
 กว้างเท่า usable width พอดีจะไม่ถูก clamp — สองค่านี้จึง drift จากกันอีกไม่ได้ พฤติกรรม
 เท่าเดิมทุกไบต์
+
+**เอกสารเลิกบรรยาย Keychain ที่ไม่มีจริง (v0.14.253)** README ทั้งสองยังบรรยายซาก
+ดีไซน์ API-key ชุดเก่า — โมดูล `Credentials/` กับ `ClaudeChatProvider` ที่ไม่มีอยู่ และประโยค
+"Secrets live in the Keychain" ทั้งที่รีโปไม่มีโค้ด Keychain สักบรรทัด (แอปขับ Claude Code
+ของเจ้าของ จึงไม่ถือ credential เอง — นั่นคือประโยคที่ถูก) module layout เพิ่ม `FunctionalCore`
+ที่เป็นฐานของทุก target แต่ไม่เคยถูกเขียนถึง และ doc comment ใน `AppearanceSettings`
+เลิกยกตัวอย่างด้วยข้อความ Keychain ที่ไม่มีใน UI จริง
