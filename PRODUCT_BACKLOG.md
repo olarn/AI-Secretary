@@ -1037,3 +1037,11 @@ cascade ต้นทางหน้าต่าง (พร้อมเทสว�
 ด้วยเมธอด `-ing` (`closingSegment`, `appending`, `noting`, `inSegment`,
 `afterMovingToWorking`) แต่ละ handler รับ run ปัจจุบันคืน run ถัดไป เหลือตัวแปรเดียวคือ
 accumulator ของ loop ที่อ่าน stream เทสเดิม 1,123 ผ่านโดยไม่ถูกแก้
+
+**`ChatPanelView.swift` แยกเป็นหกไฟล์ตาม seam ของมันเอง (v0.14.257)** 2,114 บรรทัด
+ไฟล์เดียว → core 474 + `+Header` (badges ทั้งห้า), `+Transcript` (scroller กับ markdown
+rendering), `+Composer` (message box, attachments, ↵), `+Panels` (Settings/Projects/
+Skills/footer), `+Keys` (arrow-key owner, history recall, monitors) การย้ายเป็น verbatim
+พิสูจน์ด้วย line-multiset diff: ต่างกันแค่วงเล็บของ extension, doc comment หัวไฟล์ และ
+access level ที่ต้องเปิดข้ามไฟล์ (`@State` ทุกตัวยังประกาศที่ struct — Swift ไม่ให้ประกาศใน
+extension) `private` ที่เหลือในแต่ละไฟล์แปลว่า "ใช้ในไฟล์นี้เท่านั้น" ซึ่งตอนนี้เป็นจริงและอ่านออก
