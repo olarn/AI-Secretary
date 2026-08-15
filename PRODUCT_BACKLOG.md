@@ -1031,3 +1031,9 @@ cascade ต้นทางหน้าต่าง (พร้อมเทสว�
 (909 → 801 → 933 → 777) ไว้แต่ไม่เคยมีที่ให้เขียนเทส ตอนนี้มี regression test แล้ว —
 และ `captionFontSize` แทนสูตร `max(9, secondaryFontSize - 2)` ที่เขียนซ้ำหกที่ใน
 `UsageWindow` view เหลือแค่ apply คำตอบ เทสใหม่ 11 ตัว ของเดิมผ่านหมดไม่ถูกแก้
+
+**`ReplyRun` เป็น value แท้แล้ว (v0.14.256)** struct ห้า `var` ที่ถูก mutate ผ่าน `inout`
+ในแปด handler — ตัวอย่างที่ใช้ปิดช่องของสกิล §2 เอง — เปลี่ยนเป็น `let` ทั้งหมด เปลี่ยนสถานะ
+ด้วยเมธอด `-ing` (`closingSegment`, `appending`, `noting`, `inSegment`,
+`afterMovingToWorking`) แต่ละ handler รับ run ปัจจุบันคืน run ถัดไป เหลือตัวแปรเดียวคือ
+accumulator ของ loop ที่อ่าน stream เทสเดิม 1,123 ผ่านโดยไม่ถูกแก้
