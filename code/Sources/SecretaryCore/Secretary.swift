@@ -3914,13 +3914,26 @@ public final class Secretary {
         effort.orElse(inheritedDefaults.effort)
     }
 
+    /// "Default" rather than "Unknown" when there is no name to show.
+    ///
+    /// Nothing is broken in that case: the app hasn't been told a model, and
+    /// hasn't been able to read which one the user's own Claude Code will pick,
+    /// so whatever Claude Code defaults to is what will run. "Unknown" said
+    /// that as a fault — it reads as *something is wrong with your settings* —
+    /// and it sat directly above a menu item already spelling out the true
+    /// answer, "Your Claude Code default".
     public var effectiveModelName: String {
-        effectiveModel.map(\.displayName)^.getOrElse("Unknown")
+        effectiveModel.map(\.displayName)^.getOrElse(Self.inheritedName)
     }
 
     public var effectiveEffortName: String {
-        effectiveEffort.map(\.rawValue)^.getOrElse("Unknown")
+        effectiveEffort.map(\.rawValue)^.getOrElse(Self.inheritedName)
     }
+
+    /// One spelling for both rows. They sit one above the other in the same
+    /// panel and mean the same thing, so two spellings would read as two
+    /// different situations.
+    static let inheritedName = "Default"
 
     /// True when the value comes from the user's own Claude Code rather than a
     /// choice made in this app — worth showing, because it explains why it can

@@ -457,6 +457,30 @@ final class SecretaryTests: XCTestCase {
         XCTAssertTrue(secretary.transcript.last?.text.contains("Unknown effort") ?? false)
     }
 
+    /// Nothing chosen and nothing readable from Claude Code is not a fault, so
+    /// the row must not name it like one. It used to read "Unknown", directly
+    /// above a menu item saying "Your Claude Code default" — which was the
+    /// actual answer all along.
+    func testAnUninheritedModelOrEffortReadsAsDefaultNotUnknown() {
+        let secretary = makeSecretary(projects: [project])
+
+        XCTAssertEqual(secretary.effectiveModelName, "Default")
+        XCTAssertEqual(secretary.effectiveEffortName, "Default")
+        XCTAssertTrue(secretary.isModelInherited)
+        XCTAssertTrue(secretary.isEffortInherited)
+    }
+
+    /// And a real choice still shows its own name — the fallback must not have
+    /// swallowed the case it exists to sit behind.
+    func testAChosenModelStillShowsItsOwnName() {
+        let secretary = makeSecretary(projects: [project])
+
+        secretary.selectModel(.some(.opus48))
+
+        XCTAssertEqual(secretary.effectiveModelName, ChatModel.opus48.displayName)
+        XCTAssertFalse(secretary.isModelInherited)
+    }
+
     func testGitKeywordStillRoutesToTheGitPipeline() {
         let chat = FakeChatProvider(.events([]))
         let secretary = makeSecretary(projects: [project], chat: chat)
