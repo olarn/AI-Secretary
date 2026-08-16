@@ -88,6 +88,7 @@ Pid below always means the app's pid:
 | `slowclick.swift` | `x y hold` | Click holding the button `hold` seconds — for press-and-hold. |
 | `cmdclick.swift` | `x y` | Command-click. |
 | `drag.swift` | `x0 y0 x1 y1` | Press, move, release. |
+| `dragcap.swift` | `x0 y0 x1 y1 hold out.png x,y,w,h` | Drags a real file from Finder onto the app and photographs it **while still holding it**. For anything that only exists mid-drag — `drag.swift` releases before there is anything to see. Read the source icon's position off a capture of the Finder window; Finder's own `position of item` is relative to the icon view and lands in the sidebar. |
 | `dragmeasure.swift` | `pid steps dx dy [right]` | Drags the resize grip and prints the window size after each step, so the numbers can be compared against what the layout intended. |
 | `vwheel.swift` | `x y dir [ticks]` | Vertical scroll at a point; `dir > 0` scrolls up. Ticks default 10. |
 | `wheelat.swift` | `x y dir` | Horizontal scroll at a point. |
