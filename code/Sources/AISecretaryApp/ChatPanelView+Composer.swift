@@ -14,21 +14,42 @@ extension ChatPanelView {
     var inputRow: some View {
         VStack(alignment: .leading, spacing: appearance.settings.panelSpacing) {
             if let asking = secretary.fileRequestDescription { fileRequestCard(asking) }
+            if droppingFile { dropArea }
             messageBox
         }
-        // The drop target is the whole composer, not the text field alone: the
-        // chips and the button below are part of "put it here", and a file let
-        // go two points outside a text field is a file the person believes they
-        // handed over.
-        .dropDestination(for: URL.self) { urls, _ in
-            for url in urls { secretary.attach(url) }
-            return !urls.isEmpty
-        } isTargeted: { droppingFile = $0 }
+        .animation(.easeOut(duration: 0.12), value: droppingFile)
+    }
+
+    /// Where a dragged file is going, shown only while one is over the window.
+    ///
+    /// Above the box rather than as an outline around it. The whole window
+    /// takes the drop — see `ChatPanelView.body` — and a border drawn around
+    /// the composer said the opposite of that: it named one rectangle as the
+    /// place to aim for, which is the belief this change exists to undo.
+    ///
+    /// Never hit-tests. It sits inside the region it advertises, and a view
+    /// that took the pointer here would make "anywhere" untrue at exactly the
+    /// spot that promises it.
+    private var dropArea: some View {
+        HStack(spacing: appearance.settings.panelSpacing) {
+            Image(systemName: "arrow.down.doc")
+            Text(attachmentDropPrompt(attached: secretary.attachments.count))
+            Spacer(minLength: 0)
+        }
+        .font(.system(size: appearance.settings.footnoteFontSize, weight: .semibold))
+        .foregroundStyle(theme.accent.color)
+        .padding(.horizontal, appearance.settings.panelPadding)
+        .frame(height: appearance.settings.fontSize * 2.4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(theme.accentFill.color, in: RoundedRectangle(cornerRadius: 8))
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(theme.accent.color, lineWidth: droppingFile ? 2 : 0)
-                .allowsHitTesting(false)
+                .strokeBorder(
+                    theme.accent.color,
+                    style: StrokeStyle(lineWidth: 2, dash: [6, 4])
+                )
         )
+        .allowsHitTesting(false)
     }
 
     /// The chips live *in* the field rather than above it because that is what

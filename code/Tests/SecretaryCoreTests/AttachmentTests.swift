@@ -365,4 +365,50 @@ final class AttachmentFlowTests: XCTestCase {
 
         XCTAssertEqual(secretary.fileRequest, Option.none())
     }
+
+    // MARK: - What the drop area says
+
+    func testTheDropAreaInvitesAFileWhenNothingIsAttached() {
+        XCTAssertEqual(
+            attachmentDropPrompt(attached: 0),
+            "Drop a file — anywhere in this window"
+        )
+    }
+
+    /// The count is the useful part once there is a list: it says how much room
+    /// is left without the person counting chips.
+    func testTheDropAreaSaysHowMuchRoomIsLeft() {
+        XCTAssertEqual(attachmentDropPrompt(attached: 1), "Drop to add — room for 4 more")
+        XCTAssertEqual(attachmentDropPrompt(attached: 4), "Drop to add — room for 1 more")
+    }
+
+    /// The one that matters: the window takes a drop anywhere, so somebody can
+    /// be holding a sixth file over a full list. Saying no before they let go
+    /// is the only place it helps — afterwards it is a refusal.
+    func testTheDropAreaRefusesBeforeTheDropWhenTheListIsFull() {
+        let full = attachmentDropPrompt(attached: attachmentLimit)
+        XCTAssertEqual(full, "Already holding 5 — send these before adding more")
+        XCTAssertEqual(attachmentDropPrompt(attached: attachmentLimit + 1), full,
+                       "over the limit reads the same as at it")
+    }
+
+    /// It never promises room that `admitting` would refuse — the two agree on
+    /// the same limit at every count, which is what stops the area from
+    /// inviting a drop that bounces.
+    func testTheDropAreaAndTheAdmissionRuleAgree() {
+        for attached in 0...(attachmentLimit + 1) {
+            let existing = [Attachment](repeating: sampleAttachment, count: attached)
+            let admits = admitting(name: "notes.md", bytes: 10, to: existing).isRight
+            let invites = !attachmentDropPrompt(attached: attached).hasPrefix("Already holding")
+            XCTAssertEqual(invites, admits, "disagreed at \(attached) attached")
+        }
+    }
+
+    private var sampleAttachment: Attachment {
+        Attachment(
+            name: "notes.md",
+            stagedURL: URL(fileURLWithPath: "/tmp/notes.md"),
+            kind: .markdown
+        )
+    }
 }

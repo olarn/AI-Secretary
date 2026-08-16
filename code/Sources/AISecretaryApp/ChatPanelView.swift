@@ -152,6 +152,16 @@ struct ChatPanelView: View {
             SpeechBubbleShape(isMirrored: layout.isMirrored, isFlippedVertically: layout.isFlippedVertically)
                 .fill(theme.ground.color)
         )
+        // The whole bubble takes the file, not the composer alone. A drop two
+        // points outside a small target is a file the person believes they
+        // handed over, and the composer is a strip at the bottom of a window
+        // that is mostly conversation. Attached after the background so the
+        // filled shape is the region, rather than only where content happens
+        // to be; `dropArea` in the composer is what says so on screen.
+        .dropDestination(for: URL.self) { urls, _ in
+            for url in urls { secretary.attach(url) }
+            return !urls.isEmpty
+        } isTargeted: { droppingFile = $0 }
         .overlay(
             SpeechBubbleShape(isMirrored: layout.isMirrored, isFlippedVertically: layout.isFlippedVertically)
                 .stroke(theme.panelBorder.color, lineWidth: theme.panelBorderWidth)

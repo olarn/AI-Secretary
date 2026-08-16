@@ -189,6 +189,23 @@ public func admitting(
         .fold({ .left(.unsupported(name: name)) }, { .right($0) })
 }
 
+/// What the drop area says while a file is being dragged over the window.
+///
+/// It has to be able to say no. The window accepts a drop anywhere, so the
+/// person can be holding a sixth file over a list that is already full — and an
+/// area still reading "drop files here" would invite exactly the drop that
+/// `admitting` then refuses, with the refusal arriving after they let go.
+/// Saying it before the drop is the only place it helps.
+public func attachmentDropPrompt(attached: Int, limit: Int = attachmentLimit) -> String {
+    let room = limit - attached
+    guard room > 0 else {
+        return "Already holding \(limit) — send these before adding more"
+    }
+    return attached == 0
+        ? "Drop a file — anywhere in this window"
+        : "Drop to add — room for \(room) more"
+}
+
 /// What the model is told about the files riding along with this message.
 ///
 /// Paths, not contents. The assistant has file tools and the staged copies sit
