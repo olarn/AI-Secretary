@@ -46,8 +46,13 @@ extension CharacterInstance {
         CharacterCard(
             id: profileID,
             name: secretary.profile.displayName,
-            model: secretary.modelDescription,
-            effort: secretary.effortDescription,
+            // The *effective* pair, short. `modelDescription` was handing over a
+            // raw model id and the phrase "your Claude Code default", so the
+            // roster paragraph read "claude-opus-5, effort your Claude Code
+            // default" — against this field's own documented contract, and
+            // against the wording every test fixture here has always used.
+            model: shortModelName(secretary.effectiveModelName),
+            effort: secretary.effectiveEffortName,
             projectName: secretary.openProjectName,
             isBusy: stateMachine.state.isBusy
         )

@@ -143,6 +143,25 @@ final class WebTaskFlowTests: XCTestCase {
         XCTAssertEqual(secretary.pendingDecision, Option.none())
     }
 
+    /// Both buttons on this card name themselves in the conversation now. The
+    /// approving one had said nothing at all, so the only trace of having agreed
+    /// to work in somebody's site as them was the work starting.
+    func testEitherAnswerToTheSiteCardIsWrittenDown() async {
+        let yes = SpyWorkspaceProvider()
+        let approving = makeSecretary(yes)
+        approving.submit("fill in the form at https://example.com/new")
+        approving.resolveWebTask(granted: true)
+        await settle()
+        XCTAssertTrue(approving.transcript.contains { $0.text.contains(chosenLine(CardChoice.goAhead)) })
+
+        let no = SpyWorkspaceProvider()
+        let refusing = makeSecretary(no)
+        refusing.submit("fill in the form at https://example.com/new")
+        refusing.resolveWebTask(granted: false)
+        await settle()
+        XCTAssertTrue(refusing.transcript.contains { $0.text.contains(chosenLine(CardChoice.notThisOne)) })
+    }
+
     func testDenyingOpensNothing() async {
         let provider = SpyWorkspaceProvider()
         let secretary = makeSecretary(provider)

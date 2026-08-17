@@ -421,12 +421,12 @@ struct ChatPanelView: View {
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: appearance.settings.panelSpacing * 1.3) {
-                    Button("Wait its turn") { secretary.resolveInterruption(queue: true) }
+                    Button(CardChoice.waitItsTurn) { secretary.resolveInterruption(queue: true) }
                         .buttonStyle(.borderedProminent)
                     // Says what it costs. The running turn is a CLI invocation
                     // that can't be paused or resumed, so replacing it throws
                     // away whatever it had done.
-                    Button("Replace — drop what's running") {
+                    Button(CardChoice.replaceRunning) {
                         secretary.resolveInterruption(queue: false)
                     }
                     .buttonStyle(.bordered)
@@ -445,7 +445,7 @@ struct ChatPanelView: View {
                         .buttonStyle(.bordered)
                         .font(.system(size: appearance.settings.footnoteFontSize))
                 }
-                Button("Cancel") { secretary.cancelPendingDecision() }
+                Button(CardChoice.cancel) { secretary.cancelPendingDecision() }
                     .buttonStyle(.plain)
                     .font(.system(size: appearance.settings.footnoteFontSize))
             }
@@ -472,9 +472,9 @@ struct ChatPanelView: View {
                 .foregroundStyle(theme.mutedText.color)
                 .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: appearance.settings.panelSpacing * 1.3) {
-                    Button("Go ahead") { secretary.resolveWebTask(granted: true) }
+                    Button(CardChoice.goAhead) { secretary.resolveWebTask(granted: true) }
                         .buttonStyle(.borderedProminent)
-                    Button("Not this one") { secretary.resolveWebTask(granted: false) }
+                    Button(CardChoice.notThisOne) { secretary.resolveWebTask(granted: false) }
                         .buttonStyle(.bordered)
                 }
                 .font(.system(size: appearance.settings.footnoteFontSize))

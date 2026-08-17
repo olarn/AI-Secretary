@@ -17,6 +17,19 @@ extension ChatPanelView {
         HStack(spacing: appearance.settings.panelSpacing) {
             Text(secretary.profile.displayName)
                 .font(.system(size: appearance.settings.fontSize, weight: .semibold))
+                .layoutPriority(1)
+            // Which model is answering, beside the name that answers. Two
+            // characters on one desktop can be on different models and efforts,
+            // and until now the only way to tell was to open Settings for each.
+            //
+            // Lowest layout priority in the row: the badge is the one thing
+            // here that may be truncated, because everything else is either the
+            // name or a control with an off switch on it.
+            Text("(\(secretary.modelBadgeText))")
+                .font(.system(size: appearance.settings.secondaryFontSize))
+                .foregroundStyle(theme.mutedText.color)
+                .lineLimit(1)
+                .layoutPriority(-1)
             // Two Texts rather than the whole label from `characterStatusLabel`,
             // so the name keeps its weight and the state stays secondary — but
             // the same rule decides whether there is a state to show at all.

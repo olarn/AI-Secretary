@@ -1047,6 +1047,23 @@ final class AgentSessionTests: XCTestCase {
         XCTAssertTrue(secretary.queuedMessages.isEmpty)
     }
 
+    /// Both answers to this card are now written down. Replacing especially:
+    /// it used to leave nothing but a stopped turn and a new one starting, which
+    /// looks the same as the app having decided to abandon the work by itself.
+    func testBothAnswersToTheInterruptionCardAreWrittenDown() async {
+        let waited = await busySecretary()
+        waited.submit("and another thing")
+        waited.resolveInterruption(queue: true)
+        XCTAssertTrue(waited.transcript.contains { $0.text.contains(chosenLine(CardChoice.waitItsTurn)) })
+
+        let replaced = await busySecretary()
+        replaced.submit("actually do this instead")
+        provider.eventsForNextTurn = [.completed(stopReason: .none(), usage: .none())]
+        replaced.resolveInterruption(queue: false)
+        await waitUntilIdle()
+        XCTAssertTrue(replaced.transcript.contains { $0.text.contains(chosenLine(CardChoice.replaceRunning)) })
+    }
+
     /// The stopped reply is labelled rather than left looking finished, and what
     /// was already said joins the conversation — the person can see those words,
     /// so the model has to know it said them.

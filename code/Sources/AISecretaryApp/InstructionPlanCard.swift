@@ -88,10 +88,10 @@ struct InstructionPlanCard: View {
             }
 
             HStack(spacing: spacing * 1.3) {
-                Button("Start") { start() }
+                Button(CardChoice.start) { start() }
                     .buttonStyle(.borderedProminent)
                     .disabled(!canStart)
-                Button("Cancel") { cancel() }
+                Button(CardChoice.cancel) { cancel() }
                     .buttonStyle(.bordered)
             }
             .font(.system(size: fontSize))

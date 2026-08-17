@@ -1036,8 +1036,12 @@ public final class Secretary {
 
         if wait {
             queue.append(QueuedMessage(text: text, attachments: carried))
-            say(.secretary, "Noted — I'll come to that when this one's done.")
+            say(.secretary, "\(chosenLine(CardChoice.waitItsTurn)) — I'll come to that when this one's done.")
         } else {
+            // Before the stop, deliberately. `stopCurrentTurn` writes its own
+            // line about the work being thrown away, and that line only makes
+            // sense underneath the answer that ordered it.
+            say(.secretary, "\(chosenLine(CardChoice.replaceRunning)).")
             stopCurrentTurn(because: "you replaced it")
             beginTurn(text, attachments: carried)
         }
@@ -1462,11 +1466,27 @@ public final class Secretary {
 
         guard granted else {
             audit.record(AuditEntry(taskID: request.taskID, kind: .approvalDenied, detail: request.commandSummary))
-            finish(success: false, message: "Cancelled — nothing was run.", reason: "user denied approval")
+            finish(
+                success: false,
+                message: "\(chosenLine(answer.title)) — nothing was run.",
+                reason: "user denied approval"
+            )
             return
         }
 
         audit.record(AuditEntry(taskID: request.taskID, kind: .approvalGranted, detail: request.commandSummary))
+        // Said before the work starts, not after: the answer is the last thing
+        // the person did, and a record of it arriving underneath the result
+        // reads as something the app decided once the work was already done.
+        //
+        // Whether Always actually kept anything is checked rather than assumed.
+        // The card only offers it when it can be kept, but `remember` refuses a
+        // tool outside the project's allowlist as well, and a line claiming a
+        // grant that policy will ignore is the worst of the three outcomes.
+        let kept = !request.outsideAllowlist && answer.duration(for: request.actionClass) == .always
+        say(.secretary, kept
+            ? "\(chosenLine(answer.title)) — I'll keep this for \(request.project.name)."
+            : "\(chosenLine(answer.title)) — just this time.")
         remember(answer, for: request)
         execute(operation, in: request.project)
     }
@@ -1572,9 +1592,10 @@ public final class Secretary {
 
         guard granted else {
             audit.record(AuditEntry(taskID: request.taskID, kind: .approvalDenied, detail: request.summary))
-            say(.secretary, "Left it alone — I haven't opened \(request.host).")
+            say(.secretary, "\(chosenLine(CardChoice.notThisOne)) — I haven't opened \(request.host).")
             return
         }
+        say(.secretary, "\(chosenLine(CardChoice.goAhead)) — working in \(request.host) as you.")
 
         audit.record(AuditEntry(taskID: request.taskID, kind: .approvalGranted, detail: request.summary))
         webSites = webSites.granting(host: request.host)
@@ -1590,6 +1611,7 @@ public final class Secretary {
     public func choose(project: Project) {
         guard case .projectChoice(_, let operation) = pendingDecision.toOptional() else { return }
         pendingDecision = .none()
+        say(.secretary, "\(chosenLine(project.name)) — working in it from here.")
         lastProject = .some(project)
         proceed(operation: operation, project: project)
     }
@@ -1634,10 +1656,14 @@ public final class Secretary {
             // produced it already finished — so it says so and leaves the state
             // machine where it is.
             if case .instructionPlan(let plan, _, _) = decision {
-                say(.secretary, "Left \(plan.relativePath) alone — nothing was run.")
+                say(.secretary, "\(chosenLine(CardChoice.cancel)) — left \(plan.relativePath) alone, nothing was run.")
                 return
             }
-            finish(success: false, message: "Cancelled.", reason: "user cancelled")
+            finish(
+                success: false,
+                message: "\(chosenLine(CardChoice.cancel)) — nothing was run.",
+                reason: "user cancelled"
+            )
         }
     }
 
@@ -3789,6 +3815,7 @@ public final class Secretary {
         )
         activeInstructionRun = .some(InstructionRun(plan: plan))
         say(.secretary, """
+            \(chosenLine(CardChoice.start)).
             ▶ Following \(plan.relativePath) — \(plan.steps.count) \
             step\(plan.steps.count == 1 ? "" : "s"). `/run stop` to stop at any point.
             """)
@@ -4084,10 +4111,19 @@ public final class Secretary {
         effectiveEffort.map(\.rawValue)^.getOrElse(Self.inheritedName)
     }
 
+    /// What is actually running, short enough for the header beside her name.
+    ///
+    /// Built from the *effective* pair, not from `modelDescription`, which says
+    /// "your Claude Code default" — a phrase that is right in a sentence and
+    /// absurd in a badge.
+    public var modelBadgeText: String {
+        modelBadge(model: effectiveModelName, effort: effectiveEffortName)
+    }
+
     /// One spelling for both rows. They sit one above the other in the same
     /// panel and mean the same thing, so two spellings would read as two
     /// different situations.
-    static let inheritedName = "Default"
+    static let inheritedName = inheritedSettingName
 
     /// True when the value comes from the user's own Claude Code rather than a
     /// choice made in this app — worth showing, because it explains why it can
