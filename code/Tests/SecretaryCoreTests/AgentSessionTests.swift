@@ -538,6 +538,17 @@ final class AgentSessionTests: XCTestCase {
             )],
             "Exactly the one grant, and nothing about which rules were refused"
         )
+        // The record has to agree with what was actually kept, on this card as
+        // well as on the read-only one. `.localWrite` may be remembered and the
+        // widen request is never outside the allowlist, so "just this time"
+        // here would contradict the grant sitting on disk beside it — and a
+        // line that lies is worse than no line at all.
+        XCTAssertTrue(
+            secretary.transcript.contains {
+                $0.text.contains(chosenLine("Always")) && $0.text.contains("keep this for")
+            },
+            "Always on a write card must say the grant was kept"
+        )
     }
 
     /// Once is still only once — the answer that changes nothing past this
