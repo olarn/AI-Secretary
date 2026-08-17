@@ -1,7 +1,7 @@
 import XCTest
 @testable import SecretaryCore
 
-/// Handing the pre-Phase-13 history file to a character.
+/// Handing the pre-Sprint-13 history file to a character.
 ///
 /// Only ever runs on a machine that has the old file, so it cannot be checked
 /// by launching a fresh build — and getting it wrong costs the person every

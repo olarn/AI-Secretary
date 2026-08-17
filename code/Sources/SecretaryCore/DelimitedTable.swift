@@ -3,7 +3,7 @@ import Foundation
 
 /// Pasted rows — CSV or tab-separated — recognised as a table.
 ///
-/// The reason this exists: handing over data is the point of Phase 11, and the
+/// The reason this exists: handing over data is the point of Sprint 11, and the
 /// two ways a person has it to hand are a file and their clipboard. A pasted
 /// CSV rendered as prose is a wall of commas the person cannot check, and the
 /// whole risk of data entry is entering the wrong thing — so it goes on screen

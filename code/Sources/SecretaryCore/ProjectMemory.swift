@@ -8,7 +8,7 @@ import Foundation
 /// loads that project's `CLAUDE.md` *and*
 /// `~/.claude/projects/<slug>/memory/MEMORY.md` into its context without being
 /// asked. So the reading half of "give the app access to the project's memory"
-/// was true the moment Phase 5 pointed the backend at a project folder — what
+/// was true the moment Sprint 5 pointed the backend at a project folder — what
 /// was missing is the other half: nothing the character learned ever got
 /// written back.
 ///

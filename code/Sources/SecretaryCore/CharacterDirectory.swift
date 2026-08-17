@@ -4,7 +4,7 @@ import Foundation
 /// One character as her neighbours are allowed to see her.
 ///
 /// The type is the permission boundary, which is why it is worth having at all
-/// rather than passing `SecretaryProfile` around. Phase 14.2 asks that a
+/// rather than passing `SecretaryProfile` around. Sprint 14.2 asks that a
 /// character know *which project* another has open and still have no access to
 /// it — so this card carries the project's **name** and no path, no grant, no
 /// tool id and no session id. A value cannot leak what it does not hold, and a
@@ -60,7 +60,7 @@ public func characterDirectory(_ all: [CharacterCard], excluding me: UUID) -> [C
 /// paragraph about her colleagues at all, and "there is nobody else" is a
 /// sentence that invites the model to bring the subject up.
 ///
-/// This paragraph alone answers Phase 14.1's first item — knowing the others
+/// This paragraph alone answers Sprint 14.1's first item — knowing the others
 /// exist and which model each is running needs no message sent and no round
 /// trip, because the answer is already in front of her.
 public func directoryPrompt(_ others: [CharacterCard]) -> Option<String> {

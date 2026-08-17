@@ -10,8 +10,8 @@ import SecretaryCore
 /// would be a rule no test has ever run.
 ///
 /// Everyone lives in one process on one actor, so delivery is a call. The
-/// shared file with a lock around it that Phase 14.3 describes would buy every
-/// hazard that phase lists and nothing else, while this is true.
+/// shared file with a lock around it that Sprint 14.3 describes would buy every
+/// hazard that sprint lists and nothing else, while this is true.
 @MainActor
 final class CharacterBus {
     /// Asked for the roster rather than holding it. The characters are owned by

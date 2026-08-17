@@ -1,16 +1,16 @@
 # Product Backlog — AI Desktop Companion / AI Secretary
 
-Feature list by phase, extracted out of `CLAUDE.md` so the charter (architecture,
+Feature list by sprint, extracted out of `CLAUDE.md` so the charter (architecture,
 principles, engineering rules) stays separate from the backlog (what's built vs.
 what's left). Checked items are shipped; unchecked items are still open.
 
-The phase digit in `AppVersion.swift` (`major.phase.change`) is **not** derived
+The sprint digit in `AppVersion.swift` (`major.sprint.change`) is **not** derived
 from anything in this file — the highest heading here has never been the current
-phase. It is stated once, in `CLAUDE.md` → Engineering expectations. A copy kept
+sprint. It is stated once, in `CLAUDE.md` → Engineering expectations. A copy kept
 here said **9** while the charter said **10**, so the copy is gone rather than
 corrected.
 
-## Phase 1: Desktop companion shell
+## Sprint 1: Desktop companion shell
 
 - [x] Transparent floating character window.
 - [x] Basic character state animations or placeholders.
@@ -18,7 +18,7 @@ corrected.
 - [x] Chat panel opened from the character.
 - [x] Local mock state transitions.
 
-## Phase 2: Secretary and coding workflow
+## Sprint 2: Secretary and coding workflow
 
 - [x] Intent classification for a limited set of commands.
 - [x] Project registry and explicit working-directory resolution.
@@ -26,7 +26,7 @@ corrected.
 - [x] Claude Code adapter for approved coding tasks.
 - [x] Basic Git status/diff and test-result reporting.
 
-## Phase 3: Chat with me
+## Sprint 3: Chat with me
 
 - [x] Integration with Claude as a mask app.
 - [x] ใช้ Claude Code ที่ user ติดตั้งและ login ไว้แล้ว (บัญชีของ user เอง ไม่ต้องใช้ API key) — ถ้าเครื่องไม่มี ให้แนะนำวิธีติดตั้งและ login
@@ -39,15 +39,15 @@ corrected.
 - [x] เวลา AI ตอบ chat ถ้า position อยู่ที่ bottom ให้ auto scroll ตาม แต่ถ้า user scroll ขึ้นไปอ่าน message เก่าๆ ไม่ต้อง auto scroll จนกว่า user จะ scroll ลงมาล่างสุด
 - [x] แสดง markdown table เป็นตารางจริงใน chat ถ้าตารางกว้างเกินหน้าต่าง ให้ scroll แนวขวางได้เฉพาะ content ของตาราง ไม่ใช่ทั้ง chat
 
-## Phase 4: Settings
+## Sprint 4: Settings
 
 - [x] ใช้ window chat เดิมได้ ไม่ต้องมีหน้าต่างใหม่
 - [x] เพิ่ม increase / decrease font size (มีปุ่มแค่ + -) max ที่ 32
 - [x] เพิ่ม increase / decrease ขนาดหน้าต่าง chat (มีปุ่มแค่ + -) แล้วหน้าต่างจะยืดหดได้ โดย minimum เท่าขนาด default และ max ไม่เกินขนาดหน้าจอ
-  - [x] เดิมข้อนี้เขียนว่า "แนวตั้งเท่านั้น" — Phase 5.5 เปิดให้ปรับความกว้างด้วยแล้ว (ปุ่ม step และลาก grip)
+  - [x] เดิมข้อนี้เขียนว่า "แนวตั้งเท่านั้น" — Sprint 5.5 เปิดให้ปรับความกว้างด้วยแล้ว (ปุ่ม step และลาก grip)
 - [x] เลือก model และ effort ได้จากหน้า setting (คลิกที่ชื่อแล้วมี popup ให้เลือก) โดย default ใช้ค่าเดียวกับ Claude Code ของ user และบอกการเปลี่ยนแปลงใน chat
 
-## Phase 5: Secretary Profiles
+## Sprint 5: Secretary Profiles
 
 - [x] ขยาย/ย่อ app size ได้ 3 ระดับ (S,M,L - เล็กลง/ใหญ่ขึ้น 30%) - ขนาดปัจจุบันคือ M
 - [x] สร้าง profile ใหม่ได้
@@ -62,7 +62,7 @@ corrected.
 - [x] App จะแสดงรูปที่แตกต่างกันตาม activity ที่กำลังทำ (เปลี่ยนเมื่อ thinking หรือ idle)
 - [x] เมื่อ activity แต่ไม่มีรูป ให้ใช้รูป default รูปเดียว
 
-## Phase 5.5: ปรับ UI/UX จากการใช้งานจริง
+## Sprint 5.5: ปรับ UI/UX จากการใช้งานจริง
 
 - [x] ครั้งแรกที่ run ต้องมี default profile คือ Miku เขียนลง local storage เลย ไม่ใช่มีแค่ใน memory
 - [x] upload รูป profile รูปเดียวต่อ profile (ไม่แยกตาม activity) เป็นแถว Picture แถวเดียว คลิกแล้วมี popup (Choose / Clear) แบบเดียวกับ Model และ Effort — activity สื่อด้วยสี halo, badge และ label ใต้ตัวละคร
@@ -99,7 +99,7 @@ corrected.
   - [x] ตัวอักษรในช่องพิมพ์ต้องอยู่กลางกล่องตามแนวตั้ง ไม่ลอยติดขอบบน
 - [x] เวลาขยาย/ย่อ chat window ปลายแหลมของกล่องคำพูดต้องอยู่ตำแหน่งเดิม (ยึดขอบด้านหาง แล้วขยายออกด้านตรงข้าม) ทั้งกรณีหางอยู่ซ้ายและหางอยู่ขวา (mirrored)
 
-## Phase 5.6: Version and About
+## Sprint 5.6: Version and About
 
 - [x] เลข version อยู่ใน code (`SecretaryCore/AppVersion.swift`) เป็นแหล่งเดียว — `package-app.sh` อ่านค่านี้ไปใส่ `CFBundleShortVersionString` ไม่ให้เลขสองที่ไม่ตรงกัน
 - [x] แอปต้องบอก version ตัวเองได้ แม้รันแบบไม่มี bundle
@@ -123,7 +123,7 @@ corrected.
 - [x] **อย่าใช้การ register ซ้ำเป็นเครื่องมือวัดว่าใครถือคีย์อยู่** — เขียนโพรบไปแล้วรอบหนึ่ง macOS ยอมให้อีก process จดคีย์เดียวกันได้ มันตอบ FREE ทั้งตอนที่แอปถืออยู่และไม่ถือ วัดได้ทางเดียวคือดูพฤติกรรมจริง
   - วิธีที่ใช้ได้: เปิดแถบค้นหาของ Safari (⌘F) แล้วกด Esc — กล่องเปิดอยู่ แถบค้นหาต้องยังอยู่ (เรากลืน) กล่องปิดแล้ว แถบค้นหาต้องหาย (เราคืนคีย์) ส่วน ⌘H เช็คด้วย `visible of process "Safari"` ว่าซ่อนได้จริง
 
-## Phase 5.7: คีย์ลัดในแชท และตัวเลือกที่กดเลือกได้
+## Sprint 5.7: คีย์ลัดในแชท และตัวเลือกที่กดเลือกได้
 
 - [x] ข้อความที่ขึ้นต้นด้วย `-` ต้องส่งได้ (bullet list, คำถามเกี่ยวกับ flag)
 - [x] Shift+Enter ขึ้นบรรทัดใหม่ได้ ไม่ใช่แค่ Option+Enter
@@ -138,10 +138,10 @@ corrected.
   - [x] ต้องแยก block ออกมาก่อนถึง `MessageMarkdown` เพราะ `.inlineOnlyPreservingWhitespace` กลืน fence แล้วยุบเนื้อในเป็นบรรทัดเดียว (เคยเห็น JSON โผล่มาเป็น `json { "iso": ... }`)
   - [x] หา code fence ก่อนหาตาราง — ในกล่องโค้ดมี `|` ได้ ถ้าหาตารางก่อนจะฉีกโค้ดออกเป็นตาราง
 
-## Phase 6: External tools
+## Sprint 6: External tools
 
 - [x] MCP-based integrations such as calendar, Slack, email, and knowledge sources.
-  - [x] ไม่ต้องเขียนโค้ดเพิ่ม — ทดสอบแล้วใช้ได้อยู่แล้ว (2026-07-28) เพราะแอปขับ Claude Code ของ user ซึ่งโหลด MCP server จาก config ของเขาเองตามที่ Phase 3 ตั้งใจ
+  - [x] ไม่ต้องเขียนโค้ดเพิ่ม — ทดสอบแล้วใช้ได้อยู่แล้ว (2026-07-28) เพราะแอปขับ Claude Code ของ user ซึ่งโหลด MCP server จาก config ของเขาเองตามที่ Sprint 3 ตั้งใจ
   - [x] หลักฐาน: ถาม "ตอนนี้กี่โมงแล้ว" ลอยๆ ใน session ใหม่ โมเดลหา tool เจอเองด้วย ToolSearch แล้วเรียก `mcp__my-tools__get_time` สำเร็จ ไม่ต้องผ่านรอบขออนุมัติ และลิสต์ MCP server ที่เข้าถึงได้เองได้ครบ (ทั้ง server ราย project และ global เช่น Figma)
   - [x] อย่าเพิ่ม `mcp__*` ลง allowlist หรือเขียน MCP client เอง — allowlist ปัจจุบันไม่ได้บล็อก MCP
 - [x] Be able to understand the web content through Chrome Claude plug in (suggest user that app can use this approach when user ask about app to understand the web contents).
@@ -162,7 +162,7 @@ corrected.
   - [x] extension เห็นเฉพาะแท็บที่ถูกแชร์เข้า session (กดไอคอน Claude ที่แท็บ) ไม่ใช่ทุกแท็บที่เปิดอยู่
   - [x] ต้องมี Claude in Chrome extension (≥1.0.36) และ login แบบ subscription — ถ้าใช้ API key Claude Code จะปิด Chrome integration เอง แม้ส่ง `--chrome` ไป (แอป strip `ANTHROPIC_API_KEY` อยู่แล้ว)
 
-## Phase 6.1: ติดตามตามเวลาจริง (`/loop`)
+## Sprint 6.1: ติดตามตามเวลาจริง (`/loop`)
 
 - [x] แอปติดตามเรื่องที่ user สั่งไว้ตามเวลาจริงได้ — ทุก N นาที Secretary ถามตัวเองด้วยคำถามที่ค้างไว้ แล้วตอบลงในสายแชท (เกิดจากงานจริง: คุม workshop อยู่ พิมพ์ไม่ได้ ต้องรู้ว่าถึงหัวข้อไหน)
 - [x] โมเดล **ไม่มีนาฬิกาและไม่ได้รันอยู่ระหว่างข้อความ** — prompt ของแต่ละรอบต้องบอกเวลาจริงไปด้วย ไม่งั้นมันเดาเวลาจากบริบทเก่า
@@ -178,7 +178,7 @@ corrected.
   - [x] `.beginExecuting` ออกจาก `.idle` ไม่ได้ — tick ต้องส่ง `.userBeganInput` → `.beginInterpreting` เหมือนข้อความที่ user พิมพ์ และต้องเข้า `startChat` ตรงๆ ไม่ผ่าน intent classifier (คำของเราเองอาจถูกอ่านเป็นคำสั่งแล้วไปรัน tool ที่ไม่มีใครสั่ง)
   - [x] ตัวจับเวลาอยู่ใน `Secretary` ไม่ใช่ใน view — loop ต้องเดินต่อแม้ปิดหน้าต่างแชท เพราะคนที่สั่งกำลังมองห้องประชุม ไม่ได้มองจอ
 
-## Phase 6.7: เพิ่ม Token Usage
+## Sprint 6.7: เพิ่ม Token Usage
 - [x] สามารถ chat ถาม AI usage token ได้ — `/usage` (หรือ `/tokens`) ตอบเป็นตารางในสายแชท
 - [x] มี windows ที่เปิดได้จาก menu icon แล้วแสดง usage token ได้ — เมนูแถบสถานะ → Token Usage (⌘U)
   - [x] **เปิดค้างไว้ได้** เป็นหน้าต่างของตัวเอง ไม่ใช่แผงในกล่องแชท — ปิดแชทแล้วตัวเลขต้องไม่หายไปด้วย และ observe `Secretary.sessionUsage` จึงอัปเดตสด เปิดทิ้งไว้ก่อนถามคำถามแรกก็เห็นตัวเลขไหลเข้ามาเอง
@@ -199,7 +199,7 @@ corrected.
     - ทางเดียวที่เหลือคือยิง endpoint ของ Anthropic เองด้วย OAuth credential ของ user ซึ่งแปลว่าแอปต้องเริ่มอ่าน credential ที่ตั้งใจไม่แตะมาตลอด + เป็น endpoint ที่ไม่มีเอกสาร (พังเงียบได้) + เป็นข้อมูลการเงิน — ต้องให้เจ้าของอนุมัติก่อน ไม่ทำเอง
   - poll ทุก 2 นาที **เฉพาะตอนหน้าต่างเปิด** และมีปุ่ม refresh — spawn process ทิ้งไว้ตลอดเพื่อวาดแถบที่ไม่มีใครดู ไม่ใช่สิ่งที่ companion ควรทำ
 
-## Phase 7 : Info-window
+## Sprint 7 : Info-window
 - [x] สามารถเอาข้อมูลไปเปิด window ลอยๆ ค้างไว้ได้ เช่น เมื่อถามข้อมูลอะไรบางอย่าง แล้วได้เป็นตาราง ก็บอก app ได้ว่า แสดงข้อมูลนั้นแยกออกจาก chat หรือแสดงข้อมูลนั้นแยก window ก็จะดึงข้อมูลที่คุยกัน (ในส่วนที่ระบุ) ออกไปเป็น window แยกได้
   - [x] ใช้ marker block ```window (`title:` + เนื้อหา) **ห้ามเดาจากร้อยแก้ว** เหตุผลเดียวกับ ```choices และ ```loop — โมเดลตอบเป็นตารางตลอดเวลา ถ้าเดาจะเปิดหน้าต่างที่ไม่มีใครสั่ง
   - [x] ต้องตัด block ทิ้งจากข้อความ ไม่งั้นเนื้อหาโผล่สองที่ (ในแชทและในหน้าต่าง)
@@ -214,10 +214,10 @@ corrected.
 - [x] มีเมนู Show All (อยู่ก่อน Clear All) เพื่อเรียกทุกบานกลับขึ้นมา
 - [x] ในเมนู Windows มีเมนู Clear all (อยู่ล่างเสมอ) เพื่อ clear ทุก windows ที่มีอยู่
 - [x] ขนาดของ window จะขยายตาม content ระดับนึง แต่ถ้าเนื้อหาเยอะเกินไป ก็ scroll ได้ (320–720 กว้าง, 180–640 สูง)
-- [x] **บั๊กที่เจอตอนขับจริง: prompt ไปไม่ถึง backend ที่ใช้จริง** — `capabilityPrompt` ที่อธิบาย ```loop กับ ```window ใช้เฉพาะเส้นทาง API key ส่วน Claude Code ใช้ `agentPrompt` คนละตัวซึ่งไม่มีทั้งคู่ ขอให้ปักตารางแล้วโมเดลตอบว่า "no window tool is available to me in this session" ซึ่งถูกจากมุมของมัน — แปลว่า loop ที่โมเดลตั้งเองตาม Phase 6.1 ก็ไปไม่ถึงเช่นกัน มาตลอด
+- [x] **บั๊กที่เจอตอนขับจริง: prompt ไปไม่ถึง backend ที่ใช้จริง** — `capabilityPrompt` ที่อธิบาย ```loop กับ ```window ใช้เฉพาะเส้นทาง API key ส่วน Claude Code ใช้ `agentPrompt` คนละตัวซึ่งไม่มีทั้งคู่ ขอให้ปักตารางแล้วโมเดลตอบว่า "no window tool is available to me in this session" ซึ่งถูกจากมุมของมัน — แปลว่า loop ที่โมเดลตั้งเองตาม Sprint 6.1 ก็ไปไม่ถึงเช่นกัน มาตลอด
   - เทสใหม่ยิงหนึ่งเทิร์นบน backend ทั้งสองแบบ แล้วเช็คว่า fence ทุกตัวที่แอป parse ได้ ต้องปรากฏใน prompt ที่ส่งจริง — parser ถูกและเทสเขียวไม่ได้แปลว่าโมเดลรู้ว่ามีความสามารถนี้
 
-## Phase 7.1: ลำดับปุ่มท้ายกล่องแชท
+## Sprint 7.1: ลำดับปุ่มท้ายกล่องแชท
 
 - [x] **ไม่ใช่แถวเดียว แต่เป็นสองกลุ่ม** — Projects อยู่ริมข้างหนึ่งตัวเดียว ส่วน Profile กับ Settings อยู่ติดกันที่อีกริมหนึ่ง มีความกว้างของหน้าต่างคั่นกลาง
 
@@ -236,14 +236,14 @@ corrected.
   - กฎอยู่ใน `footerSlots` ที่ `SecretaryCore` มีเทสคุมทั้งสองด้าน ไม่ใช่ array ตายตัวในไฟล์ view
 - [x] ตอนนี้ปลายแถวมีปุ่มทั้งสองข้าง กริป resize จึงหลบด้วยการย้ายปุ่มไม่ได้อีก ต้องเว้นที่ให้ที่มุมล่างที่กริปอยู่แทน
 
-## Phase 8: เลือก Skills ที่ติดตั้งใน Claude Code ได้
+## Sprint 8: เลือก Skills ที่ติดตั้งใน Claude Code ได้
 - [x] เพิ่มปุ่ม Skills อยู่ระหว่าง Profile และ Settings
 - [x] เมื่อกดปุ่ม Skills App จะแสดงหน้าจอเหมือน settings
 - [x] ในหน้าจอจะมี list ของ Skills ที่มี — สแกน `~/.claude/skills`, `.claude/skills` ของทุก project ที่ลงทะเบียนไว้โดยตรง, และ skill ที่มากับ plugin ที่ enable อยู่ (`SkillDiscovery`) เพราะ `claude` CLI ไม่มีคำสั่ง list skills จริง (`claude plugin list` มีแต่ plugin ที่ลงทะเบียนผ่าน marketplace เท่านั้น ไม่เห็น skill folder เปล่าๆ หรือ skill ข้างในแต่ละ plugin)
   - plugin skill อ่านจาก `enabledPlugins` ใน `~/.claude/settings.json` (ไม่ใช้ plugin ที่ถูก disable แม้จะยังมีไฟล์ cache ค้างอยู่) แสดงชื่อแบบ namespaced เช่น `superpowers:brainstorming` กันชนกับ skill จาก plugin อื่น
 - [x] สามารถ check เพื่อเลือกใช้ Skills ใน session นั้นได้ — session-only เหมือน `activeLoop` (ไม่เขียนลง disk) ผลของการเลือกคือ soft hint ใน system prompt ("only use these skills…") ไม่ใช่ hard limit เพราะไม่มี flag ของ CLI ที่ enforce ระดับ skill ได้จริง (มีแต่ `claude plugin enable/disable` ซึ่ง global/persist ข้าม session ไม่ตรงกับที่ต้องการ)
 
-## Phase 9.1: Monitor files and folders changed
+## Sprint 9.1: Monitor files and folders changed
 - [x] App สามารถ monitor ความเปลี่ยนแปลงของ folder ได้เมื่อสั่งให้ทำ — `/watch <path>`
   (`.` คือโฟลเดอร์โปรเจกต์) ดูทุก 4 วินาทีด้วยการเทียบ snapshot บอกว่าอะไร เพิ่ม/หาย/แก้
   ต้องสั่งเท่านั้น ไม่มีการ watch เองอัตโนมัติ
@@ -264,7 +264,7 @@ corrected.
   ตัวกันเดิมอยู่ครบ — path ต้องอยู่ในโปรเจกต์ที่อนุมัติ, ครั้งแรกในโปรเจกต์ยังเจอการ์ด,
   ประกาศตอนเริ่ม, กดปิดได้ที่ badge
 
-## Phase 9.2: Follow instruction from file
+## Sprint 9.2: Follow instruction from file
 - [x] App สามารถทำงานได้ตาม flow หรือ instruction ที่ถูกเขียนใน file — `/run <file>` อ่านไฟล์
   แล้วเดินทีละ step โดยแต่ละ step เป็นหนึ่งเทิร์นของ Claude Code ตามปกติ จึงยังผ่าน
   permission card เดิมทุกครั้งที่จะลงมือทำอะไร
@@ -289,7 +289,7 @@ corrected.
 - [x] ขอด้วยภาษาคนได้เช่นกัน ผ่าน block ```run — ปลอดภัยเพราะ "ขอ" ไม่ใช่ "ทำ": ไปได้ไกลสุด
   แค่การ์ดยืนยัน step ซึ่งเป็นด่านเดียวกับที่พิมพ์ `/run` เอง
 
-## Phase 10: Chat History
+## Sprint 10: Chat History
  - [x] เพิ่มเมนู Chat History ใน Menu icon, อยู่ระหว่างเมนู New Conversation และ Hide Character
  - [x] มีเส้นคั่น group ก่อนเมนู Hide Character
  - [x] เมื่อเริ่ม Chat, app จะเพิ่ม history ในเมนูนั้น (app ตั้งชื่อให้ด้วยจาก context) และ app จะคอยจำ context ที่คุยกันไว้ด้วย
@@ -314,7 +314,7 @@ corrected.
 - **default ของ store เป็น in-memory มีแต่ AppDelegate ที่ชี้ไปไฟล์จริง** — ตอนแรก default
   เป็นไฟล์จริง รันเทสรอบเดียวเขียนบทสนทนาปลอม 9 อันลงไฟล์ของเจ้าของ
 
-## Phase 11: ทำงานกับ web app ใดๆ แทน user
+## Sprint 11: ทำงานกับ web app ใดๆ แทน user
 - [x] user สามารถบอก app ได้ ว่าให้ทำงานกับ web ใดๆ ผ่าน chat ได้ (ผ่าน Chrome extension)
 - [x] user จะส่ง url ให้ทาง chat แล้ว app จะเริ่มขอ permission — ลิงก์ในข้อความเปิดการ์ดของตัวเอง
   ก่อนอะไรทั้งนั้น กด Go ahead แล้วจึงได้สิทธิ์ "ทำงานในเว็บนี้" ตลอดบทสนทนานี้ (+ ต่อ Chrome ให้
@@ -361,7 +361,7 @@ corrected.
   และไม่มี tool ไหนของ extension ที่ระบุ group ได้เลย (`tabs_context_mcp` เห็นเฉพาะ group ของ session ตัวเอง)
   - ที่เป็นบั๊กของเราคือ `setBrowserEnabled` ทิ้ง session ทุกครั้งที่เปิด browser กลางบทสนทนา
     บนความเชื่อว่า resume แล้วจะไม่ได้ tool ชุดใหม่ — **วัดแล้วไม่จริง** session ที่เริ่มโดยไม่มี
-    `--chrome` พอ resume พร้อม `--chrome` ก็ได้ tool ครบ (เป็นความเชื่อผิดแบบเดียวกับ `prepare()` ใน Phase 10)
+    `--chrome` พอ resume พร้อม `--chrome` ก็ได้ tool ครบ (เป็นความเชื่อผิดแบบเดียวกับ `prepare()` ใน Sprint 10)
   - prompt สั่งเพิ่มให้ทำงานใน group ที่มีอยู่ ใช้แท็บเดิม และห้ามปิดแท็บสุดท้าย เพราะ Chrome
     จะลบ group ทิ้งแล้วครั้งหน้าจะเปิดหน้าต่างใหม่ — คำอธิบายของ tool เองสั่งตรงข้าม
     ("สร้างแท็บใหม่ทุกบทสนทนา แล้วเก็บกวาดให้เรียบร้อย") จึงต้องเขียนทับให้ชัด
@@ -369,7 +369,7 @@ corrected.
 - **ไม่เขียน parser ของ .csv/.json/key-value เอง** — ให้โมเดลเปิดไฟล์ด้วยเครื่องมือของมันเอง
   เขียนเองคือได้ parser สามตัวที่แย่กว่าของเดิม แล้วรูปแบบที่สี่ก็ยังมาอยู่ดี
 
-## Phase 12: ปรับ setting ให้อยู่ถูกที่ถูกทาง
+## Sprint 12: ปรับ setting ให้อยู่ถูกที่ถูกทาง
 - [x] ย้าย App size จาก Profile -> Settings
 - [x] ย้าย Model, Effort จาก Settings -> Profile
 - [x] ย้าย Browser จาก Settings -> Project
@@ -406,7 +406,7 @@ corrected.
   แล้วหน้าต่างตัวละครโตจาก 128×149 เป็น 167×194 จริง, Theme Light แล้ว palette พลิกทั้งแอป
   accent ย้ายไปปุ่ม Light และคำอธิบายใต้แถวเปลี่ยนเป็น "Always light"
 
-## Phase 13: Multi-AI-Secretaty
+## Sprint 13: Multi-AI-Secretaty
 - [x] ทำความเข้าใจโครงสร้างใหม่ ใน file menu.pdf
 - [x] app สามารถ สร้าง character ได้มากกว่า 1 ตัว โดยจะมีเมนู New Character แล้ว app จะแสดง window
   ให้ create character ใหม่ โดยใช้ configuration จาก Profile เดิม
@@ -441,10 +441,10 @@ corrected.
 `conversations.json` 39,877 ไบต์ไปเป็นไฟล์ต่อตัวละครแล้วประวัติยังอ่านเจอ
 
 **เรื่องที่เจอตอนขับ ยังไม่ได้แก้:** ตัวละครยืนห่างกัน 179pt แต่บับเบิลกว้าง 423pt **แชทจึงทับกัน**
-คลิกในเขตทับจะตกไปที่หน้าต่างบนสุด ไม่ใช่ตัวที่เล็งไว้ — เกี่ยวโดยตรงกับ Phase 15 ที่ออกแบบให้
+คลิกในเขตทับจะตกไปที่หน้าต่างบนสุด ไม่ใช่ตัวที่เล็งไว้ — เกี่ยวโดยตรงกับ Sprint 15 ที่ออกแบบให้
 bubble ซ้อนเหลื่อมกันเป็นชั้น
 
-## Phase 13-1: Dedicate Project
+## Sprint 13-1: Dedicate Project
 - [x] แยก Project ตาม character แต่ user สามารถ set project เดียวกันได้เอง
 - [x] แยก Skills ที่จะถูกเลือกให้ใช้ ตามแต่ละ character
 - [x] แยก Settings ตามแต่ละ character
@@ -490,7 +490,7 @@ ship ทีละข้อ (v0.13.214–216) เพราะข้อ 2 ตอ�
 แล้วอาเนียยังดำอยู่, ตั้ง Character size L ให้อาเนียแล้วหน้าต่างเธอโต 128×149 → 167×194
 อีกสองตัวเท่าเดิม, ปิดเปิดแอปใหม่ทั้งสองค่ายังอยู่
 
-## Phase 13-2 — Small improvement (v0.13.223)
+## Sprint 13-2 — Small improvement (v0.13.223)
 
 - **Esc มีเจ้าของคนเดียวแล้ว** เดิมมีสามที่ที่ดัก Esc และตัวที่แย่ที่สุดคือ monitor ของ
   `ChatPanelView` ซึ่งติดตั้งครั้งเดียวและไม่เคยถูกถอด (view ถูกสร้างหนเดียวแล้วโชว์ด้วย alpha)
@@ -519,7 +519,7 @@ ship ทีละข้อ (v0.13.214–216) เพราะข้อ 2 ตอ�
 เปิดแชทแล้วกด Esc ใน Finder → แชทปิด ตัวละครอยู่ครบ (hot key ยังทำงาน แม้ตัวดักใน
 `ChatPanelView` ถูกถอดออกแล้ว)
 
-## Phase 13-3 — Performance Improvement (v0.13.224)
+## Sprint 13-3 — Performance Improvement (v0.13.224)
 
 ### ผลการวัด (2026-08-13, CLI 2.1.229, v0.13.223)
 
@@ -624,7 +624,7 @@ pass อยู่แล้ว — `TranscriptScrollPin.isBehind(distanceBelowFol
 
 ขับจริงโดยเจ้าของที่ v0.13.225: อาการหายแล้ว 964 เทส
 
-## Phase 13-4 — Font (v0.13.228)
+## Sprint 13-4 — Font (v0.13.228)
 
 สองข้อในสprint: ปรับน้ำหนัก font ในแชทที่ "เข้าใจว่าเป็น bold" และเลือก font family ได้
 โดยเติมใน Settings ก่อนแถว Text size
@@ -667,15 +667,15 @@ Ayuthaya ที่ weight regular ก็หนาเท่าเดิม สอ
 **ยังไม่ได้แก้ ตั้งใจ:** `` `inline code` `` ยังไม่ถูกจัดรูปเลย — `.inlinePresentationIntent`
 มี `.code` ส่งมาจริง แต่ไม่มีสาขารับ เป็นการตัดสินใจเรื่องหน้าตาใหม่ ไม่ใช่ของแถมของรอบนี้
 
-## Phase 14-1 / 14-2 — Character คุยกันเอง และส่งงานให้กันได้ (v0.14.229)
+## Sprint 14-1 / 14-2 — Character คุยกันเอง และส่งงานให้กันได้ (v0.14.229)
 
 `SPRINT_BACKLOG.md` แยกไว้เป็นสองข้อ แต่ลงมือแล้วเป็นกลไกเดียวกัน จึง ship พร้อมกัน:
 14.1 คือรู้จักกันและส่งข้อความหากันได้ 14.2 คือส่ง "งาน" แล้วได้คำตอบกลับ ซึ่งต่างกันแค่ว่า
 ข้อความนั้นมีคำตอบผูกกลับมาหรือไม่
 
-**อยู่ใน process เดียว ไม่ใช่หลาย process** Phase 13 ทำ `CharacterInstance` ไปแล้ว
+**อยู่ใน process เดียว ไม่ใช่หลาย process** Sprint 13 ทำ `CharacterInstance` ไปแล้ว
 ทุกตัวละครอยู่บน MainActor เดียวกัน การส่งจึงเป็นการเรียกฟังก์ชัน ไม่ต้องมีไฟล์กลาง
-ไม่ต้องมี lock — ของพวกนั้นคือ Phase 14.3 / 17 และการสร้างมันตอนนี้คือจ่ายค่าอันตราย
+ไม่ต้องมี lock — ของพวกนั้นคือ Sprint 14.3 / 17 และการสร้างมันตอนนี้คือจ่ายค่าอันตราย
 ทุกข้อที่ 14.3 ระบุไว้ โดยยังไม่ได้ประโยชน์อะไรเลย
 
 ### ซองจดหมายคือข้อมูล ไม่ใช่สิทธิ์
@@ -817,9 +817,9 @@ Pikachu ตอบ 17:16:23 (28 วิ) Ditto ตอบ 17:16:41 (46 วิ) แ�
 
 ### บันทึกนี้เคยไปอยู่ผิดไฟล์ (แก้ที่ v0.14.241)
 
-หัวข้อ Phase 14-1/14-2 ข้างบนถูกเขียนครั้งแรกด้วย `cat >>` ที่รันตอน cwd อยู่ใน `code/`
+หัวข้อ Sprint 14-1/14-2 ข้างบนถูกเขียนครั้งแรกด้วย `cat >>` ที่รันตอน cwd อยู่ใน `code/`
 จึงไปสร้าง `code/PRODUCT_BACKLOG.md` ขึ้นใหม่แทนที่จะต่อท้ายไฟล์จริง แล้วถูก commit ไปด้วย
-ผลคือ backlog จริงไม่มีหัวข้อ Phase 14 เลย ส่วนหัวข้อย่อยที่เขียนทีหลังไปห้อยอยู่ใต้ Phase 13-4
+ผลคือ backlog จริงไม่มีหัวข้อ Sprint 14 เลย ส่วนหัวข้อย่อยที่เขียนทีหลังไปห้อยอยู่ใต้ Sprint 13-4
 (Font) ซึ่งอ่านแล้วเข้าใจผิดสนิท **ให้ `cd` ให้ครบทุกครั้ง อย่าพึ่ง cwd ที่ค้างมาจากคำสั่งก่อนหน้า**
 — กติกาเดียวกับที่ Versioning and packaging เขียนไว้เรื่อง `package-app.sh` และพลาดซ้ำที่เดิม
 
@@ -909,7 +909,7 @@ Pikachu ตอบ 17:16:23 (28 วิ) Ditto ตอบ 17:16:41 (46 วิ) แ�
 **ครึ่งแรกมีอยู่แล้ว และไม่มีใครรู้** วัดจริงกับ Claude Code 2.1.220 (2026-08-14): สั่ง `claude -p`
 ด้วย flag ชุดเดียวกับที่แอปใช้ โดยตั้ง cwd เป็น project ที่ลงทะเบียนไว้ มันโหลด `CLAUDE.md`
 ของ project **และ** `~/.claude/projects/<slug>/memory/MEMORY.md` เข้า context ให้เอง
-แปลว่า "เข้าถึง memory ของ project" เป็นจริงตั้งแต่ Phase 5 ที่เริ่มชี้ backend ไปที่โฟลเดอร์ project
+แปลว่า "เข้าถึง memory ของ project" เป็นจริงตั้งแต่ Sprint 5 ที่เริ่มชี้ backend ไปที่โฟลเดอร์ project
 สิ่งที่ไม่มีคือครึ่งหลัง: ของที่ตัวละครรู้ระหว่างทำงาน ไม่เคยถูกเขียนกลับไปเลยสักครั้ง
 
 **จึงเขียนลงที่เดิม ไม่สร้างที่เก็บที่สอง** ทางเลือกที่ถูกปฏิเสธคือเก็บใน Application Support
@@ -1058,9 +1058,9 @@ extension) `private` ที่เหลือในแต่ละไฟล์�
 `continue` ใน loop ที่ mutate ตาม index, และ decision ladder สองจุดที่ early-return สามชั้น
 เทสเดิม 1,123 ผ่านโดยไม่ถูกแก้ทุก checkpoint (build+test หลังทุก batch)
 
-## Phase 14.3 — ปิดโดยไม่มีโค้ดใหม่
+## Sprint 14.3 — ปิดโดยไม่มีโค้ดใหม่
 
-**ไม่มีอะไรถูกสร้างเพิ่มสำหรับเฟสนี้เลย** และนั่นคือบันทึก ไม่ใช่การข้าม สองข้อที่ 14.3 ขอ
+**ไม่มีอะไรถูกสร้างเพิ่มสำหรับสปรินต์นี้เลย** และนั่นคือบันทึก ไม่ใช่การข้าม สองข้อที่ 14.3 ขอ
 ถูกทำไปแล้วตอน 14.1/14.2 เพราะทั้งคู่เป็นเงื่อนไขที่ต้องมีตั้งแต่ตอนที่ตัวละครส่งงานหากันได้จริง
 ไม่ใช่ของที่ค่อยเติมทีหลังได้:
 
@@ -1073,11 +1073,11 @@ extension) `private` ที่เหลือในแต่ละไฟล์�
 ไม่มีที่ไหนบนหน้าจอบอกว่าตอนนี้ส่งไปกี่คน ใครตอบแล้ว ใครยังไม่ตอบ ถ้าเจ้าของหมายถึงการเห็น
 ไม่ใช่การรู้ นั่นคืองานใหม่ที่ยังไม่ได้ทำ และควรเป็นหัวข้อของมันเอง ไม่ใช่ติ๊กย้อนหลังลงช่องนี้
 
-ส่วนคำถามเรื่อง shared instruction file / task log ข้ามโปรเซส ไม่ได้อยู่ในเฟสนี้ —
+ส่วนคำถามเรื่อง shared instruction file / task log ข้ามโปรเซส ไม่ได้อยู่ในสปรินต์นี้ —
 อยู่ที่ `PRODUCT_BACKLOG_NEXT_SPRINTS.md` และยังติดด่าน `## TODO: Design App
 Architecture ก่อน` ที่เจ้าของต้องลบเอง
 
-## Phase 14.4 — ตัวละครหายใจตอนคิด (v0.14.259–260)
+## Sprint 14.4 — ตัวละครหายใจตอนคิด (v0.14.259–260)
 
 **สิ่งที่ ship จริง อ่านตรงนี้พอ**: ระหว่าง `thinking` และ `working` วงกลมที่ครอบตัวละคร
 กระพริบจากสีเทาไปเป็นสีของสถานะ และ status badge ขยาย/ย่อ 10% ในจังหวะเดียวกัน
@@ -1131,7 +1131,7 @@ animation ที่วนไม่รู้จบมีอายุยืนก�
 1. **หยุดได้จริง** — `.still` คืน 0 ทุกค่าเวลาที่เป็นไปได้ ไม่มี state ค้างให้ติด และมีเทสที่
    เดินเวลา 0–5 วินาทียืนยันข้อนี้ ซึ่งเป็นเทสที่เขียนก่อนเพื่อน เพราะมันคือบั๊กที่เพิ่ง ship ไป
 2. **halo กับ badge อยู่ในจังหวะเดียวกันโดยโครงสร้าง** — ต่างคนต่างอ่านนาฬิกา แต่เป็นฟังก์ชัน
-   ของเวลาอย่างเดียว input เดียวกันจึงได้ค่าเดียวกันเสมอ ไม่มี phase ที่แชร์กันให้เลื่อนหลุด
+   ของเวลาอย่างเดียว input เดียวกันจึงได้ค่าเดียวกันเสมอ ไม่มี sprint ที่แชร์กันให้เลื่อนหลุด
 3. **ไม่กิน CPU ตอนว่าง** — `paused:` ตัด redraw ทิ้งทั้งหมดเมื่อไม่ busy
 
 `halo` เป็น `TimelineView` ของตัวเองที่ครอบแค่วงกลม ไม่ครอบ `characterArt` เพราะ art
@@ -1279,3 +1279,22 @@ non-activating**: แอปมักไม่ใช่แอปที่ active 
 การเชิญให้วางสิ่งที่ `admitting` จะปฏิเสธ แล้วคำปฏิเสธมาถึงหลังจากปล่อยมือไปแล้ว —
 บอกก่อนปล่อยคือที่เดียวที่ช่วยได้ เทสสี่ตัว รวมตัวที่เดินทุกจำนวนตั้งแต่ 0 ถึงเกินลิมิตแล้วยืนยันว่า
 **ข้อความกับ `admitting` ตอบตรงกันทุกค่า** ซึ่งเป็นสิ่งที่กันไม่ให้ทั้งสองฝั่งเลื่อนหลุดจากกันทีหลัง
+
+## เปลี่ยนคำจาก Phase เป็น Sprint ทั้งรีโป (v0.14.268)
+
+เจ้าของสั่งให้ใช้คำว่า Sprint แทน Phase ทุกที่ในเอกสาร ทำแล้วในหกไฟล์ที่ยังมีชีวิตอยู่
+(`CLAUDE.md`, `README.md`, `code/README.md`, และไฟล์ backlog ทั้งสาม) รวมคำไทย
+**เฟส → สปรินต์** ด้วย ไม่งั้นจะเหลือสองภาษาที่ใช้คนละคำเรียกของเดียวกัน
+
+**สองไฟล์ที่จงใจไม่แตะ** — `initial-implementation-prompt.md` ซึ่ง README ระบุว่าเก็บไว้เป็น
+หลักฐานต้นทาง และ `docs/superpowers/specs/2026-07-28-…` ซึ่งเป็น design doc ลงวันที่ไว้
+การแก้คำในเอกสารสองอันนี้คือการแก้สิ่งที่เคยเขียนไว้ ไม่ใช่การเปลี่ยนคำที่ใช้อยู่
+
+**ในโค้ดต้องแยกความหมายทีละจุด ไม่ใช่ sed ทั้งก้อน** เพราะคำว่า phase ในโค้ดมีสามความหมาย
+และสองอันไม่ใช่สปรินต์: `.onKeyPress(phases:)` เป็นชื่อพารามิเตอร์ของ SwiftUI, ส่วน
+`pulseProgress` กับเทสของมันพูดถึง**จังหวะของ animation** ถ้า sed ทั้งไฟล์จะพังทั้งคู่
+อีกจุดคือ `ProjectMemoryTests` ที่มี path จริงของ worktree (`…worktrees-phase-14-3`)
+เป็น fixture ซึ่งเปลี่ยนไม่ได้เพราะมันคือค่าที่วัดมาจากดิสก์
+
+รวม 12 ไฟล์ Swift ที่แก้คอมเมนต์ (รวม `AppVersion.swift` ที่นิยาม `major.sprint.change`)
+จึงต้อง bump version และ repackage ตามกติกา แม้จะเป็นคอมเมนต์ล้วน

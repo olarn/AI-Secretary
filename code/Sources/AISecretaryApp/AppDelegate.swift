@@ -363,7 +363,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
         usageWindow.close()
         // The About window is AppKit's, opened by
         // `orderFrontStandardAboutPanel`, and there is no handle to it — this
-        // sweep is how it goes away, and it also catches anything a later phase
+        // sweep is how it goes away, and it also catches anything a later sprint
         // puts on screen without telling this method about it.
         NSApp.windows.filter(\.isVisible).forEach { $0.orderOut(nil) }
     }

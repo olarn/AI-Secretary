@@ -4,7 +4,7 @@ import Foundation
 ///
 /// `AISecretaryApp` is never linked into the test bundle, so a menu built by
 /// hand out of `NSMenuItem`s is a hundred-odd lines that no test has ever
-/// executed — and Phase 13 turns those hundred lines into a tree three levels
+/// executed — and Sprint 13 turns those hundred lines into a tree three levels
 /// deep with a branch per character. The rule the charter draws for exactly
 /// this case is that the app applies answers rather than computing them, so
 /// the shape lives here, where it can be asserted row by row, and

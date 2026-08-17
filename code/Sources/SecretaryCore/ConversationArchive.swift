@@ -317,7 +317,7 @@ public final class FileConversationStore: ConversationStoring, @unchecked Sendab
             .appendingPathComponent("AISecretary", isDirectory: true)
     }
 
-    /// Hands the pre-Phase-13 history file to a character, once.
+    /// Hands the pre-Sprint-13 history file to a character, once.
     ///
     /// The decision is `conversationFileMigration`; this reads the two `exists`
     /// answers off the disk and applies what it says. Returns what it decided

@@ -7,7 +7,7 @@
 **คุมเฉพาะหัวข้อ multi-app / multi-secretary ในไฟล์นี้** (เจ้าของยืนยัน 2026-08-12)
 Liquid Glass, Loop & Notification, Voice และไฟล์ backlog อีกสองไฟล์ ทำได้ตามปกติ
 
-## Phase 14.4: ทำงานด้วยกัน (ต่อ) 
+## Sprint 14.4: ทำงานด้วยกัน (ต่อ) 
 - [ ] ให้ character มากกว่า 1 ตัว monitor instruction เดียวกัน
 - [ ] ให้ character มากกว่า 1 ตัว monitor task log เดียวกัน เพื่อให้แต่ละตัวเห็นความคืบหน้าของงาน
 - [ ] ให้ character แต่ละตัว ทำตาม instruction ตามขั้นตอนของตัวเอง โดยดูจากชื่อ profile ว่า step ไหน app ตัวไหนจะทำ
@@ -18,8 +18,8 @@ Liquid Glass, Loop & Notification, Voice และไฟล์ backlog อีก
 - [ ] ถ้า step ไหนช่วยกันทำได้ character ต้องรู้ว่า parallel ได้กี่ app, ต้องรออะไรจึงจะรู้ว่าทำแล้ว, และทำเสร็จแล้ว โดย update กันใน task log
 - [ ] prevent เรื่อง lock file และ race condition (ทำซ้ำกัน, เข้าใจว่า app อื่นทำเลยไม่ได้ทำ, ลำดับงานผิด, ข้ามลำดับงาน, infinite loog) 
 
-## Phase 15: Multi-session
-- Before Start : อ่าน requirement ทั้งหมดใน phase นี้ก่อน เพราะต้อง re-architecture app และต้องจัดกลุ่ม feature ที่อยู่ใน Setting, Profile, Skills ใหม่ 
+## Sprint 15: Multi-session
+- Before Start : อ่าน requirement ทั้งหมดใน sprint นี้ก่อน เพราะต้อง re-architecture app และต้องจัดกลุ่ม feature ที่อยู่ใน Setting, Profile, Skills ใหม่ 
 - Requirements
   - [ ] สามารถเปิด chat bubble ได้มากกว่า 1 window โดยที่แต่ละ window จะแยก Claude Session ออกจากกัน
   - [ ] การแสดง chat bubble ให้แสดง on top window เดิม แต่ให้ซ้อนทับแบบแหลื่อมๆกัน
@@ -38,9 +38,9 @@ Liquid Glass, Loop & Notification, Voice และไฟล์ backlog อีก
     - [ ] แต่ละ session ใน menu มีปุ่มปิด ถ้าปิดก็ลบ history ไปเลย
 - Expected App Architecture
 
-## Phase 16: Liquid Glass Theme
-  **ข้อเท็จจริงใต้เฟสนี้ขยับไปแล้วบางส่วนที่ v0.10.197 (2026-08-11)** — รอบนั้นแก้อาการ
-  "พื้นโปร่งทำให้อ่านไม่ออกเมื่อ desktop สว่าง" ซึ่งแตะโค้ดชุดเดียวกับเฟสนี้ อ่านก่อนเริ่มข้อไหนก็ตาม
+## Sprint 16: Liquid Glass Theme
+  **ข้อเท็จจริงใต้สปรินต์นี้ขยับไปแล้วบางส่วนที่ v0.10.197 (2026-08-11)** — รอบนั้นแก้อาการ
+  "พื้นโปร่งทำให้อ่านไม่ออกเมื่อ desktop สว่าง" ซึ่งแตะโค้ดชุดเดียวกับสปรินต์นี้ อ่านก่อนเริ่มข้อไหนก็ตาม
   - `.fill(.regularMaterial)` ที่ข้อ #2 อ้างถึง **ไม่มีแล้ว** เป็น `theme.ground.color` (สีทึบ)
     ตัว `SpeechBubbleShape` ยังเป็น `Shape` เหมือนเดิม จึงยังส่งเข้า `glassEffect(in:)` ได้อยู่
   - **ข้อ #3 (Content first) ถือว่าเสร็จแล้ว และเสร็จคนละแบบกับที่เขียนไว้** — ไม่ได้ "เพิ่มพื้นทึบ
@@ -59,16 +59,16 @@ Liquid Glass, Loop & Notification, Voice และไฟล์ backlog อีก
   มี **ด่าน** อยู่ก่อน #0 ต้องผ่านก่อนถึงจะเริ่มข้อไหนก็ตาม รวมทั้ง #0 ด้วย
   ข้อเท็จจริงใต้แต่ละข้อสำรวจจากโค้ดจริงตอนตั้ง backlog ไม่ใช่การเดา — ถ้าโค้ดขยับไปแล้วให้ตรวจซ้ำ
 - [ ] **ด่าน — ทดสอบว่า glass ทำงานจริงบนหน้าต่างที่ไม่เป็น key ก่อนทำทุกข้อ
-  ถ้าไม่ผ่าน ไม่ต้องไปต่อ ทั้งเฟสนี้ตกไป**
+  ถ้าไม่ผ่าน ไม่ต้องไปต่อ ทั้งสปรินต์นี้ตกไป**
   - [ ] หน้าต่างของแอปนี้ถูกออกแบบให้ไม่เป็น key window ตลอดชีวิต และ AppKit ถอด accent ออกจาก
     tinted control เมื่อหน้าต่างไม่ใช่ key มาแล้วครั้งหนึ่ง — นั่นคือที่มาของ `PanelToggleStyle`
-    ถ้า `.glass` ประพฤติแบบเดียวกัน ผิวทั้งเฟสจะดูตายตลอดเวลา ซึ่งแย่กว่าของเดิมที่มีอยู่
+    ถ้า `.glass` ประพฤติแบบเดียวกัน ผิวทั้งสปรินต์จะดูตายตลอดเวลา ซึ่งแย่กว่าของเดิมที่มีอยู่
   - [ ] **อ่านโค้ดหรือเอกสารแล้วตอบไม่ได้** เอกสารของ Apple ไม่ได้พูดถึงกรณี non-activating panel
     ต้องเปิดแอปแล้วมองด้วยตา ทั้งตอนที่แอปเป็น frontmost และตอนที่ไปคลิก Finder ทิ้งไว้
   - [ ] spike ให้เล็กที่สุด: ตัวบับเบิล + แถวปุ่มท้ายกล่อง เท่านั้น ห้ามลาม ถ้าไม่ผ่านจะได้ทิ้งง่าย
   - [ ] ทำก่อน #0 ได้โดยไม่ต้องขยับ deployment target — ห่อ spike ด้วย `if #available(macOS 26, *)`
     ชั่วคราว เพื่อไม่ให้การทดสอบกลายเป็นการตัดสินใจเรื่อง macOS 14/15 ไปด้วยกัน
-  - [ ] ถ้าไม่ผ่าน: จดผลลงที่นี่ว่าเห็นอะไร แล้วปิดเฟส อย่าปล่อยให้เป็นข้อค้างที่ใครมาเริ่มใหม่ได้
+  - [ ] ถ้าไม่ผ่าน: จดผลลงที่นี่ว่าเห็นอะไร แล้วปิดสปรินต์ อย่าปล่อยให้เป็นข้อค้างที่ใครมาเริ่มใหม่ได้
 - [ ] **#0 Theme** - สามารถเปลี่ยน Theme ได้ โดย Theme เดิมเป็น Default, และมีให้เลือก Liquid Glass
 - [ ] **#1 ขยับ deployment target `macOS 14` → `macOS 26`** (`code/Package.swift:7`) — API ชุดนี้
   (`glassEffect`, `GlassEffectContainer`, `.buttonStyle(.glass)`) มีตั้งแต่ macOS 26 คงไว้ที่ 14
@@ -85,7 +85,7 @@ Liquid Glass, Loop & Notification, Voice และไฟล์ backlog อีก
 - [ ] **#3 Content first — พื้นที่ข้อความต้องทึบ** ตอนนี้ transcript นั่งบน material ตรงๆ
   ไม่มีพื้นรองของตัวเอง พอเปลี่ยนเป็น glass กล่องข้อความที่ใช้ `Color.secondary.opacity(0.07)`
   จะกลืนหายไปกับพื้น ต้องเพิ่มพื้นทึบใต้ transcript แล้วไล่ปรับค่า opacity ~6 ค่า
-  **ทุกค่าต้องดูด้วยตาบน wallpaper จริง** ไม่ใช่คำนวณ — ข้อนี้แตะบรรทัดมากที่สุดในเฟส
+  **ทุกค่าต้องดูด้วยตาบน wallpaper จริง** ไม่ใช่คำนวณ — ข้อนี้แตะบรรทัดมากที่สุดในสปรินต์
 - [ ] **#4 ลอยเหนือ content** — `FloatingPanel` เป็น `isOpaque = false` + `hasShadow = true`
   อยู่แล้วจึงผ่านโดยไม่ต้องแก้ ระวังอย่างเดียวคือเงาของ glass ซ้อนกับเงาของ `NSWindow`
 - [ ] **#5 Glass ต้องเคลื่อนไหว** — *ตัดสินใจแยกจากข้ออื่น* ราคาไม่ได้อยู่ที่ animation
@@ -107,7 +107,7 @@ Liquid Glass, Loop & Notification, Voice และไฟล์ backlog อีก
 - [ ] **#11 Focus ด้วย Glass** — หน้าต่างนี้ไม่เคยเป็น key window จึงพึ่ง focus state ของระบบไม่ได้
   ต้องวาดสถานะเอง ซึ่งเป็นเหตุผลเดียวกับที่ `PanelToggleStyle` มีอยู่ทุกวันนี้
 
-## Phase 17: App ทำงานร่วมกันได้
+## Sprint 17: App ทำงานร่วมกันได้
 - [ ] User สามารถ start app พร้อมกันได้มากกว่า 1 app
 - [ ] Two or more app be able to talk to each other.
 - [ ] การทำงานร่วมกัน
@@ -121,8 +121,8 @@ Liquid Glass, Loop & Notification, Voice และไฟล์ backlog อีก
   - [ ] ถ้า step ไหนช่วยกันทำได้ app ต้องรู้ว่า parallel ได้กี่ app, ต้องรออะไรจึงจะรู้ว่าทำแล้ว, และทำเสร็จแล้ว โดย update กันใน task log
   - [ ] prevent เรื่อง lock file และ race condition (ทำซ้ำกัน, เข้าใจว่า app อื่นทำเลยไม่ได้ทำ, ลำดับงานผิด, ข้ามลำดับงาน, infinite loog) 
 
-## Phase 18: Multi-session
-- Before Start : อ่าน requirement ทั้งหมดใน phase นี้ก่อน เพราะต้อง re-architecture app และต้องจัดกลุ่ม feature ที่อยู่ใน Setting, Profile, Skills ใหม่ 
+## Sprint 18: Multi-session
+- Before Start : อ่าน requirement ทั้งหมดใน sprint นี้ก่อน เพราะต้อง re-architecture app และต้องจัดกลุ่ม feature ที่อยู่ใน Setting, Profile, Skills ใหม่ 
 - Requirements
   - [ ] สามารถเปิด chat bubble ได้มากกว่า 1 window โดยที่แต่ละ window จะแยก Claude Session ออกจากกัน
   - [ ] การแสดง chat bubble ให้แสดง on top window เดิม แต่ให้ซ้อนทับแบบแหลื่อมๆกัน
@@ -141,12 +141,12 @@ Liquid Glass, Loop & Notification, Voice และไฟล์ backlog อีก
     - [ ] แต่ละ session ใน menu มีปุ่มปิด ถ้าปิดก็ลบ history ไปเลย
 - Expected App Architecture
 
-## Phase 19: Loop & Notification
+## Sprint 19: Loop & Notification
 - [ ] สั่งให้ loop ได้ เช่น นับถอยหลัง 5 นาทีแล้วแจ้งเตือน หรือ long run แล้วแจ้งเตือนได้
 - [ ] มี local notification เมื่อทำงานเสร็จ (notification settings ตาม macOS)
 - [ ] เมื่อ click ที่กล่อง notication, จะเปิด app และ chat window ขึ้นมา
 
-## Phase 20: Voice
+## Sprint 20: Voice
 - [ ] Push-to-talk or explicit voice activation.
 - [ ] Speech-to-text, text-to-speech, interruption behavior, and privacy controls.
 - [ ] Voice must follow the same approval and auditing model as chat.

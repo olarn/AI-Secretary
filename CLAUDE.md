@@ -75,7 +75,7 @@ session ที่ถูก isolate อยู่ใน worktree จะถูก h
 
 **เรียกสกิล `swift-functional-programming` ก่อนแก้ไฟล์ Swift ไฟล์แรกของทุก session — ทุกไฟล์
 ไม่ใช่เฉพาะที่คิดว่าเป็น "domain code"** เดิมเขียนว่า "read it before changing domain code"
-ซึ่งเป็นการให้ตัดสินเอง แล้วก็ถูกข้ามจริงมาแล้วทั้ง Phase 11 ที่เขียนไฟล์ใหม่ใน `SecretaryCore`
+ซึ่งเป็นการให้ตัดสินเอง แล้วก็ถูกข้ามจริงมาแล้วทั้ง Sprint 11 ที่เขียนไฟล์ใหม่ใน `SecretaryCore`
 ตลอดทาง เกณฑ์ใหม่ไม่ต้องตัดสิน: จะแตะ `.swift` ก็เรียกก่อน รวมถึงไฟล์เทสและไฟล์ที่ขอบ SwiftUI
 
 - **รวมถึงตอน code review และ refactor ด้วย** ซึ่งเป็นงานเดียวกันอ่านย้อนทาง: รีวิวคือการเทียบ
@@ -191,21 +191,21 @@ type Project = {
 Kept out of this charter so architecture, principles and engineering rules
 don't get mixed in with feature items:
 
-- `PRODUCT_BACKLOG.md` — phases 1–11, what has shipped.
+- `PRODUCT_BACKLOG.md` — sprints 1–11, what has shipped.
 - `SPRINT_BACKLOG.md` — the sprint being worked on now.
 - `PRODUCT_BACKLOG_NEXT_SPRINTS.md` — later. Opens with a guard: don't write
   code for the multi-app / multi-secretary features until the architecture is
   designed. **The guard is scoped to those sections** (confirmed 2026-08-12) —
   it does not cover the other two files.
 
-**เฟสที่ผ่าน Definition of done แล้ว ต้องย้าย ไม่ใช่แค่ติ๊ก** — เขียนสิ่งที่ ship ลง
-`PRODUCT_BACKLOG.md` ซึ่งเป็นที่เก็บ "อะไร ship ไปแล้ว" **แล้วลบหัวข้อเฟสนั้นออกจาก
+**สปรินต์ที่ผ่าน Definition of done แล้ว ต้องย้าย ไม่ใช่แค่ติ๊ก** — เขียนสิ่งที่ ship ลง
+`PRODUCT_BACKLOG.md` ซึ่งเป็นที่เก็บ "อะไร ship ไปแล้ว" **แล้วลบหัวข้อสปรินต์นั้นออกจาก
 `SPRINT_BACKLOG.md`** สองขั้นนี้แยกกันไม่ได้: ลบอย่างเดียวคือทิ้งบันทึก ติ๊กอย่างเดียวคือ
 sprint ที่โตขึ้นเรื่อยๆ จนอ่านไม่ออกว่ารอบนี้เหลืออะไร เงื่อนไขว่า "จบ" คืออะไร ไม่เขียนซ้ำที่นี่ —
 อยู่ที่ Definition of done ห้าขั้นด้านบน ที่เดียว
 
-**ไม่ใช่แค่เฟส — ของที่ ship แล้วทุกอย่างต้องมีบันทึก ในคอมมิตเดียวกับที่ ship**
-กฎย้ายเฟสข้างบนยิงตอน*เฟสจบ* ซึ่งแปลว่าบั๊กที่เจอจากการขับ และฟีเจอร์ที่เจ้าของสั่งกลางทาง
+**ไม่ใช่แค่สปรินต์ — ของที่ ship แล้วทุกอย่างต้องมีบันทึก ในคอมมิตเดียวกับที่ ship**
+กฎย้ายสปรินต์ข้างบนยิงตอน*สปรินต์จบ* ซึ่งแปลว่าบั๊กที่เจอจากการขับ และฟีเจอร์ที่เจ้าของสั่งกลางทาง
 ไม่มีกฎไหนคุมเลย ผลจริง (2026-08-14): v0.14.242–246 ห้าเวอร์ชันติดกัน — รวมบั๊กที่คำตอบ
 ไปไม่ถึงตัวละคร และฟีเจอร์ Hide All ทั้งอัน — ไม่ถูกเขียนลง `PRODUCT_BACKLOG.md` เลย
 ทั้งที่ commit ผ่าน Definition of done ครบทุกขั้น เพราะ**ไม่มีขั้นไหนใน Definition of done
@@ -215,12 +215,12 @@ sprint ที่โตขึ้นเรื่อยๆ จนอ่านไม
 บั๊กหนึ่งบรรทัดก็หนึ่งย่อหน้า แต่ต้องอยู่ใน commit เดียวกัน ไม่ใช่ตามเก็บทีหลัง —
 เพราะ "ตามเก็บทีหลัง" คือสิ่งที่ไม่เกิดขึ้นห้ารอบติด
 
-**หัวข้อเฟสต้องไม่ซ้ำเลขกันข้ามไฟล์** ตอนนี้ซ้ำอยู่ (2026-08-12): `SPRINT_BACKLOG.md` มี
-Phase 12 หนึ่งอัน ส่วน `PRODUCT_BACKLOG_NEXT_SPRINTS.md` มีอีกสามอันที่เขียนว่า Phase 12
-เหมือนกัน ผลคือ "ทำ Phase 12 ให้หน่อย" ชี้ไปได้สี่ที่ และเคยถูกเข้าใจผิดมาแล้วว่างานธีมที่ ship
-ไปคืองาน Phase 12 ของ sprint
+**หัวข้อสปรินต์ต้องไม่ซ้ำเลขกันข้ามไฟล์** ตอนนี้ซ้ำอยู่ (2026-08-12): `SPRINT_BACKLOG.md` มี
+Sprint 12 หนึ่งอัน ส่วน `PRODUCT_BACKLOG_NEXT_SPRINTS.md` มีอีกสามอันที่เขียนว่า Sprint 12
+เหมือนกัน ผลคือ "ทำ Sprint 12 ให้หน่อย" ชี้ไปได้สี่ที่ และเคยถูกเข้าใจผิดมาแล้วว่างานธีมที่ ship
+ไปคืองาน Sprint 12 ที่อยู่ในไฟล์ sprint
 
-The phase digit used in the version number is stated once, in Versioning and
+The sprint digit used in the version number is stated once, in Versioning and
 packaging — not here and not in the backlog files, whose copy of it went stale
 and said 9 while this file said 10.
 
@@ -417,19 +417,19 @@ already made once, and the ungated key-posting variants were deleted on purpose.
 
 ## Versioning and packaging
 
-**ทุกครั้งที่แก้ code ต้อง bump version** ตามแพตเทิร์น `major.phase.change`
+**ทุกครั้งที่แก้ code ต้อง bump version** ตามแพตเทิร์น `major.sprint.change`
 
 - `major` — 0 ไปจนกว่าจะ public เจ้าของจะเป็นคนบอกเองว่าเมื่อไหร่
-- `phase` — phase ที่กำลังทำอยู่ **ตอนนี้คือ 14 และนี่คือที่เดียวในรีโปที่เขียนเลขนี้**
-  ห้าม derive จากหัวข้อที่สูงสุดในไฟล์ backlog เพราะหัวข้อไม่ได้บอก phase ปัจจุบัน
-  ทั้งสองทาง — `PRODUCT_BACKLOG.md` จบที่เฟสที่ ship ไปแล้ว ส่วน
-  `PRODUCT_BACKLOG_NEXT_SPRINTS.md` มีเฟสที่ยังไม่เริ่ม
-  เปลี่ยนด้วยมือเมื่อขยับ phase เท่านั้น
-  **เลขนี้เคยค้างที่ 10 ตลอด Phase 11–13** จนเจ้าของสั่งให้ตามจริง (2026-08-13)
-  ขยับ phase เมื่อไหร่ให้ขยับเลขนี้ในคอมมิตเดียวกัน
+- `sprint` — sprint ที่กำลังทำอยู่ **ตอนนี้คือ 14 และนี่คือที่เดียวในรีโปที่เขียนเลขนี้**
+  ห้าม derive จากหัวข้อที่สูงสุดในไฟล์ backlog เพราะหัวข้อไม่ได้บอก sprint ปัจจุบัน
+  ทั้งสองทาง — `PRODUCT_BACKLOG.md` จบที่สปรินต์ที่ ship ไปแล้ว ส่วน
+  `PRODUCT_BACKLOG_NEXT_SPRINTS.md` มีสปรินต์ที่ยังไม่เริ่ม
+  เปลี่ยนด้วยมือเมื่อขยับ sprint เท่านั้น
+  **เลขนี้เคยค้างที่ 10 ตลอด Sprint 11–13** จนเจ้าของสั่งให้ตามจริง (2026-08-13)
+  ขยับ sprint เมื่อไหร่ให้ขยับเลขนี้ในคอมมิตเดียวกัน
 - `change` — +1 ต่อ 1 เรื่องที่ทำเสร็จ ถ้ารอบนั้นแก้ 5 เรื่องก็ +5
-  **ไม่รีเซ็ตเมื่อ phase เปลี่ยน** — มีแต่เพิ่มขึ้น เลขจึงไม่ซ้ำกันข้าม build
-- ตัวเลขนี้ไม่ใช่ semver — `<` เทียบกันได้เฉพาะภายใน phase เดียวกัน
+  **ไม่รีเซ็ตเมื่อ sprint เปลี่ยน** — มีแต่เพิ่มขึ้น เลขจึงไม่ซ้ำกันข้าม build
+- ตัวเลขนี้ไม่ใช่ semver — `<` เทียบกันได้เฉพาะภายใน sprint เดียวกัน
   (0.6.51 คือโค้ดที่ใหม่กว่า 0.9.0 ซึ่งนับด้วยกติกาเดิม)
 - แก้ที่เดียวคือ `SecretaryCore/AppVersion.swift` — About window กับ `package-app.sh`
   อ่านค่านี้เอง ห้ามพิมพ์เลขซ้ำในโค้ด

@@ -1,21 +1,21 @@
 # AI Secretary
 
-A macOS desktop companion, built in the phases described in
+A macOS desktop companion, built in the sprints described in
 `../initial-implementation-prompt.md` and governed by `../CLAUDE.md`.
 
 The Swift package lives in this `code/` directory; the repository root holds
 the project charter and documents. All commands below are run from here.
 
-**Phase 1 — Desktop companion shell (done).** A floating, transparent,
+**Sprint 1 — Desktop companion shell (done).** A floating, transparent,
 always-on-top character window that is draggable, opens a manga-style speech
 bubble on click, and reflects a fully unit-tested assistant state machine.
 
-**Phase 2 — Secretary and coding workflow (first slice done).** Typing a
+**Sprint 2 — Secretary and coding workflow (first slice done).** Typing a
 request now drives real work: the Secretary classifies the intent, resolves an
 explicitly registered project, asks for approval, and runs a fixed set of
 read-only Git commands, reporting the result back in the transcript.
 
-**Phase 3 — Chat with me (done).** Typing anything that isn't a command
+**Sprint 3 — Chat with me (done).** Typing anything that isn't a command
 streams a real reply through the character.
 
 **Backend — your own Claude Code.** The app is a face over the Claude Code you
@@ -27,7 +27,7 @@ of the handful of tools this app could implement itself. If Claude Code isn't
 installed, the panel explains how to set it up, and an Anthropic API key set in
 Settings is used as a fallback.
 
-**Phase 4 — File & folder access (superseded).** The bundled Git and file
+**Sprint 4 — File & folder access (superseded).** The bundled Git and file
 adapters still exist and still back the typed commands below, but Claude Code's
 own tools now do this work in normal conversation.
 
@@ -432,8 +432,8 @@ implemented yet.
 
 ## Suggested next step
 
-Finish Phase 4 by adding the internet half: a fetch/search adapter in the same
+Finish Sprint 4 by adding the internet half: a fetch/search adapter in the same
 `externalNetwork` class, so a page can be pulled and reasoned about alongside a
-local file. After that, either Phase 5 (settings, font and window size, sticky
+local file. After that, either Sprint 5 (settings, font and window size, sticky
 autoscroll) or giving Claude tool-use access so it can choose these operations
 itself instead of relying on the keyword grammar.

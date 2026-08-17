@@ -1,6 +1,6 @@
 import Foundation
 
-/// Which build of the app this is, as `major.phase.change`.
+/// Which build of the app this is, as `major.sprint.change`.
 ///
 /// The number lives here, in code, rather than only in the packaging script's
 /// `Info.plist`: the app has to be able to answer the question itself — in the
@@ -13,22 +13,22 @@ import Foundation
 /// called:
 ///
 /// - **major** — `0` until the app is published. The owner says when.
-/// - **phase** — which phase of the charter the work belongs to. The digit
+/// - **sprint** — which sprint of the charter the work belongs to. The digit
 ///   itself is written down once, in the charter's Versioning and packaging
 ///   section, and this comment deliberately doesn't repeat it: the copy that
 ///   used to live here said 9 long after the charter said 10. Moved by hand
-///   when the work moves on, not derived — the backlog lists phases nobody has
+///   when the work moves on, not derived — the backlog lists sprints nobody has
 ///   started, so the highest heading is not the current one.
 /// - **change** — one per completed change, five for five. It never resets, so
 ///   it only ever counts up and two builds can't share a number.
 ///
-/// Because the middle part tracks a phase rather than progress, `<` is only
-/// meaningful within one phase: 0.6.51 is newer code than 0.9.0, which was
+/// Because the middle part tracks a sprint rather than progress, `<` is only
+/// meaningful within one sprint: 0.6.51 is newer code than 0.9.0, which was
 /// numbered under the previous scheme.
 public struct AppVersion: Equatable, Comparable, Sendable, CustomStringConvertible {
     /// The current version. Keep the literal on one line and in this shape —
     /// `scripts/package-app.sh` parses it to fill in `CFBundleShortVersionString`.
-    public static let current = AppVersion(major: 0, minor: 14, patch: 267)
+    public static let current = AppVersion(major: 0, minor: 14, patch: 268)
 
     public let major: Int
     public let minor: Int

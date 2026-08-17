@@ -4,7 +4,7 @@ A macOS desktop companion: a floating animated character that lives on your
 desktop, talks to you in chat, and gets work done through the Claude Code you
 already have installed.
 
-Version 0.14.267. macOS 14+. Not shipped — this is a working repository.
+Version 0.14.268. macOS 14+. Not shipped — this is a working repository.
 
 ## What it actually is
 
@@ -46,7 +46,7 @@ and it says so.
   and nothing more: the message carries no path and no permission, so the one
   who takes it works under her own approvals or refuses.
 
-Phases 1–14 of the charter are done. Voice is not started.
+Sprints 1–14 of the charter are done. Voice is not started.
 
 ## Getting started
 
@@ -88,7 +88,7 @@ something the packaging script can do on its own.
 
 | Path | What's there |
 | --- | --- |
-| [`CLAUDE.md`](CLAUDE.md) | The charter: product vision, permission model, phase-by-phase scope, and the engineering rules this code is held to. **Read this first.** |
+| [`CLAUDE.md`](CLAUDE.md) | The charter: product vision, permission model, sprint-by-sprint scope, and the engineering rules this code is held to. **Read this first.** |
 | [`code/`](code/) | The Swift package. Its [README](code/README.md) is the detailed guide — architecture, every module, how to run things. |
 | `code/Sources/` | Domain modules (`AssistantState`, `ProjectRegistry`, `Permissions`, `ToolAdapters`, `LLMProvider`, `SecretaryCore`) and the SwiftUI app. |
 | `code/Tests/` | One suite per domain module (`FunctionalCore` is re-exports and the app target is exercised by driving the app, not the test bundle). |

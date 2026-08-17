@@ -3,7 +3,7 @@ import Foundation
 import ToolAdapters
 
 /// What the Secretary understood from a user message. Deliberately a small
-/// closed set for this phase — no free-form command construction.
+/// closed set for this sprint — no free-form command construction.
 public enum Intent: Equatable, Sendable {
     /// Run a known read-only code operation, optionally against a named project.
     case codeTool(operation: CodeToolOperation, projectQuery: Option<String>)

@@ -11,8 +11,8 @@ import Foundation
 /// absence, so adding a field here fails the suite rather than leaking.
 ///
 /// It is not `Codable` and is never written to disk. Everything runs in one
-/// process on one actor; a shared file with a lock around it is Phase 14.3's
-/// problem and buying it now would pay for every hazard that phase lists while
+/// process on one actor; a shared file with a lock around it is Sprint 14.3's
+/// problem and buying it now would pay for every hazard that sprint lists while
 /// delivery is still a function call.
 public struct CharacterMessage: Equatable, Sendable, Identifiable {
     /// An errand expects an answer; a report is that answer. A question is just
