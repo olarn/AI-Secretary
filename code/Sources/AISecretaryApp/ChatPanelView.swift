@@ -346,6 +346,27 @@ struct ChatPanelView: View {
         .background(theme.warningFill.color, in: RoundedRectangle(cornerRadius: 8))
     }
 
+    /// The answers, drawn in the order the rule hands them back.
+    ///
+    /// Built from `secretary.offeredApprovalAnswers` rather than written out
+    /// here: which buttons exist is a decision — Always is off the card for a
+    /// folder outside the projects, for a tool outside the allowlist, and for
+    /// every class that must be asked about each time — and a decision in this
+    /// target is one no test can see.
+    ///
+    /// Deny is the plain button at the end. It is the answer that costs
+    /// nothing, so it should not be the one the eye lands on.
+    private var approvalButtons: some View {
+        HStack(spacing: appearance.settings.panelSpacing * 1.3) {
+            ForEach(secretary.offeredApprovalAnswers, id: \.rawValue) { answer in
+                Button(answer.title) { secretary.resolvePendingApproval(answer: answer) }
+                    .buttonStyle(.bordered)
+                    .tint(answer == .once ? theme.accent.color : theme.primaryText.color)
+            }
+        }
+        .font(.system(size: appearance.settings.footnoteFontSize))
+    }
+
     @ViewBuilder
     private var pendingDecisionView: some View {
         switch secretary.awaitingDecision {
@@ -373,13 +394,16 @@ struct ChatPanelView: View {
                 Text("in \(request.project.name) · \(request.actionClass.humanDescription)")
                     .font(.system(size: appearance.settings.footnoteFontSize))
                     .foregroundStyle(theme.mutedText.color)
-                HStack(spacing: appearance.settings.panelSpacing * 1.3) {
-                    Button("Approve") { secretary.resolvePendingApproval(granted: true) }
-                        .buttonStyle(.borderedProminent)
-                    Button("Deny") { secretary.resolvePendingApproval(granted: false) }
-                        .buttonStyle(.bordered)
+                approvalButtons
+                // Says what Always costs before it is pressed. The button is
+                // only on the card when a grant can actually be kept, so this
+                // line appears with it and never on its own.
+                if secretary.offeredApprovalAnswers.contains(.always) {
+                    Text("Always keeps this for \(request.project.name) after you quit. Nothing else is remembered.")
+                        .font(.system(size: appearance.settings.hintFontSize))
+                        .foregroundStyle(theme.mutedText.color)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .font(.system(size: appearance.settings.footnoteFontSize))
             }
             .padding(appearance.settings.panelPadding)
             .background(

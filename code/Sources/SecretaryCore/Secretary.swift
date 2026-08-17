@@ -1395,6 +1395,24 @@ public final class Secretary {
         }
     }
 
+    /// Which buttons the card in front of the person should carry.
+    ///
+    /// Asked of the Secretary rather than worked out in the view, because the
+    /// answer needs the registry — Always is only on offer for a project that
+    /// was actually registered — and `AISecretaryApp` is never linked into the
+    /// test bundle. Empty when nothing is waiting.
+    public var offeredApprovalAnswers: [PermissionAnswer] {
+        pendingDecision
+            .map { decision -> [PermissionAnswer] in
+                guard case .approval(let request, _) = decision else { return [] }
+                return offeredAnswers(
+                    for: request,
+                    projectIsRegistered: self.registry.projects.contains { $0.id == request.project.id }
+                )
+            }^
+            .getOrElse([])
+    }
+
     /// The two-answer door, kept for the callers that only ever meant yes or
     /// no. Yes is `.once` — the answer that changes nothing beyond this
     /// conversation.
