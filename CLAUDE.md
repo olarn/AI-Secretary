@@ -9,54 +9,65 @@ Three gates fire at different moments and are deliberately not merged:
 
 ---
 
-## Definition of done — อ่านก่อนเริ่ม ไม่ใช่ตอนจะจบ
+## Definition of done — read before starting, not when about to finish
 
-**งานไม่จบเมื่อเทสเขียว และไม่จบเมื่อ commit แล้ว งานจบเมื่อ `.app` ตัวเดียวใน
-`~/Desktop/AI-Secretary/code` ถูก build จาก `main` ที่มีงานรอบนั้นอยู่แล้ว**
-ห้ามรายงานว่าเสร็จก่อนถึงตรงนั้น
+**Work is not done when the tests are green, and not done when it is committed. It
+is done when the single `.app` in `~/Desktop/AI-Secretary/code` has been built from
+a `main` that already contains that work.** Never report done before that point.
 
-ห้าขั้น เรียงตามนี้:
+Five steps, in this order:
 
-1. commit ใน worktree — **พร้อมบันทึก backlog ในคอมมิตเดียวกัน** ทั้งสองครึ่ง:
-   เขียนสิ่งที่ ship ลง `PRODUCT_BACKLOG.md` **และลบหัวข้อนั้นออกจาก `SPRINT_BACKLOG.md`**
-   กติกาเต็มอยู่ที่ "Where the backlog lives" ไม่ซ้ำที่นี่ — ที่ต้องมีบรรทัดนี้เพราะกติกานั้น
-   ไม่เคยถูกอ้างจากเช็คลิสต์ที่คนไล่ตอนจะปิดงาน ผลคือครึ่งหลัง (ลบหัวข้อ) ถูกลืมซ้ำแล้ว
-   ซ้ำอีกจนเจ้าของต้องสั่งเอง สองรอบติด (2026-08-15)
-2. เอาขึ้น `main` — fast-forward แล้ว push **ไม่มี PR ไม่มี force ไม่มี merge commit**
-   (Principles บอกว่า force-push ต้องขออนุญาต บนเส้นทางนี้คือห้ามขาด ไม่ต้องถาม)
-3. **sync `code/` กลับ** — `cd ~/Desktop/AI-Secretary/code && git pull --ff-only`
-4. build — `cd ~/Desktop/AI-Secretary/code && ./scripts/package-app.sh`
-   บรรทัดสุดท้ายของ output ต้องอ่านว่า `on main` และต้องไม่มี `-dirty`
-5. fast-forward worktree ให้ตรง `main` — checkout ที่ค้างคือ build เก่าที่รอถูกเปิด
+1. Commit in the worktree — **with the backlog record in the same commit**, both
+   halves: write what shipped into `PRODUCT_BACKLOG.md` **and delete that heading
+   from `SPRINT_BACKLOG.md`**. The full rule is under "Where the backlog lives",
+   not repeated here — this line exists because that rule was never referenced from
+   the checklist people follow when closing work, so the second half (deleting the
+   heading) kept being forgotten until the owner had to say so, twice running
+   (2026-08-15).
+2. Get it onto `main` — fast-forward, then push. **No PR, no force, no merge
+   commit.** (Principles says force-push needs permission; on this path it is
+   forbidden outright, no need to ask.)
+3. **Sync `code/` back** — `cd ~/Desktop/AI-Secretary/code && git pull --ff-only`
+4. Build — `cd ~/Desktop/AI-Secretary/code && ./scripts/package-app.sh`
+   The last line of output must read `on main` and must not contain `-dirty`.
+5. Fast-forward the worktree to match `main` — a stale checkout is an old build
+   waiting to be opened.
 
-**ขั้น 3 คือขั้นที่หายไปบ่อยที่สุด** และเป็นเหตุผลที่ต้องเขียนแยกออกมาจากขั้น 4:
-session ที่ทำงานใน worktree จะจบด้วย `main` บน remote ที่ใหม่กว่า `code/` เสมอ
-ถ้าไม่ pull กลับ ผลคือ `code/` เป็นโค้ดเก่า `.app` ที่ build จากตรงนั้นก็เก่าตาม
-และ commit ถัดไปจาก `code/` จะ push ไม่ผ่าน ซึ่งเป็นจังหวะที่คนเผลอใช้ `--force`
+**Step 3 is the one that goes missing most often**, and that is why it has to be
+written separately from step 4: a session working in a worktree always ends with
+`main` on the remote newer than `code/`. Without pulling back, `code/` is old code
+and the `.app` built there is old with it, and the next commit from `code/` will
+fail to push — which is exactly the moment someone reaches for `--force`.
 
-**ถ้าถูกปฏิเสธตอนจะทำขั้น 3–4 ให้ออกจาก worktree แล้วทำเอง — ห้ามโยนคำสั่งให้เจ้าของรัน**
+**If you are refused while doing steps 3–4, leave the worktree and do it yourself —
+never hand the command to the owner to run.**
 
-session ที่ถูก isolate อยู่ใน worktree จะถูก harness ปฏิเสธทั้ง `cd` และ `git -C` ที่ชี้ไป
-`code/` ข้อความที่ได้อ่านเหมือนเป็นข้อห้ามถาวร แต่**มันผูกกับสถานะ isolate ไม่ใช่ผูกกับ path**
-ออกจาก worktree เมื่อไหร่ก็ทำได้ทันที ลำดับที่ใช้ได้จริง (ยืนยัน 2026-08-12): ทำขั้น 1–2 ให้จบ
-ใน worktree ก่อน — guard ของ background session ห้ามแก้ไฟล์ใน checkout หลัก จะเด้ง
-`hasn't isolated its changes yet` และ `git push origin HEAD:main` จาก worktree ได้เลย
-เป็น fast-forward ล้วน — แล้ว `ExitWorktree` ด้วย `action: "keep"` (**`keep` เท่านั้น**
-worktree ต้องอยู่ต่อ) จากนั้นขั้น 3–4 ทำได้ เช็ค `git status` ของ checkout หลักก่อนเผื่อ
-เจ้าของมีงานค้าง จะกลับไปทำงานต่อก็ `EnterWorktree` ด้วย `path` ของ worktree เดิม
+A session isolated in a worktree gets both `cd` and `git -C` pointing at `code/`
+refused by the harness. The message reads like a permanent prohibition, but **it is
+bound to the isolate state, not to the path** — the moment you leave the worktree it
+works. The sequence that actually works (confirmed 2026-08-12): finish steps 1–2 in
+the worktree first — the background-session guard forbids editing files in the main
+checkout and throws `hasn't isolated its changes yet`, while
+`git push origin HEAD:main` from the worktree is fine, being a pure fast-forward —
+then `ExitWorktree` with `action: "keep"` (**`keep` only** — the worktree has to
+survive). Steps 3–4 are
+then possible; check `git status` of the main checkout first in case the owner has
+work in progress. To resume, `EnterWorktree` with the `path` of the same worktree.
 
-**การส่งคำสั่งให้เจ้าของรันเองคือทางเลือกสุดท้าย ไม่ใช่ทางแรก** — เคยโยนให้สามรอบใน session
-เดียวโดยไม่ได้ลองข้อ 3 เลยสักครั้ง เหลือไว้เฉพาะตอนที่ลำดับข้างบนก็ยังไม่ผ่าน และตอนนั้น
-**ห้ามข้ามเงียบๆ ห้ามรายงานว่า shipped** ต้องบอกตรงๆ ว่ายังไม่ได้ build แล้วปิดเทิร์นด้วย:
+**Handing commands to the owner is the last resort, not the first** — it was handed
+over three times in one session without trying item 3 even once. Reserve it for when
+the sequence above still fails, and then **never skip silently and never report it as
+shipped**: say plainly that it has not been built, and end the turn with:
 
 ```
 ! cd ~/Desktop/AI-Secretary/code && git pull --ff-only && ./scripts/package-app.sh
 ```
 
-**ข้ามขั้น 4 ได้กรณีเดียว** คือรอบนั้นไม่มีโค้ดที่ลงไปอยู่ใน bundle เปลี่ยนเลย
-(เอกสาร, สคริปต์ dev, เทสล้วน) เพราะ `.app` เดิมยังเป็น build ที่ถูกต้องของโค้ดที่ ship อยู่
-และการ repackage โค้ดที่เหมือนเดิมทุกไบต์ทำให้ "นี่ build ไหน" แย่ลงไม่ใช่ดีขึ้น
-แต่ **ขั้น 3 ข้ามไม่ได้ไม่ว่ากรณีใด** และถ้าข้ามขั้น 4 ต้องบอกเหตุผลในรายงาน
+**Step 4 may be skipped in one case only:** nothing that goes into the bundle changed
+that round (docs, dev scripts, tests only), because the existing `.app` is still the
+correct build of the code that shipped, and repackaging byte-identical code makes
+"which build is this?" worse, not better. But **step 3 can never be skipped, under any
+circumstances**, and if step 4 is skipped the reason must be stated in the report.
 
 ---
 
@@ -70,14 +81,18 @@ worktree ต้องอยู่ต่อ) จากนั้นขั้น 3�
    changes — the list of what counts is under Principles.
 5. Implement in small, verifiable increments.
 
-**เรียกสกิล `swift-functional-programming` ก่อนแก้ไฟล์ Swift ไฟล์แรกของทุก session — ทุกไฟล์
-ไม่ใช่เฉพาะที่คิดว่าเป็น "domain code"** เดิมเขียนว่า "read it before changing domain code"
-ซึ่งเป็นการให้ตัดสินเอง แล้วก็ถูกข้ามจริงมาแล้วทั้ง Sprint 11 ที่เขียนไฟล์ใหม่ใน `SecretaryCore`
-ตลอดทาง เกณฑ์ใหม่ไม่ต้องตัดสิน: จะแตะ `.swift` ก็เรียกก่อน รวมถึงไฟล์เทสและไฟล์ที่ขอบ SwiftUI
+**Invoke the `swift-functional-programming` skill before editing the first Swift file
+of every session — every file, not only what you judge to be "domain code".** It used
+to read "read it before changing domain code", which left it to judgement, and it was
+duly skipped through all of Sprint 11 while new files were written in `SecretaryCore`
+the whole way. The new criterion needs no judgement: if you are going to touch a
+`.swift` file, invoke it first — test files and files at the SwiftUI boundary included.
 
-- **รวมถึงตอน code review และ refactor ด้วย** ซึ่งเป็นงานเดียวกันอ่านย้อนทาง: รีวิวคือการเทียบ
-  diff กับกติกาเก้าข้อในสกิลแล้วบอกว่าผิดข้อไหนด้วยอินพุตอะไร ส่วน refactor ต้องพิสูจน์ว่า
-  ความหมายไม่เปลี่ยน (เทสเดิมต้องผ่านโดยไม่ถูกแก้ ถ้าต้องแก้เทสให้เขียว แปลว่าไม่ใช่ refactor)
+- **This covers code review and refactoring too**, which are the same work read
+  backwards: a review compares the diff against the skill's nine rules and says which
+  one is broken with what input; a refactor has to prove the meaning did not change
+  (the existing tests must pass unmodified — if tests have to be edited to go green,
+  it was not a refactor).
 
 ---
 
@@ -195,27 +210,35 @@ don't get mixed in with feature items:
   designed. **The guard is scoped to those sections** (confirmed 2026-08-12) —
   it does not cover the other two files.
 
-**สปรินต์ที่ผ่าน Definition of done แล้ว ต้องย้าย ไม่ใช่แค่ติ๊ก** — เขียนสิ่งที่ ship ลง
-`PRODUCT_BACKLOG.md` ซึ่งเป็นที่เก็บ "อะไร ship ไปแล้ว" **แล้วลบหัวข้อสปรินต์นั้นออกจาก
-`SPRINT_BACKLOG.md`** สองขั้นนี้แยกกันไม่ได้: ลบอย่างเดียวคือทิ้งบันทึก ติ๊กอย่างเดียวคือ
-sprint ที่โตขึ้นเรื่อยๆ จนอ่านไม่ออกว่ารอบนี้เหลืออะไร เงื่อนไขว่า "จบ" คืออะไร ไม่เขียนซ้ำที่นี่ —
-อยู่ที่ Definition of done ห้าขั้นด้านบน ที่เดียว
+**A sprint that has passed Definition of done must be moved, not merely ticked** —
+write what shipped into `PRODUCT_BACKLOG.md`, which is the record of "what has
+shipped", **then delete that sprint's heading from `SPRINT_BACKLOG.md`**. The two
+steps cannot be separated: deleting alone throws away the record, ticking alone
+leaves a sprint that grows until you cannot read what is left this round. What
+counts as "done" is not repeated here — it is in the five-step Definition of done
+above, in one place only.
 
-**ไม่ใช่แค่สปรินต์ — ของที่ ship แล้วทุกอย่างต้องมีบันทึก ในคอมมิตเดียวกับที่ ship**
-กฎย้ายสปรินต์ข้างบนยิงตอน*สปรินต์จบ* ซึ่งแปลว่าบั๊กที่เจอจากการขับ และฟีเจอร์ที่เจ้าของสั่งกลางทาง
-ไม่มีกฎไหนคุมเลย ผลจริง (2026-08-14): v0.14.242–246 ห้าเวอร์ชันติดกัน — รวมบั๊กที่คำตอบ
-ไปไม่ถึงตัวละคร และฟีเจอร์ Hide All ทั้งอัน — ไม่ถูกเขียนลง `PRODUCT_BACKLOG.md` เลย
-ทั้งที่ commit ผ่าน Definition of done ครบทุกขั้น เพราะ**ไม่มีขั้นไหนใน Definition of done
-พูดถึง backlog** และบันทึกก่อนหน้านั้นถูกเขียนตอนบังเอิญมีจังหวะว่าง ไม่ใช่ตอนที่กฎสั่ง
+**Not just sprints — everything that ships needs a record, in the same commit that
+ships it.** The sprint-move rule above fires when a *sprint ends*, which means bugs
+found by driving the app, and features the owner asks for mid-stream, are governed by
+no rule at all. What actually happened (2026-08-14): v0.14.242–246, five consecutive
+versions — including the bug where the answer never reached the character, and the
+whole Hide All feature — were never written into `PRODUCT_BACKLOG.md`, even though
+every commit passed all five steps of Definition of done, because **no step in
+Definition of done mentions the backlog**; and the records written before that were
+written when someone happened to have a spare moment, not when a rule demanded it.
 
-เกณฑ์ไม่ต้องตัดสิน: **แก้โค้ดจนต้อง bump version = ต้องมีบันทึก** ยาวสั้นตามเรื่อง
-บั๊กหนึ่งบรรทัดก็หนึ่งย่อหน้า แต่ต้องอยู่ใน commit เดียวกัน ไม่ใช่ตามเก็บทีหลัง —
-เพราะ "ตามเก็บทีหลัง" คือสิ่งที่ไม่เกิดขึ้นห้ารอบติด
+The criterion needs no judgement: **a code change big enough to need a version bump
+needs a record.** Length to suit the subject — a one-line bug gets one paragraph — but
+it has to be in the same commit, not collected afterwards, because "collected
+afterwards" is precisely what failed to happen five rounds running.
 
-**หัวข้อสปรินต์ต้องไม่ซ้ำเลขกันข้ามไฟล์** ตอนนี้ซ้ำอยู่ (2026-08-12): `SPRINT_BACKLOG.md` มี
-Sprint 12 หนึ่งอัน ส่วน `PRODUCT_BACKLOG_NEXT_SPRINTS.md` มีอีกสามอันที่เขียนว่า Sprint 12
-เหมือนกัน ผลคือ "ทำ Sprint 12 ให้หน่อย" ชี้ไปได้สี่ที่ และเคยถูกเข้าใจผิดมาแล้วว่างานธีมที่ ship
-ไปคืองาน Sprint 12 ที่อยู่ในไฟล์ sprint
+**Sprint headings must not reuse numbers across files.** They currently do
+(2026-08-12): `SPRINT_BACKLOG.md` has one Sprint 12, and
+`PRODUCT_BACKLOG_NEXT_SPRINTS.md` has three more also labelled Sprint 12. So "do
+Sprint 12 for me" points at four different places, and it has already been
+misunderstood once — that the theme work which shipped was the Sprint 12 sitting in
+the sprint file.
 
 The sprint digit used in the version number is stated once, in Versioning and
 packaging — not here and not in the backlog files, whose copy of it went stale
@@ -280,40 +303,47 @@ xcrun llvm-cov report .build/debug/AISecretaryPackageTests.xctest/Contents/MacOS
 
 ---
 
-## Comments — why และ warning เท่านั้น ห้ามอธิบาย what
+## Comments — why and warning only, never explain what
 
-**โค้ดบอก what ได้ด้วยตัวเองอยู่แล้ว คอมเมนต์ที่เล่าซ้ำสิ่งที่บรรทัดถัดไปเขียนอยู่ คือของที่
-จะเก่าเงียบๆ** เพราะไม่มีคอมไพเลอร์ตัวไหนตรวจมัน แก้โค้ดแล้วลืมแก้คอมเมนต์เมื่อไหร่
-มันก็กลายเป็นข้อมูลผิดที่หน้าตาน่าเชื่อถือ ซึ่งแย่กว่าไม่มีคอมเมนต์เลย
+**The code already states what by itself, so a comment that retells whatever the next
+line says is a thing that goes stale silently**, because no compiler checks it. Change
+the code, forget the comment, and it becomes wrong information wearing a trustworthy
+face — which is worse than having no comment at all.
 
-เขียนได้สองชนิด นอกจากนี้ไม่ต้องมี:
+Two kinds may be written; nothing else is needed:
 
-- **Why** — เหตุผลที่มองไม่เห็นจากโค้ด: ข้อจำกัดของแพลตฟอร์ม, การตัดสินใจเชิงผลิตภัณฑ์,
-  ทางที่ลองแล้วไม่ได้ผล, หรือเหตุผลที่ตัวเลขเป็นตัวเลขนี้ **คนที่มา refactor ต้องอ่านแล้วรู้ว่า
-  ห้ามลบ** เพราะถ้าลบ ข้อจำกัดนั้นจะถูกค้นพบใหม่ด้วยการทำพังอีกรอบ
-- **Warning** — ของที่จะพังถ้าใครมาแตะโดยไม่รู้ เช่น "อย่าสลับลำดับสองบรรทัดนี้" หรือ
-  "ค่านี้ถูก parse ด้วย `sed` บรรทัดเดียว แตกบรรทัดแล้วพังเงียบ" **นี่คือข้อที่กัน AI ทำพัง
-  มากที่สุด** เพราะ AI อ่านโค้ดแล้วเห็นว่า "จัดรูปใหม่ได้" โดยไม่มีทางรู้ว่าใครพึ่งลำดับนั้นอยู่
+- **Why** — the reasons that are invisible from the code: platform limits, product
+  decisions, approaches that were tried and did not work, or why a number is that
+  number. **Whoever comes to refactor must read it and know not to delete it**, because
+  deleting it means the constraint gets rediscovered by breaking things all over again.
+- **Warning** — what breaks if someone touches it without knowing, e.g. "do not swap
+  these two lines" or "this value is parsed by a single-line `sed`; break the line and
+  it fails silently". **This is the kind that prevents the most AI damage**, because an
+  AI reads the code, sees that it "could be reformatted", and has no way of knowing who
+  depends on that order.
 
-### เส้นแบ่งที่ต้องตัดสินจริง
+### The line that takes real judgement
 
-- **คอมเมนต์ครึ่ง what ครึ่ง why ให้เขียนใหม่ ไม่ใช่ลบทั้งก้อน** — ตัดประโยคที่เล่าซ้ำโค้ด
-  เก็บประโยคที่บอกเหตุผล นี่คืองานส่วนใหญ่ของการทำความสะอาด ไม่ใช่การลบ
-- **`///` บน `public` declaration เก็บบรรทัดสรุปไว้หนึ่งบรรทัด** เพราะมันคือสัญญาของ
-  interface ที่คนเรียกใช้อ่านโดยไม่เปิดไฟล์ — ส่วนย่อหน้าถัดๆ ไปที่เล่าวิธีทำงานข้างในให้ตัด
-  เว้นแต่เป็น why หรือ warning
-- **บันทึกบั๊กคือ why เก็บไว้ทุกอัน** — คอมเมนต์ที่จดว่า "เคยพังแบบนี้ ด้วยอินพุตนี้"
-  (`.onKeyPress` ไม่เห็นปุ่มลูกศร, `.onExitCommand` ไม่เคยถูกเรียกบน non-activating panel,
-  `modkey` ที่ post `h` เปล่าๆ) เป็นกลไกเดียวกับหัวข้อ *บทเรียนที่แลกมาด้วยบั๊กจริง*
-  ด้านล่าง และเหตุผลเดียวกัน: ย่อเหลือแต่หัวข้อเมื่อไหร่ ก็ทิ้งอินพุตที่ทำให้มันเกิดซ้ำได้
-- **ตัวเลขที่ดูมาจากไหนไม่รู้ ต้องมี why เสมอ** — `26`, `1.1`, `15 นาที` อ่านจากโค้ดไม่ได้ว่า
-  มาจากไหน
+- **A half-what half-why comment gets rewritten, not deleted wholesale** — cut the
+  sentence that retells the code, keep the sentence that gives the reason. This is most
+  of the cleanup work, not deletion.
+- **`///` on a `public` declaration keeps its one summary line**, because that is the
+  interface contract callers read without opening the file — but the paragraphs after
+  it explaining how it works inside should go, unless they are why or warning.
+- **Bug records are why; keep every one** — comments noting "this broke like this, with
+  this input" (`.onKeyPress` not seeing the arrow keys, `.onExitCommand` never being
+  called on a non-activating panel, `modkey` posting a bare `h`) are the same mechanism
+  as *Lessons paid for with real bugs* below, and for the same reason: reduce them to
+  headlines and you throw away the input that reproduces them.
+- **A number that looks like it came from nowhere always needs a why** — `26`, `1.1`,
+  `15 minutes` cannot be read out of the code.
 
-### ถ้าต้องเขียน what แปลว่าโค้ดยังไม่ดีพอ
+### Having to write what means the code is not good enough yet
 
-คอมเมนต์ที่อธิบายว่าบล็อกนี้ทำอะไร คือคำขอให้แยกฟังก์ชันแล้วตั้งชื่อมันตามนั้น —
-กติกาเดียวกับ §6 ของสกิล `swift-functional-programming` **แก้ด้วยชื่อก่อน แล้วคอมเมนต์
-จะไม่จำเป็นเอง** ลบคอมเมนต์ทิ้งเฉยๆ โดยไม่แตะชื่อ คือทำให้อ่านยากขึ้นไม่ใช่ง่ายขึ้น
+A comment explaining what this block does is a request to extract a function and name
+it that — the same rule as §6 of the `swift-functional-programming` skill. **Fix it
+with the name first and the comment stops being necessary by itself.** Deleting the
+comment on its own without touching the name makes the code harder to read, not easier.
 
 ---
 
@@ -352,89 +382,108 @@ The tools for doing that are in `code/scripts/uidrive/`, with a README.
 **Read it before writing a new one-liner:** each script encodes a mistake
 already made once, and the ungated key-posting variants were deleted on purpose.
 
-**เวลา capture ต้องใช้ขอบเขตหน้าต่างจริงจาก `win.swift`** เคย capture 720pt ของหน้าต่างสูง
-643 แล้วอ่านว่า "พอดี" ทั้งที่ล้น เพราะส่วนที่ล้นอยู่นอกกรอบภาพ
+**When capturing, use the real window bounds from `win.swift`.** A 720pt capture was
+once taken of a window 643 high and read as "it fits" when it was in fact overflowing,
+because the overflowing part fell outside the frame.
 
 ---
 
-## บทเรียนที่แลกมาด้วยบั๊กจริง
+## Lessons paid for with real bugs
 
-ทุกข้อคือบั๊กที่เกิดไปแล้วอย่างน้อยหนึ่งครั้ง ไม่ใช่คำแนะนำทั่วไป — ย่อเหลือแต่หัวข้อเมื่อไหร่
-ก็ทิ้งอินพุตที่ทำให้มันเกิดซ้ำได้
+Every item is a bug that has already happened at least once, not general advice —
+reduce them to headlines and you throw away the input that reproduces them.
 
-### แผง Settings/Profile/Projects ต้องล้นหน้าต่างไม่ได้ "โดยโครงสร้าง"
+### The Settings/Profile/Projects panels must be unable to overflow the window "by construction"
 
-เปิดได้ทีละแผง (`openPanel: Panel?` ไม่ใช่ bool สามตัว) และแผงที่เปิดถูกจำกัดที่สัดส่วนของ
-ความสูงหน้าต่างแล้ว scroll ในตัวเอง เคยล้นมาแล้วสองรอบเพราะแก้ด้วยการจูนตัวเลข ซึ่งตัวเลข
-ถูกทำให้เกินได้เสมอ — การเพิ่มแถวใหม่ในแผงจึงต้องไม่ทำให้ต้องคำนวณอะไรใหม่อีก
+One panel opens at a time (`openPanel: Panel?`, not three bools), and the open panel is
+capped at a proportion of the window height and scrolls inside itself. It overflowed
+twice before because it was fixed by tuning numbers, and a number can always be
+exceeded — so adding a new row to a panel must not require recalculating anything again.
 
-- ห้ามใช้ค่าคงที่แบบ "ความสูงหน้าต่าง ลบ header/input/footer" เพราะสามอย่างนั้นโตตาม font size
-- เวลาตรวจ ต้องเห็นแถว header ในภาพ (และ capture ตามขอบเขตจริง — ดู Testing and verification)
-- สถานะที่ต้อง run app จริงอย่างน้อย: Profile เดี่ยวที่ font เล็กสุดและใหญ่สุด, สลับแผงขณะเปิดอยู่
+- Never use a constant like "window height minus header/input/footer", because all
+  three of those grow with font size.
+- When checking, the header row must be visible in the image (and capture per the real
+  bounds — see Testing and verification).
+- States that must be run in the real app, at minimum: a single Profile at the smallest
+  and largest font, and switching panels while one is open.
 
-### ตัวเลือกในแชทต้องมาจากรูปแบบที่เรากำหนด ห้ามเดาจากร้อยแก้ว
+### Choices in chat must come from a format we define; never guess them from prose
 
-โมเดลเขียน list ตลอดเวลา (เสนอ 3 stack, บอก 3 ขั้นที่กำลังจะทำ) การเดาจะสร้าง picker
-คร่อมของที่ไม่ใช่คำถาม ระบบ prompt สั่งให้ปิดท้ายด้วย block ```choices แล้ว `MessageChoices`
-แยกออกมา
+The model writes lists all the time (proposing 3 stacks, stating the 3 steps it is
+about to take), so guessing would build a picker around something that is not a
+question. The system prompt instructs it to end with a ```choices block, and
+`MessageChoices` extracts that.
 
-- ต้องตัด block ทิ้งก่อน render ไม่งั้นจะโผล่เป็นข้อความดิบใต้ picker
-- ตอนเลือก ให้ส่ง "ข้อความเต็มของตัวเลือก" ไม่ใช่ตัวอักษร A/B/C — ตัวอักษรลอยๆ กำกวมสำหรับ
-  เทิร์นถัดไป และข้อความที่ขึ้นต้นด้วย `-` เคยทำ CLI พังมาแล้ว
-- `choiceIndex` ต้อง clamp ตอนใช้ และ reset เมื่อชุดตัวเลือกเปลี่ยน (`onChange(of:)` ไม่ใช่
-  `onAppear`) เพราะคำถามใหม่มาแทนที่ในตำแหน่งเดิมโดย list ไม่หายไปจากจอ `onAppear` จึงไม่ยิงซ้ำ
+- The block must be stripped before render, or it shows up as raw text under the picker.
+- On selection, send "the full text of the choice", not the letter A/B/C — a bare letter
+  is ambiguous for the next turn, and text starting with `-` has broken the CLI before.
+- `choiceIndex` must be clamped at the point of use, and reset when the choice set
+  changes (`onChange(of:)`, not `onAppear`), because a new question replaces the old one
+  in the same position without the list leaving the screen, so `onAppear` never fires again.
 
-### ปุ่มลูกศรมีสามความหมาย เจ้าของต้องมีคนเดียวเสมอ
+### The arrow keys have three meanings; there must always be exactly one owner
 
-เลือกตัวเลือก / เรียกประวัติ / เลื่อน caret — ตัดสินที่ `ArrowKeyOwner` ที่เดียว ไม่ใช่ที่ลำดับ
-ของ `if` ในตัวดักคีย์
+Select a choice / recall history / move the caret — decided in `ArrowKeyOwner`, in one
+place, not by the order of the `if`s in the key interceptor.
 
-- ช่องพิมพ์ว่าง + มี picker = ของ picker (ไม่ต้องมี focus ในช่องพิมพ์ เหมือน Esc)
-  พอพิมพ์อะไรลงไป = กำลังตอบด้วยคำของตัวเอง picker ปล่อยลูกศรคืนให้ history
-  ซึ่งเป็นกติกาเดียวกับที่ Return ใช้อยู่แล้ว จึงเขียนไว้ครั้งเดียวใช้ทั้งสองปุ่ม
-- draft หลายบรรทัด = ลูกศรเป็นของ caret ห้ามใครแย่ง
-- hint ใต้ตัวเลือกต้องบอกว่าตอนนี้ลูกศรเป็นของใคร — ปุ่มที่แปลได้สองอย่างเงียบๆ คือจุดที่คนพลาด
+- Empty input field + a picker present = the picker's (no focus needed in the input
+  field, same as Esc). Type anything and you are answering in your own words, so the
+  picker hands the arrows back to history — which is the same rule Return already uses,
+  hence written once and applied to both keys.
+- A multi-line draft = the arrows belong to the caret; nobody may take them.
+- The hint under the choices must say who owns the arrows right now — a key that
+  silently means two things is where people get it wrong.
 
-### คีย์ลัดในหน้าต่างนี้ต้องดักที่ `NSEvent.addLocalMonitorForEvents`
+### Shortcuts in this window must be intercepted at `NSEvent.addLocalMonitorForEvents`
 
-ซึ่งเห็นก่อน responder chain
+which sees them before the responder chain.
 
-- `.onKeyPress` ไม่เห็นปุ่มลูกศร — `TextField` กินไปเลื่อน caret ก่อน (Return ผ่าน แต่ลูกศรไม่ผ่าน)
-- `.onExitCommand` ไม่เคยถูกเรียกเลยบน panel แบบ non-activating — Esc ประกาศไว้แต่กดแล้วไม่เกิดอะไร
-- ทั้งสองกรณี "โค้ดอ่านแล้วถูก แต่คีย์ไม่เคยเดินทางมาถึง" จะรู้ได้ทางเดียวคือเปิดแอปแล้วกดจริง
-- ตัวที่ควรทำงานทุกที่ (เช่น Esc) ต้องวางไว้ก่อนเงื่อนไข focus
+- `.onKeyPress` does not see the arrow keys — `TextField` eats them to move the caret
+  first (Return gets through, the arrows do not).
+- `.onExitCommand` was never called at all on a non-activating panel — Esc was declared,
+  but pressing it did nothing.
+- In both cases "the code reads correctly but the key never arrives", and the only way
+  to find out is to open the app and press it for real.
+- Anything that should work everywhere (Esc, for instance) must be placed before the
+  focus condition.
 
-### ข้อความของ user ต้องเป็น argument ตัวสุดท้าย ต่อจาก `--`
+### The user's message must be the last argument, after `--`
 
-ส่งเป็นค่าของ `-p` เมื่อไหร่ ข้อความที่ขึ้นต้นด้วยขีดจะถูกอ่านเป็น flag
-(`unknown option '- A…'`) ทำให้ bullet list หรือคำถามเรื่อง flag ส่งไม่ได้เลย
-และห้ามมี flag ตามหลังข้อความ เพราะหลัง `--` เป็น positional ทั้งหมด
+Passed as the value of `-p`, a message starting with a dash is read as a flag
+(`unknown option '- A…'`), which makes bullet lists and questions about flags impossible
+to send at all. And never put a flag after the message, because everything after `--`
+is positional.
 
 ---
 
 ## Versioning and packaging
 
-**ทุกครั้งที่แก้ code ต้อง bump version** ตามแพตเทิร์น `major.sprint.change`
+**Every code change requires a version bump**, following the pattern
+`major.sprint.change`
 
-- `major` — 0 ไปจนกว่าจะ public เจ้าของจะเป็นคนบอกเองว่าเมื่อไหร่
-- `sprint` — sprint ที่กำลังทำอยู่ **ตอนนี้คือ 17 และนี่คือที่เดียวในรีโปที่เขียนเลขนี้**
-  ห้าม derive จากหัวข้อที่สูงสุดในไฟล์ backlog เพราะหัวข้อไม่ได้บอก sprint ปัจจุบัน
-  ทั้งสองทาง — `PRODUCT_BACKLOG.md` จบที่สปรินต์ที่ ship ไปแล้ว ส่วน
-  `PRODUCT_BACKLOG_NEXT_SPRINTS.md` มีสปรินต์ที่ยังไม่เริ่ม
-  เปลี่ยนด้วยมือเมื่อขยับ sprint เท่านั้น
-  **เลขนี้เคยค้างที่ 10 ตลอด Sprint 11–13** จนเจ้าของสั่งให้ตามจริง (2026-08-13)
-  ขยับ sprint เมื่อไหร่ให้ขยับเลขนี้ในคอมมิตเดียวกัน
-- `change` — +1 ต่อ 1 เรื่องที่ทำเสร็จ ถ้ารอบนั้นแก้ 5 เรื่องก็ +5
-  **ไม่รีเซ็ตเมื่อ sprint เปลี่ยน** — มีแต่เพิ่มขึ้น เลขจึงไม่ซ้ำกันข้าม build
-- ตัวเลขนี้ไม่ใช่ semver — `<` เทียบกันได้เฉพาะภายใน sprint เดียวกัน
-  (0.6.51 คือโค้ดที่ใหม่กว่า 0.9.0 ซึ่งนับด้วยกติกาเดิม)
-- แก้ที่เดียวคือ `SecretaryCore/AppVersion.swift` — About window กับ `package-app.sh`
-  อ่านค่านี้เอง ห้ามพิมพ์เลขซ้ำในโค้ด
-- เอกสารที่เขียนเลข version เป็นข้อความ (ตอนนี้คือ root `README.md`) เป็นสำเนาที่สอง
-  ซึ่งเก่าได้ — `VersionInSyncTests` จะ fail ถ้าไม่ตรง **ห้ามแก้เทสให้ผ่านโดยลดการตรวจ**
-  ถ้ามีเอกสารใหม่ที่อ้างเลข version ให้เพิ่มแถวใน `versionMentions`
-- เทสยังกันไม่ให้ประกาศ `AppVersion(...)` ถูกจัดรูปข้ามบรรทัด เพราะ `package-app.sh`
-  parse ด้วย `sed` บรรทัดเดียว ถ้าแตกบรรทัด bundle จะไม่มีเลข version เงียบๆ
+- `major` — 0 until it goes public; the owner will say when.
+- `sprint` — the sprint currently being worked on. **It is 17 right now, and this is
+  the only place in the repo that writes this number.** Never derive it from the
+  highest heading in the backlog files, because the headings do not state the current
+  sprint in either direction — `PRODUCT_BACKLOG.md` ends at the sprint already shipped,
+  while `PRODUCT_BACKLOG_NEXT_SPRINTS.md` holds sprints not yet started. Change it by
+  hand only when the sprint moves. **This number sat at 10 through all of Sprints
+  11–13** until the owner demanded it track reality (2026-08-13); when the sprint
+  moves, move this number in the same commit.
+- `change` — +1 per thing finished; 5 things that round means +5. **It does not reset
+  when the sprint changes** — it only ever goes up, so the numbers never repeat across
+  builds.
+- This number is not semver — `<` only compares within a single sprint (0.6.51 is newer
+  code than 0.9.0, which was numbered under the old rule).
+- Edit it in one place, `SecretaryCore/AppVersion.swift` — the About window and
+  `package-app.sh` read that value themselves. Never retype the number elsewhere in code.
+- Docs that write the version as text (currently the root `README.md`) are a second copy
+  that can go stale — `VersionInSyncTests` fails if they disagree. **Never edit the test
+  to pass by weakening the check.** If a new doc references the version number, add a row
+  to `versionMentions`.
+- A test also prevents the `AppVersion(...)` declaration from being wrapped across lines,
+  because `package-app.sh` parses it with a single-line `sed`; break it across lines and
+  the bundle silently ends up with no version number.
 
 **One `.app`, always.** `scripts/package-app.sh` deletes every other
 `AISecretary.app` in the repo — worktrees otherwise leave several bundles with
@@ -446,14 +495,37 @@ carried it too until 0.13.209, when the owner asked for the hash out of the
 header: the question it answers is real but rare, and it was the first thing in
 the menu every single time.
 
-การรันสคริปต์เป็นขั้นที่ 4 ของ Definition of done — ขั้นตอนอยู่ที่นั่น ไม่เขียนซ้ำที่นี่ เพราะ
-สำเนาที่สองของกติกาจะเก่าโดยไม่มีใครรู้ สองอย่างนี้เป็นเรื่องของตัวสคริปต์เอง:
+Running the script is step 4 of Definition of done — the steps live there and are not
+repeated here, because a second copy of a rule goes stale without anyone noticing.
+These two things are properties of the script itself:
 
-- รันจาก worktree เมื่อไหร่ `.app` ตัวเดียวที่เหลือจะไปอยู่ใน worktree นั้น ส่วน `code/`
-  ที่ root กลายเป็นไม่มี build เลย ซึ่งเกิดขึ้นมาแล้วหลายรอบ (สาเหตุคือ `cd` ที่ค้างมาจาก
-  คำสั่งก่อนหน้า — ให้ `cd` ให้ครบทุกครั้ง ไม่ใช่พึ่ง cwd ปัจจุบัน)
-- สคริปต์ลบ `AISecretary.app` ตัวอื่นในรีโปทิ้งเอง worktree จึงสะอาดโดยอัตโนมัติ
-  ไม่ต้องไปตามลบเอง
+- Run it from a worktree and the single surviving `.app` ends up inside that worktree,
+  leaving `code/` at the root with no build at all, which has happened several times.
+  (The cause is a stale `cd` carried over from an earlier command — always `cd` in full,
+  never rely on the current cwd.)
+- The script deletes the other `AISecretary.app` copies in the repo itself, so worktrees
+  are cleaned up automatically; there is no need to go hunting for them by hand.
+
+---
+
+## Session language is English, even when the owner writes Thai
+
+**Reply in English on every turn** — answers, questions, plans, commit messages, and
+this file and the skills alongside it. The owner writes in Thai and will carry on doing
+so; that is not a request to answer in Thai.
+
+The reason is cost, not preference: Thai runs several times the tokens per character,
+and this charter is reloaded into every session. Translating it (2026-08-17) took it
+from 38.5KB to 27.5KB of text, and rather more than that in tokens. Anyone who
+"restores" Thai here is paying that multiplier again on every turn of every session, so
+do not, and do not soften this into a preference the next session can weigh up.
+
+**This governs the conversation only. It says nothing about the product.** The app's UI,
+the character's speech, the system prompts it sends, and anything a user of the app
+reads stay exactly as they are — if the owner asks for Thai in the product, build Thai
+in the product. The Thai still under `code/` is almost all product strings and quoted
+examples of what the character actually said, which are bug evidence in exactly the way
+*Comments* describes; leave it alone.
 
 ---
 
