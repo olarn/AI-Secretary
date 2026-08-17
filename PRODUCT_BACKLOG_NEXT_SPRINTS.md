@@ -7,7 +7,7 @@
 **คุมเฉพาะหัวข้อ multi-app / multi-secretary ในไฟล์นี้** (เจ้าของยืนยัน 2026-08-12)
 Liquid Glass, Loop & Notification, Voice และไฟล์ backlog อีกสองไฟล์ ทำได้ตามปกติ
 
-## Sprint 14.4: ทำงานด้วยกัน (ต่อ) 
+## Sprint xxx: ทำงานด้วยกัน (ต่อ) 
 - [ ] ให้ character มากกว่า 1 ตัว monitor instruction เดียวกัน
 - [ ] ให้ character มากกว่า 1 ตัว monitor task log เดียวกัน เพื่อให้แต่ละตัวเห็นความคืบหน้าของงาน
 - [ ] ให้ character แต่ละตัว ทำตาม instruction ตามขั้นตอนของตัวเอง โดยดูจากชื่อ profile ว่า step ไหน app ตัวไหนจะทำ
@@ -18,7 +18,7 @@ Liquid Glass, Loop & Notification, Voice และไฟล์ backlog อีก
 - [ ] ถ้า step ไหนช่วยกันทำได้ character ต้องรู้ว่า parallel ได้กี่ app, ต้องรออะไรจึงจะรู้ว่าทำแล้ว, และทำเสร็จแล้ว โดย update กันใน task log
 - [ ] prevent เรื่อง lock file และ race condition (ทำซ้ำกัน, เข้าใจว่า app อื่นทำเลยไม่ได้ทำ, ลำดับงานผิด, ข้ามลำดับงาน, infinite loog) 
 
-## Sprint 15: Multi-session
+## Sprint yyy: Multi-session
 - Before Start : อ่าน requirement ทั้งหมดใน sprint นี้ก่อน เพราะต้อง re-architecture app และต้องจัดกลุ่ม feature ที่อยู่ใน Setting, Profile, Skills ใหม่ 
 - Requirements
   - [ ] สามารถเปิด chat bubble ได้มากกว่า 1 window โดยที่แต่ละ window จะแยก Claude Session ออกจากกัน
@@ -38,7 +38,7 @@ Liquid Glass, Loop & Notification, Voice และไฟล์ backlog อีก
     - [ ] แต่ละ session ใน menu มีปุ่มปิด ถ้าปิดก็ลบ history ไปเลย
 - Expected App Architecture
 
-## Sprint 16: Liquid Glass Theme
+## Sprint zzz: Liquid Glass Theme
   **ข้อเท็จจริงใต้สปรินต์นี้ขยับไปแล้วบางส่วนที่ v0.10.197 (2026-08-11)** — รอบนั้นแก้อาการ
   "พื้นโปร่งทำให้อ่านไม่ออกเมื่อ desktop สว่าง" ซึ่งแตะโค้ดชุดเดียวกับสปรินต์นี้ อ่านก่อนเริ่มข้อไหนก็ตาม
   - `.fill(.regularMaterial)` ที่ข้อ #2 อ้างถึง **ไม่มีแล้ว** เป็น `theme.ground.color` (สีทึบ)
@@ -107,7 +107,7 @@ Liquid Glass, Loop & Notification, Voice และไฟล์ backlog อีก
 - [ ] **#11 Focus ด้วย Glass** — หน้าต่างนี้ไม่เคยเป็น key window จึงพึ่ง focus state ของระบบไม่ได้
   ต้องวาดสถานะเอง ซึ่งเป็นเหตุผลเดียวกับที่ `PanelToggleStyle` มีอยู่ทุกวันนี้
 
-## Sprint 17: App ทำงานร่วมกันได้
+## Sprint zzzz: App ทำงานร่วมกันได้
 - [ ] User สามารถ start app พร้อมกันได้มากกว่า 1 app
 - [ ] Two or more app be able to talk to each other.
 - [ ] การทำงานร่วมกัน
