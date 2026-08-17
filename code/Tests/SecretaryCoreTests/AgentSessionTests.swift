@@ -482,6 +482,39 @@ final class AgentSessionTests: XCTestCase {
         )
     }
 
+    /// The brake on the silent path. A rule granted this session and refused
+    /// anyway is the `bashPermissionRules` failure — approving did nothing and
+    /// the retry hit the same wall. Widening it again cannot help, so without
+    /// this the turn would go round `refused → widen → retry` for ever, with no
+    /// card to press and a bill running. The card comes back instead.
+    func testARuleAlreadyGrantedAndStillRefusedRaisesTheCardAgain() async {
+        let allowed = project(grantingAgent: true)
+        let secretary = makeSecretary(
+            projects: [allowed],
+            grantStore: InMemoryStandingGrantStore(grants: [
+                StandingGrant(
+                    projectID: allowed.id,
+                    toolID: Secretary.claudeCodeToolID,
+                    actionClass: .localWrite
+                )
+            ])
+        )
+        // First refusal: the grant covers it, so it widens in silence.
+        provider.denialsForNextTurn = [denyWrite()]
+        secretary.submit("create out.txt")
+        await waitUntilIdle()
+        XCTAssertEqual(secretary.pendingDecision, .none(), "the first one is silent")
+
+        // Same rule, refused again — the grant is demonstrably not the problem.
+        provider.denialsForNextTurn = [denyWrite()]
+        secretary.submit("create out.txt again")
+        await waitUntilIdle()
+
+        guard case .approval = secretary.pendingDecision.toOptional() else {
+            return XCTFail("Expected the card back, got: \(String(describing: secretary.pendingDecision))")
+        }
+    }
+
     /// The grant reaching disk is what makes the previous test true on the
     /// *next* launch, and it is keyed to the project — a second project is a
     /// separate answer.

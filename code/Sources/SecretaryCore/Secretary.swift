@@ -2361,7 +2361,17 @@ public final class Secretary {
         // Browser actions are excluded, by class and by this condition both:
         // acting inside a session the person is signed into is not something a
         // grant scoped to a project folder can speak for.
-        if !inBrowser, grants.has(
+        //
+        // `isNew` is the brake. Silent widening replaces a card the person had
+        // to press, and a card is what used to stop `refused → widen → retry →
+        // refused` from going round for ever. Claude Code refusing a rule this
+        // session has *already* been granted is precisely the failure
+        // `bashPermissionRules` was written for — approving did nothing, and
+        // the retry hit the same wall. Granting it a second time cannot help,
+        // so the loop stops and the person sees the card, which is the honest
+        // report that the grant is not the thing standing in the way.
+        let isNew = !rules.allSatisfy(sessionAgentTools.contains)
+        if isNew, !inBrowser, grants.has(
             projectID: project.id,
             toolID: Self.claudeCodeToolID,
             actionClass: .localWrite
