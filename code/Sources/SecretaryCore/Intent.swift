@@ -118,7 +118,11 @@ public final class RuleBasedIntentClassifier {
     /// `classify` can chain it rather than unwrap it. `first(where:)` says what
     /// the `for … where … { return }` it replaced was doing: first match wins.
     private func codeToolIntent(_ normalized: String) -> Option<Intent> {
-        Option.fromOptional(
+        // The armour `fileIntent` has had all along, finally on this side too.
+        // A git keyword only means a command when the message is shaped like
+        // one; in prose it is just a word. See `isSingleSentence`.
+        guard isSingleSentence(normalized) else { return .none() }
+        return Option.fromOptional(
             rules.first { rule in
                 rule.keywords.contains { Self.containsWord($0, in: normalized) }
             }
@@ -235,22 +239,7 @@ public final class RuleBasedIntentClassifier {
     /// Splits a "… in/for/on <project>" suffix off the command, preserving the
     /// original case of both halves. Returns (command, projectQuery?).
     private func splitProject(_ text: String) -> (head: String, project: Option<String>) {
-        for marker in [" in ", " for ", " on "] {
-            // Search `text` itself, case-insensitively. Searching a lowercased
-            // copy and then slicing the original is undefined — a String.Index
-            // belongs to the string it came from. It happened to work for ASCII
-            // and crashed on the first Thai message that contained " On ":
-            // "Range requires lowerBound <= upperBound".
-            guard let range = text.range(of: marker, options: [.caseInsensitive]) else { continue }
-            let head = String(text[text.startIndex..<range.lowerBound])
-            let tail = String(text[range.upperBound...])
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-                .trimmingCharacters(in: CharacterSet(charactersIn: "?.!\"'"))
-            if !tail.isEmpty {
-                return (head.trimmingCharacters(in: .whitespacesAndNewlines), .some(tail))
-            }
-        }
-        return (text, .none())
+        splitAtProjectMarker(text)
     }
 
     private func cleanPath(_ raw: String) -> String {
@@ -263,13 +252,115 @@ public final class RuleBasedIntentClassifier {
     /// Extracts a project name following "in"/"for"/"on", e.g.
     /// "git status in AI-Secretary". Returns nil when no such phrase appears.
     private func projectQuery(in text: String) -> Option<String> {
-        for marker in [" in ", " for ", " on "] {
-            guard let range = text.range(of: marker) else { continue }
-            let tail = text[range.upperBound...]
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-                .trimmingCharacters(in: CharacterSet(charactersIn: "?.!\"'"))
-            if !tail.isEmpty { return .some(tail) }
-        }
-        return .none()
+        splitAtProjectMarker(text).project
     }
+}
+
+// MARK: - Prose is not a command
+
+/// Whether this could be the name of a registered project.
+///
+/// Guards the `" in "` / `" for "` / `" on "` split, which used to hand back
+/// everything after the marker whatever it was. A 300-character English
+/// paragraph about debt management (2026-08-17) contained "legal **status**"
+/// and "specializing **in** non-performing…", so it was read as `git status`
+/// in a project named by the remaining ~50 words, resolved to nothing, and the
+/// turn ended with *"No registered project matches …"* — **the model was never
+/// called at all**, which reads to the person as the app going quiet.
+///
+/// The three conditions are what separates a name from a sentence:
+///
+/// - **60 characters.** Long enough for the longest folder name anyone has
+///   registered here (`AI-Secretary`, `Second-Brain`, `TISCO - AI Sharing`)
+///   with room to spare; far shorter than the ~300-character paragraph that
+///   caused this.
+/// - **5 words.** A folder name is a name. The paragraph's tail ran to about
+///   fifty, and even a generous multi-word name stops well before five.
+/// - **No `, . ( ) ; :`.** Sentence punctuation. A path may carry a dot, but
+///   this is not a path — the file rules have `looksLikePath` for that, and a
+///   trailing `.` or `?` is already trimmed before this is asked.
+///
+/// Both numbers are ceilings on a *name*, not tuned thresholds: the failing
+/// input was an order of magnitude past either, so neither is close to the line.
+func looksLikeProjectName(_ candidate: String) -> Bool {
+    guard !candidate.isEmpty, candidate.count <= 60 else { return false }
+    guard !candidate.contains(where: { ",.();:".contains($0) }) else { return false }
+    return candidate.split(separator: " ").count <= 5
+}
+
+/// Whether the text is one sentence, with no boundary inside it.
+///
+/// The second guard, and the one that catches prose the first cannot: a short
+/// single sentence with "legal status" and " in " in it still classifies wrong,
+/// and a paragraph with a plausible short tail after its last marker still
+/// reaches the git rules. A boundary is `.`, `?` or `!` followed by whitespace
+/// and then more text — `README.md` and a trailing `?` are both untouched by
+/// that, and a real command is one sentence by construction.
+///
+/// **Structural on purpose, and it must stay that way.** A word count would be
+/// a number, and the Settings-panel lesson is that a number can always be
+/// exceeded; "one sentence" has no dial to turn. There is deliberately no
+/// "unless it says `git`" shortcut either — that reopens the same hole for any
+/// paragraph mentioning git, and this case never needed it.
+func isSingleSentence(_ text: String) -> Bool {
+    let characters = Array(text)
+    for (offset, character) in characters.enumerated() where ".?!".contains(character) {
+        let rest = characters[(offset + 1)...]
+        guard let next = rest.first, next.isWhitespace else { continue }
+        if rest.contains(where: { !$0.isWhitespace }) { return false }
+    }
+    return true
+}
+
+/// Splits "<command> in/for/on <project>" at the **last** marker whose tail
+/// could be a name.
+///
+/// Last, not first: a project name sits at the end of the request, while an
+/// English sentence can contain "in" anywhere. The previous version looped over
+/// the markers in the order `[" in ", " for ", " on "]` and returned the first
+/// marker that appeared *at all*, which is not even the earliest one in the
+/// text — "specializing in …" won over every later, better candidate.
+///
+/// Shared by the file rules and the git rules. It was two near-identical
+/// copies, and guarding one of them would have left the other still able to
+/// hand a whole paragraph to the file adapter as a path.
+///
+/// Searches `text` itself, case-insensitively. Searching a lowercased copy and
+/// then slicing the original is undefined — a `String.Index` belongs to the
+/// string it came from. It happened to work for ASCII and crashed on the first
+/// Thai message that contained " On ": "Range requires lowerBound <= upperBound".
+func splitAtProjectMarker(_ text: String) -> (head: String, project: Option<String>) {
+    let named = projectMarkerRanges(in: text)
+        .map { range in
+            (
+                head: String(text[text.startIndex..<range.lowerBound])
+                    .trimmingCharacters(in: .whitespacesAndNewlines),
+                tail: String(text[range.upperBound...])
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "?.!\"'"))
+            )
+        }
+        .filter { looksLikeProjectName($0.tail) }
+
+    return named.last.map { ($0.head, Option.some($0.tail)) } ?? (text, .none())
+}
+
+/// Every occurrence of every marker, in the order they appear in the text.
+private func projectMarkerRanges(in text: String) -> [Range<String.Index>] {
+    [" in ", " for ", " on "]
+        .flatMap { marker in occurrences(of: marker, in: text) }
+        .sorted { $0.lowerBound < $1.lowerBound }
+}
+
+private func occurrences(of marker: String, in text: String) -> [Range<String.Index>] {
+    var found: [Range<String.Index>] = []
+    var searchRange = text.startIndex..<text.endIndex
+    // Resumes one character past the *start* of the hit, not past its end, so
+    // overlapping markers in " on in " are both seen.
+    while let range = text.range(of: marker, options: [.caseInsensitive], range: searchRange) {
+        found.append(range)
+        guard range.lowerBound < text.endIndex else { break }
+        searchRange = text.index(after: range.lowerBound)..<text.endIndex
+    }
+    return found
 }

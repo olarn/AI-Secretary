@@ -10,88 +10,10 @@ Sprint 14 จบทั้งสปรินต์ บันทึกทุกอ
 | Sprint 14.3 — ปิดโดยไม่มีโค้ดใหม่ | — |
 | Sprint 14.4 — ตัวละครหายใจตอนคิด | v0.14.259–260 |
 | Sprint 15 — permission ที่จำได้ข้าม session | v0.15.269–270 |
+| Sprint 15.2 — ร้อยแก้วไม่ถูกอ่านเป็นคำสั่ง git | v0.15.272–273 |
 
 หัวข้อใน `PRODUCT_BACKLOG_NEXT_SPRINTS.md` ใช้เลขหลอก (`xxx`, `yyy`, `zzz`, `zzzz`)
 เพราะเจ้าของยังไม่ได้ตัดสินว่าอันไหนเป็นสปรินต์ที่เท่าไร — **ที่นี่คือที่เดียวที่เลขสปรินต์เป็นของจริง**
-
-## Sprint 15.2  กันร้อยแก้วไม่ให้ถูกตีความเป็นคำสั่ง git
-
-เจอจากการขับจริง (2026-08-17): ย่อหน้าภาษาอังกฤษเรื่องธุรกิจบริหารหนี้ ~300 ตัวอักษร
-ถูกตอบกลับว่า *"No registered project matches …"* แล้วเทิร์นจบตรงนั้น **โมเดลไม่เคยถูกเรียก**
-คนใช้เห็นเป็นอาการ "แอปนิ่ง" ทั้งที่ state machine กลับไป `IDLE` เรียบร้อย
-
-ลูกโซ่: คำว่า `status` ใน "legal **status**" เข้ากฎ git ที่ `Intent.swift:120` →
-`projectQuery(in:)` ที่ `Intent.swift:265` คว้าทุกอย่างหลัง `" in "` ตัวแรก
-("specializing **in** non-performing…") มาเป็นชื่อโปรเจกต์ยาวทั้งย่อหน้า →
-resolve ไม่เจอ → `finish(success: false)` ที่ `Secretary.swift:3157` ปิดเทิร์น
-ที่ `Secretary.swift:665-675` มีแค่ `.unknown` เท่านั้นที่ไปถึง `startChat`
-
-ไม่ใช่บั๊กเฉพาะประโยคนี้: **ข้อความอังกฤษใดก็ตามที่มี `status` / `log` / `branch` /
-`changes` / `history` เป็นคำเต็ม บวกกับมี `" in "` / `" for "` / `" on "` จะถูกดูดเข้า
-git tool call แล้วไม่มีวันไปถึงโมเดล** ร้อยแก้วเชิงธุรกิจโดนเงื่อนไขนี้บ่อยมาก
-
-รากของเรื่องคือความไม่สมมาตรในไฟล์เดียวกัน — `fileIntent` มีเกราะครบ (strong/weak prefix,
-บังคับ `looksLikePath`, คอมเมนต์บทเรียนที่ `Intent.swift:45-59`) ส่วน `codeToolIntent`
-ไม่ได้เกราะพวกนั้นเลยสักอย่าง งานรอบนี้คือย้ายเกราะชุดเดียวกันไปติดอีกฝั่ง
-
-- [ ] **Guard 1 — ชื่อโปรเจกต์ต้องหน้าตาเหมือนชื่อ**
-  - [ ] เพิ่มฟังก์ชันบริสุทธิ์ `looksLikeProjectName(_:) -> Bool` วางคู่ `looksLikePath`
-        ผ่านเมื่อ: ยาวไม่เกิน 60 ตัวอักษร **และ** ไม่เกิน 5 คำ **และ** ไม่มี `,` `.` `(` `)` `;` `:`
-  - [ ] ตัวเลข 60 กับ 5 ต้องมีคอมเมนต์ why อ้างเคสนี้ (ย่อหน้า ~300 ตัวอักษร ~50 คำ
-        ถูกส่งเป็นชื่อโปรเจกต์) — ตัวเลขที่อ่านจากโค้ดไม่ได้ว่ามาจากไหน ต้องมี why เสมอ
-  - [ ] เปลี่ยนวิธีเลือก occurrence: ตอนนี้วนตามลำดับ marker `[" in ", " for ", " on "]`
-        แล้วคืน**อันแรกที่เจอ** ซึ่งไม่ใช่อันที่อยู่ต้นสุดในข้อความ → เปลี่ยนเป็นสแกนทุก
-        occurrence ของทุก marker แล้วเอา**อันท้ายสุดที่ tail ผ่าน `looksLikeProjectName`**
-        เพราะชื่อโปรเจกต์อยู่ท้ายประโยคเสมอ ไม่เจอเลย → `.none()`
-  - [ ] **`looksLikeProjectName` ต้องใช้ร่วมกันทั้ง `projectQuery(in:)` (บรรทัด 265) และ
-        `splitProject` (บรรทัด 237)** — สองอันนี้เป็นตรรกะ marker ที่เกือบซ้ำกัน ใส่เกราะ
-        ที่เดียวแล้วอีกทางยังส่งย่อหน้าทั้งก้อนเข้า file path ได้อยู่
-  - [ ] ห้ามแตะคอมเมนต์เรื่อง crash จากการ slice สำเนา lowercased ใน `splitProject`
-        นั่นเป็นบันทึกบั๊กจริง ("Range requires lowerBound <= upperBound" จากข้อความไทยที่มี " On ")
-
-- [ ] **Guard 2 — คีย์เวิร์ด git เป็นคำสั่งได้เฉพาะตอนข้อความมีรูปเป็นคำสั่ง**
-  - [ ] ใน `codeToolIntent` ก่อนแมตช์กฎ ต้องผ่านเงื่อนไข "ข้อความเป็นประโยคเดียว" —
-        ไม่มีขอบประโยคภายใน (`.` `?` `!` ที่ตามด้วยช่องว่างแล้วมีเนื้อความต่อ)
-        ไม่ผ่าน → `.none()` → ตกไปเป็นแชท
-  - [ ] **ใช้เกณฑ์เชิงโครงสร้าง ห้ามนับจำนวนคำ** — บทเรียนแผง Settings บอกว่าตัวเลขที่จูนไว้
-        ถูกทำให้เกินได้เสมอ ส่วน "ประโยคเดียว" ไม่มีปุ่มให้หมุน
-  - [ ] **ห้ามใส่ทางลัด "ถ้ามีคำว่า `git` ให้ข้ามเงื่อนไข"** — เปิดรูเดิมกลับมา และเคสนี้ไม่ต้องใช้
-
-- [ ] **Guard 3 — invariant ที่บันทึกไว้ก่อน ยังไม่ต้องทำ**
-  - [ ] เขียนคอมเมนต์ที่ `handleTool` ว่า **การจัดประเภทผิดต้องตกลงไปเป็นแชท ห้ามจบเทิร์น**
-        ซึ่งเป็นยาที่รักษาอาการ "นิ่ง" โดยตรง พอมี Guard 1+2 แล้ว `.notFound` จะเกิดเฉพาะกับ
-        query ที่หน้าตาเหมือนชื่อโปรเจกต์จริงๆ ซึ่งข้อความปฏิเสธเป็นคำตอบที่**ถูกต้อง** จึงยัง
-        ไม่แก้ — **แต่ต้องบันทึกไว้ให้คนที่มาทีหลังรู้ว่าที่ไม่ทำคือตั้งใจ ไม่ใช่ลืม**
-
-- [ ] **เทส** — `Tests/SecretaryCoreTests/ProseIsNotACommandTests.swift` (ไฟล์ใหม่)
-      ทุกอย่างเป็นฟังก์ชันบริสุทธิ์ใน library target จึงนับ coverage ได้
-  - [ ] fixture ของจริง: ย่อหน้าข้างล่างนี้ **คัดลอกทั้งก้อนแบบตรงตัวอักษร** เป็น constant
-        พร้อมคอมเมนต์ว่าเจอเมื่อไหร่ ต้องได้ `.unknown`
-
-        ```
-        Alpha Capital Group is a company specializing in non-performing asset management through its operating subsidiaries, Alpha Capital Asset Management Co., Ltd. (Alpha) and Wireless Asset Management Co., Ltd. (WAMC). The group manages non-performing loan (NPL) portfolios and non-performing assets (NPA), including property sales, borrower follow-up, collection, legal status, collateral management, customer enquiries, and related service processes
-        ```
-
-        **ห้ามย่อ ห้ามแต่ง** — คุณสมบัติที่ทำให้มันเป็น fixture มีสามอย่างพร้อมกันในก้อนเดียว
-        และหายไปทันทีถ้าเขียนใหม่: มี `status` เต็มคำ (ใน "legal status"), มี `" in "`
-        (ใน "specializing **in**"), และ**มีขอบประโยคหลายจุด** ซึ่งเป็นอย่างเดียวที่ทดสอบ
-        Guard 2 ได้จริง — ข้อความประโยคเดียวสั้นๆ ที่มี "legal status" กับ `" in "` จะ*ผ่าน*
-        เงื่อนไขประโยคเดียวแล้วยังจัดประเภทผิดอยู่ ต้องกันด้วย Guard 1 แทน
-        เขียนเทสแยกให้ครอบทั้งสองทาง
-  - [ ] ร้อยแก้วอื่นที่มี `status` / `log` / `branch` / `changes` / `history` เต็มคำ + มี `" in "`
-        ต้องเป็นแชท
-  - [ ] `looksLikeProjectName` ตรงๆ: `"AI-Secretary"` ผ่าน, ย่อหน้าไม่ผ่าน, `""` ไม่ผ่าน
-  - [ ] **regression must-hold: เทสสี่ตัวใน `KeywordBoundaryTests.swift` ต้องเขียวโดยไม่ถูกแก้**
-        (`testTheWordThatStartedThis`, `testKeywordsBuriedInLongerWordsAreNotCommands`,
-        `testRealCommandsStillClassify`, `testPunctuationCountsAsABoundary`)
-        ถ้าต้องแก้เทสเดิมให้ผ่าน แปลว่าออกแบบผิด ไม่ใช่เทสผิด
-  - [ ] เคสที่พังเงียบง่ายที่สุดคือ `"which branch am I on?"` — tail หลัง `" on "` เป็น `""`
-        หลัง trim `?` ต้องได้ `.none()` แล้ว**ยังต้องถูกจัดเป็นคำสั่งอยู่ผ่าน Guard 2**
-
-- [ ] เรียกสกิล `swift-functional-programming` ก่อนแตะ `.swift` ไฟล์แรก
-- [ ] bump `AppVersion.swift` +2 (Guard 1, Guard 2)
-- [ ] **ขับแอปจริง**: พิมพ์ย่อหน้านั้นซ้ำ ต้องได้คำตอบจากโมเดล ไม่ใช่ข้อความปฏิเสธ —
-      unit test ไม่นับเป็นหลักฐานว่า UI ทำงาน
 
 ## Sprint 16  Classifier หลบทางให้ agent
 

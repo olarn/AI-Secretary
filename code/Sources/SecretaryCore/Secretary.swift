@@ -3223,6 +3223,21 @@ public final class Secretary {
 
     // MARK: - Git pipeline
 
+    /// **A misreading must fall through to chat, never end the turn** — and
+    /// today it can still do the latter, on purpose. Written down so the next
+    /// person knows it was weighed rather than missed.
+    ///
+    /// The `.notFound` arm below finishes the turn with a refusal. When the
+    /// classifier could hand this a whole paragraph as a project name, that
+    /// refusal was the app going silent on an ordinary question (2026-08-17).
+    /// With `looksLikeProjectName` and `isSingleSentence` in front of it, a
+    /// query only reaches here if it is short, unpunctuated and shaped like a
+    /// name — in which case "no registered project matches" is the *correct*
+    /// answer and turning it into a chat turn would hide a real mistake.
+    ///
+    /// So the fix belongs at the guards, and it is there. If a misclassification
+    /// ever reaches this line again, widen the guards; do not make the refusal
+    /// quieter.
     private func handleTool(operation: PlannedOperation, projectQuery: Option<String>) {
         let taskID = activeTaskID.getOrElse("-")
 
