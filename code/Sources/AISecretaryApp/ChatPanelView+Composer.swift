@@ -5,9 +5,13 @@ import SecretaryCore
 /// The composer: the growing message box, the attachments riding with it, the
 /// file-request card and the ↵ that sends.
 extension ChatPanelView {
-    /// Asked for: the message box grows to five lines and then scrolls. Past
-    /// five it starts eating the conversation it's replying to.
-    static let inputLineLimit = 5
+    /// Asked for: the message box grows to ten lines and then scrolls. Past
+    /// that it starts eating the conversation it is replying to.
+    ///
+    /// Was five, and raised on request (2026-08-17) now that a line break lands
+    /// where the caret is — writing a message of several paragraphs in the box
+    /// became a thing people actually do.
+    static let inputLineLimit = 10
 
     /// The box spans the full width, with the send affordance inside it rather
     /// than a button beside it.
@@ -86,11 +90,7 @@ extension ChatPanelView {
                 .onKeyPress(.return, phases: .down) { press in
                     let newlineKeys: EventModifiers = [.shift, .option]
                     guard press.modifiers.isDisjoint(with: newlineKeys) else {
-                        // Inserted here rather than passed on. Handing Shift+Return
-                        // back to the field left it doing nothing at all — the
-                        // modifier is swallowed and the line never breaks — which
-                        // is why only Option+Return worked.
-                        draft.append("\n")
+                        breakLineAtCaret()
                         return .handled
                     }
                     send()
@@ -115,6 +115,33 @@ extension ChatPanelView {
         // Keeps the newest line in view as the message grows, which is where the
         // caret is while typing.
         .defaultScrollAnchor(.bottom)
+    }
+
+    /// Shift/Option-Return breaks the line **where the caret is**.
+    ///
+    /// It used to be `draft.append("\n")`, which put every break at the end of
+    /// the message: editing a sentence in the middle and pressing Shift+Return
+    /// moved the break to the bottom and left the sentence intact. Reported
+    /// 2026-08-17.
+    ///
+    /// Done through the field editor rather than by splicing the binding.
+    /// `NSTextView` already knows where the caret is, and it is the only thing
+    /// here that gets it right for Thai and for emoji: `selectedRange` is in
+    /// UTF-16 units, and an index built from one by hand can land inside a
+    /// grapheme cluster and cut a character in half.
+    ///
+    /// `insertNewlineIgnoringFieldEditor` rather than `insertNewline`, which
+    /// would end editing — the same reason Return has to be caught at all.
+    ///
+    /// Appending is kept as the fallback for the case where the field editor
+    /// cannot be found. It is the old bug, but a break in the wrong place beats
+    /// a key that does nothing.
+    private func breakLineAtCaret() {
+        guard let editor = NSApp.keyWindow?.firstResponder as? NSTextView else {
+            draft.append("\n")
+            return
+        }
+        editor.insertNewlineIgnoringFieldEditor(nil)
     }
 
     /// One line of the message font, measured rather than guessed — a fraction
