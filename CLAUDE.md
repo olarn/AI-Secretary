@@ -19,9 +19,9 @@ Three gates fire at different moments and are deliberately not merged:
 
 1. commit ใน worktree — **พร้อมบันทึก backlog ในคอมมิตเดียวกัน** ทั้งสองครึ่ง:
    เขียนสิ่งที่ ship ลง `PRODUCT_BACKLOG.md` **และลบหัวข้อนั้นออกจาก `SPRINT_BACKLOG.md`**
-   กติกาเต็มอยู่ที่ "Where the backlog lives" ที่เขียนไว้ครั้งเดียว ไม่ซ้ำที่นี่ —
-   ที่ต้องมีบรรทัดนี้เพราะกติกานั้นไม่เคยถูกอ้างจากเช็คลิสต์ที่คนไล่ตอนจะปิดงาน
-   ผลคือครึ่งหลัง (ลบหัวข้อ) ถูกลืมซ้ำแล้วซ้ำอีกจนเจ้าของต้องสั่งเอง สองรอบติด (2026-08-15)
+   กติกาเต็มอยู่ที่ "Where the backlog lives" ไม่ซ้ำที่นี่ — ที่ต้องมีบรรทัดนี้เพราะกติกานั้น
+   ไม่เคยถูกอ้างจากเช็คลิสต์ที่คนไล่ตอนจะปิดงาน ผลคือครึ่งหลัง (ลบหัวข้อ) ถูกลืมซ้ำแล้ว
+   ซ้ำอีกจนเจ้าของต้องสั่งเอง สองรอบติด (2026-08-15)
 2. เอาขึ้น `main` — fast-forward แล้ว push **ไม่มี PR ไม่มี force ไม่มี merge commit**
    (Principles บอกว่า force-push ต้องขออนุญาต บนเส้นทางนี้คือห้ามขาด ไม่ต้องถาม)
 3. **sync `code/` กลับ** — `cd ~/Desktop/AI-Secretary/code && git pull --ff-only`
@@ -38,15 +38,12 @@ session ที่ทำงานใน worktree จะจบด้วย `main` 
 
 session ที่ถูก isolate อยู่ใน worktree จะถูก harness ปฏิเสธทั้ง `cd` และ `git -C` ที่ชี้ไป
 `code/` ข้อความที่ได้อ่านเหมือนเป็นข้อห้ามถาวร แต่**มันผูกกับสถานะ isolate ไม่ใช่ผูกกับ path**
-ออกจาก worktree เมื่อไหร่ก็ทำได้ทันที ลำดับที่ใช้ได้จริง (ยืนยัน 2026-08-12):
-
-1. แก้ไฟล์ + commit **ใน worktree** — guard ของ background session ห้ามแก้ไฟล์ใน
-   checkout หลัก จะเด้ง `hasn't isolated its changes yet` ดังนั้นงานแก้ต้องเสร็จก่อน
-2. push — `git push origin HEAD:main` จาก worktree ได้เลย เป็น fast-forward ล้วน
-3. `ExitWorktree` ด้วย `action: "keep"` — **`keep` เท่านั้น** worktree ต้องอยู่ต่อ
-4. ขั้น 3–4 ของ Definition of done ทำได้แล้ว เช็ค `git status` ของ checkout หลักก่อน
-   เผื่อเจ้าของมีงานค้าง แล้ว `cd ~/Desktop/AI-Secretary/code && git pull --ff-only`
-5. จะกลับไปทำงานต่อก็ `EnterWorktree` ด้วย `path` ของ worktree เดิม
+ออกจาก worktree เมื่อไหร่ก็ทำได้ทันที ลำดับที่ใช้ได้จริง (ยืนยัน 2026-08-12): ทำขั้น 1–2 ให้จบ
+ใน worktree ก่อน — guard ของ background session ห้ามแก้ไฟล์ใน checkout หลัก จะเด้ง
+`hasn't isolated its changes yet` และ `git push origin HEAD:main` จาก worktree ได้เลย
+เป็น fast-forward ล้วน — แล้ว `ExitWorktree` ด้วย `action: "keep"` (**`keep` เท่านั้น**
+worktree ต้องอยู่ต่อ) จากนั้นขั้น 3–4 ทำได้ เช็ค `git status` ของ checkout หลักก่อนเผื่อ
+เจ้าของมีงานค้าง จะกลับไปทำงานต่อก็ `EnterWorktree` ด้วย `path` ของ worktree เดิม
 
 **การส่งคำสั่งให้เจ้าของรันเองคือทางเลือกสุดท้าย ไม่ใช่ทางแรก** — เคยโยนให้สามรอบใน session
 เดียวโดยไม่ได้ลองข้อ 3 เลยสักครั้ง เหลือไว้เฉพาะตอนที่ลำดับข้างบนก็ยังไม่ผ่าน และตอนนั้น
