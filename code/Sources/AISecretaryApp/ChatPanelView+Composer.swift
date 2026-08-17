@@ -137,11 +137,28 @@ extension ChatPanelView {
     /// cannot be found. It is the old bug, but a break in the wrong place beats
     /// a key that does nothing.
     private func breakLineAtCaret() {
-        guard let editor = NSApp.keyWindow?.firstResponder as? NSTextView else {
+        guard let editor = editingTextView else {
             draft.append("\n")
             return
         }
         editor.insertNewlineIgnoringFieldEditor(nil)
+    }
+
+    /// The field editor behind the message box.
+    ///
+    /// **Not `NSApp.keyWindow`.** This panel is non-activating, so the app is
+    /// usually not the active one and `keyWindow` is nil even while the box has
+    /// the caret and is taking keystrokes — driven on 2026-08-17, where the
+    /// fallback ran every time and gave itself away by resetting the caret to
+    /// the start of the message, which is what writing to the binding does.
+    ///
+    /// Editable, because the panes pinned out of the conversation are
+    /// `NSTextView`s too and any of them can be a window's last first
+    /// responder; only the message box can be typed into.
+    private var editingTextView: NSTextView? {
+        NSApp.windows
+            .compactMap { $0.firstResponder as? NSTextView }
+            .first { $0.isEditable }
     }
 
     /// One line of the message font, measured rather than guessed — a fraction
