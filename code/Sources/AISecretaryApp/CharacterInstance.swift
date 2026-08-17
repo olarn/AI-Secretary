@@ -128,7 +128,14 @@ final class CharacterInstance {
             profile: profiles.profiles.first { $0.id == profileID } ?? profiles.active,
             chatProvider: backend,
             conversationStore: conversationStore,
-            attachmentStore: attachmentStore
+            attachmentStore: attachmentStore,
+            // Hers, keyed by profile like every other per-character file. Built
+            // here rather than defaulted in `Secretary`, whose default reaches
+            // nowhere on purpose — a suite that forgot to override it would
+            // otherwise be granting permissions in the person's own name.
+            grantStore: FileStandingGrantStore(
+                fileURL: FileStandingGrantStore.url(forCharacter: profileID)
+            )
         )
     }
 

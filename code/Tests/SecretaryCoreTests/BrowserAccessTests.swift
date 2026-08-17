@@ -1,6 +1,7 @@
 import FunctionalCore
 import XCTest
 import AssistantState
+import Permissions
 import ProjectRegistry
 import ToolAdapters
 import LLMProvider
@@ -165,7 +166,7 @@ final class BrowserAccessTests: XCTestCase {
             return XCTFail("Expected to be asked. Got: \(String(describing: secretary.pendingDecision))")
         }
         XCTAssertEqual(request.actionClass, .browserAction)
-        XCTAssertFalse(request.actionClass.canRunUnattended)
+        XCTAssertFalse(mayBeRemembered(request.actionClass))
     }
 
     /// Nobody can weigh `mcp__claude-in-chrome__computer`. The card has to say

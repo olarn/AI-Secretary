@@ -264,10 +264,14 @@ return binding(
 Mutable state in a class is a second copy that drifts from what the view renders. Model it as an immutable value with `-ing` methods returning a new one, then let the single `@Observable` store hold it:
 
 ```swift
-public func granting(projectID: UUID, toolID: String) -> PermissionGrants  // returns a new value
+// Returns a new value. Every part of the key is a parameter and none of them
+// has a default — the call site that forgets one would silently widen a grant.
+public func granting(
+    projectID: UUID, toolID: String, actionClass: ActionClass, lasting: GrantDuration = .session
+) -> PermissionGrants
 
 // Curried static twin, so it composes in a pipeline:
-grants = grants |> PermissionGrants.granting(projectID: id, toolID: tool)
+grants = grants |> PermissionGrants.granting(projectID: id, toolID: tool, actionClass: .readOnly)
 ```
 
 Behaviour that is currently a protocol + class purely to be swapped in tests is usually better as a pure function taking its dependency as a parameter — the test passes a value instead of building a fake.

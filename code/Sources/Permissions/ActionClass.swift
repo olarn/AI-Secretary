@@ -20,18 +20,6 @@ public enum ActionClass: String, Codable, CaseIterable, Sendable {
     /// either. What matters is whose session it acts in — theirs.
     case browserAction
 
-    /// Whether this class may ever run without asking, once the working
-    /// directory itself has been approved.
-    public var canRunUnattended: Bool {
-        switch self {
-        case .readOnly:
-            return true
-        case .localWrite, .destructive, .gitHistoryChanging,
-             .dependencyInstalling, .externalNetwork, .browserAction:
-            return false
-        }
-    }
-
     public var humanDescription: String {
         switch self {
         case .readOnly: return "Read-only"

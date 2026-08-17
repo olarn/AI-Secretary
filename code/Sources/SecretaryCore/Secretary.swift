@@ -410,6 +410,11 @@ public final class Secretary {
     /// How installed skills are found. A parameter rather than a hardcoded
     /// call to `SkillDiscovery.discover`, so a test can supply a fixed list
     /// instead of whatever happens to be installed on the machine running it.
+    /// Where the grants that outlive this conversation are kept. Read once at
+    /// startup and written the moment one is added, so the file is the record
+    /// rather than a copy that has to be flushed.
+    @ObservationIgnored private let grantStore: StandingGrantStoring
+
     @ObservationIgnored private let discoverSkills: ([String]) -> [SkillInfo]
     /// How a note reaches the project's memory directory. A closure for the
     /// same reason as `discoverSkills`: the real one writes into the person's
@@ -515,12 +520,22 @@ public final class Secretary {
         // twin to default to, because there is nothing to read back — so the
         // default is the real one and every test passes its own temporary home.
         saveProjectMemory: @escaping (MemoryNote, String) -> Either<String, URL>
-            = { FileProjectMemoryStore().save($0, forProjectAt: $1) }
+            = { FileProjectMemoryStore().save($0, forProjectAt: $1) },
+        // Nowhere by default, like the history and attachment stores: a default
+        // that reaches the person's own remembered permissions is one a test
+        // has to remember to override, and permissions are the last thing that
+        // should be granted by a suite that forgot.
+        grantStore: StandingGrantStoring = InMemoryStandingGrantStore()
     ) {
         self.profile = profile
         self.stateMachine = stateMachine
         self.registry = registry
-        self.grants = grants
+        self.grantStore = grantStore
+        // What was remembered on an earlier run, put back before anything can
+        // ask. A file that won't load reads as nothing remembered: the cost is
+        // one card the person has already answered, and the alternative is
+        // starting up believing in permissions nobody can see.
+        self.grants = grants.adopting(remembered: grantStore.load().getOrElse([]))
         self.adapter = adapter
         self.fileAdapter = fileAdapter
         self.classify = classify
@@ -1380,7 +1395,15 @@ public final class Secretary {
         }
     }
 
+    /// The two-answer door, kept for the callers that only ever meant yes or
+    /// no. Yes is `.once` — the answer that changes nothing beyond this
+    /// conversation.
     public func resolvePendingApproval(granted: Bool) {
+        resolvePendingApproval(answer: granted ? .once : .deny)
+    }
+
+    public func resolvePendingApproval(answer: PermissionAnswer) {
+        let granted = answer != .deny
         guard case .approval(let request, let operation) = pendingDecision.toOptional() else { return }
         pendingDecision = .none()
 
@@ -1391,24 +1414,39 @@ public final class Secretary {
         }
 
         audit.record(AuditEntry(taskID: request.taskID, kind: .approvalGranted, detail: request.commandSummary))
-        // Only read-only approvals are remembered. Understanding a file shares
-        // the file adapter's tool ID, so recording it would silently grant
-        // unattended local reads off the back of a one-off "send this to Claude"
-        // — a grant the user never asked for. Non-read-only classes re-prompt
-        // anyway, so there is nothing to record.
-        //
-        // Never for a tool outside the project's allowlist, even a read-only
-        // one. `requireApproval` would ask again anyway — it checks that before
-        // the grants — so recording it would only leave the session holding a
-        // permission that policy ignores, which is the kind of state that reads
-        // as "already agreed" the next time someone looks.
-        if request.actionClass == .readOnly, !request.outsideAllowlist {
-            grants = grants |> PermissionGrants.granting(
-                projectID: request.project.id,
-                toolID: request.toolID
-            )
-        }
+        remember(answer, for: request)
         execute(operation, in: request.project)
+    }
+
+    /// Writes down what the answer said to keep, and nothing more.
+    ///
+    /// Never for a tool outside the project's allowlist, even a read-only one.
+    /// `requireApproval` re-asks for those before it ever looks at the grants,
+    /// so a recorded one would leave the session holding a permission that
+    /// policy ignores — the kind of state that reads as "already agreed" to
+    /// whoever looks next.
+    ///
+    /// The class decides whether anything may be kept at all
+    /// (`PermissionAnswer.duration(for:)`), which is what stops Always from
+    /// reaching the charter's approval list. Only the standing half is written
+    /// out; a session grant that reached disk would be the bug the two sets
+    /// exist to make impossible.
+    private func remember(_ answer: PermissionAnswer, for request: ApprovalRequest) {
+        guard !request.outsideAllowlist,
+              let duration = answer.duration(for: request.actionClass)
+        else { return }
+
+        grants = grants |> PermissionGrants.granting(
+            projectID: request.project.id,
+            toolID: request.toolID,
+            actionClass: request.actionClass,
+            lasting: duration
+        )
+        guard duration == .always else { return }
+        grantStore.save(grants.remembered).fold(
+            { failure in self.say(.secretary, failure.reason) },
+            { }
+        )
     }
 
     // MARK: - Files handed over
@@ -3263,9 +3301,10 @@ public final class Secretary {
             beginWatching(request, in: project)
             return
         }
-        // Reached only through the card: `.localWrite` never satisfies
-        // `canRunUnattended`, so `decidePermission` always routes it through
-        // `.needsApproval` first.
+        // Reached through the card the first time. Since Sprint 15 a
+        // `.localWrite` that was answered Once or Always can come straight
+        // here on a later turn — the note itself is still built from a reply
+        // that was scanned, and the grant is per project and per class.
         if case .rememberNote(let note) = operation {
             rememberNote(note, in: project)
             return

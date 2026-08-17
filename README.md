@@ -4,7 +4,7 @@ A macOS desktop companion: a floating animated character that lives on your
 desktop, talks to you in chat, and gets work done through the Claude Code you
 already have installed.
 
-Version 0.14.268. macOS 14+. Not shipped — this is a working repository.
+Version 0.15.269. macOS 14+. Not shipped — this is a working repository.
 
 ## What it actually is
 
@@ -106,7 +106,13 @@ own `State`, which would otherwise shadow `@State`. The rules are in the
 - Least privilege by default. Read-only and acting are separate classes, and
   approval is asked at the point of impact with a description of what will
   actually happen rather than the name of the rule being granted.
-- Write and browser grants last one session and are never written to disk.
+- Reading and writing **inside a folder you registered** can be remembered:
+  the card offers Once, Always and Deny, and only Always is written to disk —
+  the app's own file, one per character, that nothing else reads.
+- Everything else asks every time however you answer it, and nothing about it
+  is ever written down: sending a file to the model, acting in your browser,
+  deleting or overwriting data, changing Git history, installing software. A
+  path dragged in from outside your projects is asked about every time too.
 - The app holds no credentials of its own — it drives your installed Claude
   Code, and `ANTHROPIC_API_KEY` is stripped from the child process environment,
   so a stray export can't quietly bill your API credit for work you asked to

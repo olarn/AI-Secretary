@@ -135,7 +135,7 @@ final class FileUnderstandingPolicyTests: XCTestCase {
     func testUnderstandingIsExternalNetworkNotReadOnly() {
         let request = FileUnderstanding(relativePath: "README.md", task: .summarize)
         XCTAssertEqual(request.actionClass, .externalNetwork)
-        XCTAssertFalse(request.actionClass.canRunUnattended)
+        XCTAssertFalse(mayBeRemembered(request.actionClass))
     }
 
     /// Approving "read files here" must never become permission to upload them.
@@ -148,7 +148,8 @@ final class FileUnderstandingPolicyTests: XCTestCase {
         let grants = PermissionGrants()
             |> PermissionGrants.granting(
                 projectID: project.id,
-                toolID: FileReadOnlyAdapter.toolIdentifier
+                toolID: FileReadOnlyAdapter.toolIdentifier,
+                actionClass: .readOnly
             )
 
         let upload = ApprovalRequest(

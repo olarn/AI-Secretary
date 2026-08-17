@@ -51,11 +51,18 @@ public func requireApproval(
         guard !request.outsideAllowlist else {
             return .right(.needsApproval(request))
         }
-        guard request.actionClass.canRunUnattended else {
+        // The classes that may never be remembered ask every time, grant or no
+        // grant — see `mayBeRemembered`. This is the check that keeps Sprint
+        // 15's Once and Always from reaching past the charter's approval list.
+        guard mayBeRemembered(request.actionClass) else {
             return .right(.needsApproval(request))
         }
         return .right(
-            grants.has(projectID: request.project.id, toolID: request.toolID)
+            grants.has(
+                projectID: request.project.id,
+                toolID: request.toolID,
+                actionClass: request.actionClass
+            )
                 ? .allowed
                 : .needsApproval(request)
         )
