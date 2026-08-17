@@ -207,7 +207,7 @@ final class CharacterInstance {
 
         // A reply can ask for part of itself to be kept on screen.
         secretary.onPinWindow = { [weak self] spec in self?.infoWindows.open(spec) }
-        infoWindows.onCountChanged = { [weak self] in self?.onDismissableChanged?() }
+        infoWindows.onVisibilityChanged = { [weak self] in self?.onDismissableChanged?() }
 
         positionInitialWindows(ordinal: ordinal)
         observeWindowMovement()
@@ -365,8 +365,15 @@ final class CharacterInstance {
 
     // MARK: - Visibility
 
-    /// Anything Esc would put away for this character.
-    var hasDismissableWindow: Bool { isChatVisible || !infoWindows.set.isEmpty }
+    /// Anything Esc would put away for this character. The rule is
+    /// `hasSomethingToDismiss`, in `SecretaryCore` where it has tests and where
+    /// the bug it was written for is recorded.
+    var hasDismissableWindow: Bool {
+        hasSomethingToDismiss(
+            isChatVisible: isChatVisible,
+            visiblePanes: infoWindows.visiblePaneCount
+        )
+    }
 
     /// Whether one of her windows is the one being typed in. What makes Esc
     /// hers rather than another character's.
@@ -468,8 +475,17 @@ final class CharacterInstance {
     }
 
     /// Esc: a pinned pane in front is what it puts away; otherwise the chat.
+    ///
+    /// Three rungs, not two. The middle one is for the press that arrives from
+    /// the system-wide claim while the person is typing in another app: a pane of
+    /// hers is on screen, none of her windows holds the keyboard, and the chat is
+    /// already shut — so without it the key was swallowed and spent on nothing.
     func dismissFrontmost() {
         if infoWindows.hideKeyWindow() { return }
-        hideChatPanel()
+        if isChatVisible {
+            hideChatPanel()
+            return
+        }
+        infoWindows.hideFrontmostVisible()
     }
 }

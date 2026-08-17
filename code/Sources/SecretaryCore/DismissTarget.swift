@@ -25,6 +25,26 @@ public struct DismissCandidate: Equatable, Sendable {
     }
 }
 
+/// Whether Esc has anything to put away for one character.
+///
+/// **Counts panes that are on screen, never panes that merely exist.** The set
+/// behind a character's pinned panes deliberately keeps every pane that was ever
+/// pinned — the status-bar menu is built from it, and a pane that Esc put away
+/// has to stay listed so one click brings it back. Asking that set whether it is
+/// *empty* therefore answers a different question from the one Esc asks, and it
+/// answers `true` for the rest of the session after the very first pin.
+///
+/// What that cost, driven on 2026-08-17 at v0.17.278: pin one box, press Esc to
+/// put the pane away, press Esc again to close the chat — and the third press,
+/// the one that should hide the character, did nothing, then or ever again in
+/// that session. `dismissDecision` was right to refuse; it was being told
+/// something was still on screen. The same wrong answer keeps the system-wide
+/// Esc claim registered with nothing of ours visible, so the key is taken from
+/// every other app and spent on doing nothing.
+public func hasSomethingToDismiss(isChatVisible: Bool, visiblePanes: Int) -> Bool {
+    isChatVisible || visiblePanes > 0
+}
+
 /// Where an Esc press came from.
 ///
 /// The two paths are not interchangeable and the difference is the whole reason

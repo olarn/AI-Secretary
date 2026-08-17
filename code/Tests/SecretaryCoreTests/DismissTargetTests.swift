@@ -139,3 +139,46 @@ final class DismissTargetTests: XCTestCase {
         ))
     }
 }
+
+/// What counts as "something for Esc to put away".
+///
+/// Its own class because the bug was not in the ladder above — that was right
+/// all along — but in the answer it was being given.
+final class HasSomethingToDismissTests: XCTestCase {
+
+    func testAnOpenChatCounts() {
+        XCTAssertTrue(hasSomethingToDismiss(isChatVisible: true, visiblePanes: 0))
+    }
+
+    func testAPaneOnScreenCountsWithTheChatShut() {
+        XCTAssertTrue(hasSomethingToDismiss(isChatVisible: false, visiblePanes: 1))
+    }
+
+    /// The bug, as a test. A pane that has been put away is still in the set —
+    /// the status-bar menu is built from it — so the old predicate went on
+    /// answering "yes, something is up" for the rest of the session after the
+    /// first pin, and the last rung of the Esc ladder became unreachable.
+    ///
+    /// `visiblePanes: 0` is what a set full of put-away panes now reports.
+    func testPanesThatExistButAreOffScreenDoNotCount() {
+        XCTAssertFalse(hasSomethingToDismiss(isChatVisible: false, visiblePanes: 0))
+    }
+
+    /// Read as the pair the Esc ladder actually consumes: with the chat shut and
+    /// every pane put away, a local press must reach `.hideCharacter` rather than
+    /// being declined.
+    func testWithEveryPanePutAwayEscCanReachTheCharacterAgain() {
+        let id = UUID()
+        let decision = dismissDecision(
+            [DismissCandidate(
+                id: id,
+                holdsKeyboard: true,
+                hasDismissable: hasSomethingToDismiss(isChatVisible: false, visiblePanes: 0),
+                isCharacterVisible: true
+            )],
+            trigger: .ownWindow
+        )
+
+        XCTAssertEqual(decision, DismissDecision(id: id, step: .hideCharacter))
+    }
+}

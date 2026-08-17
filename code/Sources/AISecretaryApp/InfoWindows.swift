@@ -25,9 +25,19 @@ final class InfoWindows: NSObject, NSWindowDelegate {
 
     @ObservationIgnored private var panels: [UUID: NSPanel] = [:]
     @ObservationIgnored private let appearance: Appearance
-    /// Told when the set becomes empty or non-empty, so Esc is claimed while a
-    /// pane is up even with the chat closed, and released when the last one goes.
-    @ObservationIgnored var onCountChanged: (() -> Void)?
+    /// Told whenever the number of panes *on screen* changes, so Esc is claimed
+    /// while a pane is up even with the chat closed, and released the moment the
+    /// last one is put away.
+    ///
+    /// Every hide and every show has to report, not just open and remove: a pane
+    /// put away leaves the screen while staying in the set, and that is exactly
+    /// the difference `hasSomethingToDismiss` was rewritten to notice. Firing
+    /// only on the set's count is what left Esc claimed with an empty desktop.
+    @ObservationIgnored var onVisibilityChanged: (() -> Void)?
+
+    /// How many panes are actually on screen. The set's count answers a
+    /// different question — see `hasSomethingToDismiss`.
+    var visiblePaneCount: Int { panels.values.filter(\.isVisible).count }
 
     init(appearance: Appearance) {
         self.appearance = appearance
@@ -52,13 +62,17 @@ final class InfoWindows: NSObject, NSWindowDelegate {
         set = set.adding(spec)
         let after = Set(set.windows.map(\.id))
         for gone in before.subtracting(after) { destroyPanel(gone) }
-        onCountChanged?()
+        onVisibilityChanged?()
         show(spec.id)
     }
 
     func show(_ id: UUID) {
         guard let spec = set.window(id) else { return }
         NSApp.activate(ignoringOtherApps: true)
+        // A pane coming back from the menu with the chat closed is the whole
+        // reason this reports: it is the moment Esc has something to put away
+        // again, and nothing else would say so.
+        defer { onVisibilityChanged?() }
 
         if let panel = panels[id] {
             panel.makeKeyAndOrderFront(nil)
@@ -102,27 +116,48 @@ final class InfoWindows: NSObject, NSWindowDelegate {
     /// Esc: off the screen, still in the menu.
     func hide(_ id: UUID) {
         panels[id]?.orderOut(nil)
+        onVisibilityChanged?()
     }
 
     /// ⌘H: all of them off the screen, all still in the menu. The counterpart
     /// of `showAll`.
     func hideAll() {
         panels.values.forEach { $0.orderOut(nil) }
+        onVisibilityChanged?()
     }
 
-    /// Hides whichever pane is frontmost, and says whether it did. The Esc hot
-    /// key asks this first so that Esc means "put this away" when a pane is in
-    /// front, and "close the chat" otherwise.
-    @discardableResult
     /// Whether one of these panes is the window being typed in — asked by the
     /// character who owns them, so Esc goes to her.
     func holds(_ window: NSWindow) -> Bool {
         panels.values.contains { $0 === window }
     }
 
+    /// Hides whichever pane is being typed in, and says whether it did. The Esc
+    /// ladder asks this first so that Esc means "put this away" when a pane has
+    /// the keyboard, and "close the chat" otherwise.
+    @discardableResult
     func hideKeyWindow() -> Bool {
         guard let key = NSApp.keyWindow,
               let id = panels.first(where: { $0.value === key })?.key
+        else { return false }
+        hide(id)
+        return true
+    }
+
+    /// The frontmost pane that is on screen, put away, whether or not it holds
+    /// the keyboard — and whether it did.
+    ///
+    /// The rung between `hideKeyWindow` and the chat. Esc is claimed from the
+    /// whole system while a pane is up, so it arrives while the person is typing
+    /// in another app entirely: no pane of ours holds the keyboard then, and
+    /// without this the claim was spent on nothing while a pane sat there in
+    /// plain sight refusing to go away.
+    @discardableResult
+    func hideFrontmostVisible() -> Bool {
+        guard let id = panels
+            .filter(\.value.isVisible)
+            .min(by: { $0.value.orderedIndex < $1.value.orderedIndex })?
+            .key
         else { return false }
         hide(id)
         return true
@@ -132,13 +167,13 @@ final class InfoWindows: NSObject, NSWindowDelegate {
     func remove(_ id: UUID) {
         destroyPanel(id)
         set = set.removing(id)
-        onCountChanged?()
+        onVisibilityChanged?()
     }
 
     func clearAll() {
         for id in panels.keys { destroyPanel(id) }
         set = set.cleared
-        onCountChanged?()
+        onVisibilityChanged?()
     }
 
     private func destroyPanel(_ id: UUID) {
