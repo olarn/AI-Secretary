@@ -30,12 +30,11 @@ public func emptyTranscriptHint(_ readiness: BackendReadiness) -> String {
         return "Install Claude Code and sign in, and I'll be able to work for you."
     case .ready(let version):
         let named = version.map { " (\($0))" }^.getOrElse("")
-        // Two beats, so a paragraph between them: what I am, then what to do.
-        // Run together they read as one long sentence whose second half is the
-        // only part asking for anything.
+        // One break, not a blank line. Two beats — what I am, then what to do —
+        // so they do not belong on one line, but a paragraph between two short
+        // sentences read as a gap rather than as structure (owner, 2026-08-17).
         return """
         Ready — I'll work through your own Claude Code\(named).
-
         Add a project, then just tell me what you need in your own words.
         """
     }
