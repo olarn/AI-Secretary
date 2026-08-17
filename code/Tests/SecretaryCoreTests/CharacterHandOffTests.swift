@@ -94,6 +94,37 @@ final class CharacterHandOffTests: XCTestCase {
         }
     }
 
+    // MARK: - The model's own block, which is where plurals live now
+
+    /// Sprint 17 left the several-recipients case to the model, so the block
+    /// has to carry it: named twice, delivered twice, and a name that is not on
+    /// the desktop is said out loud rather than matched to the nearest
+    /// spelling. Guessing there would send the person's work to whoever
+    /// happened to sort first.
+    func testABlockNamingSomebodyWhoIsNotHereStillDeliversToTheOneWhoIs() async {
+        mikuProvider.replyForNextTurn = """
+            I'll ask them both.
+
+            ```to
+            Anya, Pikachu
+            หาราคา honda ปี 2020 ให้หน่อย
+            ```
+            """
+        anyaProvider.replyForNextTurn = "About 420,000 baht."
+
+        miku.submit("ช่วยหาราคารถให้หน่อย")
+        await waitUntilIdle(mikuMachine)
+        await waitUntil { self.saidAnything(self.miku, containing: "420,000") }
+
+        XCTAssertTrue(
+            saidAnything(miku, containing: "Pikachu"),
+            "the name nobody here answers to has to be said. Got: \(said(miku))"
+        )
+        XCTAssertTrue(saidAnything(anya, containing: "Miku passed this on"),
+                      "and the one who is here still gets it")
+        XCTAssertTrue(saidAnything(miku, containing: "420,000"))
+    }
+
     // MARK: - The scenario from the backlog
 
     /// Miku is asked to have Anya do something. Miku says she passed it on;
@@ -281,10 +312,15 @@ final class CharacterHandOffTests: XCTestCase {
         dittoProvider.replyForNextTurn = "City 195,000"
         mikuProvider.replyForNextTurn = "Merged and saved."
 
+        // Two names is a question now (Sprint 17) — and the question carries
+        // "both", so the fan-out this test is about is one tap away rather than
+        // a guess about what joined the names.
         miku.submit("""
-            1. ขอข้อมูลราคารถมือสอง จาก Anya และ Ditto
+            1. ขอให้ Anya และ Ditto ช่วยหาข้อมูลราคารถมือสอง
             2. เมื่อได้ข้อมูลทั้ง 2 ชุด ให้รวมข้อมูล แล้วบันทึกลง file ใน project
             """)
+        XCTAssertTrue(saidAnything(miku, containing: "Who should take this?"))
+        miku.submit(everyoneChoice)
 
         XCTAssertTrue(saidAnything(miku, containing: "Passed this on to Anya and Ditto"))
         await waitUntilIdle(anyaMachine)
@@ -320,7 +356,8 @@ final class CharacterHandOffTests: XCTestCase {
         anyaProvider.replyForNextTurn = "Vios 190,000"
         mikuProvider.replyForNextTurn = "Merged what there was."
 
-        miku.submit("1. ขอข้อมูล จาก Anya และ Ditto\n2. รวมข้อมูล แล้วบันทึกลง file")
+        miku.submit("1. ขอให้ Anya และ Ditto ช่วยหาข้อมูล\n2. รวมข้อมูล แล้วบันทึกลง file")
+        miku.submit(everyoneChoice)
         // Anya's answer, however long her turn takes — then Ditto's silence
         // running out of patience.
         await waitUntil { self.saidAnything(self.miku, containing: "Anya answered") }

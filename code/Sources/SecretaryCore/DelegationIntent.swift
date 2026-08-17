@@ -15,60 +15,32 @@ public enum DelegationReading: Equatable, Sendable {
     case unsure(candidates: [CharacterCard], errand: String)
     /// Send it — to one character, or to several at once.
     ///
-    /// Plural since 0.14.236. "จาก Pikachu และ Ditto" is one request of two
-    /// people, and reading it as an ambiguity to be resolved by picking one was
-    /// the app deciding the person had misspoken. Two names joined by *and* are
-    /// two recipients; two names with nothing joining them are still a
-    /// question.
+    /// Plural since 0.14.236, and still plural, but **prose no longer produces
+    /// a plural**: from Sprint 17 the several-recipients case comes from the
+    /// model's own ```to block, which names them a line at a time and is read
+    /// rather than scanned. Reading "จาก Pikachu และ Ditto" as two recipients
+    /// meant asking `contains("และ")` whether a conjunction joined the *names*,
+    /// which it cannot know — and the price of being wrong is the person's work
+    /// sent to somebody who was never asked.
     case confident(to: [CharacterCard], errand: String)
-}
-
-/// Words that turn a list of names into "both of them".
-///
-/// Without one, two names in a sentence are as likely to be a comparison, an
-/// aside, or a message *about* one of them — so the conjunction is what carries
-/// the plural, and its absence is what keeps the question.
-let conjunctions = ["และ", "กับ", "ทั้ง", " and ", ",", "&", "+"]
-
-func namesAreJoined(in text: String) -> Bool {
-    let haystack = text.lowercased()
-    return conjunctions.contains { haystack.contains($0) }
 }
 
 /// Phrases that name a third party by their shape alone — the person is asking
 /// for something to be passed on, not asking you.
 ///
 /// These stand on their own: `ขอให้` with nobody named still means somebody
-/// else is meant to do it, and that is the case that makes this list worth
-/// keeping separate from the one below.
+/// else is meant to do it, and that is the case this list exists for.
+///
+/// **Frozen. Do not add to this list.** It grew twice in one day (2026-08-14)
+/// chasing sentences that had slipped through, and the second note recorded
+/// that the slipped case reached the model and *did the right thing through the
+/// block*. That is the answer: a phrasing this list misses is the model's to
+/// read, not a signal to type another keyword. Substring matching on a language
+/// written without spaces cannot be made good by lengthening it, and every
+/// word added widened what it caught in ordinary sentences too.
 let handOffPhrases = [
     "ขอให้", "ฝากถาม", "ฝากบอก", "ฝากให้", "ช่วยถาม", "ช่วยบอก", "บอกให้",
     "ask ", "tell ", "forward", "pass this", "pass it",
-]
-
-/// Weaker verbs. On their own these are ordinary words — `ให้` is a fragment of
-/// half the polite sentences in Thai, and "send" is usually about a file — so
-/// they never reach a confident reading. With a name beside them they are worth
-/// a question, and no more than a question.
-/// Widened on 2026-08-14 from what the owner actually typed. `ขอข้อมูล … มาจาก
-/// Pikachu` and `ขอข้อมูล Pikachu รถ …` are plainly hand-offs and matched none
-/// of the original list, so the turn went to the model — which is where the
-/// trouble started. They are here rather than in `handOffPhrases` because on
-/// their own they are ordinary words: with a name beside them they are worth a
-/// question, and a question is all they get.
-/// Widened again on 2026-08-14: `ขอราคา … จาก Pikachu และ Ditto` matched none
-/// of these, because the list had `ขอข้อมูล` and `มาจาก` but not the bare `จาก`
-/// that actually carries "from her" in Thai. The turn fell through to the model
-/// — which then did the right thing through the block, and could only reach one
-/// of the two.
-///
-/// `จาก` on its own is an ordinary word (`อ่านจากไฟล์`), which is exactly why it
-/// belongs here rather than in the list above: it needs a name beside it to mean
-/// anything, and even then it only earns a question unless names are joined.
-let addressPhrases = [
-    "ถาม", "บอก", "ส่งให้", "ส่งไปให้", "แจ้ง", "ขอข้อมูล", "มาจาก", "จาก", "ขอให้ช่วย",
-    "ขอราคา", "ขอผล", "ขอความเห็น",
-    "check with", "message", "send", "have ", "get ", "from ",
 ]
 
 /// A name short enough to appear inside ordinary words is not looked for.
@@ -126,38 +98,30 @@ public func delegationIntent(in text: String, directory: [CharacterCard]) -> Del
     guard !errand.isEmpty, !directory.isEmpty else { return .none }
 
     let named = mentioned(directory, in: errand)
-    let handOff = contains(handOffPhrases, errand)
-    let addressed = handOff || contains(addressPhrases, errand)
+    guard contains(handOffPhrases, errand) else { return .none }
 
-    // Only an unambiguous hand-off phrase with exactly one name on it is acted
-    // on without asking. Everything else that looks like it might involve
-    // someone else becomes a question — a wrong guess here sends the person's
-    // work to a character they never named, and there is no undo for that.
-    switch (named.count, handOff, addressed) {
-    case (1, true, _):
+    switch named.count {
+    // One unambiguous hand-off phrase, one name on it. The only reading this
+    // function still makes on its own.
+    case 1:
         return .confident(to: named, errand: errand)
-    // Several names joined by *and* is one request of all of them — the
-    // owner's "จาก Pikachu และ Ditto". Without the conjunction the second name
-    // is as likely to be an aside as a recipient, so that still asks.
-    case (2..., _, true) where namesAreJoined(in: errand):
-        return .confident(to: named, errand: errand)
-    case (2..., _, true):
-        return .unsure(candidates: named, errand: errand)
-    // A name and a weaker verb — "อาเนียบอกว่าอะไรนะ" is a question *about* her,
-    // not a request to send her anything, and the two are not separable by
-    // wording. Ask.
-    case (1, false, true):
+    // Several names is always a question now. It used to send to all of them
+    // when a conjunction appeared somewhere in the sentence, which was a guess:
+    // `contains("กับ")` cannot tell "Anya กับ Ditto" from "Anya กับผม", and a
+    // wrong recipient is work sent to someone who was never asked, with no
+    // undo. A person who means both is one tap away through the question, and
+    // the model — which reads the sentence rather than scanning it — names both
+    // in its own block when it is sure.
+    case 2...:
         return .unsure(candidates: named, errand: errand)
     // The case this whole enum exists for. The owner's own scenario writes
     // "อาเนีย" for a character whose profile name is "Anya", so a roster-name
-    // match would find nothing and the message would be answered as if it had
-    // been meant for the character it was typed at — which reads, correctly, as
-    // the feature not working. A phrase that means "somebody else" with nobody
-    // matched asks who.
-    case (0, true, _):
-        return .unsure(candidates: directory, errand: errand)
+    // match finds nothing and the message would otherwise be answered as if it
+    // had been meant for the character it was typed at — which reads, correctly,
+    // as the feature not working. A phrase that means "somebody else" with
+    // nobody matched asks who.
     default:
-        return .none
+        return .unsure(candidates: directory, errand: errand)
     }
 }
 
@@ -168,6 +132,17 @@ public func delegationIntent(in text: String, directory: [CharacterCard]) -> Del
 /// with no option but to send work somewhere they never meant to.
 public let answerItYourselfChoice = "No — answer it yourself"
 
+/// Offered whenever more than one name was found, so that "both of them" is a
+/// tap rather than a rephrase.
+///
+/// Sprint 17 stopped prose from producing several recipients on its own, since
+/// deciding it meant asking `contains("และ")` whether a conjunction joined the
+/// *names*. Asking instead is right; asking a question whose only answers are
+/// "Anya" and "Ditto" when the person plainly wrote both is not — that is the
+/// app making them choose one, which is the same wrong guess with an extra
+/// step. So the question carries the answer they meant.
+public let everyoneChoice = "Both — ask all of them"
+
 public func delegationQuestion(_ candidates: [CharacterCard]) -> String {
     candidates.count == 1
         ? "Should I pass this to \(candidates[0].name)?"
@@ -175,5 +150,6 @@ public func delegationQuestion(_ candidates: [CharacterCard]) -> String {
 }
 
 public func delegationChoices(_ candidates: [CharacterCard]) -> [String] {
-    candidates.map(\.name) + [answerItYourselfChoice]
+    let everyone = candidates.count > 1 ? [everyoneChoice] : []
+    return candidates.map(\.name) + everyone + [answerItYourselfChoice]
 }

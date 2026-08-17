@@ -1163,6 +1163,10 @@ public final class Secretary {
             routeToTurn(waiting.errand, attachments: waiting.attachments)
             return true
         }
+        guard picked != everyoneChoice else {
+            send(waiting.errand, to: waiting.candidates, thenDo: waiting.thenDo)
+            return true
+        }
         guard let card = waiting.candidates.first(
             where: { $0.name.caseInsensitiveCompare(picked) == .orderedSame }
         ) else {

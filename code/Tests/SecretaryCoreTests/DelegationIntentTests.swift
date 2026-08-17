@@ -65,59 +65,66 @@ final class DelegationIntentTests: XCTestCase {
         XCTAssertTrue(errand.contains("honda"))
     }
 
-    /// Two names *joined* are two recipients, not an ambiguity. Asking "which
-    /// one?" here is the app deciding the person misspoke.
-    func testTwoNamesJoinedByAndGoToBothOfThem() {
-        guard case .confident(let to, _) = read("ขอข้อมูลราคารถมือสอง จาก Anya และ Ditto") else {
-            return XCTFail("expected both of them")
-        }
-        XCTAssertEqual(to.map(\.name), ["Anya", "Ditto"])
-    }
+    // MARK: - Sprint 17 — several names are a question, not a broadcast
 
-    /// The owner's exact words on 2026-08-14, which reached only one of the
-    /// two. `จาก` on its own carries "from her" in Thai and was not in any
-    /// list, so the whole thing fell through to the model.
-    func testTheBarePrepositionCountsWhenNamesAreOnIt() {
-        guard case .confident(let to, _) = read(
-            "ขอราคา city มือ 2 เทียบกับ civic ของปี 2020 จาก Anya และ Ditto"
-        ) else {
-            return XCTFail("expected both of them")
-        }
-        XCTAssertEqual(to.map(\.name), ["Anya", "Ditto"])
-    }
-
-    func testEnglishJoinsThemTheSameWay() {
-        guard case .confident(let to, _) = read("ask Anya and Ditto for a price comparison") else {
-            return XCTFail("expected both of them")
-        }
-        XCTAssertEqual(to.map(\.name), ["Anya", "Ditto"])
-    }
-
-    func testThaiKapJoinsThemToo() {
-        guard case .confident(let to, _) = read("ขอให้ Anya กับ Ditto ช่วยดูให้หน่อย") else {
-            return XCTFail("expected both of them")
-        }
-        XCTAssertEqual(to.map(\.name), ["Anya", "Ditto"])
-    }
-
-    /// With nothing joining them, the second name is as likely to be an aside
-    /// as a recipient — "tell Anya that Ditto finished" is not a request to
-    /// Ditto. That still asks.
-    func testTwoNamesWithNothingJoiningThemStillAsks() {
-        guard case .unsure(let candidates, _) = read("บอก Anya ว่า Ditto ทำเสร็จแล้ว") else {
-            return XCTFail("expected an unsure reading")
+    /// **Reversed on purpose (Sprint 17).** This used to send to both, on the
+    /// strength of `contains("และ")` somewhere in the sentence — which cannot
+    /// tell "Anya และ Ditto" from "Anya และผม", and pays for being wrong by
+    /// sending the person's work to somebody who was never asked. The person
+    /// who means both is one tap away; the model, which reads the sentence
+    /// rather than scanning it, names both in its own block when it is sure.
+    func testTwoNamesJoinedByAndNowAsksWhoRatherThanSendingToBoth() {
+        guard case .unsure(let candidates, _) = read("ขอให้ Anya และ Ditto ช่วยดูราคารถมือสอง") else {
+            return XCTFail("expected a question")
         }
         XCTAssertEqual(candidates.map(\.name), ["Anya", "Ditto"])
     }
 
-    /// "อาเนียบอกว่าอะไรนะ" is a question *about* her, not a request to send her
-    /// anything, and no wording separates the two. A name plus a weak verb is
-    /// worth a question and no more.
-    func testANameWithAWeakVerbAsksRatherThanSends() {
-        guard case .unsure(let candidates, _) = read("Anya บอกว่าอะไรนะ") else {
-            return XCTFail("expected an unsure reading")
+    func testEnglishIsAskedAboutTheSameWay() {
+        guard case .unsure(let candidates, _) = read("ask Anya and Ditto for a price comparison") else {
+            return XCTFail("expected a question")
         }
-        XCTAssertEqual(candidates.map(\.name), ["Anya"])
+        XCTAssertEqual(candidates.map(\.name), ["Anya", "Ditto"])
+    }
+
+    /// The owner's exact words from 2026-08-14, and the sentence the keyword
+    /// list was widened twice to catch. **It is now the model's to read.**
+    /// Nothing in it is a hand-off phrase: `ขอราคา` and the bare `จาก` were
+    /// keywords added in that widening, and both are gone. Driven in the app on
+    /// 2026-08-17 before this was cut — a two-name request the keywords never
+    /// matched produced a ```to block naming both, and both answered.
+    func testTheOwnersPriceRequestGoesToTheModel() {
+        XCTAssertEqual(
+            read("ขอราคา city มือ 2 เทียบกับ civic ของปี 2020 จาก Anya และ Ditto"),
+            .none
+        )
+    }
+
+    // MARK: - Sprint 17 — talking *about* someone is not addressing her
+
+    /// **Reversed on purpose (Sprint 17).** "อาเนียบอกว่าอะไรนะ" is a question
+    /// about her, and it used to interrupt with "Should I pass this to Anya?".
+    /// `บอก` was in the weak-verb list, and a name before a verb and a name
+    /// after it are the same string to `contains` — so the only way to stop
+    /// asking about the first was to stop asking about both.
+    func testAQuestionAboutSomeoneIsNoLongerInterrupted() {
+        XCTAssertEqual(read("Anya บอกว่าอะไรนะ"), .none)
+        XCTAssertEqual(read("บอก Anya ว่า Ditto ทำเสร็จแล้ว"), .none)
+    }
+
+    /// The whole of `addressPhrases` went with it. Every word in that list was
+    /// a verb that reads the same whether the character is doing it or having
+    /// it done to her, so each one failed the test above by the same symmetry.
+    func testTheWeakVerbsNoLongerStartAConversation() {
+        for text in [
+            "ขอข้อมูลราคารถมือสอง จาก Anya",
+            "send Anya the file",
+            "get the numbers from Ditto",
+            "Anya แจ้งมาว่าเสร็จแล้ว",
+            "ถาม Anya ดูแล้ว ยังไม่ตอบ"
+        ] {
+            XCTAssertEqual(read(text), .none, "should have gone to the model: \(text)")
+        }
     }
 
     // MARK: - None
@@ -192,6 +199,22 @@ final class DelegationIntentTests: XCTestCase {
     func testThereIsAlwaysAWayToSayNo() {
         XCTAssertEqual(delegationChoices([anya]), ["Anya", answerItYourselfChoice])
         XCTAssertEqual(delegationChoices(roster).last, answerItYourselfChoice)
+    }
+
+    /// With several names the question has to be answerable the way it was
+    /// meant. Sprint 17 stopped prose deciding "both" on its own; a question
+    /// whose only answers are "Anya" and "Ditto" would make the person choose
+    /// one when they wrote both — the same wrong guess, with an extra step.
+    func testSeveralNamesCanBeAnsweredWithBoth() {
+        XCTAssertEqual(
+            delegationChoices(roster),
+            ["Anya", "Ditto", everyoneChoice, answerItYourselfChoice]
+        )
+    }
+
+    /// One name needs no such option, and offering it would be noise.
+    func testOneNameIsNotOfferedBoth() {
+        XCTAssertFalse(delegationChoices([anya]).contains(everyoneChoice))
     }
 
     func testTheQuestionNamesTheOneCandidateAndAsksOpenlyWhenThereAreMore() {
