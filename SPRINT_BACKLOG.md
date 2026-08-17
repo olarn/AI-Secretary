@@ -11,67 +11,10 @@ Sprint 14 จบทั้งสปรินต์ บันทึกทุกอ
 | Sprint 14.4 — ตัวละครหายใจตอนคิด | v0.14.259–260 |
 | Sprint 15 — permission ที่จำได้ข้าม session | v0.15.269–270 |
 | Sprint 15.2 — ร้อยแก้วไม่ถูกอ่านเป็นคำสั่ง git | v0.15.272–273 |
+| Sprint 16 — classifier หลบทางให้ agent | v0.16.275 |
 
 หัวข้อใน `PRODUCT_BACKLOG_NEXT_SPRINTS.md` ใช้เลขหลอก (`xxx`, `yyy`, `zzz`, `zzzz`)
 เพราะเจ้าของยังไม่ได้ตัดสินว่าอันไหนเป็นสปรินต์ที่เท่าไร — **ที่นี่คือที่เดียวที่เลขสปรินต์เป็นของจริง**
-
-## Sprint 16  Classifier หลบทางให้ agent
-
-มาจากการวิเคราะห์ 2026-08-17: `RuleBasedIntentClassifier` เกิดในสปรินต์แรกๆ ตอน backend
-เป็น bare API ที่ไม่มีมือมีเท้า (`Intent.swift:6` เขียนเองว่า "for this sprint") วันนี้ backend
-หลักคือ Claude Code agent ที่มีเครื่องมืออ่านไฟล์/รัน git ของตัวเอง และ `agentSystemPrompt`
-ก็สั่งไว้แล้วว่า "look for yourself" — แต่ `beginTurn` (`Secretary.swift:662`) ยังเรียก
-`classify` ทุกเทิร์นโดยไม่ดูว่า backend เป็นแบบไหน ผลสามอย่าง:
-
-1. **ไม่ correct** — ผลของ local adapter ไม่เคยเข้า session ของ agent:
-   `ClaudeCodeProvider` ส่งเฉพาะข้อความ user ล่าสุดแล้ว `--resume` (บันทึกไว้ที่
-   `Secretary.swift:713` เรื่อง `unseenReports`) พิมพ์ "diff in X" แล้วตามด้วย
-   "อธิบายหน่อย" โมเดลไม่รู้ว่า diff ไหน — bug class เดียวกับที่เคยตอบ
-   "ยังไม่มีอะไรให้สรุปเลยค่ะ" ทั้งที่คำตอบอยู่บนจอ
-2. **ไม่ seamless** — keyword เป็นอังกฤษล้วน: "อ่าน README.md" ได้ agent (เก่งกว่า),
-   "read README.md" ได้ adapter (จำกัดกว่า) พฤติกรรมแยกตามภาษาที่พิมพ์
-3. Sprint 15.2 คือการติดเกราะให้ classifier — สปรินต์นี้ทำให้เส้นทางหลักไม่ต้องพึ่งเกราะนั้น
-   เลย **ทำหลัง 15.2 เพราะเกราะยังจำเป็นกับ fallback** (ดู "อะไรไม่เปลี่ยน" ข้างล่าง)
-
-- [ ] **ทางหลัก: มี workspace tools = ทุกข้อความเป็นแชท**
-  - [ ] ใน `beginTurn` ก่อนเรียก `classify`: ถ้า
-        `(chatProvider as? WorkspaceScopedProvider)?.hasWorkspaceTools == true`
-        ให้ไป `startChat` ตรงๆ — เงื่อนไขเดียวกับที่ `systemPrompt`
-        (`Secretary.swift:3867`) ใช้เลือก `agentPrompt` อยู่แล้ว สองที่นี้ต้องตัดสิน
-        จากคำถามเดียวกันเสมอ ไม่งั้นจะเกิด "prompt บอกโมเดลว่ามีมือ แต่ turn ถูก adapter ดัก"
-  - [ ] audit ยังต้องได้ entry `intentClassified` เขียนเหตุผลว่า "agent-mode: chat" —
-        เส้น audit trail ต้องอ่านออกว่าทำไมเทิร์นนี้ไม่ผ่าน classifier
-  - [ ] `help` ที่ดักใน `submit` (`Secretary.swift:598`) คงไว้ — เป็น local ล้วน ไม่เกี่ยวกับ
-        backend
-- [ ] **หน้าต่าง detection ยังไม่จบ** — `hasWorkspaceTools` เป็น false จนกว่า detector
-      จะรายงาน (`ChatBackend.swift:142` บอกเองว่า "detection has usually not finished"
-      ตอนเปิดแอป) ข้อความแรกๆ หลังเปิดแอปจะยังผ่าน classifier
-  - [ ] ยอมรับพฤติกรรมนี้ ไม่ต้องรอ detection — มันคือพฤติกรรม fallback ที่ถูกต้องของ
-        โมเมนต์นั้น แต่**ต้องมีคอมเมนต์ why ตรงเงื่อนไข** ว่าหน้าต่างนี้มีจริงและตั้งใจปล่อย
-        ไม่ให้คนมาทีหลังเห็นว่า "บางทีก็ classify บางทีก็ไม่" แล้วคิดว่าเป็นบั๊ก
-- [ ] **อะไรไม่เปลี่ยน — เขียนกันไว้ก่อนลงมือ**
-  - [ ] chat-only fallback (ไม่มี Claude Code / detection ล้มเหลว) ใช้ classifier + adapter
-        เหมือนเดิมทุกอย่าง — ที่นั่น bare API ทำเองไม่ได้จริงๆ และ `chatOnlySystemPrompt`
-        ออกแบบคู่กับมัน (สอนผู้ใช้พิมพ์ "list files in …")
-  - [ ] เกราะของ Sprint 15.2 ห้ามถอด — fixture ย่อหน้า Alpha Capital ต้องยังเขียวใน
-        โหมด fallback และเทสสี่ตัวใน `KeywordBoundaryTests.swift` ต้องเขียวโดยไม่ถูกแก้
-  - [ ] `handleTool` / adapter / `Permissions` ไม่แตะ — ยังเป็นเส้นทางของ fallback
-- [ ] **helpText สองความจริง** — ข้อความ help ปัจจุบัน (`SecretaryPrompts.swift:235`)
-      สอนคำสั่ง "status / read / list" ซึ่งหลังสปรินต์นี้เป็นจริงเฉพาะโหมด fallback
-  - [ ] แยกเป็นสองข้อความตามโหมด หรือเขียนใหม่ให้ไม่สอนสิ่งที่โหมด agent ไม่ทำแล้ว —
-        เลือกตอนลงมือ แต่ห้ามปล่อยให้ help สอนคำสั่งที่พิมพ์แล้วพฤติกรรมไม่ตรงคำสอน
-- [ ] **เทส** — ฟังก์ชันบริสุทธิ์ + `Secretary` กับ provider ปลอม
-  - [ ] provider ปลอมที่ `hasWorkspaceTools == true`: "read README.md in AI-Secretary",
-        "status in AI-Secretary", ย่อหน้า Alpha Capital — ทั้งหมดต้องถึง `startChat`
-        ไม่มีอันไหนแตะ adapter
-  - [ ] provider ธรรมดา: ชุดเดียวกันต้อง classify เหมือนก่อนสปรินต์นี้ทุกตัว
-  - [ ] ลำดับ: provider เริ่ม false แล้วพลิกเป็น true ระหว่าง session — เทิร์นก่อนพลิกใช้
-        classifier เทิร์นหลังพลิกไม่ใช้
-- [ ] เรียกสกิล `swift-functional-programming` ก่อนแตะ `.swift` ไฟล์แรก
-- [ ] bump `AppVersion.swift` +1
-- [ ] **ขับแอปจริง**: (1) "read README.md in AI-Secretary" ต้องได้คำตอบจาก agent ที่อ่าน
-      ไฟล์เอง (2) "diff in <project>" แล้วตามด้วย "อธิบายหน่อย" — คำตอบที่สองต้องรู้เรื่อง
-      diff เพราะทั้งคู่อยู่ใน session เดียวกันแล้ว ซึ่งเป็นสิ่งที่ก่อนสปรินต์นี้ทำไม่ได้
 
 ## Sprint 17  หยุดไล่เก็บ keyword — ยกความเข้าใจ hand-off ให้โมเดล
 

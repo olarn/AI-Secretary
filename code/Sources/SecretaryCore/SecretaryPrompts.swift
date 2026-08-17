@@ -232,25 +232,9 @@ enum SecretaryPrompt {
     \(window)
     """
 
-    static let help = """
-    I can chat with you, and run these read-only Git commands in a registered project:
-    • status — working tree status
-    • diff — summary of uncommitted changes
-    • branch — current branch
-    • log — 20 most recent commits
-
-    I can also read files in a registered project (read-only, stays on this Mac):
-    • list [path] — list a directory, e.g. “list src in AI-Secretary”
-    • read <path> — show a text file, e.g. “read README.md in AI-Secretary”
-
-    And I can read a file and tell you about it. This sends the file's
-    contents to Claude, so I ask permission every single time:
-    • summarize <path> · explain <path> · analyze <path>
-    • review <path> · describe <path> · what does <path> do
-
-    Add “in <project>” to pick a project, e.g. “status in AI-Secretary”.
-    Anything else I treat as a conversation.
-
+    /// The half that is true whichever backend answered — every slash command
+    /// is handled here in the app, before anything is sent anywhere.
+    static let helpSlashCommands = """
     Slash commands:
     • /model <id|opus|sonnet|default> — switch the model
     • /effort <low|medium|high|xhigh|max|default> — adjust reasoning depth
@@ -268,6 +252,53 @@ enum SecretaryPrompt {
     Or just ask me to keep track of something as it happens and I'll set the
     timer up myself.
     """
+
+    /// The typed commands, which exist only on the fallback path.
+    ///
+    /// A bare chat model cannot open a folder, so there it really does matter
+    /// that the person knows to type "list files in …". Shown nowhere else —
+    /// see `helpText(workspaceTools:)`.
+    static let helpTypedCommands = """
+    I can chat with you, and run these read-only Git commands in a registered project:
+    • status — working tree status
+    • diff — summary of uncommitted changes
+    • branch — current branch
+    • log — 20 most recent commits
+
+    I can also read files in a registered project (read-only, stays on this Mac):
+    • list [path] — list a directory, e.g. “list src in AI-Secretary”
+    • read <path> — show a text file, e.g. “read README.md in AI-Secretary”
+
+    And I can read a file and tell you about it. This sends the file's
+    contents to Claude, so I ask permission every single time:
+    • summarize <path> · explain <path> · analyze <path>
+    • review <path> · describe <path> · what does <path> do
+
+    Add “in <project>” to pick a project, e.g. “status in AI-Secretary”.
+    Anything else I treat as a conversation.
+    """
+
+    /// What the assistant tells you it can do — which now depends on which
+    /// backend answered.
+    ///
+    /// Two texts because there are two behaviours. Sprint 16 sends every
+    /// message straight to the agent when the backend has its own tools, so on
+    /// that path "type status in AI-Secretary" describes a keyword rule that no
+    /// longer runs: the words go to the model, which looks for itself. Help
+    /// that teaches a command whose behaviour does not match the teaching is
+    /// worse than no help, because the person believes the phrasing matters and
+    /// blames themselves when it doesn't.
+    static func helpText(workspaceTools: Bool) -> String {
+        let opening = workspaceTools
+            ? """
+              Just tell me what you need, in your own words and in any language \
+              — I work through your own Claude Code, so I can open the files in \
+              a registered project and look for myself. Anything that writes \
+              stops and asks you first.
+              """
+            : helpTypedCommands
+        return opening + "\n\n" + helpSlashCommands
+    }
 }
 
 /// What the assistant can and can't see of the web, and — when it can't —

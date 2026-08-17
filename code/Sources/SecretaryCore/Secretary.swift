@@ -674,6 +674,37 @@ public final class Secretary {
         stateMachine.send(.userBeganInput, reason: "user submitted a message", taskID: .some(taskID))
         stateMachine.send(.beginInterpreting, reason: "classifying intent", taskID: .some(taskID))
 
+        // A backend that can open the folder itself does not need the
+        // classifier, and is actively harmed by it.
+        //
+        // The rules were written when the backend was a bare API with no hands
+        // (`Intent.swift` still says "for this sprint"). Against Claude Code
+        // they cause three things. The local adapter's answer never enters the
+        // model's session — only the latest user message is sent, then
+        // `--resume` — so "diff in X" followed by "explain that" leaves the
+        // model with no idea which diff, the same class of bug as answering
+        // "there's nothing to summarise yet" with the answer on screen. The
+        // keywords are English-only, so "อ่าน README.md" got the capable path
+        // and "read README.md" got the limited one — behaviour split by which
+        // language you typed. And the adapter is simply worse at the job the
+        // agent is already instructed to do for itself.
+        //
+        // Asked of the same value `systemPrompt` uses to choose `agentPrompt`.
+        // They must not diverge: a prompt telling the model it has hands, on a
+        // turn the adapter intercepted, is a promise the app then breaks.
+        //
+        // **There is a window where this is false and the classifier still
+        // runs**, and it is deliberate. Detection has usually not finished when
+        // the app opens, so the first message or two after launch take the
+        // fallback path. That is the correct behaviour for a moment when
+        // nobody yet knows whether Claude Code is there — not a bug, and not
+        // something to hold the turn waiting for.
+        if (chatProvider as? WorkspaceScopedProvider)?.hasWorkspaceTools == true {
+            audit.record(AuditEntry(taskID: taskID, kind: .intentClassified, detail: "agent-mode: chat"))
+            startChat(sending, taskID: taskID)
+            return
+        }
+
         let intent = classify(trimmed)
         audit.record(AuditEntry(taskID: taskID, kind: .intentClassified, detail: describe(intent)))
 
@@ -4129,7 +4160,11 @@ public final class Secretary {
         }
     }
 
-    private var helpText: String { SecretaryPrompt.help }
+    private var helpText: String {
+        SecretaryPrompt.helpText(
+            workspaceTools: (chatProvider as? WorkspaceScopedProvider)?.hasWorkspaceTools == true
+        )
+    }
 }
 
 extension Array where Element == String {

@@ -1505,3 +1505,53 @@ v0.15.271 ทำให้โปรเจกต์ที่ตอบ Always แ�
 **ยังไม่ทำ** เพราะเป็นการตัดความสามารถที่เจ้าของอาจตั้งใจให้มี — เป็นการตัดสินใจของเจ้าของ
 
 เทสรวม **1,183 ตัวผ่าน**
+
+## Sprint 16 — classifier หลบทางให้ agent (v0.16.275)
+
+`RuleBasedIntentClassifier` เกิดตอน backend เป็น bare API ที่ไม่มีมือมีเท้า — `Intent.swift`
+ยังเขียนไว้เองว่า "for this sprint" วันนี้ backend หลักคือ Claude Code ที่เปิดไฟล์และรัน git
+ของตัวเองได้ และ `agentPrompt` ก็สั่งไว้แล้วว่า "look for yourself" แต่ `beginTurn` ยังเรียก
+`classify` ทุกเทิร์นโดยไม่ดูว่า backend เป็นแบบไหน
+
+รอบนี้: **มี workspace tools = ทุกข้อความเป็นแชท** ถามจาก
+`(chatProvider as? WorkspaceScopedProvider)?.hasWorkspaceTools` ซึ่งเป็น**ค่าเดียวกับที่
+`systemPrompt` ใช้เลือก `agentPrompt` อยู่แล้ว** สองที่นี้ห้ามแยกกันตัดสิน ไม่งั้นจะได้
+"prompt บอกโมเดลว่ามีมือ แต่เทิร์นถูก adapter ดัก" ซึ่งเป็นสัญญาที่แอปผิดเอง
+
+### ทำไมต้องเอาออก ไม่ใช่แค่ปรับ
+
+1. **ไม่ correct** — ผลของ local adapter ไม่เคยเข้า session ของโมเดล เพราะ
+   `ClaudeCodeProvider` ส่งเฉพาะข้อความ user ล่าสุดแล้ว `--resume` พิมพ์ "diff in X"
+   แล้วตามด้วย "อธิบายหน่อย" โมเดลไม่รู้ว่า diff ไหน — bug class เดียวกับที่เคยตอบ
+   "ยังไม่มีอะไรให้สรุปเลยค่ะ" ทั้งที่คำตอบอยู่บนจอ
+2. **ไม่ seamless** — keyword เป็นอังกฤษล้วน "อ่าน README.md" ได้ agent (เก่งกว่า)
+   ส่วน "read README.md" ได้ adapter (จำกัดกว่า) **พฤติกรรมแยกตามภาษาที่พิมพ์**
+3. adapter ทำงานเดียวกันได้แย่กว่า agent ที่ถูกสั่งให้ทำงานนั้นอยู่แล้ว
+
+audit ยังได้ entry `intentClassified` ที่เขียนว่า `agent-mode: chat` — เส้น audit trail
+ต้องอ่านออกว่าทำไมเทิร์นนี้ไม่ผ่าน classifier ไม่ใช่หายไปเฉยๆ
+
+### หน้าต่างที่ยังผ่าน classifier — ตั้งใจ ไม่ใช่บั๊ก
+
+`hasWorkspaceTools` เป็น false จนกว่า detection จะเสร็จ ข้อความหนึ่งถึงสองข้อความแรก
+หลังเปิดแอปจึงยังไปทาง fallback **ปล่อยไว้ตามที่สเปคสั่ง** เพราะเป็นพฤติกรรมที่ถูกต้องของ
+โมเมนต์ที่ยังไม่มีใครรู้ว่ามี Claude Code ไหม และไม่ควรถ่วงเทิร์นไว้รอ มีคอมเมนต์ why
+ตรงเงื่อนไข และมีเทสที่พลิกค่ากลางเซสชันแล้วยืนยันว่าเทิร์นก่อนพลิกใช้ classifier เทิร์นหลังไม่ใช้
+— เพื่อให้ "บางทีก็ classify บางทีก็ไม่" อ่านเป็นการตัดสินใจ ไม่ใช่ของเสีย
+
+### help สองความจริง
+
+`SecretaryPrompt.help` เดิมสอน "status / read / list / summarize" ซึ่งหลังสปรินต์นี้
+เป็นจริงเฉพาะโหมด fallback แยกเป็น `helpText(workspaceTools:)` — โหมด agent บอกว่า
+พิมพ์อะไรก็ได้ภาษาไหนก็ได้ ส่วน `helpTypedCommands` เหลืออยู่ที่ fallback ซึ่งเป็นที่เดียวที่มันจริง
+slash commands อยู่ทั้งสองโหมดเพราะแอปจัดการเองก่อนส่งไปไหน
+**help ที่สอนคำสั่งซึ่งพิมพ์แล้วพฤติกรรมไม่ตรงคำสอน แย่กว่าไม่มี help** เพราะคนจะเชื่อว่า
+การเลือกคำมีผล แล้วโทษตัวเองตอนมันไม่มีผล
+
+### อะไรไม่เปลี่ยน
+
+fallback ใช้ classifier + adapter เหมือนเดิมทุกอย่าง, เกราะของ Sprint 15.2 ไม่ถูกถอด
+(`KeywordBoundaryTests` และ fixture Alpha Capital ยังเขียวโดยไม่ถูกแก้), `handleTool` /
+adapter / `Permissions` ไม่แตะเลย, `help` ที่ดักใน `submit` ยังเป็น local ล้วน
+
+เทสใหม่ 7 ตัวใน `ClassifierStandsAsideTests.swift` รวม **1,190 ตัวผ่าน**
