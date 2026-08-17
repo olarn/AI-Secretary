@@ -73,8 +73,19 @@ git tool call แล้วไม่มีวันไปถึงโมเดล
 
 - [ ] **เทส** — `Tests/SecretaryCoreTests/ProseIsNotACommandTests.swift` (ไฟล์ใหม่)
       ทุกอย่างเป็นฟังก์ชันบริสุทธิ์ใน library target จึงนับ coverage ได้
-  - [ ] fixture ของจริง: ย่อหน้า Alpha Capital ทั้งก้อนเป็น constant พร้อมคอมเมนต์ว่าเจอเมื่อไหร่
-        ต้องได้ `.unknown`
+  - [ ] fixture ของจริง: ย่อหน้าข้างล่างนี้ **คัดลอกทั้งก้อนแบบตรงตัวอักษร** เป็น constant
+        พร้อมคอมเมนต์ว่าเจอเมื่อไหร่ ต้องได้ `.unknown`
+
+        ```
+        Alpha Capital Group is a company specializing in non-performing asset management through its operating subsidiaries, Alpha Capital Asset Management Co., Ltd. (Alpha) and Wireless Asset Management Co., Ltd. (WAMC). The group manages non-performing loan (NPL) portfolios and non-performing assets (NPA), including property sales, borrower follow-up, collection, legal status, collateral management, customer enquiries, and related service processes
+        ```
+
+        **ห้ามย่อ ห้ามแต่ง** — คุณสมบัติที่ทำให้มันเป็น fixture มีสามอย่างพร้อมกันในก้อนเดียว
+        และหายไปทันทีถ้าเขียนใหม่: มี `status` เต็มคำ (ใน "legal status"), มี `" in "`
+        (ใน "specializing **in**"), และ**มีขอบประโยคหลายจุด** ซึ่งเป็นอย่างเดียวที่ทดสอบ
+        Guard 2 ได้จริง — ข้อความประโยคเดียวสั้นๆ ที่มี "legal status" กับ `" in "` จะ*ผ่าน*
+        เงื่อนไขประโยคเดียวแล้วยังจัดประเภทผิดอยู่ ต้องกันด้วย Guard 1 แทน
+        เขียนเทสแยกให้ครอบทั้งสองทาง
   - [ ] ร้อยแก้วอื่นที่มี `status` / `log` / `branch` / `changes` / `history` เต็มคำ + มี `" in "`
         ต้องเป็นแชท
   - [ ] `looksLikeProjectName` ตรงๆ: `"AI-Secretary"` ผ่าน, ย่อหน้าไม่ผ่าน, `""` ไม่ผ่าน
