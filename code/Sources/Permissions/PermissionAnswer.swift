@@ -54,6 +54,21 @@ extension PermissionAnswer {
 /// whole of what `startAgent` asks, and re-asking it on every new session in a
 /// project the person already chose is the friction Sprint 15 exists to remove.
 ///
+/// `.localWrite` is that too, but only since `.projectMemoryWrite` was split
+/// out of it. **This paragraph is the reversal of a narrowing made in Sprint
+/// 15, and the reason it was safe to reverse is the split, not a change of
+/// mind about the danger.** The rule was: a class may be remembered when the
+/// key `(project, tool, class)` describes the whole of what was agreed. When
+/// two operations shared `.localWrite`, it did not — `rememberNote` was scoped
+/// by the sentence it writes, and writes it outside every registered project —
+/// so one Always on a file edit would have covered every later note as well.
+/// With the split, `.localWrite` means exactly one thing, "Claude Code may
+/// write inside this project", and the key says all of it. Driven and found
+/// wanting on 2026-08-17: writing in a registered vault asked again for every
+/// new shell command (`mkdir`, then `mv`, then …), because the only thing
+/// holding a widened permission was a per-rule set that dies with the
+/// conversation.
+///
 /// The rest are excluded, each for its own reason:
 ///
 /// - `.destructive`, `.gitHistoryChanging`, `.dependencyInstalling` are on the
@@ -62,19 +77,15 @@ extension PermissionAnswer {
 /// - `.externalNetwork` and `.browserAction` leave this Mac or act as the
 ///   person somewhere else, which is a different promise from "stop asking
 ///   about my own project".
-/// - `.localWrite` is excluded for the key, not for the danger, and this is the
-///   one worth writing down: the two operations that use it are *scoped by
-///   something the key does not hold*. `widenAgentTools` carries the rules that
-///   were refused, and `rememberNote` carries the sentence to be written. One
-///   Always would silently cover every later set of rules and every later note
-///   in that project. It can be let in the day a grant can name which write.
+/// - `.projectMemoryWrite` writes where the person's own terminal reads, and
+///   outside every folder a grant is keyed to. See the case's own comment.
 ///
 /// A card for any of those offers Once and Deny, and Once means only this time.
 public func mayBeRemembered(_ actionClass: ActionClass) -> Bool {
     switch actionClass {
-    case .readOnly:
+    case .readOnly, .localWrite:
         return true
-    case .localWrite, .externalNetwork, .browserAction,
+    case .projectMemoryWrite, .externalNetwork, .browserAction,
          .destructive, .gitHistoryChanging, .dependencyInstalling:
         return false
     }
@@ -93,6 +104,20 @@ public func mayBeRemembered(_ actionClass: ActionClass) -> Bool {
 /// - the tool is inside that project's allowlist, since `requireApproval`
 ///   re-asks for anything outside it regardless, and a remembered grant that
 ///   policy ignores reads as "already agreed" to the next person who looks.
+/// How far a "yes" reaches, said in the sentence that does the asking.
+///
+/// Written because the widen card promised *"this allows it for the rest of
+/// this session only"* whatever it was asking about. That was true for as long
+/// as the only answers were yes and no; the moment an Always button appeared
+/// beside it, the card was a sentence arguing with its own buttons. Taking the
+/// answers as the argument is what keeps the two from drifting: there is no
+/// second place that decides whether Always is on offer.
+public func permissionScopeSentence(_ answers: [PermissionAnswer]) -> String {
+    answers.contains(.always)
+        ? "Once covers this conversation; Always means you won't be asked for this project again."
+        : "This allows it for the rest of this session only."
+}
+
 public func offeredAnswers(
     for request: ApprovalRequest,
     projectIsRegistered: Bool

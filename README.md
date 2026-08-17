@@ -4,7 +4,7 @@ A macOS desktop companion: a floating animated character that lives on your
 desktop, talks to you in chat, and gets work done through the Claude Code you
 already have installed.
 
-Version 0.15.270. macOS 14+. Not shipped — this is a working repository.
+Version 0.15.271. macOS 14+. Not shipped — this is a working repository.
 
 ## What it actually is
 
@@ -29,7 +29,8 @@ and it says so.
   reached for.
 - **Work in your projects.** Explicitly registered folders only — a path is
   never guessed from a name. Read-only by default; anything that writes stops
-  and asks, and the grant lasts the session, not forever.
+  and asks, and you choose there whether the answer lasts the conversation or
+  the project.
 - **Read your browser.** Optional, off by default. With the
   [Claude in Chrome](https://claude.com/claude-for-chrome) extension it reads
   pages in your own Chrome — including sites you're signed into, because it
@@ -46,13 +47,13 @@ and it says so.
   and nothing more: the message carries no path and no permission, so the one
   who takes it works under her own approvals or refuses.
 
-Sprints 1–14 of the charter are done. Voice is not started.
+Sprints 1–15 of the charter are done. Voice is not started.
 
 ## Getting started
 
 ```bash
 cd code
-swift build            # or: swift test   (1,072 tests)
+swift build            # or: swift test   (1,171 tests)
 ./scripts/package-app.sh
 open AISecretary.app
 ```
@@ -111,8 +112,10 @@ own `State`, which would otherwise shadow `@State`. The rules are in the
   the app's own file, one per character, that nothing else reads.
 - Everything else asks every time however you answer it, and nothing about it
   is ever written down: sending a file to the model, acting in your browser,
-  deleting or overwriting data, changing Git history, installing software. A
-  path dragged in from outside your projects is asked about every time too.
+  deleting or overwriting data, changing Git history, installing software, and
+  keeping a note in your Claude Code memory — that one lands outside every
+  folder you registered, where your own terminal reads it. A path dragged in
+  from outside your projects is asked about every time too.
 - The app holds no credentials of its own — it drives your installed Claude
   Code, and `ANTHROPIC_API_KEY` is stripped from the child process environment,
   so a stray export can't quietly bill your API credit for work you asked to

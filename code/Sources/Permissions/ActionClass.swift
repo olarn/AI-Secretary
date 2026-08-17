@@ -6,6 +6,15 @@ import Foundation
 public enum ActionClass: String, Codable, CaseIterable, Sendable {
     case readOnly
     case localWrite
+    /// Writes into the project's Claude Code memory directory.
+    ///
+    /// Split out of `localWrite` so that class means one thing — the assistant
+    /// writing inside a folder the person registered — and can therefore be
+    /// remembered per project. This one cannot: it writes *outside* every
+    /// registered project, into the directory the person's own terminal
+    /// `claude` reads back, so "yes" here is a different promise from "yes, work
+    /// in my project" and must be asked each time.
+    case projectMemoryWrite
     case destructive
     case gitHistoryChanging
     case dependencyInstalling
@@ -24,6 +33,7 @@ public enum ActionClass: String, Codable, CaseIterable, Sendable {
         switch self {
         case .readOnly: return "Read-only"
         case .localWrite: return "Writes files in the project"
+        case .projectMemoryWrite: return "Writes to your Claude Code memory, outside the project"
         case .destructive: return "Deletes or overwrites data"
         case .gitHistoryChanging: return "Changes Git history"
         case .dependencyInstalling: return "Installs software or dependencies"

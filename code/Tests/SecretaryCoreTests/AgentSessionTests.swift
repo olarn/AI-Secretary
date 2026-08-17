@@ -114,7 +114,10 @@ final class AgentSessionTests: XCTestCase {
         activityPreference = InMemoryActivityPreference(showsActivity: true)
     }
 
-    private func makeSecretary(projects: [Project]) -> Secretary {
+    private func makeSecretary(
+        projects: [Project],
+        grantStore: StandingGrantStoring = InMemoryStandingGrantStore()
+    ) -> Secretary {
         store = InMemoryProjectStore(projects: projects)
         registry = ProjectRegistry(store: store)
         return Secretary(
@@ -125,7 +128,8 @@ final class AgentSessionTests: XCTestCase {
             classify: RuleBasedIntentClassifier().classify,
             audit: AuditLog(),
             activityPreference: activityPreference,
-            chatProvider: provider
+            chatProvider: provider,
+            grantStore: grantStore
         )
     }
 
@@ -442,6 +446,82 @@ final class AgentSessionTests: XCTestCase {
         XCTAssertEqual(request.actionClass, .localWrite, "Writing files must never be approve-once")
         XCTAssertTrue(secretary.transcript.contains { $0.text.contains("out.txt") },
                       "The prompt should say what was blocked")
+    }
+
+    /// The card the owner actually met (2026-08-17): working in a registered
+    /// vault, permission was asked again at every new shell command, because
+    /// Claude Code mints one rule per command prefix and nothing outlived the
+    /// conversation. With the project's write grant on record there is no card
+    /// at all — the refusal is still noticed and still widened, silently.
+    func testAProjectWithAStandingWriteGrantIsNotAskedAgain() async {
+        let allowed = project(grantingAgent: true)
+        let secretary = makeSecretary(
+            projects: [allowed],
+            grantStore: InMemoryStandingGrantStore(grants: [
+                StandingGrant(
+                    projectID: allowed.id,
+                    toolID: Secretary.claudeCodeToolID,
+                    actionClass: .localWrite
+                )
+            ])
+        )
+        secretary.submit("hello")
+        await waitUntilIdle()
+
+        provider.denialsForNextTurn = [denyWrite()]
+        secretary.submit("create out.txt")
+        await waitUntilIdle()
+
+        XCTAssertEqual(
+            secretary.pendingDecision, .none(),
+            "A project already answered Always for must not raise the card again"
+        )
+        XCTAssertFalse(
+            secretary.transcript.contains { $0.text.contains("Shall I go ahead?") },
+            "Nor may it ask in prose. Got: \(secretary.transcript.map(\.text).joined(separator: " | "))"
+        )
+    }
+
+    /// The grant reaching disk is what makes the previous test true on the
+    /// *next* launch, and it is keyed to the project — a second project is a
+    /// separate answer.
+    func testAnsweringAlwaysOnTheWidenCardIsWrittenDown() async {
+        let allowed = project(grantingAgent: true)
+        let grantStore = InMemoryStandingGrantStore()
+        let secretary = makeSecretary(projects: [allowed], grantStore: grantStore)
+        provider.denialsForNextTurn = [denyWrite()]
+        secretary.submit("create out.txt")
+        await waitUntilIdle()
+
+        secretary.resolvePendingApproval(answer: .always)
+        await waitUntilIdle()
+
+        XCTAssertEqual(
+            grantStore.load().getOrElse([]),
+            [StandingGrant(
+                projectID: allowed.id,
+                toolID: Secretary.claudeCodeToolID,
+                actionClass: .localWrite
+            )],
+            "Exactly the one grant, and nothing about which rules were refused"
+        )
+    }
+
+    /// Once is still only once — the answer that changes nothing past this
+    /// conversation has to leave the file empty, or the two buttons mean the
+    /// same thing and the card is lying about the choice.
+    func testAnsweringOnceOnTheWidenCardIsNotWrittenDown() async {
+        let allowed = project(grantingAgent: true)
+        let grantStore = InMemoryStandingGrantStore()
+        let secretary = makeSecretary(projects: [allowed], grantStore: grantStore)
+        provider.denialsForNextTurn = [denyWrite()]
+        secretary.submit("create out.txt")
+        await waitUntilIdle()
+
+        secretary.resolvePendingApproval(answer: .once)
+        await waitUntilIdle()
+
+        XCTAssertEqual(grantStore.load().getOrElse([]), [])
     }
 
     /// The previous turn ended at IDLE, so the retry has to re-enter the state

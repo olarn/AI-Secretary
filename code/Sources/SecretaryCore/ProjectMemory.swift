@@ -236,11 +236,12 @@ public struct RememberBlock: Equatable, Sendable {
 /// \(project)", and the first drive of this produced "…for my-mcp-server, in
 /// your Claude Code memory in my-mcp-server?" — the name twice in one question.
 ///
-/// It does say *outside the project folder*, because the card's own subtitle
-/// for a `.localWrite` reads "Writes files in the project", which is not where
-/// this goes. That subtitle is shared with every other local write and is right
-/// for all of them, so the correction belongs here rather than in
-/// `ActionClass`.
+/// It does say *outside the project folder*. That began as a correction to the
+/// card's subtitle, which read "Writes files in the project" back when this
+/// shared `.localWrite` with every other write; the class was split and
+/// `.projectMemoryWrite` now says it too. Kept because the sentence is what the
+/// person reads first, and saying where a write lands twice is cheap next to
+/// their believing it lands in the project.
 public func memoryApprovalSummary(_ note: MemoryNote) -> String {
     "keep “\(note.title)” in your Claude Code memory (outside the project folder)"
 }

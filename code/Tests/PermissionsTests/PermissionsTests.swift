@@ -4,22 +4,54 @@ import ProjectRegistry
 @testable import Permissions
 
 final class ActionClassTests: XCTestCase {
-    /// Only read-only may be remembered, and the reason `.localWrite` is not on
-    /// this list is worth failing loudly over: the two operations that use it
-    /// are scoped by rules and by note text, neither of which the grant's key
-    /// holds. Letting it in needs a finer key first, not a wider list.
-    func testOnlyReadOnlyMayBeRemembered() {
+    /// Reading and writing *inside a registered project* may be remembered;
+    /// nothing else may.
+    ///
+    /// `.localWrite` joined the list only when `.projectMemoryWrite` was split
+    /// out of it. The rule being pinned is not "writes are fine now" — it is
+    /// that a class may be kept exactly when the grant's key,
+    /// `(project, tool, class)`, describes the whole of what was agreed. While
+    /// the memory note shared this class, it did not: that write lands outside
+    /// every registered project. Widening this list again needs the same
+    /// argument made in the same place, not a case appended.
+    func testOnlyWorkInsideARegisteredProjectMayBeRemembered() {
         XCTAssertTrue(mayBeRemembered(.readOnly))
-        for klass in ActionClass.allCases where klass != .readOnly {
+        XCTAssertTrue(mayBeRemembered(.localWrite))
+        for klass in ActionClass.allCases where klass != .readOnly && klass != .localWrite {
             XCTAssertFalse(mayBeRemembered(klass), "\(klass) must be asked every time")
+        }
+    }
+
+    /// The note is the case this split exists for: it writes into the person's
+    /// own Claude Code memory directory, which their terminal reads, and which
+    /// no project-scoped grant can speak for.
+    func testAMemoryNoteIsAskedEveryTime() {
+        XCTAssertFalse(mayBeRemembered(.projectMemoryWrite))
+        for answer in PermissionAnswer.allCases {
+            XCTAssertNil(answer.duration(for: .projectMemoryWrite), "\(answer)")
         }
     }
 
     /// Every case is on one side or the other, so a case added later fails here
     /// rather than defaulting into whichever arm the switch happens to have.
     func testEveryClassIsAccountedFor() {
-        XCTAssertEqual(Set(ActionClass.allCases.filter(mayBeRemembered)), [.readOnly])
-        XCTAssertEqual(ActionClass.allCases.count, 7)
+        XCTAssertEqual(Set(ActionClass.allCases.filter(mayBeRemembered)), [.readOnly, .localWrite])
+        XCTAssertEqual(ActionClass.allCases.count, 8)
+    }
+
+    /// The sentence on the card and the buttons under it are decided by one
+    /// value, so they cannot come apart the way they did when the widen card
+    /// promised "this session only" beside an Always button.
+    func testTheScopeSentenceFollowsTheButtons() {
+        XCTAssertTrue(
+            permissionScopeSentence([.once, .always, .deny]).contains("Always"),
+            "a card offering Always must say what Always means"
+        )
+        XCTAssertFalse(
+            permissionScopeSentence([.once, .deny]).contains("Always"),
+            "a card without the button must not name it"
+        )
+        XCTAssertTrue(permissionScopeSentence([.once, .deny]).contains("session only"))
     }
 }
 

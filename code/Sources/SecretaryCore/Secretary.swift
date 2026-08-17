@@ -77,17 +77,17 @@ public enum PlannedOperation: Equatable, Sendable {
     /// unusable, so the prompt has to be explicit about what the grant covers.
     case startAgent(prompt: String)
     /// Re-run a turn with extra tools after Claude Code was refused them.
-    /// `.localWrite`, so it asks every single time — this is the door to
-    /// changing the user's files.
+    /// `.localWrite` — the door to changing the user's files, so it is asked,
+    /// but the answer may be kept for the project: see `mayBeRemembered`.
     case widenAgentTools(rules: [String], prompt: String)
     /// Install a skill the assistant says it needs, then ask again.
     /// `.dependencyInstalling`, so it is asked every time: this puts software
     /// on the person's machine.
     case installSkill(plugin: String, prompt: String)
     /// Keep something about this project in its Claude Code memory.
-    /// `.localWrite` — it writes a file, and it writes it *outside* every
-    /// registered project, into the directory the person's own terminal
-    /// sessions read back.
+    /// `.projectMemoryWrite` — its own class precisely because it writes
+    /// *outside* every registered project, into the directory the person's own
+    /// terminal sessions read back, and so may never be remembered.
     case rememberNote(MemoryNote)
 
     public var actionClass: ActionClass {
@@ -101,7 +101,7 @@ public enum PlannedOperation: Equatable, Sendable {
         case .startAgent: return .readOnly
         case .widenAgentTools: return .localWrite
         case .installSkill: return .dependencyInstalling
-        case .rememberNote: return .localWrite
+        case .rememberNote: return .projectMemoryWrite
         }
     }
 
@@ -2325,9 +2325,14 @@ public final class Secretary {
     ///
     /// This is how permissions widen at all. Claude Code has no mid-turn
     /// approval — an un-granted tool is simply refused — so the only honest loop
-    /// is: try, get refused, ask the human, retry with more. The grant is
-    /// `.localWrite`, so it is asked every time and is never persisted to disk:
-    /// permission to change files should not outlive the session.
+    /// is: try, get refused, ask the human, retry with more.
+    ///
+    /// The refusal is per rule, and Claude Code mints one rule per shell
+    /// command prefix, so a session of ordinary work asks again at `mkdir`,
+    /// again at `mv`, again at whatever comes next. That is the friction the
+    /// standing `.localWrite` grant removes: answered Always once, the same
+    /// loop still runs — try, refused, widen, retry — but silently, and the
+    /// person is not shown a card they have already answered for this project.
     private func offerToWiden(_ denied: [DeniedTool], taskID: String) {
         // A browser action belongs to no project — it happens in Chrome — and
         // the person may have registered none at all. Requiring one here meant
@@ -2345,6 +2350,31 @@ public final class Secretary {
         guard !rules.isEmpty else { return }
 
         let inBrowser = denied.contains { BrowserTools.changesState($0.name) }
+
+        // A project the person has already answered Always for is not asked
+        // again. The check has to be made *here*: `proceed` intercepts
+        // `widenAgentTools` before the rail that consults the grants, so this
+        // is the only place on the path that ever reads them. Without it the
+        // Always button records a grant nothing looks at, and the card comes
+        // back on the next command prefix exactly as before.
+        //
+        // Browser actions are excluded, by class and by this condition both:
+        // acting inside a session the person is signed into is not something a
+        // grant scoped to a project folder can speak for.
+        if !inBrowser, grants.has(
+            projectID: project.id,
+            toolID: Self.claudeCodeToolID,
+            actionClass: .localWrite
+        ) {
+            audit.record(AuditEntry(
+                taskID: taskID,
+                kind: .approvalGranted,
+                detail: "standing write grant for \(project.name): \(rules.joined(separator: ", "))"
+            ))
+            widenAndRetry(rules: rules, prompt: prompt, in: project)
+            return
+        }
+
         let request = ApprovalRequest(
             taskID: taskID,
             toolID: Self.claudeCodeToolID,
@@ -2359,6 +2389,13 @@ public final class Secretary {
             rationale: "Retry with these tools allowed"
         )
         audit.record(AuditEntry(taskID: taskID, kind: .approvalRequested, detail: request.commandSummary))
+
+        let howLong = permissionScopeSentence(
+            offeredAnswers(
+                for: request,
+                projectIsRegistered: registry.projects.contains { $0.id == project.id }
+            )
+        )
 
         let what = denied.map { tool in
             BrowserTools.humanDescription(for: tool.name)^
@@ -2379,8 +2416,8 @@ public final class Secretary {
 
             \(what)
 
-            \(scope)Shall I go ahead? This allows it for the rest of this \
-            session only, and I'll try your request again.
+            \(scope)Shall I go ahead? \(howLong) Either way I'll try your \
+            request again.
             """)
         pendingDecision = .some(.approval(request, operation: .widenAgentTools(rules: rules, prompt: prompt)))
     }
