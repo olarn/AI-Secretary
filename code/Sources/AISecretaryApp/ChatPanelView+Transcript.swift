@@ -6,16 +6,7 @@ import SecretaryCore
 /// message becomes bubbles, tables, code blocks and activity lines.
 extension ChatPanelView {
     var emptyTranscriptHint: String {
-        if backendStatus.needsOnboarding {
-            return "Install Claude Code and sign in, and I'll be able to work for you."
-        }
-        if let installation = backendStatus.installation {
-            let version = installation.version.map { " (\($0))" } ?? ""
-            return """
-            Ready — I'll work through your own Claude Code\(version).             Add a project, then just tell me what you need in your own words.
-            """
-        }
-        return "Checking for Claude Code…"
+        SecretaryCore.emptyTranscriptHint(backendStatus.readiness)
     }
 
     var transcript: some View {

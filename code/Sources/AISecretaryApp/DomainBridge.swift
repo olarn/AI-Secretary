@@ -72,3 +72,14 @@ extension Secretary {
     /// What the assistant has asked for a file for, when it has.
     var fileRequestDescription: String? { fileRequest.toOptional() }
 }
+
+extension BackendStatus {
+    /// Which of the three states the panel is looking at, as a value the hint
+    /// can be asked for. The order matters: not-found is a finished answer,
+    /// while a missing installation with no answer yet is still the search.
+    var readiness: BackendReadiness {
+        if needsOnboarding { return .notInstalled }
+        guard let installation else { return .looking }
+        return .ready(version: Option.fromOptional(installation.version))
+    }
+}
