@@ -168,9 +168,15 @@ private func charactersSubmenu(_ characters: [CharacterMenuState]) -> [StatusMen
         // says so. It goes inside the same condition, because a separator with
         // nothing under it is a line drawn for no reason.
         .separator,
+        // ⌘H is advertised here because this is what it does: the whole desktop,
+        // since Sprint 13-2. It used to be advertised on each character's own
+        // row, which was true before that and quietly false after — and stayed
+        // false long enough that ⌘H really did hide one character again, for a
+        // different reason (see `handlesHideLocally`).
         .item(StatusMenuItem(
             title: allCharactersTitle(characters),
-            action: .toggleAllCharacters
+            action: .toggleAllCharacters,
+            shortcut: .commandH
         )),
     ])
     + [
@@ -193,13 +199,12 @@ public func allCharactersTitle(_ characters: [CharacterMenuState]) -> String {
 
 private func characterSubmenu(_ character: CharacterMenuState) -> [StatusMenuEntry] {
     [
-        // ⌘H is advertised on every character but only ever reaches the
-        // focused one — the system grants the keystroke once. The row is still
-        // where someone finds out the shortcut exists.
+        // No shortcut on this row: ⌘H takes the whole desktop, and it is
+        // advertised on the row that does that. Hiding one character is a click,
+        // here or on her name.
         .item(StatusMenuItem(
             title: character.isVisible ? "Hide Character" : "Show Character",
-            action: .toggleCharacter(character: character.id),
-            shortcut: .commandH
+            action: .toggleCharacter(character: character.id)
         )),
         .item(StatusMenuItem(title: "New chat", action: .newChat(character: character.id))),
         .item(StatusMenuItem(

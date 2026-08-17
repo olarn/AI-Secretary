@@ -208,14 +208,22 @@ final class StatusMenuTests: XCTestCase {
 
     // MARK: - Shortcuts
 
-    func testTheShortcutsAreAdvertisedWhereTheyAlwaysWere() {
+    /// ⌘H is advertised on the row it actually acts on.
+    ///
+    /// It used to be asserted on each character's own "Hide Character" row, which
+    /// was right until Sprint 13-2 made ⌘H take the whole desktop and was never
+    /// moved afterwards — a menu promising one thing while the key did another.
+    /// Deliberately reversed here, not weakened: the assertion is as strict, and
+    /// the row that must *not* carry it is checked too.
+    func testCommandHIsAdvertisedOnTheRowThatTakesEverything() {
         let menu = statusBarMenu(summary: "x", characters: [state(miku, "Miku")])
 
         XCTAssertEqual(item(menu, "Token Usage")?.shortcut, .commandU)
         XCTAssertEqual(item(menu, "Quit AI Secretary")?.shortcut, .commandQ)
-        XCTAssertEqual(
+        XCTAssertEqual(item(menu, "Hide All")?.shortcut, .commandH)
+        XCTAssertNil(
             item(submenu(menu, "Miku"), "Hide Character")?.shortcut,
-            .commandH
+            "One character is a click, not ⌘H — advertising it here is the bug"
         )
     }
 }

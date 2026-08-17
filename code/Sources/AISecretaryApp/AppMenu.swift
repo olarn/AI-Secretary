@@ -64,16 +64,18 @@ enum AppMenu {
         about.target = target
         menu.addItem(.separator())
 
-        // ⌘H hides the character, not the application. An accessory app has no
-        // windows in the Dock to come back from, so `NSApplication.hide` mostly
-        // just made the companion vanish with no obvious way to return it — and
-        // hiding the character is the thing people actually want that key for.
-        let hide = menu.addItem(
-            withTitle: "Hide Character",
-            action: #selector(AppCommands.toggleCharacter(_:)),
-            keyEquivalent: "h"
-        )
-        hide.target = target
+        // No ⌘H item here, deliberately. There was one — "Hide Character", from
+        // before Sprint 13-2 made ⌘H mean the whole app — and because this menu
+        // is searched before any local monitor, it went on answering ⌘H with the
+        // old one-character behaviour whenever `handlesHideLocally` declined.
+        // Under a non-Latin layout that was *every* press, so the newer feature
+        // never ran. The monitor in `AppDelegate.watchForHideShortcut` owns the
+        // key now, and it is the only thing that can: a menu key equivalent is
+        // searched in the frontmost app's menu, and the chat bubble takes the
+        // keyboard without making this app frontmost.
+        //
+        // Per-character hiding is still there, on each character's own row in the
+        // status bar menu.
 
         // Also in the status bar menu, but a key equivalent only works from the
         // main menu — a status item's menu is not searched for shortcuts, so
@@ -127,7 +129,6 @@ enum AppMenu {
 @objc protocol AppCommands {
     @objc func increaseTextSize(_ sender: Any?)
     @objc func decreaseTextSize(_ sender: Any?)
-    @objc func toggleCharacter(_ sender: Any?)
     @objc func showAbout(_ sender: Any?)
     @objc func toggleUsageWindow(_ sender: Any?)
 }

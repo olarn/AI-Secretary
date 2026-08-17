@@ -335,7 +335,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
             let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
             guard handlesHideLocally(
                 isOurWindowKey: NSApp.keyWindow != nil,
-                key: event.charactersIgnoringModifiers ?? "",
+                keyCode: event.keyCode,
                 hasOnlyCommand: flags == .command
             ) else { return event }
             self.hideEverything()
@@ -441,8 +441,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
 
     /// ⌘H. Goes through the same toggle the status bar item uses; the character
     /// reports back so the menu's wording doesn't go stale.
-    func toggleCharacter(_ sender: Any?) { focused.toggleCharacterVisibility() }
-
     func showAbout(_ sender: Any?) { AboutPanel.show() }
 
     func toggleUsageWindow(_ sender: Any?) { usageWindow.toggle(using: focused.appearance) }
