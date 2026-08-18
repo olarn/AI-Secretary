@@ -59,7 +59,7 @@ final class QueuedAfterTurnEndsTests: XCTestCase {
         secretary.submit("what is 2+2?")
         finishTheTurn()
 
-        secretary.resolveInterruption(queue: true)
+        secretary.resolveInterruption(.wait)
         await settle()
 
         XCTAssertTrue(
@@ -76,7 +76,7 @@ final class QueuedAfterTurnEndsTests: XCTestCase {
         makeBusy()
         secretary.submit("what is 2+2?")
 
-        secretary.resolveInterruption(queue: true)
+        secretary.resolveInterruption(.wait)
 
         XCTAssertEqual(secretary.queuedMessages.count, 1)
         XCTAssertFalse(said(secretary, "Now, the one that was waiting:"))

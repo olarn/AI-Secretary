@@ -285,10 +285,25 @@ public enum PendingDecision: Equatable, Sendable {
     /// work thrown away. Both answers are reasonable — wait your turn, or drop
     /// that and do this — and which one is right depends on what the person
     /// meant, which only they know.
-    case interruption(text: String, attachments: [Attachment])
+    /// `candidates` are the characters who were free when the card was drawn —
+    /// one button each. Carried on the decision rather than fetched by the view
+    /// at draw time, so the card cannot redraw itself into a different set of
+    /// buttons while somebody is deciding which one to press.
+    case interruption(text: String, attachments: [Attachment], candidates: [CharacterCard])
     /// A link arrived in chat and the assistant is being asked whether to go
     /// and work in that site as the person. Nothing has been opened yet.
     case website(WebTaskRequest)
+}
+
+/// The three answers to "I'm still on the last one".
+///
+/// A type rather than a `Bool` plus an optional second argument: the third
+/// answer carries *who*, and a boolean cannot say that without a companion
+/// parameter which is meaningless whenever the boolean is true.
+public enum InterruptionAnswer: Equatable, Sendable {
+    case wait
+    case replace
+    case delegate(to: CharacterCard)
 }
 
 /// Orchestration layer. Interprets a message, resolves context, applies policy,
@@ -641,7 +656,11 @@ public final class Secretary {
                 I'm still on the last one. Shall this wait its turn, or does it \
                 replace what I'm doing?
                 """)
-            pendingDecision = .some(.interruption(text: trimmed, attachments: carried))
+            pendingDecision = .some(.interruption(
+                text: trimmed,
+                attachments: carried,
+                candidates: delegationCandidates(directorySnapshot())
+            ))
             return
         }
 
@@ -1038,11 +1057,23 @@ public final class Secretary {
     }
 
     /// Answers the card that appears when something is typed mid-flight.
-    public func resolveInterruption(queue wait: Bool) {
-        guard case .interruption(let text, let carried) = pendingDecision.toOptional() else { return }
+    ///
+    /// An enum rather than the `Bool` this used to take. The moment a two-way
+    /// answer grew a third, a boolean could only have carried it as a second
+    /// parameter that is meaningless unless the first is false — which is the
+    /// same trap the charter records for the arrow keys: one key, one owner, one
+    /// type that can say all of what it means.
+    public func resolveInterruption(_ answer: InterruptionAnswer) {
+        guard case .interruption(let text, let carried, let candidates)
+            = pendingDecision.toOptional() else { return }
         pendingDecision = .none()
 
-        if wait {
+        if case .delegate(let card) = answer {
+            delegate(text, carried, to: card, fallbackCandidates: candidates)
+            return
+        }
+
+        if case .wait = answer {
             queue.append(QueuedMessage(text: text, attachments: carried))
             say(.secretary, "\(chosenLine(CardChoice.waitItsTurn)) — I'll come to that when this one's done.")
             // The queue is normally pumped when a turn ends. If this turn ended
@@ -1064,6 +1095,58 @@ public final class Secretary {
             stopCurrentTurn(because: "you replaced it")
             beginTurn(text, attachments: carried)
         }
+    }
+
+    /// The third answer: give it to a character who was free.
+    ///
+    /// Freeness is re-read here rather than taken from the card. The card is a
+    /// snapshot from when it was drawn and the person may have sat with it for a
+    /// minute; every character lives on this actor in this process, so asking
+    /// again costs nothing and is exact. Handing work to somebody who has since
+    /// started something would break the only promise the button makes.
+    ///
+    /// On refusal the card comes back with the *same* candidate list minus
+    /// nobody — `delegationCandidates` re-filters it, so if she was the last one
+    /// free the card returns with two buttons and the person is not offered the
+    /// same dead end twice.
+    private func delegate(
+        _ text: String,
+        _ carried: [Attachment],
+        to card: CharacterCard,
+        fallbackCandidates: [CharacterCard]
+    ) {
+        let live = directorySnapshot()
+        let message = CharacterMessage(
+            from: profile.id,
+            fromName: profile.displayName,
+            to: card.id,
+            kind: .errand,
+            body: text
+        )
+        let recipient = live.first { $0.id == card.id } ?? card
+
+        delegationDeliverable(
+            message,
+            known: Set(live.map(\.id)),
+            outstanding: sentErrands,
+            recipient: recipient
+        ).fold(
+            { error in
+                say(.secretary, "\(chosenLine(CardChoice.giveItTo(card.name))) — \(relayRefusalLine(error, to: card.name))")
+                // Asked again rather than dropped: the message is still
+                // unanswered, and silently keeping it would leave the person
+                // believing it had gone somewhere.
+                pendingDecision = .some(.interruption(
+                    text: text,
+                    attachments: carried,
+                    candidates: delegationCandidates(live)
+                ))
+            },
+            { _ in
+                say(.secretary, "\(chosenLine(CardChoice.giveItTo(card.name))).")
+                send(text, to: [recipient])
+            }
+        )
     }
 
     public func toggleQueuePause() {
@@ -1647,7 +1730,7 @@ public final class Secretary {
         // the message that raised the question is put in the queue rather than
         // dropped. Losing what someone typed is the one outcome neither answer
         // would have produced.
-        if case .interruption(let text, let carried) = decision {
+        if case .interruption(let text, let carried, _) = decision {
             queue.append(QueuedMessage(text: text, attachments: carried))
             say(.secretary, "(Kept “\(text)” in the queue — you typed again before choosing.)")
             return

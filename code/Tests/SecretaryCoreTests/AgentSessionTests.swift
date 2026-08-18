@@ -1025,7 +1025,7 @@ final class AgentSessionTests: XCTestCase {
         let secretary = await busySecretary()
         secretary.submit("and another thing")
 
-        guard case .interruption(let text, _) = secretary.pendingDecision.toOptional() else {
+        guard case .interruption(let text, _, _) = secretary.pendingDecision.toOptional() else {
             return XCTFail("Expected to be asked. Got: \(secretary.pendingDecision)")
         }
         XCTAssertEqual(text, "and another thing")
@@ -1035,7 +1035,7 @@ final class AgentSessionTests: XCTestCase {
     func testWaitingItsTurnQueuesRatherThanRuns() async {
         let secretary = await busySecretary()
         secretary.submit("and another thing")
-        secretary.resolveInterruption(queue: true)
+        secretary.resolveInterruption(.wait)
 
         XCTAssertEqual(secretary.queuedMessages, ["and another thing"])
         XCTAssertEqual(provider.callCount, 1)
@@ -1050,7 +1050,7 @@ final class AgentSessionTests: XCTestCase {
             .textDelta("done"),
             .completed(stopReason: .none(), usage: .none())
         ]
-        secretary.resolveInterruption(queue: false)
+        secretary.resolveInterruption(.replace)
         await waitUntilIdle()
 
         XCTAssertEqual(provider.callCount, 2)
@@ -1064,13 +1064,13 @@ final class AgentSessionTests: XCTestCase {
     func testBothAnswersToTheInterruptionCardAreWrittenDown() async {
         let waited = await busySecretary()
         waited.submit("and another thing")
-        waited.resolveInterruption(queue: true)
+        waited.resolveInterruption(.wait)
         XCTAssertTrue(waited.transcript.contains { $0.text.contains(chosenLine(CardChoice.waitItsTurn)) })
 
         let replaced = await busySecretary()
         replaced.submit("actually do this instead")
         provider.eventsForNextTurn = [.completed(stopReason: .none(), usage: .none())]
-        replaced.resolveInterruption(queue: false)
+        replaced.resolveInterruption(.replace)
         await waitUntilIdle()
         XCTAssertTrue(replaced.transcript.contains { $0.text.contains(chosenLine(CardChoice.replaceRunning)) })
     }
@@ -1108,7 +1108,7 @@ final class AgentSessionTests: XCTestCase {
     func testAHeldQueueDoesNotStartWhenTheTurnEnds() async {
         let secretary = await busySecretary()
         secretary.submit("later, please")
-        secretary.resolveInterruption(queue: true)
+        secretary.resolveInterruption(.wait)
         secretary.toggleQueuePause()
 
         secretary.stopCurrentTurn(because: "you stopped it")
@@ -1134,7 +1134,7 @@ final class AgentSessionTests: XCTestCase {
         secretary.submit("second extra")
 
         XCTAssertEqual(secretary.queuedMessages, ["first extra"])
-        guard case .interruption(let text, _) = secretary.pendingDecision.toOptional() else {
+        guard case .interruption(let text, _, _) = secretary.pendingDecision.toOptional() else {
             return XCTFail("the newest one is the question now")
         }
         XCTAssertEqual(text, "second extra")
@@ -1148,7 +1148,7 @@ final class AgentSessionTests: XCTestCase {
     func testNewConversationForgetsTheContextAndStopsWhatWasStanding() async {
         let secretary = await busySecretary()
         secretary.submit("something for later")
-        secretary.resolveInterruption(queue: true)
+        secretary.resolveInterruption(.wait)
         XCTAssertEqual(secretary.queuedMessages.count, 1)
 
         secretary.newConversation()
@@ -1201,7 +1201,7 @@ final class AgentSessionTests: XCTestCase {
     func testClearingTheQueueDropsItRatherThanHoldingIt() async {
         let secretary = await busySecretary()
         secretary.submit("never mind this one")
-        secretary.resolveInterruption(queue: true)
+        secretary.resolveInterruption(.wait)
 
         secretary.clearQueue()
 

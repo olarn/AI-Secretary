@@ -110,3 +110,17 @@ public func directoryPrompt(_ others: [CharacterCard]) -> Option<String> {
         something that did not happen is worse than saying you couldn't.
         """)
 }
+
+/// Who the interruption card may offer the work to: everyone who is free.
+///
+/// An empty result *is* the requirement "nobody free, no delegate choice" — the
+/// card draws one button per candidate, so an empty list means no buttons, and
+/// there is no second branch that could disagree with this one.
+///
+/// The directory it reads is a snapshot taken as the card is drawn, so it can be
+/// seconds stale by the time a button is pressed. That is exactly why pressing
+/// one re-checks against live state (`delegationDeliverable`) instead of
+/// trusting what the card was drawn from.
+public func delegationCandidates(_ directory: [CharacterCard]) -> [CharacterCard] {
+    directory.filter { !$0.isBusy }
+}

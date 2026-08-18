@@ -411,7 +411,7 @@ struct ChatPanelView: View {
                 in: RoundedRectangle(cornerRadius: 8)
             )
 
-        case .interruption(let text, _):
+        case .interruption(let text, _, let freeCharacters):
             VStack(alignment: .leading, spacing: appearance.settings.panelSpacing) {
                 Label("I'm still on the last one", systemImage: "clock.arrow.circlepath")
                     .font(.system(size: appearance.settings.footnoteFontSize, weight: .semibold))
@@ -421,17 +421,41 @@ struct ChatPanelView: View {
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: appearance.settings.panelSpacing * 1.3) {
-                    Button(CardChoice.waitItsTurn) { secretary.resolveInterruption(queue: true) }
+                    Button(CardChoice.waitItsTurn) { secretary.resolveInterruption(.wait) }
                         .buttonStyle(.borderedProminent)
                     // Says what it costs. The running turn is a CLI invocation
                     // that can't be paused or resumed, so replacing it throws
                     // away whatever it had done.
                     Button(CardChoice.replaceRunning) {
-                        secretary.resolveInterruption(queue: false)
+                        secretary.resolveInterruption(.replace)
                     }
                     .buttonStyle(.bordered)
                 }
                 .font(.system(size: appearance.settings.footnoteFontSize))
+                // One per character who was free when this was drawn, and none
+                // at all when nobody was — the empty list is the rule, so there
+                // is no "is anyone free?" branch here to disagree with it.
+                //
+                // Their own row rather than alongside the two above: those
+                // answers are about this character's queue, these hand the work
+                // somewhere else entirely, and a row of four buttons reads as
+                // four shades of the same choice.
+                //
+                // Stacked, not in a row: names are as long as people's names
+                // are, and three of them beside each other is how a card
+                // overflows a window whose width the person chose. Down the
+                // page it can only ever be as wide as the longest single name.
+                if !freeCharacters.isEmpty {
+                    VStack(alignment: .leading, spacing: appearance.settings.panelSpacing) {
+                        ForEach(freeCharacters) { who in
+                            Button(CardChoice.giveItTo(who.name)) {
+                                secretary.resolveInterruption(.delegate(to: who))
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                    }
+                    .font(.system(size: appearance.settings.footnoteFontSize))
+                }
             }
             .padding(appearance.settings.panelPadding)
             .background(theme.accentFill.color, in: RoundedRectangle(cornerRadius: 8))

@@ -16,6 +16,12 @@ public enum CardChoice {
     public static let notThisOne = "Not this one"
     public static let start = "Start"
     public static let cancel = "Cancel"
+
+    /// One button per character who is free, so the name is on the button
+    /// rather than behind a second menu — the answer to "who?" is the whole
+    /// point of the choice, and hiding it would make this the slowest of the
+    /// three rather than the quickest.
+    public static func giveItTo(_ name: String) -> String { "Give it to \(name)" }
 }
 
 /// How an answered card is written into the conversation.

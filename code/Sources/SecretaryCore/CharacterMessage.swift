@@ -93,6 +93,15 @@ public enum RelayError: Error, Equatable, Sendable {
     /// A report for an errand nobody is waiting on: already answered, timed
     /// out, or invented.
     case unknownErrand
+    /// Only reachable from the interruption card's third button, where the
+    /// whole promise is "she is free". Between the card being drawn and the
+    /// button being pressed she may have started something, and handing it over
+    /// anyway would break the one thing that button says.
+    ///
+    /// Deliberately *not* used by the prose hand-off: Sprint 14 decided a busy
+    /// recipient takes the errand and queues it, and this must not quietly
+    /// reverse that. See `delegationDeliverable`.
+    case recipientBusy(name: String)
 }
 
 public enum CharacterRelay: Sendable {
@@ -259,7 +268,37 @@ public func relayRefusalLine(_ error: RelayError, to name: String) -> String {
         return "\(on) is still on the last thing I sent. I'll wait for that before sending another."
     case .unknownErrand:
         return "That answer arrived for something nobody was waiting on any more, so I've left it out."
+    case .recipientBusy(let who):
+        return "\(who) started something else just now, so I've kept this one here."
     }
+}
+
+/// Whether this may be handed to a character the person picked *because she was
+/// free*, asked at the moment the button is pressed.
+///
+/// The freeness rail sits in front of the ordinary ones rather than replacing
+/// them: everything that refuses a prose hand-off still refuses this. What it
+/// adds is the promise the button made, checked against live state instead of
+/// against the snapshot the card was drawn from — the card can be seconds stale,
+/// the check never is, because every character shares one actor in one process.
+///
+/// `relayDeliverable` is untouched on purpose. The prose path must keep Sprint
+/// 14's behaviour, where a busy recipient takes the errand and queues it.
+public func delegationDeliverable(
+    _ message: CharacterMessage,
+    known: Set<UUID>,
+    outstanding: [OutstandingErrand],
+    recipient: CharacterCard,
+    now: Date = Date()
+) -> Either<RelayError, CharacterMessage> {
+    guard !recipient.isBusy else { return .left(.recipientBusy(name: recipient.name)) }
+    return relayDeliverable(
+        message,
+        known: known,
+        outstanding: outstanding,
+        recipientName: recipient.name,
+        now: now
+    )
 }
 
 /// How a relayed errand is put to the character who has to act on it.
