@@ -462,7 +462,7 @@ is positional.
 `major.sprint.change`
 
 - `major` — 0 until it goes public; the owner will say when.
-- `sprint` — the sprint currently being worked on. **It is 17 right now, and this is
+- `sprint` — the sprint currently being worked on. **It is 18 right now, and this is
   the only place in the repo that writes this number.** Never derive it from the
   highest heading in the backlog files, because the headings do not state the current
   sprint in either direction — `PRODUCT_BACKLOG.md` ends at the sprint already shipped,

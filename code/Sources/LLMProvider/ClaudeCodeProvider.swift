@@ -477,13 +477,70 @@ public final class ClaudeCodeProvider: ChatProvider, SkillInstalling, @unchecked
         // own reader below. As one body it was a hundred lines whose arms had
         // nothing to do with each other but had to be read together anyway.
         switch type {
-        case "system": return adoptSession(from: object)
+        case "system": return systemLine(object)
         case "assistant": return toolCalls(in: object)
         case "user": return refusals(in: object)
         case "stream_event": return streamEvents(in: object)
         case "result": return [completion(from: object)]
         default: return []
         }
+    }
+
+    /// `system` carries more than the init line, and everything that was not
+    /// `init` used to be dropped right here — which is where every sub-agent
+    /// event was going. Unknown subtypes are still ignored, deliberately: new
+    /// ones appear between Claude Code releases and must not read as failures.
+    private func systemLine(_ object: [String: Any]) -> [ChatStreamEvent] {
+        switch object["subtype"] as? String {
+        case "init": return adoptSession(from: object)
+        case "task_started": return Self.subagentStarted(object)
+        case "task_progress": return Self.subagentProgress(object)
+        case "task_notification": return Self.subagentFinished(object)
+        default: return []
+        }
+    }
+
+    /// The CLI names the sub-agent and says what it was asked for, so nothing
+    /// here is guessed from the launching tool call.
+    static func subagentStarted(_ object: [String: Any]) -> [ChatStreamEvent] {
+        guard let id = object["task_id"] as? String else { return [] }
+        return [.subagentStarted(SubagentTask(
+            id: id,
+            kind: object["subagent_type"] as? String ?? "sub-agent",
+            detail: object["description"] as? String ?? ""
+        ))]
+    }
+
+    static func subagentProgress(_ object: [String: Any]) -> [ChatStreamEvent] {
+        guard let id = object["task_id"] as? String else { return [] }
+        return [.subagentProgress(SubagentTask(
+            id: id,
+            kind: object["subagent_type"] as? String ?? "sub-agent",
+            detail: object["description"] as? String ?? "",
+            lastTool: Option.fromOptional(object["last_tool_name"] as? String)
+        ))]
+    }
+
+    /// `summary` is the sub-agent's own answer. Without one the outcome is still
+    /// worth emitting — "it finished" is the half that matters most, and a
+    /// missing summary must not swallow the whole report.
+    static func subagentFinished(_ object: [String: Any]) -> [ChatStreamEvent] {
+        guard let id = object["task_id"] as? String else { return [] }
+        return [.subagentFinished(SubagentOutcome(
+            id: id,
+            status: object["status"] as? String ?? "finished",
+            summary: object["summary"] as? String ?? ""
+        ))]
+    }
+
+    /// Whose turn this line belongs to.
+    ///
+    /// The stream tags a sub-agent's own turns with the id of the `Agent` tool
+    /// call that started it. Until this was read, a sub-agent's inner tool calls
+    /// were shown as the character's own — measured 2026-08-18: its `Bash`
+    /// arrived as an ordinary activity line with nothing to tell it apart.
+    static func origin(of object: [String: Any]) -> ActivityOrigin {
+        (object["parent_tool_use_id"] as? String).map { .subagent($0) } ?? .main
     }
 
     /// The init line is the only place the session id and the model actually
@@ -509,7 +566,11 @@ public final class ClaudeCodeProvider: ChatProvider, SkillInstalling, @unchecked
                 guard let id = block["id"] as? String, let name = block["name"] as? String else { return nil }
                 let input = block["input"] as? [String: Any] ?? [:]
                 stateLock.withLock { _pendingToolUses[id] = (name, input) }
-                return .activity(AgentActivity(kind: .tool, detail: Self.activityDetail(tool: name, input: input)))
+                return .activity(AgentActivity(
+                    kind: .tool,
+                    detail: Self.activityDetail(tool: name, input: input),
+                    origin: Self.origin(of: object)
+                ))
             }
     }
 
@@ -533,6 +594,14 @@ public final class ClaudeCodeProvider: ChatProvider, SkillInstalling, @unchecked
 
     private func streamEvents(in object: [String: Any]) -> [ChatStreamEvent] {
         guard let event = object["event"] as? [String: Any] else { return [] }
+        // A sub-agent's prose is not the character's. Joined into the reply it
+        // would be another agent's words in her mouth, with no seam to show it —
+        // the one failure here that a reader could not detect. Its progress is
+        // reported by `task_progress` instead, which is the CLI's own channel
+        // for it. Not observed carrying deltas in the 2026-08-18 capture, but
+        // guarded rather than trusted: `--include-partial-messages` is on, and a
+        // longer sub-agent run is exactly where this would first appear.
+        guard case .main = Self.origin(of: object) else { return [] }
 
         // A thinking block opening is the only signal that reasoning is
         // happening; its deltas carry no text to show.

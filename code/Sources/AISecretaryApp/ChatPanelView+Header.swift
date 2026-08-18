@@ -39,6 +39,7 @@ extension ChatPanelView {
                     .foregroundStyle(theme.mutedText.color)
             }
             stopBadge
+            subagentBadge
             queueBadge
             loopBadge
             runBadge
@@ -51,6 +52,40 @@ extension ChatPanelView {
         // around as the bubble mirrored; the title now stays flush left at every
         // size, on either side, and whichever corner the grip is in.
         .padding(.top, Self.headerTopClearance)
+    }
+
+    /// What the sub-agent working on her behalf is doing, and whether it is
+    /// still answering.
+    ///
+    /// Read-only, unlike its neighbours: there is no button because there is
+    /// nothing safe to press. Stopping the sub-agent alone is not something the
+    /// CLI offers — Stop ends the whole turn, and that button is already here.
+    ///
+    /// `TimelineView` rather than a stored timer: the text has to age even when
+    /// nothing arrives, since silence is precisely what it reports, and a badge
+    /// that only redraws on the next event would freeze at "running" for exactly
+    /// the case it exists to show. Five seconds is finer than the 30s threshold
+    /// it has to cross, and it re-evaluates a Text rather than animating.
+    @ViewBuilder
+    private var subagentBadge: some View {
+        if let running = secretary.workingSubagent {
+            TimelineView(.periodic(from: .now, by: 5)) { tick in
+                HStack(spacing: 3) {
+                    Image(systemName: "person.2.badge.gearshape")
+                    Text(running.badgeText(now: tick.date))
+                        .lineLimit(1)
+                }
+                .font(.system(size: appearance.settings.secondaryFontSize, weight: .semibold))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(theme.accentFill.color, in: Capsule())
+                .help("A sub-agent is working on this. Stop ends the whole turn.")
+            }
+            // Truncates before anything with an off switch on it, the same rule
+            // the model badge follows: this is the longest thing in the row and
+            // the only one that is pure information.
+            .layoutPriority(-1)
+        }
     }
 
     /// Shows that the Secretary is on a timer, and stops it in one click.

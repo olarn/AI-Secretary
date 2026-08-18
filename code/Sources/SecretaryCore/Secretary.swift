@@ -310,6 +310,14 @@ public final class Secretary {
     /// would be a list of things you could already scroll to.
     public private(set) var history: [ArchivedConversation] = []
     public private(set) var pendingDecision: Option<PendingDecision> = .none()
+
+    /// The sub-agent running right now, if one is.
+    ///
+    /// Observed by the header so the wait has something attached to it. One at a
+    /// time, not a list: Claude Code runs the `Agent` tool to completion before
+    /// the turn goes on, so a second starting means the first has ended — and a
+    /// list nobody can empty is how a stale badge outlives the work it describes.
+    public private(set) var runningSubagent: Option<RunningSubagent> = .none()
     /// What the assistant is doing this turn, newest last. Collected whether or
     /// not it is being shown, so switching it on mid-turn isn't blank.
     public private(set) var activity: [AgentActivity] = []
@@ -2932,6 +2940,29 @@ public final class Secretary {
             // Kept even when the user has the panel closed: turning it on
             // mid-turn should show what already happened.
             recordActivity(step, before: Option.fromOptional(closed.segmentID))
+            return closed
+        case .subagentStarted(let task):
+            runningSubagent = .some(RunningSubagent(task: task, lastEventAt: Date()))
+            // Said in the conversation, not only in the activity box: that box
+            // is off by default, and a person who has never turned it on is
+            // exactly the one who cannot tell working from dead.
+            let closed = closeSegment(run)
+            say(.secretary, subagentStartedLine(task.kind, detail: task.detail))
+            return closed
+        case .subagentProgress(let task):
+            // No line of its own — the CLI sends one of these per step, and a
+            // conversation that grows a paragraph per step buries the answer.
+            // It moves the header instead, and re-stamps the clock the liveness
+            // rule reads.
+            runningSubagent = runningSubagent.map { $0.hearing(task, at: Date()) }^
+            return run
+        case .subagentFinished(let outcome):
+            // Read before clearing: the kind is only known from the sub-agent
+            // that is ending, and the finish line does not repeat it.
+            let kind = runningSubagent.map(\.task.kind)^.getOrElse("sub-agent")
+            runningSubagent = .none()
+            let closed = closeSegment(run)
+            say(.secretary, subagentReportLine(kind, summary: outcome.summary))
             return closed
         case .toolDenied(let tool):
             return run.noting(tool)

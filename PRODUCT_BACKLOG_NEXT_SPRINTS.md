@@ -7,18 +7,7 @@
 **คุมเฉพาะหัวข้อ multi-app / multi-secretary ในไฟล์นี้** (เจ้าของยืนยัน 2026-08-12)
 Liquid Glass, Loop & Notification, Voice และไฟล์ backlog อีกสองไฟล์ ทำได้ตามปกติ
 
-## Sprint xxx: ทำงานด้วยกัน (ต่อ) 
-- [ ] ให้ character มากกว่า 1 ตัว monitor instruction เดียวกัน
-- [ ] ให้ character มากกว่า 1 ตัว monitor task log เดียวกัน เพื่อให้แต่ละตัวเห็นความคืบหน้าของงาน
-- [ ] ให้ character แต่ละตัว ทำตาม instruction ตามขั้นตอนของตัวเอง โดยดูจากชื่อ profile ว่า step ไหน app ตัวไหนจะทำ
-- [ ] ก่อนเริ่ม character ต้องเช็คว่า 
-    1) มีชื่อ profile ตัวเองใน instruction นั้นไหม (จะได้รู้ว่า step ไหนที่ตัวเองต้องทำ)
-    2) ถาม user ว่าใช้ file ไหนเพื่อบอก progress ระหว่าง app (app ไหนทำอะไร ต้องมา write log เพื่อบอก app ตัวอื่นว่าทำ step ไหนไปแล้ว)
-- [ ] เมื่อ app เริ่มทำงาน character ไหนทำอะไร ต้องมา write log เพื่อบอก app ตัวอื่นว่าทำ step ไหนไปแล้ว
-- [ ] ถ้า step ไหนช่วยกันทำได้ character ต้องรู้ว่า parallel ได้กี่ app, ต้องรออะไรจึงจะรู้ว่าทำแล้ว, และทำเสร็จแล้ว โดย update กันใน task log
-- [ ] prevent เรื่อง lock file และ race condition (ทำซ้ำกัน, เข้าใจว่า app อื่นทำเลยไม่ได้ทำ, ลำดับงานผิด, ข้ามลำดับงาน, infinite loog) 
-
-## Sprint yyy: Multi-session
+## Sprint 19: Multi-session
 - Before Start : อ่าน requirement ทั้งหมดใน sprint นี้ก่อน เพราะต้อง re-architecture app และต้องจัดกลุ่ม feature ที่อยู่ใน Setting, Profile, Skills ใหม่ 
 - Requirements
   - [ ] สามารถเปิด chat bubble ได้มากกว่า 1 window โดยที่แต่ละ window จะแยก Claude Session ออกจากกัน
@@ -38,7 +27,17 @@ Liquid Glass, Loop & Notification, Voice และไฟล์ backlog อีก
     - [ ] แต่ละ session ใน menu มีปุ่มปิด ถ้าปิดก็ลบ history ไปเลย
 - Expected App Architecture
 
-## Sprint zzz: Liquid Glass Theme
+## Sprint 20: Loop & Notification
+- [ ] สั่งให้ loop ได้ เช่น นับถอยหลัง 5 นาทีแล้วแจ้งเตือน หรือ long run แล้วแจ้งเตือนได้
+- [ ] มี local notification เมื่อทำงานเสร็จ (notification settings ตาม macOS)
+- [ ] เมื่อ click ที่กล่อง notication, จะเปิด app และ chat window ขึ้นมา
+
+## Sprint 21: Voice
+- [ ] Push-to-talk or explicit voice activation.
+- [ ] Speech-to-text, text-to-speech, interruption behavior, and privacy controls.
+- [ ] Voice must follow the same approval and auditing model as chat.
+
+## Sprint 22: Liquid Glass Theme
   **ข้อเท็จจริงใต้สปรินต์นี้ขยับไปแล้วบางส่วนที่ v0.10.197 (2026-08-11)** — รอบนั้นแก้อาการ
   "พื้นโปร่งทำให้อ่านไม่ออกเมื่อ desktop สว่าง" ซึ่งแตะโค้ดชุดเดียวกับสปรินต์นี้ อ่านก่อนเริ่มข้อไหนก็ตาม
   - `.fill(.regularMaterial)` ที่ข้อ #2 อ้างถึง **ไม่มีแล้ว** เป็น `theme.ground.color` (สีทึบ)
@@ -107,7 +106,18 @@ Liquid Glass, Loop & Notification, Voice และไฟล์ backlog อีก
 - [ ] **#11 Focus ด้วย Glass** — หน้าต่างนี้ไม่เคยเป็น key window จึงพึ่ง focus state ของระบบไม่ได้
   ต้องวาดสถานะเอง ซึ่งเป็นเหตุผลเดียวกับที่ `PanelToggleStyle` มีอยู่ทุกวันนี้
 
-## Sprint zzzz: App ทำงานร่วมกันได้
+## Sprint 23: ทำงานด้วยกัน (ต่อ) — หลาย character ใน process เดียว
+- [ ] ให้ character มากกว่า 1 ตัว monitor instruction เดียวกัน
+- [ ] ให้ character มากกว่า 1 ตัว monitor task log เดียวกัน เพื่อให้แต่ละตัวเห็นความคืบหน้าของงาน
+- [ ] ให้ character แต่ละตัว ทำตาม instruction ตามขั้นตอนของตัวเอง โดยดูจากชื่อ profile ว่า step ไหน app ตัวไหนจะทำ
+- [ ] ก่อนเริ่ม character ต้องเช็คว่า 
+    1) มีชื่อ profile ตัวเองใน instruction นั้นไหม (จะได้รู้ว่า step ไหนที่ตัวเองต้องทำ)
+    2) ถาม user ว่าใช้ file ไหนเพื่อบอก progress ระหว่าง app (app ไหนทำอะไร ต้องมา write log เพื่อบอก app ตัวอื่นว่าทำ step ไหนไปแล้ว)
+- [ ] เมื่อ app เริ่มทำงาน character ไหนทำอะไร ต้องมา write log เพื่อบอก app ตัวอื่นว่าทำ step ไหนไปแล้ว
+- [ ] ถ้า step ไหนช่วยกันทำได้ character ต้องรู้ว่า parallel ได้กี่ app, ต้องรออะไรจึงจะรู้ว่าทำแล้ว, และทำเสร็จแล้ว โดย update กันใน task log
+- [ ] prevent เรื่อง lock file และ race condition (ทำซ้ำกัน, เข้าใจว่า app อื่นทำเลยไม่ได้ทำ, ลำดับงานผิด, ข้ามลำดับงาน, infinite loog) 
+
+## Sprint 24: App ทำงานร่วมกันได้ — หลาย process
 - [ ] User สามารถ start app พร้อมกันได้มากกว่า 1 app
 - [ ] Two or more app be able to talk to each other.
 - [ ] การทำงานร่วมกัน
@@ -120,36 +130,6 @@ Liquid Glass, Loop & Notification, Voice และไฟล์ backlog อีก
   - [ ] เมื่อ app เริ่มทำงาน app ไหนทำอะไร ต้องมา write log เพื่อบอก app ตัวอื่นว่าทำ step ไหนไปแล้ว
   - [ ] ถ้า step ไหนช่วยกันทำได้ app ต้องรู้ว่า parallel ได้กี่ app, ต้องรออะไรจึงจะรู้ว่าทำแล้ว, และทำเสร็จแล้ว โดย update กันใน task log
   - [ ] prevent เรื่อง lock file และ race condition (ทำซ้ำกัน, เข้าใจว่า app อื่นทำเลยไม่ได้ทำ, ลำดับงานผิด, ข้ามลำดับงาน, infinite loog) 
-
-## Sprint 18: Multi-session
-- Before Start : อ่าน requirement ทั้งหมดใน sprint นี้ก่อน เพราะต้อง re-architecture app และต้องจัดกลุ่ม feature ที่อยู่ใน Setting, Profile, Skills ใหม่ 
-- Requirements
-  - [ ] สามารถเปิด chat bubble ได้มากกว่า 1 window โดยที่แต่ละ window จะแยก Claude Session ออกจากกัน
-  - [ ] การแสดง chat bubble ให้แสดง on top window เดิม แต่ให้ซ้อนทับแบบแหลื่อมๆกัน
-  - [ ] ถ้า drag ตัวละคร, ให้ลากเอา chat bubble ทั้งหมดไปด้วย โดยซ้อนกับเป็นชั้นแบบเหลื่อมๆ แล้วลากไปด้วยกัน 
-  - [ ] มีเมนูใน Menu icon ชื่อ Chats และลอกเอา feature มาจาก Pinned Messages เลย 
-  - [ ] โดย default ใน Chats จะมี 1 session เสมอ คือ session ปัจจุบัน ถ้าปิด app แล้วเกิดใหม่ จะขึ้น session ใหม่ แต่ user สามารถกด session เก่าเพื่อเปิด chat เดิมที่คุยกันอยู่ได้
-  - [ ] เมื่อเปิด chat เก่า จะขึ้น chat window ใหม่ ไม่ทับ chat ปัจจุบัน (ยกเว้นว่าเป็น session เดียวกัน)
-  - [ ] แยก settings ตาม chat window ของใครของมัน แปลว่า แต่ละ chat จะแยก model, effort ได้
-  - [ ] ถ้ามี Project อยู่แล้ว แล้วขึ้น session ใหม่ จะไม่เอา config project เดิมไปด้วย 
-  - [ ] project ที่เพิ่มใหม่ใน session ใหม่ จะไม่เห็นใน session เดิม
-  - [ ] chat window ที่ 2,3 จะไม่มี Profile จนกว่าจะปิดจนเหลือ session (window) เดียว app ก็จะแสดงกลับมา
-  - [ ] จำ session history ได้ 
-  - [ ] เพิ่ม menu Sessions ใน Menu bar
-    - [ ] ตั้งชื่อเมนูสั้นๆ ให้ด้วย ตาม context ที่คุยกัน  
-    - [ ] ถ้า click ที่ session ใน menu จะเปิด chat bubble แล้วคุยต่อ (resumr session) ได้เลย
-    - [ ] แต่ละ session ใน menu มีปุ่มปิด ถ้าปิดก็ลบ history ไปเลย
-- Expected App Architecture
-
-## Sprint 19: Loop & Notification
-- [ ] สั่งให้ loop ได้ เช่น นับถอยหลัง 5 นาทีแล้วแจ้งเตือน หรือ long run แล้วแจ้งเตือนได้
-- [ ] มี local notification เมื่อทำงานเสร็จ (notification settings ตาม macOS)
-- [ ] เมื่อ click ที่กล่อง notication, จะเปิด app และ chat window ขึ้นมา
-
-## Sprint 20: Voice
-- [ ] Push-to-talk or explicit voice activation.
-- [ ] Speech-to-text, text-to-speech, interruption behavior, and privacy controls.
-- [ ] Voice must follow the same approval and auditing model as chat.
 
 ## Defered
   - [ ] ยังไม่ได้พิสูจน์: MCP tool ที่มีผลออกนอกเครื่อง (ส่งเมล/สร้าง event) ถูกจัดเป็น `.localWrite`และการ์ดขออนุมัติขึ้นข้อความ "Send to Claude?" ซึ่งน่าจะสื่อผิด — ต้องทดสอบก่อนถือเป็นบั๊ก

@@ -141,20 +141,79 @@ public struct DeniedTool: Equatable, Sendable {
 /// family at all). What can be shown is the activity itself: that it is
 /// thinking, and which tool it reached for with what argument. In practice
 /// that is what "what is it doing?" actually means.
+/// Whose work a piece of activity is.
+///
+/// Carried as data rather than spelled into `detail`, so the view has nothing to
+/// parse and cannot get the answer wrong by reading a prefix. The associated
+/// value is the id of the `Agent` tool call that started the sub-agent, which is
+/// what the stream tags its inner turns with (`parent_tool_use_id`).
+public enum ActivityOrigin: Equatable, Sendable {
+    case main
+    case subagent(String)
+}
+
 public struct AgentActivity: Equatable, Sendable, Identifiable {
     public enum Kind: Equatable, Sendable { case thinking, tool }
 
     public let id = UUID()
     public let kind: Kind
     public let detail: String
+    /// Defaulted, so every existing caller and test reads unchanged — the
+    /// sub-agent dimension was added without rewriting the ones that never had
+    /// one.
+    public let origin: ActivityOrigin
 
-    public init(kind: Kind, detail: String) {
+    public init(kind: Kind, detail: String, origin: ActivityOrigin = .main) {
         self.kind = kind
         self.detail = detail
+        self.origin = origin
     }
 
     public static func == (lhs: AgentActivity, rhs: AgentActivity) -> Bool {
-        lhs.kind == rhs.kind && lhs.detail == rhs.detail
+        lhs.kind == rhs.kind && lhs.detail == rhs.detail && lhs.origin == rhs.origin
+    }
+}
+
+/// A sub-agent the character has started, as it is worth showing.
+///
+/// Claude Code reports these on its own — `task_started` and `task_progress`
+/// `system` lines carry every field here — so none of it is inferred from tool
+/// calls. Measured against Claude Code 2.1.234; see the sprint record for the
+/// captured stream.
+public struct SubagentTask: Equatable, Sendable, Identifiable {
+    /// The CLI's `task_id`. Stable for the life of the sub-agent, which is what
+    /// makes progress lines attachable to the thing they are about.
+    public let id: String
+    /// `subagent_type` — "general-purpose" and friends.
+    public let kind: String
+    /// The CLI's own `description`, which is a sentence about what it is doing
+    /// right now and changes as it goes.
+    public let detail: String
+    /// The tool it reached for last, when it has reached for one.
+    public let lastTool: Option<String>
+
+    public init(id: String, kind: String, detail: String, lastTool: Option<String> = .none()) {
+        self.id = id
+        self.kind = kind
+        self.detail = detail
+        self.lastTool = lastTool
+    }
+}
+
+/// How a sub-agent ended.
+///
+/// `summary` is the CLI's own one-line answer from `task_notification`, which is
+/// why the character can report an outcome without waiting for the launching
+/// tool's result to come back and without asking the model to say it again.
+public struct SubagentOutcome: Equatable, Sendable {
+    public let id: String
+    public let status: String
+    public let summary: String
+
+    public init(id: String, status: String, summary: String) {
+        self.id = id
+        self.status = status
+        self.summary = summary
     }
 }
 
@@ -165,6 +224,14 @@ public enum ChatStreamEvent: Equatable, Sendable {
     case toolDenied(DeniedTool)
     /// Only Claude Code emits this.
     case activity(AgentActivity)
+    /// A sub-agent started. Only Claude Code emits these three.
+    case subagentStarted(SubagentTask)
+    /// It is still going, and this is what it is doing now. Also the heartbeat
+    /// the liveness rule measures from — the CLI sends one per step, so silence
+    /// is meaningful.
+    case subagentProgress(SubagentTask)
+    /// It finished, with its own summary of the answer.
+    case subagentFinished(SubagentOutcome)
     /// Adaptive thinking began. Carries no visible text — there is none to show.
     case thinking
     case textDelta(String)

@@ -69,6 +69,8 @@ extension Secretary {
     var awaitingDecision: PendingDecision? { pendingDecision.toOptional() }
     var runningLoop: LoopSchedule? { activeLoop.toOptional() }
     var runningInstructions: InstructionRun? { activeInstructionRun.toOptional() }
+    /// The sub-agent working on her behalf, when one is.
+    var workingSubagent: RunningSubagent? { runningSubagent.toOptional() }
     /// What the assistant has asked for a file for, when it has.
     var fileRequestDescription: String? { fileRequest.toOptional() }
 }

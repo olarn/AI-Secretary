@@ -220,6 +220,33 @@ public func relayReportLine(from name: String, body: String) -> String {
     "← \(name) answered:\n\n\(body)"
 }
 
+/// In her own chat, when a sub-agent she started finishes.
+///
+/// Deliberately shaped like `relayReportLine`: an answer that came from
+/// somewhere other than her own turn reads the same whether the somewhere was a
+/// colleague or a sub-agent, and the arrow is what says "this is not me
+/// talking". Said without being asked, which is the whole point — the old
+/// behaviour was silence until the person asked again.
+///
+/// A sub-agent that ends with nothing to say still gets a line. "It finished
+/// and said nothing" is information; a character that stays quiet is
+/// indistinguishable from one whose session died.
+public func subagentReportLine(_ kind: String, summary: String) -> String {
+    let body = summary.trimmingCharacters(in: .whitespacesAndNewlines)
+    return body.isEmpty
+        ? "← The \(kind) sub-agent finished without a summary."
+        : "← The \(kind) sub-agent finished:\n\n\(body)"
+}
+
+/// In her own chat, the moment one starts, so the wait has a reason attached to
+/// it rather than being unexplained silence.
+public func subagentStartedLine(_ kind: String, detail: String) -> String {
+    let what = detail.trimmingCharacters(in: .whitespacesAndNewlines)
+    return what.isEmpty
+        ? "→ Started a \(kind) sub-agent."
+        : "→ Started a \(kind) sub-agent: \(what)"
+}
+
 public func relayRefusalLine(_ error: RelayError, to name: String) -> String {
     switch error {
     case .sentToSelf:
