@@ -48,9 +48,11 @@ public struct CompletionNotice: Equatable, Sendable {
 ///   character she handed it to answers, then reports back, and the character
 ///   who asked finishes again. Notifying on both means two banners for one
 ///   piece of work, the first from somebody the person never spoke to.
-/// - **They are already looking at it.** The app is frontmost *and* her chat is
-///   open: the reply is on screen. A banner for a bubble you are watching fill
-///   in is noise, and it would fire on every turn while typing.
+/// - **Her chat is on screen.** The reply lands in a window the person can
+///   already see, so a banner would be a second copy of it. Being frontmost is
+///   deliberately not part of this: the owner's rule is the window, not the
+///   focus (asked for on 2026-08-18, while driving 0.19.288). A bubble left
+///   open on a second display, or behind the editor, still counts as shown.
 /// - **Nothing to say.** A turn that ends with an empty bubble has no body, and
 ///   a banner with a title and no text reads as a bug.
 ///
@@ -58,11 +60,10 @@ public struct CompletionNotice: Equatable, Sendable {
 /// minutes while nobody is watching is exactly what a notification is for.
 public func completionNotice(
     for turn: FinishedTurn,
-    isChatVisible: Bool,
-    isAppActive: Bool
+    isChatVisible: Bool
 ) -> CompletionNotice? {
     guard !turn.wasErrand else { return nil }
-    guard !(isAppActive && isChatVisible) else { return nil }
+    guard !isChatVisible else { return nil }
 
     let body = noticeBody(turn.text)
     guard !body.isEmpty else { return nil }

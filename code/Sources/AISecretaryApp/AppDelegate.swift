@@ -208,14 +208,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     // MARK: - Notifications
 
     /// A character has finished something. Whether that is worth a banner is
-    /// `completionNotice`'s decision — this only gathers the two facts she
-    /// cannot see from inside herself: whether her chat is up, and whether the
-    /// person is in this app at all.
+    /// `completionNotice`'s decision — this only gathers the one fact she
+    /// cannot see from inside herself: whether her chat is on screen.
     private func announce(_ turn: FinishedTurn, from id: UUID) {
         guard let notice = completionNotice(
             for: turn,
-            isChatVisible: character(id)?.isChatVisible ?? false,
-            isAppActive: NSApp.isActive
+            isChatVisible: character(id)?.isChatVisible ?? false
         ) else { return }
 
         notifier.post(notice, from: id)

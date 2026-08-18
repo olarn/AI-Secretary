@@ -17,22 +17,18 @@ final class CompletionNoticeTests: XCTestCase {
     }
 
     func testNotifiesWhenTheChatIsClosed() {
-        let notice = completionNotice(for: turn(), isChatVisible: false, isAppActive: true)
+        let notice = completionNotice(for: turn(), isChatVisible: false)
 
         XCTAssertEqual(notice?.title, "Miku")
         XCTAssertEqual(notice?.body, "Pushed the branch and the tests are green.")
     }
 
-    func testNotifiesWhenAnotherAppIsInFront() {
-        let notice = completionNotice(for: turn(), isChatVisible: true, isAppActive: false)
-
-        XCTAssertEqual(notice?.title, "Miku")
-    }
-
-    /// The reply is on screen and being watched. This is the case that would
-    /// otherwise fire on every single turn while somebody is typing.
-    func testStaysQuietWhileTheChatIsBeingWatched() {
-        XCTAssertNil(completionNotice(for: turn(), isChatVisible: true, isAppActive: true))
+    /// The reply is in a window the person can see. The window is the whole
+    /// test — not whether this app happens to be the frontmost one, which the
+    /// owner ruled out while driving 0.19.288: a bubble open behind the editor
+    /// is still a bubble they can read.
+    func testStaysQuietWhileHerChatIsOnScreen() {
+        XCTAssertNil(completionNotice(for: turn(), isChatVisible: true))
     }
 
     /// One request, two finished turns: the character who was handed the errand
@@ -40,13 +36,13 @@ final class CompletionNoticeTests: XCTestCase {
     /// the second is the person's.
     func testStaysQuietForAnotherCharactersErrand() {
         XCTAssertNil(
-            completionNotice(for: turn(errand: true), isChatVisible: false, isAppActive: false)
+            completionNotice(for: turn(errand: true), isChatVisible: false)
         )
     }
 
     func testStaysQuietWhenThereIsNothingToSay() {
         XCTAssertNil(
-            completionNotice(for: turn(text: "   \n  "), isChatVisible: false, isAppActive: false)
+            completionNotice(for: turn(text: "   \n  "), isChatVisible: false)
         )
     }
 
@@ -55,8 +51,7 @@ final class CompletionNoticeTests: XCTestCase {
     func testAFailureSaysSoInTheTitle() {
         let notice = completionNotice(
             for: turn(text: "The build failed.", succeeded: false),
-            isChatVisible: false,
-            isAppActive: false
+            isChatVisible: false
         )
 
         XCTAssertEqual(notice?.title, "Miku couldn't finish")
