@@ -216,7 +216,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
             isChatVisible: character(id)?.isChatVisible ?? false
         ) else { return }
 
-        notifier.post(notice, from: id)
+        // Her portrait rides along when she has one. Asked through the Bool and
+        // the URL rather than `resolve`, whose `Option` would mean importing
+        // FunctionalCore into a file that sits next to SwiftUI.
+        let artwork = ProfileArtwork()
+        notifier.post(
+            notice,
+            from: id,
+            picture: artwork.hasArtwork(for: id) ? artwork.url(for: id) : nil
+        )
     }
 
     /// A banner was clicked: bring back the character who posted it, with her

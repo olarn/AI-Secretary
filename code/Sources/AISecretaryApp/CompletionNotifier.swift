@@ -66,7 +66,13 @@ final class CompletionNotifier: NSObject, UNUserNotificationCenterDelegate {
     /// The identifier is the character's, so a second answer from the same
     /// character replaces her own waiting banner instead of stacking — ten
     /// loop checks while you are out should leave the latest, not a column.
-    func post(_ notice: CompletionNotice, from characterID: UUID) {
+    ///
+    /// - Parameter picture: her own portrait, when she has one. It becomes the
+    ///   image on the right of the banner — **not** the small icon on the left,
+    ///   which is the app's and cannot be set per notification: macOS reads that
+    ///   one from the bundle. With four characters answering, the portrait is
+    ///   what says which of them this is before you read the name.
+    func post(_ notice: CompletionNotice, from characterID: UUID, picture: URL?) {
         guard isAvailable else {
             NSLog("AISecretary: would notify — \(notice.title): \(notice.body)")
             return
@@ -76,6 +82,9 @@ final class CompletionNotifier: NSObject, UNUserNotificationCenterDelegate {
         content.body = notice.body
         content.sound = .default
         content.userInfo = [Self.characterKey: characterID.uuidString]
+        if let attachment = picture.flatMap(Self.attachment) {
+            content.attachments = [attachment]
+        }
 
         UNUserNotificationCenter.current().add(
             UNNotificationRequest(
@@ -88,6 +97,28 @@ final class CompletionNotifier: NSObject, UNUserNotificationCenterDelegate {
             if let error {
                 NSLog("AISecretary: could not post a notification — \(error.localizedDescription)")
             }
+        }
+    }
+
+    /// Her portrait, wrapped for the notification centre.
+    ///
+    /// **Attaches a copy, never the original.** `UNNotificationAttachment`
+    /// takes ownership of the file it is given and moves it into its own store,
+    /// so handing it `ProfileArtwork`'s URL would take the character's picture
+    /// off disk — she would lose her face the first time she finished something
+    /// unwatched. The copy goes to the temporary directory, which the system
+    /// empties by itself; if the attachment can't be made, the copy is removed
+    /// here rather than left behind.
+    private nonisolated static func attachment(for picture: URL) -> UNNotificationAttachment? {
+        let copy = FileManager.default.temporaryDirectory
+            .appendingPathComponent("notice-\(UUID().uuidString).png")
+        do {
+            try FileManager.default.copyItem(at: picture, to: copy)
+            return try UNNotificationAttachment(identifier: "", url: copy, options: nil)
+        } catch {
+            try? FileManager.default.removeItem(at: copy)
+            NSLog("AISecretary: could not attach the picture — \(error.localizedDescription)")
+            return nil
         }
     }
 
@@ -108,11 +139,10 @@ final class CompletionNotifier: NSObject, UNUserNotificationCenterDelegate {
 
     /// What to do when one arrives while the app is frontmost.
     ///
-    /// It normally cannot: `completionNotice` refuses to make one while the app
-    /// is active with her chat open. It still can when the app is active and
-    /// her chat is shut — someone typing to another character — and in that
-    /// case the banner is the whole point, so it is shown rather than swallowed,
-    /// which is what the system does by default.
+    /// It can: `completionNotice` refuses only while *her* chat is on screen, so
+    /// somebody typing to another character still gets one. There the banner is
+    /// the whole point, and it is shown rather than swallowed, which is what the
+    /// system does by default with the app in front.
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
