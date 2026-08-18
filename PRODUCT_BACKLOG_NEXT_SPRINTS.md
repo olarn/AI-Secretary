@@ -2,35 +2,7 @@
 
 งานของ sprint ถัดๆ ไป ยังไม่เริ่ม
 
-## TODO: Design App Architecture ก่อน - ถ้ายังมี TODO ถ้าแก้ code จนกว่า user จะลบบรรทัดนี้เอง
-
-**คุมเฉพาะหัวข้อ multi-app / multi-secretary ในไฟล์นี้** (เจ้าของยืนยัน 2026-08-12)
-Liquid Glass, Loop & Notification, Voice และไฟล์ backlog อีกสองไฟล์ ทำได้ตามปกติ
-
-## Sprint 19: Multi-session
-- Before Start : อ่าน requirement ทั้งหมดใน sprint นี้ก่อน เพราะต้อง re-architecture app และต้องจัดกลุ่ม feature ที่อยู่ใน Setting, Profile, Skills ใหม่ 
-- Requirements
-  - [ ] สามารถเปิด chat bubble ได้มากกว่า 1 window โดยที่แต่ละ window จะแยก Claude Session ออกจากกัน
-  - [ ] การแสดง chat bubble ให้แสดง on top window เดิม แต่ให้ซ้อนทับแบบแหลื่อมๆกัน
-  - [ ] ถ้า drag ตัวละคร, ให้ลากเอา chat bubble ทั้งหมดไปด้วย โดยซ้อนกับเป็นชั้นแบบเหลื่อมๆ แล้วลากไปด้วยกัน 
-  - [ ] มีเมนูใน Menu icon ชื่อ Chats และลอกเอา feature มาจาก Pinned Messages เลย 
-  - [ ] โดย default ใน Chats จะมี 1 session เสมอ คือ session ปัจจุบัน ถ้าปิด app แล้วเกิดใหม่ จะขึ้น session ใหม่ แต่ user สามารถกด session เก่าเพื่อเปิด chat เดิมที่คุยกันอยู่ได้
-  - [ ] เมื่อเปิด chat เก่า จะขึ้น chat window ใหม่ ไม่ทับ chat ปัจจุบัน (ยกเว้นว่าเป็น session เดียวกัน)
-  - [ ] แยก settings ตาม chat window ของใครของมัน แปลว่า แต่ละ chat จะแยก model, effort ได้
-  - [ ] ถ้ามี Project อยู่แล้ว แล้วขึ้น session ใหม่ จะไม่เอา config project เดิมไปด้วย 
-  - [ ] project ที่เพิ่มใหม่ใน session ใหม่ จะไม่เห็นใน session เดิม
-  - [ ] chat window ที่ 2,3 จะไม่มี Profile จนกว่าจะปิดจนเหลือ session (window) เดียว app ก็จะแสดงกลับมา
-  - [ ] จำ session history ได้ 
-  - [ ] เพิ่ม menu Sessions ใน Menu bar
-    - [ ] ตั้งชื่อเมนูสั้นๆ ให้ด้วย ตาม context ที่คุยกัน  
-    - [ ] ถ้า click ที่ session ใน menu จะเปิด chat bubble แล้วคุยต่อ (resumr session) ได้เลย
-    - [ ] แต่ละ session ใน menu มีปุ่มปิด ถ้าปิดก็ลบ history ไปเลย
-- Expected App Architecture
-
-## Sprint 20: Loop & Notification
-- [ ] สั่งให้ loop ได้ เช่น นับถอยหลัง 5 นาทีแล้วแจ้งเตือน หรือ long run แล้วแจ้งเตือนได้
-- [ ] มี local notification เมื่อทำงานเสร็จ (notification settings ตาม macOS)
-- [ ] เมื่อ click ที่กล่อง notication, จะเปิด app และ chat window ขึ้นมา
+## Sprint 20
 
 ## Sprint 21: Voice
 - [ ] Push-to-talk or explicit voice activation.

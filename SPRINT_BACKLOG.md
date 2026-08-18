@@ -23,8 +23,6 @@ Sprint ที่จบแล้ว บันทึกทุกอย่างอ
 
 ---
 
-**สปรินต์ว่าง** — Sprint 18 จบครบทั้งสามข้อ ขับจริงทุกข้อ รายละเอียดอยู่ใน `PRODUCT_BACKLOG.md`
-
-งานถัดไปคือ **Sprint 19 (Multi-session)** ใน `PRODUCT_BACKLOG_NEXT_SPRINTS.md` ซึ่งหัวข้อ
-**Expected App Architecture ยังว่างอยู่** และตัวสปรินต์เขียนไว้เองว่าต้อง re-architecture
-กับจัดกลุ่ม feature ใน Setting/Profile/Skills ใหม่ก่อน — ควรออกแบบก่อนเริ่มเขียนโค้ด
+## Sprint 19: Loop & Notification
+- [ ] มี local notification เมื่อทำงานเสร็จ (notification settings ตาม macOS)
+- [ ] เมื่อ click ที่กล่อง notication, จะเปิด app และ chat window ขึ้นมา แล้วแต่ว่า character ไหนเป็นตัวสั่ง notification
