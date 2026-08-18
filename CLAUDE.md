@@ -15,47 +15,74 @@ Three gates fire at different moments and are deliberately not merged:
 is done when the single `.app` in `~/Desktop/AI-Secretary/code` has been built from
 a `main` that already contains that work.** Never report done before that point.
 
-Five steps, in this order:
+**And it is not started until it has been seen working.** Driving used to come
+last, after the push — which is backwards, because driving is the step that finds
+the bugs. On 2026-08-18 it found two in one afternoon, both *after* the code was
+already on `main`: a message answered with "wait its turn" that then never started,
+and a sub-agent's tool calls drawn as the character's own. Each cost `main` a
+follow-up commit it need not have carried. The order below puts the finding before
+the publishing.
 
-1. Commit in the worktree — **with the backlog record in the same commit**, both
-   halves: write what shipped into `PRODUCT_BACKLOG.md` **and delete that heading
-   from `SPRINT_BACKLOG.md`**. The full rule is under "Where the backlog lives",
-   not repeated here — this line exists because that rule was never referenced from
-   the checklist people follow when closing work, so the second half (deleting the
-   heading) kept being forgotten until the owner had to say so, twice running
-   (2026-08-15).
-2. Get it onto `main` — fast-forward, then push. **No PR, no force, no merge
+Seven steps, in this order:
+
+1. **Drive it, before anything is committed.** `swift build && swift test` first,
+   then run the thing and do what a person would do with it. Quit the packaged
+   `.app` (two instances cannot coexist — the status item and the Esc claim are
+   granted once), then from the worktree's `code/`:
+
+   ```
+   swift run AISecretaryApp
+   ```
+
+   That runs exactly the code about to be committed and needs no bundle. **Never
+   run `package-app.sh` from a worktree** to test — it moves the single `.app`
+   there and leaves `code/` with none.
+
+   What cannot be checked this way, because it only exists in a bundle: the About
+   window's build stamp, the icon, the `Info.plist` version, and reopening by
+   double-click. Those wait for step 6 and are checked there.
+2. Update the paperwork — version bump in `AppVersion.swift`, the README copy if it
+   moved, and **the backlog record**, both halves: write what shipped into
+   `PRODUCT_BACKLOG.md` **and delete that heading from `SPRINT_BACKLOG.md`**. The
+   full rule is under "Where the backlog lives", not repeated here — this line
+   exists because that rule was never referenced from the checklist people follow
+   when closing work, so the second half (deleting the heading) kept being
+   forgotten until the owner had to say so, twice running (2026-08-15).
+3. Commit in the worktree — **the record in the same commit as the code it
+   describes**, never collected afterwards.
+4. Get it onto `main` — fast-forward, then push. **No PR, no force, no merge
    commit.** (Principles says force-push needs permission; on this path it is
    forbidden outright, no need to ask.)
-3. **Sync `code/` back** — `cd ~/Desktop/AI-Secretary/code && git pull --ff-only`
-4. Build — `cd ~/Desktop/AI-Secretary/code && ./scripts/package-app.sh`
+5. **Sync `code/` back** — `cd ~/Desktop/AI-Secretary/code && git pull --ff-only`
+6. Build — `cd ~/Desktop/AI-Secretary/code && ./scripts/package-app.sh`
    The last line of output must read `on main` and must not contain `-dirty`.
-5. Fast-forward the worktree to match `main` — a stale checkout is an old build
+   Relaunch it, and check here whatever step 1 could not.
+7. Fast-forward the worktree to match `main` — a stale checkout is an old build
    waiting to be opened.
 
-**Step 3 is the one that goes missing most often**, and that is why it has to be
-written separately from step 4: a session working in a worktree always ends with
+**Step 5 is the one that goes missing most often**, and that is why it has to be
+written separately from step 6: a session working in a worktree always ends with
 `main` on the remote newer than `code/`. Without pulling back, `code/` is old code
 and the `.app` built there is old with it, and the next commit from `code/` will
 fail to push — which is exactly the moment someone reaches for `--force`.
 
-**If you are refused while doing steps 3–4, leave the worktree and do it yourself —
+**If you are refused while doing steps 5–6, leave the worktree and do it yourself —
 never hand the command to the owner to run.**
 
 A session isolated in a worktree gets both `cd` and `git -C` pointing at `code/`
 refused by the harness. The message reads like a permanent prohibition, but **it is
 bound to the isolate state, not to the path** — the moment you leave the worktree it
-works. The sequence that actually works (confirmed 2026-08-12): finish steps 1–2 in
+works. The sequence that actually works (confirmed 2026-08-12): finish steps 1–4 in
 the worktree first — the background-session guard forbids editing files in the main
 checkout and throws `hasn't isolated its changes yet`, while
 `git push origin HEAD:main` from the worktree is fine, being a pure fast-forward —
 then `ExitWorktree` with `action: "keep"` (**`keep` only** — the worktree has to
-survive). Steps 3–4 are
+survive). Steps 5–6 are
 then possible; check `git status` of the main checkout first in case the owner has
 work in progress. To resume, `EnterWorktree` with the `path` of the same worktree.
 
 **Handing commands to the owner is the last resort, not the first** — it was handed
-over three times in one session without trying item 3 even once. Reserve it for when
+over three times in one session without trying item 5 even once. Reserve it for when
 the sequence above still fails, and then **never skip silently and never report it as
 shipped**: say plainly that it has not been built, and end the turn with:
 
@@ -63,11 +90,11 @@ shipped**: say plainly that it has not been built, and end the turn with:
 ! cd ~/Desktop/AI-Secretary/code && git pull --ff-only && ./scripts/package-app.sh
 ```
 
-**Step 4 may be skipped in one case only:** nothing that goes into the bundle changed
+**Step 6 may be skipped in one case only:** nothing that goes into the bundle changed
 that round (docs, dev scripts, tests only), because the existing `.app` is still the
 correct build of the code that shipped, and repackaging byte-identical code makes
-"which build is this?" worse, not better. But **step 3 can never be skipped, under any
-circumstances**, and if step 4 is skipped the reason must be stated in the report.
+"which build is this?" worse, not better. But **step 5 can never be skipped, under any
+circumstances**, and if step 6 is skipped the reason must be stated in the report.
 
 ---
 
@@ -215,7 +242,7 @@ write what shipped into `PRODUCT_BACKLOG.md`, which is the record of "what has
 shipped", **then delete that sprint's heading from `SPRINT_BACKLOG.md`**. The two
 steps cannot be separated: deleting alone throws away the record, ticking alone
 leaves a sprint that grows until you cannot read what is left this round. What
-counts as "done" is not repeated here — it is in the five-step Definition of done
+counts as "done" is not repeated here — it is in the Definition of done
 above, in one place only.
 
 **Not just sprints — everything that ships needs a record, in the same commit that
@@ -224,7 +251,7 @@ found by driving the app, and features the owner asks for mid-stream, are govern
 no rule at all. What actually happened (2026-08-14): v0.14.242–246, five consecutive
 versions — including the bug where the answer never reached the character, and the
 whole Hide All feature — were never written into `PRODUCT_BACKLOG.md`, even though
-every commit passed all five steps of Definition of done, because **no step in
+every commit passed every step of Definition of done, because **no step in
 Definition of done mentions the backlog**; and the records written before that were
 written when someone happened to have a spare moment, not when a rule demanded it.
 
@@ -495,7 +522,7 @@ carried it too until 0.13.209, when the owner asked for the hash out of the
 header: the question it answers is real but rare, and it was the first thing in
 the menu every single time.
 
-Running the script is step 4 of Definition of done — the steps live there and are not
+Running the script is step 6 of Definition of done — the steps live there and are not
 repeated here, because a second copy of a rule goes stale without anyone noticing.
 These two things are properties of the script itself:
 
