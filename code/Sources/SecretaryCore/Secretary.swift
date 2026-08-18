@@ -1045,6 +1045,17 @@ public final class Secretary {
         if wait {
             queue.append(QueuedMessage(text: text, attachments: carried))
             say(.secretary, "\(chosenLine(CardChoice.waitItsTurn)) — I'll come to that when this one's done.")
+            // The queue is normally pumped when a turn ends. If this turn ended
+            // while the card was still on screen — which is ordinary, the card
+            // waits as long as the person does — that moment has already gone,
+            // and nothing else would ever start what was just queued. Found by
+            // driving it (0.18.282): the badge sat at 1 for ever, after she had
+            // said out loud that she would come to it.
+            //
+            // Safe to call unconditionally: `dispatchNextQueued` refuses while
+            // busy, paused, or with a card still open, so this is only ever the
+            // already-finished case.
+            dispatchNextQueued()
         } else {
             // Before the stop, deliberately. `stopCurrentTurn` writes its own
             // line about the work being thrown away, and that line only makes
