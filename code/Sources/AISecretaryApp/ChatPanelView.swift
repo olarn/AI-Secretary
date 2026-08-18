@@ -441,19 +441,31 @@ struct ChatPanelView: View {
                 // somewhere else entirely, and a row of four buttons reads as
                 // four shades of the same choice.
                 //
-                // Stacked, not in a row: names are as long as people's names
-                // are, and three of them beside each other is how a card
-                // overflows a window whose width the person chose. Down the
-                // page it can only ever be as wide as the longest single name.
+                // One menu, not one button each. Buttons were the first shape
+                // and they cannot survive a roster: four characters already put
+                // three rows under the two answers above, and the card would
+                // grow a row per character with nothing to stop it — which is
+                // the unbounded growth the charter forbids in the panels, for
+                // the same reason. This is the same height whether two are free
+                // or twenty, and a long list scrolls inside the menu, which is
+                // AppKit's problem rather than this card's.
+                //
+                // A plain string label, deliberately: a `Menu` whose label is
+                // built from several views renders as a bare chevron in this
+                // window — the bug that Model and Effort in Profile were fixed
+                // for, and it would leave this control with no words at all.
                 if !freeCharacters.isEmpty {
-                    VStack(alignment: .leading, spacing: appearance.settings.panelSpacing) {
+                    Menu(CardChoice.giveItToSomeone) {
                         ForEach(freeCharacters) { who in
-                            Button(CardChoice.giveItTo(who.name)) {
+                            Button(who.name) {
                                 secretary.resolveInterruption(.delegate(to: who))
                             }
-                            .buttonStyle(.bordered)
                         }
                     }
+                    .menuStyle(.borderlessButton)
+                    // Without this the menu takes the whole width of the card
+                    // and reads as a banner rather than as the third answer.
+                    .fixedSize()
                     .font(.system(size: appearance.settings.footnoteFontSize))
                 }
             }

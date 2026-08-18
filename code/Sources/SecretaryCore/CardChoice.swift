@@ -17,10 +17,19 @@ public enum CardChoice {
     public static let start = "Start"
     public static let cancel = "Cancel"
 
-    /// One button per character who is free, so the name is on the button
-    /// rather than behind a second menu — the answer to "who?" is the whole
-    /// point of the choice, and hiding it would make this the slowest of the
-    /// three rather than the quickest.
+    /// The control that opens the list of everyone free.
+    ///
+    /// One control rather than one button per character. Buttons were the first
+    /// shape and they do not survive a roster: four characters already filled
+    /// three rows under the other two answers, and the card grows a row per
+    /// character with nothing to stop it — the same unbounded growth the charter
+    /// forbids in the settings panels. A menu is the same height whether two
+    /// characters are free or twenty, and the list inside it is AppKit's problem
+    /// rather than ours.
+    public static let giveItToSomeone = "Give it to…"
+
+    /// How the choice is named once it has been made — the menu's words and the
+    /// item's words together, which is what the person actually read.
     public static func giveItTo(_ name: String) -> String { "Give it to \(name)" }
 }
 

@@ -23,6 +23,7 @@ final class CardChoiceTests: XCTestCase {
             CardChoice.waitItsTurn, CardChoice.replaceRunning,
             CardChoice.goAhead, CardChoice.notThisOne,
             CardChoice.start, CardChoice.cancel,
+            CardChoice.giveItToSomeone,
         ] + PermissionAnswer.allCases.map(\.title)
         XCTAssertEqual(Set(titles).count, titles.count, "Two cards must not share a title")
         XCTAssertFalse(titles.contains { $0.isEmpty })

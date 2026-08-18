@@ -120,6 +120,20 @@ final class DelegateWhileBusyTests: XCTestCase {
         XCTAssertTrue(candidates.isEmpty, "She is busy now, so she is no longer offered")
     }
 
+    /// The card must be the same height whether two characters are free or
+    /// twenty, so the control is one menu rather than a button each. This pins
+    /// the half that can be tested from here: the words on it say nothing about
+    /// how many there are, so nothing in them can grow with the roster.
+    func testTheControlDoesNotNameAnybodyUntilItIsOpened() {
+        XCTAssertEqual(CardChoice.giveItToSomeone, "Give it to…")
+        for name in ["อาเนีย", "Ditto", "Miku (2nd Brain)"] {
+            XCTAssertFalse(
+                CardChoice.giveItToSomeone.contains(name),
+                "The control is one control; names live inside it"
+            )
+        }
+    }
+
     // MARK: - What must not change
 
     /// Sprint 14 decided a busy recipient *takes* a prose errand and queues it.
