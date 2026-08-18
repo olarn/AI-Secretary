@@ -437,6 +437,7 @@ public final class Secretary {
     /// startup and written the moment one is added, so the file is the record
     /// rather than a copy that has to be flushed.
     @ObservationIgnored private let grantStore: StandingGrantStoring
+    @ObservationIgnored private let choiceStore: AssistantChoiceStoring
 
     @ObservationIgnored private let discoverSkills: ([String]) -> [SkillInfo]
     /// How a note reaches the project's memory directory. A closure for the
@@ -548,12 +549,21 @@ public final class Secretary {
         // that reaches the person's own remembered permissions is one a test
         // has to remember to override, and permissions are the last thing that
         // should be granted by a suite that forgot.
-        grantStore: StandingGrantStoring = InMemoryStandingGrantStore()
+        grantStore: StandingGrantStoring = InMemoryStandingGrantStore(),
+        // Nowhere by default, for the same reason as the grant store above.
+        choiceStore: AssistantChoiceStoring = InMemoryAssistantChoiceStore()
     ) {
         self.profile = profile
         self.stateMachine = stateMachine
         self.registry = registry
         self.grantStore = grantStore
+        self.choiceStore = choiceStore
+        // Whichever model she was told to use, put back before the first turn
+        // can be sent — a character who came back on "Default" every morning is
+        // the bug this fixes, and the badge is the only place it showed.
+        let remembered = choiceStore.load()
+        self.model = remembered.model
+        self.effort = remembered.effort
         // What was remembered on an earlier run, put back before anything can
         // ask. A file that won't load reads as nothing remembered: the cost is
         // one card the person has already answered, and the alternative is
@@ -4267,6 +4277,7 @@ public final class Secretary {
     public func selectModel(_ chosen: Option<ChatModel>) {
         guard chosen != model else { return }
         model = chosen
+        rememberChoice()
         say(
             .secretary,
             chosen.fold(
@@ -4279,6 +4290,7 @@ public final class Secretary {
     public func selectEffort(_ chosen: Option<Effort>) {
         guard chosen != effort else { return }
         effort = chosen
+        rememberChoice()
         say(
             .secretary,
             chosen.fold(
@@ -4286,6 +4298,12 @@ public final class Secretary {
                 { "Effort set to \($0.rawValue)." }
             )
         )
+    }
+
+    /// Both halves together, because they live in one value and writing one
+    /// without the other would drop whichever was not being changed.
+    private func rememberChoice() {
+        choiceStore.save(AssistantChoice(model: model, effort: effort))
     }
 
     /// What to show the user for a setting they may never have touched.

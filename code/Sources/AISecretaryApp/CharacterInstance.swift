@@ -135,7 +135,12 @@ final class CharacterInstance {
             // otherwise be granting permissions in the person's own name.
             grantStore: FileStandingGrantStore(
                 fileURL: FileStandingGrantStore.url(forCharacter: profileID)
-            )
+            ),
+            // Hers, and keyed by profile like everything else of hers. Built
+            // here rather than defaulted in `Secretary` for the same reason as
+            // the grant store: a suite that forgot to override it would write
+            // into the person's own preferences.
+            choiceStore: UserDefaultsAssistantChoiceStore(character: profileID)
         )
     }
 
