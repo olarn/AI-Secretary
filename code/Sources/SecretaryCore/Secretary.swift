@@ -3254,8 +3254,7 @@ public final class Secretary {
         activity.append(step)
         guard showsActivity else { return }
 
-        let text = activity.map { "\($0.kind == .thinking ? "◇" : "▸") \($0.detail)" }
-            .joined(separator: "\n")
+        let text = activity.map(activityLine).joined(separator: "\n")
 
         let entries = transcript
         let existing = activityEntryID
