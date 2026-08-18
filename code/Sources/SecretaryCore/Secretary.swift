@@ -369,6 +369,16 @@ public final class Secretary {
     /// on, so a button offering to pick "the spreadsheet" never outlives the
     /// question that wanted it.
     public private(set) var fileRequest: Option<String> = .none()
+    /// Files she has just made and is offering to hand over. The mirror of
+    /// `fileRequest`, and cleared at the same moments and for the same reason:
+    /// an offer belongs to the turn that made it, and a Save button left over
+    /// from three answers ago points at a file the conversation has moved past.
+    ///
+    /// Session-only and never written to disk, like the loop and the grants:
+    /// the scratch folder is cleared out from under it by anything, and an
+    /// offer that survived a relaunch would be a button for a file that is no
+    /// longer there.
+    public private(set) var savableFiles: [OfferedFile] = []
     /// The standing check-back, when one is running: every so often the
     /// Secretary asks itself the question the user left standing, and answers
     /// into the conversation. Observed so the panel can show that it is on and
@@ -654,6 +664,8 @@ public final class Secretary {
         let carried = attachments
         attachments = []
         fileRequest = .none()
+        // The previous answer's offer goes with the previous answer.
+        savableFiles = []
         say(.user, ([trimmed] + carried.map(attachmentLine)).joined(separator: "\n"))
 
         // Local commands first: never hit the network or the state machine.
@@ -914,6 +926,7 @@ public final class Secretary {
         // is installed, for a conversation that is over.
         attachments = []
         fileRequest = .none()
+        savableFiles = []
         stagedThisSession = false
         attachmentStore.clear()
         // Session-only, like the grants above. An errand outstanding across a
@@ -1684,6 +1697,27 @@ public final class Secretary {
     /// Puts the open-file button away without choosing anything.
     public func dismissFileRequest() {
         fileRequest = .none()
+    }
+
+    /// Takes the names out of a ```save-file block and turns the ones that
+    /// survive `offeredFile` into the card.
+    ///
+    /// **Only when the turn ran without a project.** A file written into a
+    /// project the person registered is already where they asked for it, and
+    /// offering to save it somewhere else would be a button for work that is
+    /// finished — it would also fire on ordinary code edits. The scratch folder
+    /// is the case the feature exists for: under Application Support, where the
+    /// result is otherwise stranded.
+    private func offerToSave(_ names: [String]) {
+        guard !names.isEmpty, !lastProject.isDefined else { return }
+        savableFiles = offeredFiles(named: names, inScratch: Self.scratchDirectory)
+    }
+
+    /// Puts the save card away. The files stay where they are — this dismisses
+    /// an offer, it does not throw anything out, and asking her again brings
+    /// back a fresh one.
+    public func dismissSavableFiles() {
+        savableFiles = []
     }
 
     // MARK: - Working in a web app
@@ -3275,6 +3309,12 @@ public final class Secretary {
         let keeping = success
             ? RememberBlock.parse(handing.body)
             : RememberBlock(body: handing.body, note: nil)
+        // Files she made and is offering to hand over. Read once the reply is
+        // whole, like the rest — a half-written block would name half a file.
+        let offering = success
+            ? SaveFileBlock.parse(keeping.body)
+            : SaveFileBlock(body: keeping.body, names: [])
+        offerToSave(offering.names)
         if let missing = blocked.missing,
            let request = conversation.last(where: { $0.role == .user })?.content {
             outstanding = OutstandingRequest(request: request, missing: missing)
@@ -3308,7 +3348,7 @@ public final class Secretary {
         // If this turn was another character's errand, the answer goes back
         // now — after the state machine has settled, so what is sent is a
         // finished answer rather than one still closing.
-        reportBackIfAnswering(keeping.body)
+        reportBackIfAnswering(offering.body)
 
         // Her own request to pass something on. After the report above, so a
         // character answering an errand can hand a piece of it to a third
@@ -3385,7 +3425,7 @@ public final class Secretary {
         let watched = WatchBlock.parse(planned.body)
         let asked = AttachBlock.parse(RunBlock.parse(watched.body).body)
         let handed = HandOffBlock.parse(SkillInstallBlock.parse(asked.body).body)
-        return RememberBlock.parse(handed.body).body
+        return SaveFileBlock.parse(RememberBlock.parse(handed.body).body).body
     }
 
     /// - Parameter replyID: the bubble being written, when there is one. With

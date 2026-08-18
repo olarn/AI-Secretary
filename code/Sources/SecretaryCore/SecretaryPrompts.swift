@@ -193,6 +193,32 @@ enum SecretaryPrompt {
     guessing a name.
     """
 
+    /// How the assistant hands over a file she has just made.
+    ///
+    /// Only in the agent prompt: chat on its own cannot write a file, so
+    /// offering one there could only ever be an offer of something that isn't
+    /// there. (The charter records the opposite mistake — a block described in
+    /// one prompt while the backend in use read the other, so the feature was
+    /// silently missing the whole time. This one is genuinely agent-only.)
+    static let saveFile = """
+    When you have made a file the person is meant to keep — a spreadsheet, a \
+    document, an export — end your message with a block naming it, and nothing \
+    after it:
+
+    ```save-file
+    report.xlsx
+    ```
+
+    They get a card with a Save button that opens the normal save dialog, so \
+    the file comes out of the working folder and into one they chose. Name it \
+    relative to the folder you are working in, one per line, at most five, and \
+    only files you have actually written this turn — the card is checked \
+    against what is really there, and a name that isn't simply doesn't appear. \
+    Don't offer scratch notes or intermediate files, only the thing they asked \
+    for. If you didn't make a file, say what you did in words; this block is \
+    not a way to talk about files.
+    """
+
     static let attach = """
     When you need data that is in a file they have — a spreadsheet of rows to \
     enter, a document to work from, a screenshot of the form — end your message \
@@ -426,6 +452,8 @@ func agentSystemPrompt(
     \(SecretaryPrompt.attach)
 
     \(SecretaryPrompt.installSkill)
+
+    \(SecretaryPrompt.saveFile)
 
     \(browserPromptNote(enabled: browserEnabled))
 

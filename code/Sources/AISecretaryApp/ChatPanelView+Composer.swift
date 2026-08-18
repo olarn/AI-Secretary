@@ -18,6 +18,7 @@ extension ChatPanelView {
     var inputRow: some View {
         VStack(alignment: .leading, spacing: appearance.settings.panelSpacing) {
             if let asking = secretary.fileRequestDescription { fileRequestCard(asking) }
+            if !secretary.savableFiles.isEmpty { savableFilesCard(secretary.savableFiles) }
             if droppingFile { dropArea }
             messageBox
         }
@@ -260,6 +261,53 @@ extension ChatPanelView {
         .padding(appearance.settings.panelPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(theme.infoFill.color, in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    /// Files she has just made, offered for keeping.
+    ///
+    /// The mirror of `fileRequestCard` and deliberately the same colour: this
+    /// is the other half of the same conversation — a file crossing between the
+    /// two of them — and nothing here acts on the person's behalf either. The
+    /// save panel is what acts, and only after they have said where.
+    ///
+    /// The size is on the row because it is the one fact that tells an empty
+    /// file from a real one before saving it, and "0 bytes" has been the whole
+    /// story of a failed export more than once.
+    private func savableFilesCard(_ files: [OfferedFile]) -> some View {
+        VStack(alignment: .leading, spacing: appearance.settings.panelSpacing) {
+            Label(
+                files.count == 1 ? "Made you a file" : "Made you \(files.count) files",
+                systemImage: "square.and.arrow.down"
+            )
+            .font(.system(size: appearance.settings.footnoteFontSize, weight: .semibold))
+            ForEach(files) { file in
+                HStack(spacing: appearance.settings.panelSpacing) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(file.name)
+                            .font(.system(size: appearance.settings.footnoteFontSize))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Text(fileSize(file.byteCount))
+                            .font(.system(size: appearance.settings.hintFontSize))
+                            .foregroundStyle(theme.mutedText.color)
+                    }
+                    Spacer(minLength: appearance.settings.panelSpacing)
+                    Button("Save…") { SavePanel.save(file) }
+                        .buttonStyle(.borderedProminent)
+                        .font(.system(size: appearance.settings.footnoteFontSize))
+                }
+            }
+            Button("Not now") { secretary.dismissSavableFiles() }
+                .buttonStyle(.bordered)
+                .font(.system(size: appearance.settings.footnoteFontSize))
+        }
+        .padding(appearance.settings.panelPadding)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(theme.infoFill.color, in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func fileSize(_ bytes: Int) -> String {
+        ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
     }
 
     /// The ↵'s point size, relative to the message text. Was 1.1 — 10% smaller
