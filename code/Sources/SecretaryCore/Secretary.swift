@@ -198,34 +198,50 @@ private struct ReplyRun {
     let segmentID: UUID?
     let segmentText: String
     let reply: String
+    /// The bubbles of this turn that are already finished, in order.
+    ///
+    /// Not derivable from `reply`, which is deliberately one continuous answer
+    /// — the conversation has to remember the turn as one thing said, and a
+    /// test pins that. The seam only exists on screen, so anything that wants
+    /// the turn *as the person saw it* — the notification banner, so far — has
+    /// to be told where the bubbles were. Without it a turn that answered
+    /// "done" and then added a line came out of `reply` as one run-on word
+    /// (driven at 0.19.288).
+    let spoken: [String]
     let denied: [DeniedTool]
     let movedToWorking: Bool
 
     init(taskID: String, speakerName: String, segmentID: UUID?) {
         self.init(
             taskID: taskID, speakerName: speakerName, segmentID: segmentID,
-            segmentText: "", reply: "", denied: [], movedToWorking: false
+            segmentText: "", reply: "", spoken: [], denied: [], movedToWorking: false
         )
     }
 
     private init(
         taskID: String, speakerName: String, segmentID: UUID?,
-        segmentText: String, reply: String, denied: [DeniedTool], movedToWorking: Bool
+        segmentText: String, reply: String, spoken: [String],
+        denied: [DeniedTool], movedToWorking: Bool
     ) {
         self.taskID = taskID
         self.speakerName = speakerName
         self.segmentID = segmentID
         self.segmentText = segmentText
         self.reply = reply
+        self.spoken = spoken
         self.denied = denied
         self.movedToWorking = movedToWorking
     }
+
+    /// Every bubble of this turn, the one being written included.
+    var bubbles: [String] { spoken + [segmentText] }
 
     /// The bubble being written is finished; the next words open a new one.
     func closingSegment() -> ReplyRun {
         ReplyRun(
             taskID: taskID, speakerName: speakerName, segmentID: nil,
-            segmentText: "", reply: reply, denied: denied, movedToWorking: movedToWorking
+            segmentText: "", reply: reply, spoken: spoken + [segmentText],
+            denied: denied, movedToWorking: movedToWorking
         )
     }
 
@@ -233,14 +249,15 @@ private struct ReplyRun {
     func inSegment(_ id: UUID) -> ReplyRun {
         ReplyRun(
             taskID: taskID, speakerName: speakerName, segmentID: id,
-            segmentText: segmentText, reply: reply, denied: denied, movedToWorking: movedToWorking
+            segmentText: segmentText, reply: reply, spoken: spoken,
+            denied: denied, movedToWorking: movedToWorking
         )
     }
 
     func appending(_ chunk: String) -> ReplyRun {
         ReplyRun(
             taskID: taskID, speakerName: speakerName, segmentID: segmentID,
-            segmentText: segmentText + chunk, reply: reply + chunk,
+            segmentText: segmentText + chunk, reply: reply + chunk, spoken: spoken,
             denied: denied, movedToWorking: movedToWorking
         )
     }
@@ -252,15 +269,16 @@ private struct ReplyRun {
         guard !denied.contains(tool) else { return self }
         return ReplyRun(
             taskID: taskID, speakerName: speakerName, segmentID: segmentID,
-            segmentText: segmentText, reply: reply, denied: denied + [tool],
-            movedToWorking: movedToWorking
+            segmentText: segmentText, reply: reply, spoken: spoken,
+            denied: denied + [tool], movedToWorking: movedToWorking
         )
     }
 
     func afterMovingToWorking() -> ReplyRun {
         ReplyRun(
             taskID: taskID, speakerName: speakerName, segmentID: segmentID,
-            segmentText: segmentText, reply: reply, denied: denied, movedToWorking: true
+            segmentText: segmentText, reply: reply, spoken: spoken,
+            denied: denied, movedToWorking: true
         )
     }
 }
@@ -779,6 +797,12 @@ public final class Secretary {
     /// Hands a message to whoever does the delivering — `CharacterBus` in the
     /// app, a closure in tests. Unset means she is the only one here.
     @ObservationIgnored public var onSend: ((CharacterMessage) -> Void)?
+
+    /// Told each time a turn comes to rest, so the app can put a banner up for
+    /// work that finished while nobody was looking. Whether it deserves one is
+    /// `completionNotice`, not this — she reports, the app decides, because
+    /// only the app knows whether her chat is on screen.
+    @ObservationIgnored public var onTurnFinished: ((FinishedTurn) -> Void)?
 
     /// Errands sent and not yet answered. Session-only, like the grants and the
     /// queue: one that outlived a relaunch would have nobody left to answer it.
@@ -3158,7 +3182,8 @@ public final class Secretary {
             finishChat(
                 entryID: run.segmentID, taskID: run.taskID, success: false,
                 displayText: run.segmentText.isEmpty ? "(The model declined to respond.)" : run.segmentText,
-                fullText: run.reply.isEmpty ? "(The model declined to respond.)" : run.reply
+                fullText: run.reply.isEmpty ? "(The model declined to respond.)" : run.reply,
+                bubbles: run.bubbles
             )
             return
         }
@@ -3167,7 +3192,7 @@ public final class Secretary {
         trimConversation()
         finishChat(
             entryID: run.segmentID, taskID: run.taskID, success: true,
-            displayText: run.segmentText, fullText: run.reply
+            displayText: run.segmentText, fullText: run.reply, bubbles: run.bubbles
         )
         offerToWiden(run.denied, taskID: run.taskID)
     }
@@ -3178,7 +3203,7 @@ public final class Secretary {
         audit.record(AuditEntry(taskID: run.taskID, kind: .failed, detail: "chat error"))
         finishChat(
             entryID: run.segmentID, taskID: run.taskID, success: false,
-            displayText: message, fullText: message
+            displayText: message, fullText: message, bubbles: [message]
         )
     }
 
@@ -3194,12 +3219,16 @@ public final class Secretary {
     ///
     /// `entryID` is absent when the turn ended on a tool rather than a word.
     /// There is then nothing left to say and no bubble to say it in.
+    ///
+    /// - Parameter bubbles: the same turn a third way — one entry per bubble
+    ///   the person saw. Only the notification banner wants it; see `spoken`.
     private func finishChat(
         entryID: UUID?,
         taskID: String,
         success: Bool,
         displayText: String,
-        fullText: String
+        fullText: String,
+        bubbles: [String]
     ) {
         let finalText = fullText
         streamingEntryID = .none()
@@ -3267,6 +3296,15 @@ public final class Secretary {
         stateMachine.send(success ? .succeeded : .failed, reason: success ? "chat reply delivered" : "chat failed", taskID: .some(taskID))
         stateMachine.send(.acknowledge, reason: "result delivered", taskID: .some(taskID))
         activeTaskID = .none()
+        // Before `reportBackIfAnswering`, which clears `answering` — after it,
+        // an errand would look like the person's own request and every hand-off
+        // would put a banner up from a character nobody spoke to.
+        // Every bubble, not just `displayText`, which is the last one only: a
+        // turn that answered "done" and then added a housekeeping line put the
+        // housekeeping in the banner and left the answer off it (driven at
+        // 0.19.288). Joined with a blank line rather than taken from `reply`,
+        // which glues the bubbles character to character on purpose.
+        announceFinished(text: spokenAsOneMessage(bubbles), succeeded: success)
         // If this turn was another character's errand, the answer goes back
         // now — after the state machine has settled, so what is sent is a
         // finished answer rather than one still closing.
@@ -4146,6 +4184,35 @@ public final class Secretary {
         say(.secretary, message)
         stateMachine.send(.acknowledge, reason: "result delivered", taskID: .some(taskID))
         activeTaskID = .none()
+        announceFinished(text: message, succeeded: success)
+    }
+
+    /// The turn as the person saw it: the bubbles, stripped of their marker
+    /// blocks the same way the screen strips them, with the empty ones dropped
+    /// — a turn that ran a tool before saying anything has one.
+    private func spokenAsOneMessage(_ bubbles: [String]) -> String {
+        bubbles
+            .map(strippedForDisplay)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n\n")
+    }
+
+    /// Reports a turn that has come to rest, for whoever is listening.
+    ///
+    /// The one thing she contributes that the app cannot work out for itself is
+    /// `wasErrand` — by the time a banner could be posted the errand has been
+    /// answered and forgotten, so it has to be read here, while `answering`
+    /// still holds it.
+    private func announceFinished(text: String, succeeded: Bool) {
+        onTurnFinished?(
+            FinishedTurn(
+                characterName: profile.displayName,
+                text: text,
+                succeeded: succeeded,
+                wasErrand: answering.isDefined
+            )
+        )
     }
 
     private func say(_ speaker: TranscriptEntry.Speaker, _ text: String) {

@@ -35,6 +35,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     /// holding it, so a character added or deleted needs nothing rewired.
     private lazy var bus = CharacterBus(roster: { [weak self] in self?.characters ?? [] })
 
+    /// Banners for work that finished while nobody was watching, and the way
+    /// back in when one is clicked.
+    private lazy var notifier = CompletionNotifier(
+        onOpen: { [weak self] id in self?.openFromNotification(id) }
+    )
+
     private var statusBar: StatusBarController!
     private var hotKeys: GlobalHotKeys?
     /// Watches this app's own key events for ⌘H; see `watchForHideShortcut`.
@@ -59,6 +65,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
         // Adding or deleting a profile is adding or deleting a character; the
         // roster follows the library rather than being kept in step by hand.
         profiles.onRosterChange = { [weak self] in self?.reconcileCharacters() }
+
+        // Before this method returns: a click on a banner may be what launched
+        // the app, and the system delivers it the moment a delegate exists.
+        notifier.start()
 
         detectBackend()
 
@@ -139,6 +149,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
             self?.bus.directory(excluding: id) ?? []
         }
         character.secretary.onSend = { [weak self] message in self?.bus.deliver(message) }
+        character.secretary.onTurnFinished = { [weak self] turn in self?.announce(turn, from: id) }
         character.onUsed = { [weak self] in
             guard self?.lastUsed != id else { return }
             self?.lastUsed = id
@@ -192,6 +203,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     private func projectsFile(for id: UUID) -> URL {
         _ = FileProjectStore.adoptLegacyProjects(for: id)
         return FileProjectStore.url(forCharacter: id)
+    }
+
+    // MARK: - Notifications
+
+    /// A character has finished something. Whether that is worth a banner is
+    /// `completionNotice`'s decision — this only gathers the two facts she
+    /// cannot see from inside herself: whether her chat is up, and whether the
+    /// person is in this app at all.
+    private func announce(_ turn: FinishedTurn, from id: UUID) {
+        guard let notice = completionNotice(
+            for: turn,
+            isChatVisible: character(id)?.isChatVisible ?? false,
+            isAppActive: NSApp.isActive
+        ) else { return }
+
+        notifier.post(notice, from: id)
+    }
+
+    /// A banner was clicked: bring back the character who posted it, with her
+    /// chat open — the answer being on screen is the point of the click.
+    ///
+    /// The two ⌘H sets are cleared for her because she is on the desktop again
+    /// whatever they say, and leaving her in them would have Show All believe
+    /// it still owes her an appearance.
+    private func openFromNotification(_ id: UUID) {
+        guard let character = character(id) else { return }
+        hiddenByShortcut.remove(id)
+        chatsHiddenByShortcut.remove(id)
+        character.openChat()
     }
 
     // MARK: - The status bar menu

@@ -16,13 +16,11 @@ Sprint ที่จบแล้ว บันทึกทุกอย่างอ
 | Sprint 18-1 — sub-agent ไม่เงียบอีกต่อไป | v0.18.281–282 |
 | Sprint 18-2 — ข้อความที่ต่อคิวไว้ ค้างตลอดกาล | v0.18.283 |
 | Sprint 18-3 — ตัวเลือกที่สาม: ยกงานให้ตัวที่ว่าง | v0.18.284 |
+| Sprint 18-4 — model ที่ตั้งให้ตัวละคร จำข้ามการเปิดแอป | v0.18.286 |
+| Sprint 19 — notification เมื่องานเสร็จ คลิกแล้วเปิดแชทของตัวที่ส่ง | v0.19.288 |
 
 **เลขสปรินต์เป็นของจริงที่นี่ที่เดียว** และตั้งแต่ 2026-08-18 ทุกหัวข้อใน
-`PRODUCT_BACKLOG_NEXT_SPRINTS.md` มีเลขจริงหมดแล้ว (19–24) ไม่มี `xxx`/`yyy`/`zzz`/`zzzz`
+`PRODUCT_BACKLOG_NEXT_SPRINTS.md` มีเลขจริงหมดแล้ว (20–24) ไม่มี `xxx`/`yyy`/`zzz`/`zzzz`
 เหลืออยู่ — เลขเรียงตามลำดับที่จะลงมือทำ เพราะนั่นคือความหมายของเลขหลักกลางใน version
 
 ---
-
-## Sprint 19: Loop & Notification
-- [ ] มี local notification เมื่อทำงานเสร็จ (notification settings ตาม macOS)
-- [ ] เมื่อ click ที่กล่อง notication, จะเปิด app และ chat window ขึ้นมา แล้วแต่ว่า character ไหนเป็นตัวสั่ง notification

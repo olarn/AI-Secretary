@@ -1272,6 +1272,35 @@ final class AgentSessionTests: XCTestCase {
         )
     }
 
+    /// What the notification banner is handed, when the turn was several
+    /// bubbles.
+    ///
+    /// The turn the model is told it said is deliberately continuous (see
+    /// above), so reading the banner out of it glued the last bubble onto the
+    /// answer: "done" followed by a housekeeping line came out as one run-on
+    /// word, found by driving 0.19.288. The banner is built from the bubbles
+    /// instead, which is what the person actually saw.
+    func testTheBannerKeepsTheBubblesApart() async {
+        let secretary = makeSecretary(projects: [
+            Project(name: "Second-Brain", path: "/tmp/second-brain", allowedTools: [Secretary.claudeCodeToolID])
+        ])
+        var finished: [FinishedTurn] = []
+        secretary.onTurnFinished = { finished.append($0) }
+        provider.eventsForNextTurn = [
+            .textDelta("done"),
+            .activity(AgentActivity(kind: .tool, detail: "Read x")),
+            .textDelta("Nothing to capture."),
+            .completed(stopReason: .none(), usage: .none())
+        ]
+
+        secretary.submit("go")
+        await waitUntilIdle()
+
+        XCTAssertEqual(finished.last?.text, "done\n\nNothing to capture.")
+        XCTAssertEqual(finished.last?.succeeded, true)
+        XCTAssertEqual(finished.last?.wasErrand, false)
+    }
+
     /// The seam the app was actually missing.
     ///
     /// Claude Code sends a turn as several content blocks; the deltas inside
