@@ -333,18 +333,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
                 existing: profiles.profiles
             )
             profiles.add(fresh)
-            // Her default face is the app's own icon, read from the bundle's
-            // icns file — NOT `applicationIconImage`, which answers with a
-            // generic folder when the app runs unbundled (`swift run`, while
-            // driving) and put a folder on a character once; the owner asked
-            // why (2026-08-19). No icns — a dev run — means no picture at
-            // all, which is the built-in avatar: yesterday's behaviour, never
-            // a wrong face.
-            if let icns = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
-               let icon = NSImage(contentsOf: icns),
-               let tiff = icon.tiffRepresentation,
-               let bitmap = NSBitmapImageRep(data: tiff),
-               let png = bitmap.representation(using: .png, properties: [:]) {
+            // Her default face is the robot artwork the owner pointed at —
+            // the packager puts the original PNG in the bundle as
+            // `DefaultCharacter.png`. Read from a file, NOT
+            // `applicationIconImage`, which answers with a generic folder
+            // when the app runs unbundled (`swift run`, while driving) and
+            // put a folder on a character once; the owner asked why
+            // (2026-08-19). No resource — a dev run — means no picture at
+            // all, which is the built-in avatar: never a wrong face.
+            if let art = Bundle.main.url(forResource: "DefaultCharacter", withExtension: "png"),
+               let png = try? Data(contentsOf: art) {
                 _ = profiles.setArtwork(pngData: png, for: fresh.id)
             }
             character(fresh.id)?.openChat()

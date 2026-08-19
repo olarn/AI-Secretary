@@ -90,6 +90,10 @@ if [[ -f "$ICON_SRC" ]]; then
     else
         echo "  (icon generation failed — bundling without a custom icon)"
     fi
+    # The same artwork rides along untouched as every new character's default
+    # face — the owner pointed at this exact picture (2026-08-19). The original
+    # PNG, not a conversion of the icns, which pads for the icon grid.
+    cp "$ICON_SRC" "$CONTENTS/Resources/DefaultCharacter.png"
 else
     echo "▸ No icon source at ${ICON_SRC} — bundling without a custom icon."
     echo "  (set ICON_SRC=/path/to/image.png to use your own)"

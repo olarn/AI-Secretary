@@ -2303,3 +2303,11 @@ draft ย้ายจาก view state ไปอยู่ใน `CommandCenter` 
 
 ยังไม่ได้ขับในรอบ dev: หน้า App Icon ของตัวละครใหม่ (ต้องมี bundle) — ไปยืนยันที่
 ขั้น package ของ Definition of done แทน
+
+## หน้า default ของตัวละครใหม่ อ่านจากไฟล์ artwork ที่ฝังใน bundle (v0.20.314)
+
+เจ้าของทดลองแล้วยังเห็น Miku (build ที่กดยังเป็นตัวเก่า) และชี้รูปหุ่นยนต์มาว่า
+"เอารูปนี้" — ตอนนี้ `package-app.sh` ฝัง `docs/Noti-Icon.png` ต้นฉบับลง bundle เป็น
+`Resources/DefaultCharacter.png` แล้ว New Character อ่านไฟล์นั้นตรงๆ ไม่ผ่านการ
+แปลงจาก icns ซึ่งเผื่อขอบสำหรับตารางไอคอน (contentFill 0.92) — ได้ภาพเต็มคมเท่า
+ต้นฉบับ กติกา fallback เดิม: ไม่มีไฟล์ (dev run) = ไม่ติดรูป ใช้ avatar เดิม
