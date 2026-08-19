@@ -2311,3 +2311,16 @@ draft ย้ายจาก view state ไปอยู่ใน `CommandCenter` 
 `Resources/DefaultCharacter.png` แล้ว New Character อ่านไฟล์นั้นตรงๆ ไม่ผ่านการ
 แปลงจาก icns ซึ่งเผื่อขอบสำหรับตารางไอคอน (contentFill 0.92) — ได้ภาพเต็มคมเท่า
 ต้นฉบับ กติกา fallback เดิม: ไม่มีไฟล์ (dev run) = ไม่ติดรูป ใช้ avatar เดิม
+
+## หน้า default กลับมาใช้ icon ของแอป (v0.20.315)
+
+เจ้าของลองรูป artwork ดิบจาก v0.20.314 แล้วส่งกลับ: สัดส่วนไม่ fit กับกรอบ character
+— ตอนนี้อ่านจาก `AppIcon.icns` ใน bundle ซึ่ง `make-icon.swift` ตัดขอบและจัดสัดส่วน
+ให้แล้ว เลิกฝัง `DefaultCharacter.png` (อยู่ใน bundle รอบเดียวคือ 314) กติกา fallback
+เดิม: ไม่มี icns (dev run) = ไม่ติดรูป
+
+ที่เจอระหว่างขับใน bundle: (1) defaults ของ dev binary กับตัวแพ็กเกจเป็นคนละ domain
+(`AISecretaryApp` กับ `com.aisecretary.app`) — ตำแหน่งที่จำไว้ตอนขับแบบ dev จึงไม่ติด
+มาที่ตัวแพ็กเกจ ไม่ใช่บั๊กของการจำตำแหน่ง (ยืนยันในตัวแพ็กเกจล้วนแล้ว) (2) คลิก
+New Character ทันทีหลังแอปเพิ่งเปิดหนึ่งครั้งไม่สร้างตัว — คลิกซ้ำแล้วได้ปกติ ยังจับ
+สาเหตุไม่ได้ บันทึกไว้ก่อน
