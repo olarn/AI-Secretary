@@ -63,14 +63,19 @@ mkdir -p "$MACOS" "$CONTENTS/Resources"
 
 cp "$BIN_PATH" "$MACOS/$EXECUTABLE"
 
-# Generate the app icon. The source is committed at docs/App-Icon.png — the
+# Generate the app icon. The source is committed at docs/Noti-Icon.png — the
 # app's own artwork, drawn for this purpose, so unlike the character portraits
 # it carries no licence question and doesn't have to be built from whatever
 # image the person running the script happens to have installed. It used to
 # default to ~/Library/Application Support/AISecretary/character.png, which
 # meant two machines packaging the same commit produced two different icons.
+#
+# Noti-Icon.png rather than App-Icon.png, which is the same drawing inside a
+# rounded blue square: the square shrinks the artwork to fit inside it, and at
+# the size Finder actually lists a file the robot was too small to make out
+# (owner, 2026-08-19). The transparent cut-out fills the frame instead.
 # Override with ICON_SRC.
-ICON_SRC="${ICON_SRC:-$ROOT/../docs/App-Icon.png}"
+ICON_SRC="${ICON_SRC:-$ROOT/../docs/Noti-Icon.png}"
 ICON_LINE=""
 if [[ -f "$ICON_SRC" ]]; then
     echo "▸ Building icon from ${ICON_SRC}…"
