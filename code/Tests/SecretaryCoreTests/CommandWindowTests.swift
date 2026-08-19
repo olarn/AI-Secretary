@@ -184,6 +184,45 @@ final class CommandWindowTests: XCTestCase {
         XCTAssertEqual(commandWindowWidth(saved: 5000), 1000)
     }
 
+    // MARK: - What a dropped file becomes
+
+    func testNotesAreInstructionsAndEverythingElseRidesAlong() {
+        XCTAssertEqual(commandDropRole(forExtension: "md"), .instruction)
+        XCTAssertEqual(commandDropRole(forExtension: "TXT"), .instruction)
+        XCTAssertEqual(commandDropRole(forExtension: "markdown"), .instruction)
+        XCTAssertEqual(commandDropRole(forExtension: "png"), .attachment)
+        XCTAssertEqual(commandDropRole(forExtension: "pdf"), .attachment)
+        XCTAssertEqual(commandDropRole(forExtension: "csv"), .attachment)
+        XCTAssertEqual(commandDropRole(forExtension: ""), .attachment)
+    }
+
+    // MARK: - The box's own text size
+
+    func testTheFontSizeStaysInsideTheChatSizesRange() {
+        XCTAssertEqual(clampedCommandFontSize(13), 13)
+        XCTAssertEqual(clampedCommandFontSize(5), 10)
+        XCTAssertEqual(clampedCommandFontSize(99), 28)
+    }
+
+    // MARK: - What a finished turn carries to the results strip
+
+    func testAFinishedTurnCarriesItsChoicesUnstripped() {
+        let turn = FinishedTurn(
+            characterName: "Miku",
+            text: "Which one?",
+            succeeded: true,
+            wasErrand: false,
+            choices: ["A — the first", "B — the second"]
+        )
+        XCTAssertEqual(turn.choices, ["A — the first", "B — the second"])
+        // The default keeps every existing construction site honest: no
+        // choices means none, not nil.
+        XCTAssertEqual(
+            FinishedTurn(characterName: "M", text: "t", succeeded: true, wasErrand: false).choices,
+            []
+        )
+    }
+
     // MARK: - The menu row
 
     func testTheMenuRowWordsItselfFromWhatIsOnScreen() {

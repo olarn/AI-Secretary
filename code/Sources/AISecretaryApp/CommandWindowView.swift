@@ -2,9 +2,10 @@ import SwiftUI
 import SecretaryCore
 
 /// The command window: tick who should listen, type once, everyone ticked
-/// gets it. Spotlight-shaped — one borderless rounded slab in the middle of
-/// the screen — with the character list above the box, the same growing
-/// message box the chat uses, and the red line under it when nothing can go.
+/// gets it. Spotlight-shaped — one borderless rounded slab — with the
+/// character list above the box, the same growing message box the chat uses,
+/// the red line under it when nothing can go, and a foldable strip of what
+/// the commanded characters have answered.
 struct CommandWindowView: View {
     @Bindable var model: CommandCenter
     let appearance: Appearance
@@ -27,8 +28,8 @@ struct CommandWindowView: View {
     /// framed hosting view) dragged fine under the same synthetic events.
     let contentHeightChanged: (Double) -> Void
 
-    @State private var draft = ""
     @State private var draftHeight: Double = 0
+    @State private var resultsHeight: Double = 0
     @State private var droppingFile = false
     @FocusState private var boxFocused: Bool
 
@@ -38,7 +39,7 @@ struct CommandWindowView: View {
         VStack(alignment: .leading, spacing: appearance.settings.panelSpacing) {
             characterRow
             if droppingFile { dropHint }
-            if !model.droppedFiles.isEmpty { fileRow }
+            if !model.droppedFiles.isEmpty || !model.pendingAttachments.isEmpty { fileRow }
             messageBox
             if let error = model.errorText {
                 Text(error)
@@ -46,6 +47,7 @@ struct CommandWindowView: View {
                     .foregroundStyle(theme.danger.color)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            if !model.results.isEmpty { resultsSection }
             footer
         }
         .padding(appearance.settings.panelPadding * 1.5)
@@ -61,7 +63,6 @@ struct CommandWindowView: View {
         }
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(theme.panelBorder.color, lineWidth: theme.panelBorderWidth))
         .overlay(alignment: .topTrailing) { closeButton.padding(6) }
-        .overlay(alignment: .bottomTrailing) { resizeGrip }
         // The whole slab takes the drop, same as the chat bubble — naming one
         // rectangle as the target is the belief the chat's drop area undid.
         .dropDestination(for: URL.self) { urls, _ in
@@ -131,31 +132,39 @@ struct CommandWindowView: View {
         .allowsHitTesting(false)
     }
 
-    /// The instruction files waiting to go, in the order they merge.
+    /// Everything waiting to go with the next send: instruction files in
+    /// merge order, then the attachments.
     private var fileRow: some View {
         ScrollView(.horizontal) {
             HStack(spacing: appearance.settings.panelSpacing) {
                 ForEach(model.droppedFiles) { file in
-                    HStack(spacing: 4) {
-                        Image(systemName: "doc.text")
-                        Text(file.name)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                        Button { model.detach(file.id) } label: {
-                            Image(systemName: "xmark.circle.fill")
-                        }
-                        .buttonStyle(.plain)
-                        .help("Don't send this one")
-                    }
-                    .font(.system(size: appearance.settings.footnoteFontSize))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(theme.chipFill.color, in: Capsule())
+                    fileChip(name: file.name, glyph: "doc.text", id: file.id)
+                }
+                ForEach(model.pendingAttachments) { file in
+                    fileChip(name: file.name, glyph: "paperclip", id: file.id)
                 }
             }
             .padding(.vertical, 1)
         }
         .scrollIndicators(.never)
+    }
+
+    private func fileChip(name: String, glyph: String, id: UUID) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: glyph)
+            Text(name)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Button { model.detach(id) } label: {
+                Image(systemName: "xmark.circle.fill")
+            }
+            .buttonStyle(.plain)
+            .help("Don't send this one")
+        }
+        .font(.system(size: appearance.settings.footnoteFontSize))
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+        .background(theme.chipFill.color, in: Capsule())
     }
 
     private var messageBox: some View {
@@ -171,9 +180,9 @@ struct CommandWindowView: View {
 
     private var messageField: some View {
         ScrollView(.vertical) {
-            TextField("", text: $draft, prompt: Text("สั่งงานทุกตัวที่เลือก…"), axis: .vertical)
+            TextField("", text: $model.draft, prompt: Text("สั่งงานทุกตัวที่เลือก…"), axis: .vertical)
                 .textFieldStyle(.plain)
-                .font(.system(size: appearance.settings.fontSize))
+                .font(.system(size: model.fontSize))
                 // Return sends, Shift/Option-Return breaks the line — the same
                 // contract as the chat box, for the same `onSubmit` reason.
                 .onKeyPress(.return, phases: .down) { press in
@@ -204,12 +213,127 @@ struct CommandWindowView: View {
         // The granted extra rides on top of the draft-driven height, so a
         // taller window is a taller writing area and nothing else moves.
         .frame(height: boxHeight + model.extraBoxHeight)
+        // The field is top-aligned and only as tall as its text, so in a
+        // stretched box most of the writing area is empty scroll space — a
+        // click there must still land the caret, or the box reads as dead
+        // (driven 2026-08-19: a click mid-box typed nowhere).
+        .contentShape(Rectangle())
+        .onTapGesture { boxFocused = true }
         .scrollDisabled(draftHeight <= maxBoxHeight + model.extraBoxHeight)
         .defaultScrollAnchor(.bottom)
     }
 
+    // MARK: - Results
+
+    /// What has come back, foldable like the usage window's sections — the
+    /// whole header row is the target, not a 10pt chevron.
+    private var resultsSection: some View {
+        VStack(alignment: .leading, spacing: appearance.settings.panelSpacing) {
+            HStack(spacing: 6) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.15)) { model.showResults.toggle() }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: max(8, appearance.settings.footnoteFontSize - 3), weight: .bold))
+                            .foregroundStyle(theme.mutedText.color)
+                            .rotationEffect(.degrees(model.showResults ? 90 : 0))
+                        Text("ผลลัพธ์")
+                            .font(.system(size: appearance.settings.footnoteFontSize, weight: .semibold))
+                        Text("\(model.results.count)")
+                            .font(.system(size: appearance.settings.hintFontSize))
+                            .foregroundStyle(theme.mutedText.color)
+                        Spacer()
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                if model.showResults {
+                    Button("clear") { model.clearResults() }
+                        .buttonStyle(.plain)
+                        .font(.system(size: appearance.settings.hintFontSize))
+                        .foregroundStyle(theme.mutedText.color)
+                        .help("Empty the results strip — sessions are untouched")
+                }
+            }
+
+            if model.showResults {
+                ScrollView(.vertical) {
+                    VStack(alignment: .leading, spacing: appearance.settings.panelSpacing) {
+                        ForEach(model.results) { result in
+                            resultRow(result)
+                        }
+                    }
+                    .background(
+                        GeometryReader { proxy in
+                            Color.clear.preference(key: ResultsHeightKey.self, value: proxy.size.height)
+                        }
+                    )
+                }
+                .onPreferenceChange(ResultsHeightKey.self) { resultsHeight = $0 }
+                // Sized from the measured rows, capped: a bare `maxHeight`
+                // lets a ScrollView collapse to nothing — driven 2026-08-19,
+                // where the strip showed its header and not one row. A strip,
+                // not a transcript: a few answers, its own scroll for the
+                // rest, so results can never crowd out the box.
+                .frame(height: min(220, resultsHeight))
+            }
+        }
+        .padding(appearance.settings.panelSpacing)
+        .background(theme.infoFill.color(opacity: 0.5), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func resultRow(_ result: CommandResult) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 5) {
+                Circle()
+                    .fill(result.succeeded ? theme.success.color : theme.danger.color)
+                    .frame(width: 6, height: 6)
+                Text(result.name)
+                    .font(.system(size: appearance.settings.footnoteFontSize, weight: .semibold))
+            }
+            Text(result.text)
+                .font(.system(size: appearance.settings.footnoteFontSize))
+                .lineLimit(8)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+            if !result.choices.isEmpty {
+                // The reply asked something. Answering sends the option's own
+                // words to that character — the chat picker's rule, because a
+                // bare letter is ambiguous for the next turn.
+                WrappingChoices(
+                    options: result.choices,
+                    fontSize: appearance.settings.footnoteFontSize,
+                    theme: theme
+                ) { option in
+                    model.pick(option, from: result)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     private var footer: some View {
-        HStack {
+        HStack(spacing: appearance.settings.panelSpacing * 1.5) {
+            // Link-shaped on purpose — the owner asked for hypertext, and a
+            // third bordered button here would outrank the two that act.
+            Button("Clear") { model.clearComposition() }
+                .buttonStyle(.plain)
+                .font(.system(size: appearance.settings.footnoteFontSize))
+                .foregroundStyle(theme.accent.color)
+                .underline()
+                .help("Empty the box and the waiting files — nothing is sent")
+            Button {
+                for url in AttachmentPicker.promptForFiles(message: "instruction files or attachments") {
+                    model.attach(url)
+                }
+            } label: {
+                Image(systemName: "paperclip")
+                    .font(.system(size: appearance.settings.footnoteFontSize))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(theme.mutedText.color)
+            .help("Attach files without dragging")
             Button("จบการทำงาน") { model.endAll() }
                 .buttonStyle(.bordered)
                 .font(.system(size: appearance.settings.footnoteFontSize))
@@ -223,7 +347,7 @@ struct CommandWindowView: View {
         }
     }
 
-    private var sendGlyphSize: Double { appearance.settings.fontSize * 1.1 * 0.9 }
+    private var sendGlyphSize: Double { model.fontSize * 1.1 * 0.9 }
     private var sendGlyphLane: Double { sendGlyphSize + 16 }
 
     private var sendGlyph: some View {
@@ -248,19 +372,6 @@ struct CommandWindowView: View {
         DragGesture(minimumDistance: 2).onChanged { _ in beginWindowDrag() }
     }
 
-    /// The width affordance. Only a glyph: the resizing itself is the
-    /// window's own edge-resize — the panel is `.resizable` with the height
-    /// pinned to the content, so grabbing any edge changes width alone. A
-    /// gesture of our own here fought the background drag (both fired at
-    /// once, driven 2026-08-19) and lost to the native loop on smoothness.
-    private var resizeGrip: some View {
-        Image(systemName: "arrow.left.and.right")
-            .font(.system(size: 9, weight: .bold))
-            .foregroundStyle(theme.mutedText.color)
-            .padding(8)
-            .allowsHitTesting(false)
-    }
-
     /// The ✕. Hiding, not closing: the hint beside จบการทำงาน says so, and
     /// Esc does the same thing.
     private var closeButton: some View {
@@ -275,12 +386,14 @@ struct CommandWindowView: View {
 
     /// A dropped file on its own is a command, same as an attachment in chat.
     private var canSend: Bool {
-        !draft.trimmingCharacters(in: .whitespaces).isEmpty || !model.droppedFiles.isEmpty
+        !model.draft.trimmingCharacters(in: .whitespaces).isEmpty
+            || !model.droppedFiles.isEmpty
+            || !model.pendingAttachments.isEmpty
     }
 
     private func send() {
         guard canSend else { return }
-        if model.send(draft) { draft = "" }
+        _ = model.send()
     }
 
     /// Shift/Option-Return breaks the line where the caret is, through the
@@ -291,14 +404,14 @@ struct CommandWindowView: View {
             .compactMap({ $0.firstResponder as? NSTextView })
             .first(where: \.isEditable)
         else {
-            draft.append("\n")
+            model.draft.append("\n")
             return
         }
         editor.insertNewlineIgnoringFieldEditor(nil)
     }
 
     private var lineHeight: Double {
-        Double(NSLayoutManager().defaultLineHeight(for: .systemFont(ofSize: appearance.settings.fontSize)))
+        Double(NSLayoutManager().defaultLineHeight(for: .systemFont(ofSize: model.fontSize)))
     }
 
     private var maxBoxHeight: Double { lineHeight * Double(ChatPanelView.inputLineLimit) }
@@ -309,6 +422,80 @@ struct CommandWindowView: View {
             lineHeight: lineHeight,
             lineLimit: ChatPanelView.inputLineLimit
         )
+    }
+}
+
+/// Choice buttons that wrap to the strip's width instead of forcing it wider —
+/// the same must-not-decide-the-window-size rule every panel here lives by.
+private struct WrappingChoices: View {
+    let options: [String]
+    let fontSize: Double
+    let theme: Palette
+    let pick: (String) -> Void
+
+    var body: some View {
+        FlowLayout(spacing: 5) {
+            ForEach(options, id: \.self) { option in
+                Button { pick(option) } label: {
+                    Text(option)
+                        .font(.system(size: fontSize))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 3)
+                        .background(theme.accentFill.color, in: Capsule())
+                        .overlay(Capsule().stroke(theme.accent.color, lineWidth: 1))
+                        .foregroundStyle(theme.accent.color)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+}
+
+/// Rows of subviews, wrapping when the line is full. A `Layout` because
+/// HStacks cannot wrap and a `Grid` would make every column as wide as the
+/// longest option.
+private struct FlowLayout: Layout {
+    let spacing: Double
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        arrange(in: proposal.width ?? .infinity, subviews: subviews).size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        for (index, origin) in arrange(in: bounds.width, subviews: subviews).origins.enumerated() {
+            subviews[index].place(
+                at: CGPoint(x: bounds.minX + origin.x, y: bounds.minY + origin.y),
+                proposal: .unspecified
+            )
+        }
+    }
+
+    private func arrange(in width: Double, subviews: Subviews) -> (origins: [CGPoint], size: CGSize) {
+        var origins: [CGPoint] = []
+        var x = 0.0, y = 0.0, rowHeight = 0.0, widest = 0.0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > width {
+                x = 0
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            origins.append(CGPoint(x: x, y: y))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+            widest = max(widest, x - spacing)
+        }
+        return (origins, CGSize(width: widest, height: y + rowHeight))
+    }
+}
+
+/// Carries the result rows' height out to the strip that has to cap it.
+private struct ResultsHeightKey: PreferenceKey {
+    static let defaultValue: Double = 0
+    static func reduce(value: inout Double, nextValue: () -> Double) {
+        value = max(value, nextValue())
     }
 }
 

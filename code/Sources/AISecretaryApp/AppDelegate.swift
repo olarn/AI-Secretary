@@ -61,7 +61,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     /// promise of the window.
     private lazy var commandCenter = CommandCenter(
         roster: { [weak self] in (self?.characters ?? []).map(\.card) },
-        deliver: { [weak self] id, text in self?.character(id)?.secretary.submit(text) },
+        deliver: { [weak self] id, text, files in
+            guard let secretary = self?.character(id)?.secretary else { return }
+            // Attachments first, so the submit that follows carries them —
+            // the same order typing in her own chat produces.
+            files.forEach { secretary.attach($0) }
+            secretary.submit(text)
+        },
         endSessions: { [weak self] ids in
             ids.forEach { self?.character($0)?.secretary.newConversation() }
         }
@@ -229,6 +235,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     /// `completionNotice`'s decision — this only gathers the one fact she
     /// cannot see from inside herself: whether her chat is on screen.
     private func announce(_ turn: FinishedTurn, from id: UUID) {
+        // The command window's results strip hears about every commanded
+        // character's turn, banner or no banner — the strip is the reason the
+        // person does not have three chats open.
+        commandCenter.record(turn, from: id)
         guard let notice = completionNotice(
             for: turn,
             isChatVisible: character(id)?.isChatVisible ?? false
@@ -516,9 +526,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     /// now that the size is hers rather than the app's. A shortcut that changed
     /// all of them would be the one thing on this screen that still treats them
     /// as one.
-    func increaseTextSize(_ sender: Any?) { focused?.appearance.increaseFontSize() }
+    /// While the command box holds the keyboard the shortcut sizes *that
+    /// box's* text — the window is the app's, and growing one character's
+    /// bubbles because the caret happened to be here would resize windows the
+    /// person is not looking at.
+    func increaseTextSize(_ sender: Any?) {
+        if commandWindow.isKey { commandCenter.bumpFontSize(1) }
+        else { focused?.appearance.increaseFontSize() }
+    }
 
-    func decreaseTextSize(_ sender: Any?) { focused?.appearance.decreaseFontSize() }
+    func decreaseTextSize(_ sender: Any?) {
+        if commandWindow.isKey { commandCenter.bumpFontSize(-1) }
+        else { focused?.appearance.decreaseFontSize() }
+    }
 
     /// ⌘H. Goes through the same toggle the status bar item uses; the character
     /// reports back so the menu's wording doesn't go stale.

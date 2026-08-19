@@ -100,6 +100,8 @@ final class CommandWindowController {
     private var panel: FloatingPanel?
     private var moveObserver: NSObjectProtocol?
     private var resizeObserver: NSObjectProtocol?
+    /// The ↑↓ recall monitor — see `watchArrowKeys`.
+    private var arrowKeyMonitor: Any?
     /// The slab's height with no granted extra — what the window may never
     /// shrink below, and the zero point the extra is measured from.
     private var naturalHeight: Double = 0
@@ -183,6 +185,7 @@ final class CommandWindowController {
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.followUserResize() }
         }
+        watchArrowKeys()
         moveObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.didMoveNotification,
             object: panel,
@@ -196,6 +199,28 @@ final class CommandWindowController {
             }
         }
         return panel
+    }
+
+    /// ↑↓ recall what this box has sent, exactly as the chat box does — and
+    /// through the same door: a local `NSEvent` monitor, because `TextField`
+    /// eats the arrow keys before `.onKeyPress` ever sees them (the chat's
+    /// receipt for this is in `ChatPanelView+Keys`). Who owns the arrows is
+    /// `ArrowKeyOwner`'s decision, not an `if` chain here: a multi-line draft
+    /// keeps them for the caret. No choices are passed — the results strip's
+    /// picker is clicked, not steered, so the arrows never mean three things
+    /// in this window.
+    private func watchArrowKeys() {
+        arrowKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self, let panel, panel.isKeyWindow else { return event }
+            guard event.keyCode == 126 || event.keyCode == 125 else { return event }
+            guard ArrowKeyOwner.owner(
+                hasChoices: false,
+                draft: model.draft,
+                hasHistory: model.hasRecallHistory
+            ) == .history else { return event }
+            let handled = event.keyCode == 126 ? model.recallOlder() : model.recallNewer()
+            return handled ? nil : event
+        }
     }
 
     /// The view, wired back to the window it lives in for the background drag

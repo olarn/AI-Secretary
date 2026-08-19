@@ -3344,7 +3344,13 @@ public final class Secretary {
         // housekeeping in the banner and left the answer off it (driven at
         // 0.19.288). Joined with a blank line rather than taken from `reply`,
         // which glues the bubbles character to character on purpose.
-        announceFinished(text: spokenAsOneMessage(bubbles), succeeded: success)
+        announceFinished(
+            text: spokenAsOneMessage(bubbles),
+            succeeded: success,
+            // From the raw last bubble, where the fence still is — the spoken
+            // text above has already had it stripped.
+            choices: MessageChoices.parse(bubbles.last ?? "").options
+        )
         // If this turn was another character's errand, the answer goes back
         // now — after the state machine has settled, so what is sent is a
         // finished answer rather than one still closing.
@@ -4244,13 +4250,14 @@ public final class Secretary {
     /// `wasErrand` — by the time a banner could be posted the errand has been
     /// answered and forgotten, so it has to be read here, while `answering`
     /// still holds it.
-    private func announceFinished(text: String, succeeded: Bool) {
+    private func announceFinished(text: String, succeeded: Bool, choices: [String] = []) {
         onTurnFinished?(
             FinishedTurn(
                 characterName: profile.displayName,
                 text: text,
                 succeeded: succeeded,
-                wasErrand: answering.isDefined
+                wasErrand: answering.isDefined,
+                choices: choices
             )
         )
     }

@@ -15,12 +15,23 @@ public struct FinishedTurn: Equatable, Sendable {
     /// Whether this turn was another character's errand rather than the
     /// person's request.
     public let wasErrand: Bool
+    /// What the reply offered to pick, parsed from the raw bubble before the
+    /// fence was stripped — `text` deliberately no longer carries it, so a
+    /// listener that wants the question's options has to be handed them.
+    public let choices: [String]
 
-    public init(characterName: String, text: String, succeeded: Bool, wasErrand: Bool) {
+    public init(
+        characterName: String,
+        text: String,
+        succeeded: Bool,
+        wasErrand: Bool,
+        choices: [String] = []
+    ) {
         self.characterName = characterName
         self.text = text
         self.succeeded = succeeded
         self.wasErrand = wasErrand
+        self.choices = choices
     }
 }
 

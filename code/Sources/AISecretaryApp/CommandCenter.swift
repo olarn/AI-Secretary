@@ -10,31 +10,60 @@ struct DroppedInstruction: Identifiable, Equatable {
     let text: String
 }
 
-/// What the command window is holding: who is ticked, which files are waiting,
-/// and who has been commanded — the set "จบการทำงาน" acts on.
+/// A file riding along as a real attachment — an image, a PDF, a CSV. Held as
+/// a URL because each recipient's own Secretary stages it, exactly as the
+/// chat's drop does; reading it here would only be a second copy.
+struct DroppedAttachment: Identifiable, Equatable {
+    let id = UUID()
+    let name: String
+    let url: URL
+}
+
+/// One finished turn of a commanded character, as the results strip shows it.
+struct CommandResult: Identifiable, Equatable {
+    let id = UUID()
+    let characterID: UUID
+    let name: String
+    let text: String
+    let succeeded: Bool
+    /// The reply's own question, offered as buttons. Emptied once picked —
+    /// the question has been answered, and a second click would answer it
+    /// again.
+    var choices: [String]
+}
+
+/// What the command window is holding: who is ticked, what is waiting to go,
+/// who has been commanded, and what has come back.
 ///
 /// Gathering and applying only. Every decision — who a command reaches, what
-/// each copy says, how files merge — is a pure function in `SecretaryCore`,
-/// because this target is never linked into the test bundle.
+/// each copy says, how files merge and route — is a pure function in
+/// `SecretaryCore`, because this target is never linked into the test bundle.
 @MainActor
 @Observable
 final class CommandCenter {
     /// Everyone on the desktop, asked for rather than held — the same rule as
     /// `CharacterBus`, so a character added or deleted needs nothing rewired.
     @ObservationIgnored let roster: () -> [CharacterCard]
-    /// Hands one character her copy of the command.
-    @ObservationIgnored let deliver: (UUID, String) -> Void
+    /// Hands one character her copy of the command, with the files that ride
+    /// along as attachments.
+    @ObservationIgnored let deliver: (UUID, String, [URL]) -> Void
     /// Ends the sessions of everyone in the set.
     @ObservationIgnored let endSessions: (Set<UUID>) -> Void
 
     /// Who is ticked. Commands only ever reach ticked characters; the set can
     /// change at any time and takes effect on the next send.
     var selected: Set<UUID> = []
+    /// The message being written. In the model rather than the view so the
+    /// arrow-key monitor can consult it and recall can rewrite it — and so it
+    /// survives the view being rebuilt when the borrowed look changes.
+    var draft = ""
     /// The red line under the box, when there is one.
     var errorText: String?
     /// Instruction files waiting to go with the next send, in drop order —
     /// the order they merge in.
     var droppedFiles: [DroppedInstruction] = []
+    /// Files waiting to go as attachments.
+    var pendingAttachments: [DroppedAttachment] = []
     /// Everyone this window has sent a command to since the last
     /// "จบการทำงาน". Hiding the window does not touch it — hiding keeps
     /// sessions alive by design.
@@ -50,10 +79,26 @@ final class CommandCenter {
     /// box, everything else keeps its place. Zero is the default, which is
     /// also the minimum.
     var extraBoxHeight: Double = 0
+    /// The box's own text size, moved by ⌘+/⌘− while the box holds the caret.
+    var fontSize: Double = {
+        let saved = UserDefaults.standard.double(forKey: commandFontSizeKey)
+        return clampedCommandFontSize(saved > 0 ? saved : commandWindowDefaultFontSize)
+    }()
+    /// What commanded characters have answered, newest first, capped so a
+    /// long day of commands cannot grow the window without bound.
+    private(set) var results: [CommandResult] = []
+    /// The results strip folds — the owner asked for it closable.
+    var showResults = true
+
+    /// What was sent from this box, for ↑↓ recall — this window's own, not
+    /// any character's, and this session's only, same as the chat's.
+    private(set) var sentCommands: [String] = []
+    private var recallIndex: Int?
+    private var stashedDraft = ""
 
     init(
         roster: @escaping () -> [CharacterCard],
-        deliver: @escaping (UUID, String) -> Void,
+        deliver: @escaping (UUID, String, [URL]) -> Void,
         endSessions: @escaping (Set<UUID>) -> Void
     ) {
         self.roster = roster
@@ -68,25 +113,43 @@ final class CommandCenter {
         errorText = nil
     }
 
+    /// One door for the drop and the picker both; the role rule decides what
+    /// the file becomes.
     func attach(_ url: URL) {
-        guard let text = try? String(contentsOf: url, encoding: .utf8) else {
-            errorText = "อ่านไฟล์ \(url.lastPathComponent) ไม่ได้"
-            return
+        switch commandDropRole(forExtension: url.pathExtension) {
+        case .instruction:
+            guard let text = try? String(contentsOf: url, encoding: .utf8) else {
+                errorText = "อ่านไฟล์ \(url.lastPathComponent) ไม่ได้"
+                return
+            }
+            droppedFiles.append(DroppedInstruction(name: url.lastPathComponent, text: text))
+        case .attachment:
+            pendingAttachments.append(DroppedAttachment(name: url.lastPathComponent, url: url))
         }
-        droppedFiles.append(DroppedInstruction(name: url.lastPathComponent, text: text))
         errorText = nil
     }
 
     func detach(_ id: UUID) {
         droppedFiles.removeAll { $0.id == id }
+        pendingAttachments.removeAll { $0.id == id }
     }
 
-    /// Sends the typed text and the waiting files. Returns whether they went,
-    /// which is what tells the view to clear the draft.
-    func send(_ typed: String) -> Bool {
+    /// The "Clear" link: everything composed but not yet sent. Not the
+    /// results, and never the sessions.
+    func clearComposition() {
+        draft = ""
+        droppedFiles = []
+        pendingAttachments = []
+        errorText = nil
+        recallIndex = nil
+    }
+
+    /// Sends the draft and the waiting files. Returns whether they went.
+    func send() -> Bool {
         let cards = roster()
+        let typed = draft
         let text = mergedInstructions(files: droppedFiles.map(\.text), typed: typed)
-        guard !text.isEmpty else { return false }
+        guard !text.isEmpty || !pendingAttachments.isEmpty else { return false }
 
         let dispatch = commandRecipients(
             for: text,
@@ -101,14 +164,109 @@ final class CommandCenter {
             errorText = namedNotSelectedMessage(names)
             return false
         case .send(let recipients):
+            let files = pendingAttachments.map(\.url)
             recipients.forEach { recipient in
-                deliver(recipient.id, commandMessage(for: recipient, among: recipients, instructions: text))
+                deliver(
+                    recipient.id,
+                    commandMessage(for: recipient, among: recipients, instructions: text),
+                    files
+                )
             }
             commanded.formUnion(recipients.map(\.id))
+            if !typed.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                sentCommands.append(typed)
+            }
+            draft = ""
             droppedFiles = []
+            pendingAttachments = []
             errorText = nil
+            recallIndex = nil
             return true
         }
+    }
+
+    // MARK: - ↑↓ recall — the same walk the chat box does
+
+    var hasRecallHistory: Bool { !sentCommands.isEmpty }
+
+    /// Up: step back through what was sent, stashing the unsent draft first
+    /// so stepping past the oldest and back down returns it intact.
+    func recallOlder() -> Bool {
+        guard !sentCommands.isEmpty else { return false }
+        switch recallIndex {
+        case nil:
+            stashedDraft = draft
+            recallIndex = sentCommands.count - 1
+        case let index? where index > 0:
+            recallIndex = index - 1
+        default:
+            break
+        }
+        draft = recallIndex.map { sentCommands[$0] } ?? draft
+        return true
+    }
+
+    /// Down: forward again, ending on the stashed draft.
+    func recallNewer() -> Bool {
+        guard let index = recallIndex else { return false }
+        if index + 1 < sentCommands.count {
+            recallIndex = index + 1
+            draft = sentCommands[recallIndex ?? index]
+        } else {
+            recallIndex = nil
+            draft = stashedDraft
+        }
+        return true
+    }
+
+    // MARK: - Results
+
+    /// A commanded character's turn came to rest. Anything she finishes while
+    /// commanded lands here — hand-offs between recipients included, which is
+    /// how divided work stays visible without opening her chat.
+    func record(_ turn: FinishedTurn, from id: UUID) {
+        guard commanded.contains(id) else { return }
+        results.insert(
+            CommandResult(
+                characterID: id,
+                name: turn.characterName,
+                // Parsed again for the body: `FinishedTurn.text` still carries
+                // the ```choices fence (driven 2026-08-19 — the strip showed
+                // it as literal text under the buttons made from it).
+                text: MessageChoices.parse(turn.text).body
+                    .trimmingCharacters(in: .whitespacesAndNewlines),
+                succeeded: turn.succeeded,
+                choices: turn.choices
+            ),
+            at: 0
+        )
+        // Newest first, oldest off the end — 20 is a strip, not an archive.
+        if results.count > 20 { results.removeLast(results.count - 20) }
+    }
+
+    /// Answers one result's question with the option's own words, exactly as
+    /// the chat's picker does — never a bare letter.
+    func pick(_ option: String, from result: CommandResult) {
+        deliver(result.characterID, option, [])
+        commanded.insert(result.characterID)
+        // The question has been answered; the buttons would answer it twice.
+        results = results.map { entry in
+            guard entry.id == result.id else { return entry }
+            var answered = entry
+            answered.choices = []
+            return answered
+        }
+    }
+
+    func clearResults() { results = [] }
+
+    // MARK: - Text size
+
+    /// ⌘+ / ⌘−. Persisted like the window's frame — a size chosen once is a
+    /// preference, not a session whim.
+    func bumpFontSize(_ delta: Double) {
+        fontSize = clampedCommandFontSize(fontSize + delta)
+        UserDefaults.standard.set(fontSize, forKey: commandFontSizeKey)
     }
 
     /// "จบการทำงาน": every session this window commanded is ended, whether or

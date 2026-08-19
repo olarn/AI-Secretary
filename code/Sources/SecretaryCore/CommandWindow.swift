@@ -161,6 +161,41 @@ public func commandWindowWidth(saved: Double?) -> Double {
     return min(max(saved, 380), 1000)
 }
 
+// MARK: - What a dropped file becomes
+
+/// What one file dragged onto the command window turns into.
+public enum CommandDropRole: Equatable, Sendable {
+    /// Read as text and merged into the instructions.
+    case instruction
+    /// Handed to each recipient as a real attachment, the way the chat's own
+    /// drop does — an image read as UTF-8 was an error message before this.
+    case attachment
+}
+
+/// Notes are instructions; everything else rides along as a file. Extension
+/// rather than content sniffing, because "a markdown file of tasks" versus "a
+/// CSV the tasks are about" is a distinction of kind, not of bytes.
+public func commandDropRole(forExtension ext: String) -> CommandDropRole {
+    ["md", "markdown", "txt", "text"].contains(ext.lowercased()) ? .instruction : .attachment
+}
+
+// MARK: - The box's own text size
+
+/// The one place this defaults key is written, same rule as the origin's.
+public let commandFontSizeKey = "commandWindow.fontSize"
+
+/// The chat boxes' default, which is where this box's look came from.
+public let commandWindowDefaultFontSize: Double = 13
+
+/// ⌘+ / ⌘− while the command box holds the caret size *this box*, not the
+/// focused character's chat — the window is the app's, and growing one
+/// character's bubbles because the pointer happened to be here would be the
+/// same borrowed-look bug Token Usage exists to avoid. Clamped to the range
+/// the chat's own sizes span.
+public func clampedCommandFontSize(_ size: Double) -> Double {
+    min(max(size, 10), 28)
+}
+
 // MARK: - The menu row
 
 /// One row for both directions, worded from what is on screen right now —
