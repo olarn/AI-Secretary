@@ -35,6 +35,17 @@ guard let source = NSImage(contentsOfFile: sourcePath) else {
 ///
 /// Returns the whole image when it is fully opaque, or when the pixels can't
 /// be read — a slightly small icon beats no icon.
+///
+/// **Do not expect this to change what Finder shows on macOS 26.** It doesn't,
+/// and that was measured, not assumed: asking `NSWorkspace.icon(forFile:)` for
+/// the bundle before and after this trim returned artwork covering 80% x 80% of
+/// the tile both times, `lsregister -f` included so it wasn't a stale cache.
+/// macOS 26 fits the icon to its own tile regardless of the padding in the
+/// `.icns`, so it is already doing this. What the trim fixes is the `.icns`
+/// itself — 62% x 57% of its canvas became 91% x 84% — which is what any
+/// surface reading the file directly gets. Making the icon read *larger* on
+/// macOS 26 means an Icon Composer `.icon` asset instead, not a bigger drawing
+/// in here.
 func contentBounds(of image: NSImage) -> NSRect {
     let whole = NSRect(origin: .zero, size: image.size)
     guard let tiff = image.tiffRepresentation,
