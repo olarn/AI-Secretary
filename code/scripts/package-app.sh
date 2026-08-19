@@ -35,6 +35,11 @@ if [[ -z "$VERSION" ]]; then
     exit 1
 fi
 
+# The change digit alone, which is the one part that never resets and never
+# repeats — see the CFBundleVersion comment further down for why the bundle
+# needs a number that moves.
+BUILD_NUMBER="${VERSION##*.}"
+
 # Which commit this bundle was actually built from. Two bundles can carry the
 # same version number and different code — that is exactly how a fixed feature
 # appears to come back broken — so the build is stamped and shown in the app.
@@ -114,8 +119,14 @@ $ICON_LINE
     <string>$BUILD</string>
     <key>AISecretaryBranch</key>
     <string>$BRANCH</string>
+    <!-- The build number, and it has to move: macOS caches an app's icon
+         against its identity, and every build shipping CFBundleVersion=1 gave
+         it no reason to believe the bundle had changed. A new icon then kept
+         showing up in Finder while notification banners carried the old one
+         (2026-08-19). The change digit only ever counts up, so it is already a
+         monotonic build number. -->
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>$BUILD_NUMBER</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
     <key>LSUIElement</key>
