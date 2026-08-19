@@ -248,7 +248,14 @@ final class CharacterInstance {
         guard let screen = NSScreen.main else { return }
         let visibleFrame = screen.visibleFrame
 
-        let characterOrigin = CharacterLaunch.origin(
+        // Where she was left last time, if that spot still exists — a save
+        // from a display that is gone falls back to the launch position, per
+        // `savedCharacterOrigin`'s rule (20.1).
+        let characterOrigin = savedCharacterOrigin(
+            saved: UserDefaults.standard.string(forKey: characterOriginKey(profileID)),
+            size: characterPanel.frame.size,
+            screenFrame: screen.frame
+        ) ?? CharacterLaunch.origin(
             ordinal: ordinal,
             characterSize: characterPanel.frame.size,
             visibleFrame: visibleFrame,
@@ -269,6 +276,13 @@ final class CharacterInstance {
             // isolation to reach the panel and layout without a warning.
             MainActor.assumeIsolated {
                 guard let self, let screen = self.characterPanel.screen ?? NSScreen.main else { return }
+                // Every move is remembered, the same way the command window's
+                // is — the restore's staleness rule lives in
+                // `savedCharacterOrigin`, not here.
+                UserDefaults.standard.set(
+                    characterOriginString(self.characterPanel.frame.origin),
+                    forKey: characterOriginKey(self.profileID)
+                )
                 self.applyChatLayout(in: screen.visibleFrame)
             }
         }

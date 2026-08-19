@@ -18,19 +18,11 @@ Sprint ที่จบแล้ว บันทึกทุกอย่างอ
 | Sprint 18-3 — ตัวเลือกที่สาม: ยกงานให้ตัวที่ว่าง | v0.18.284 |
 | Sprint 18-4 — model ที่ตั้งให้ตัวละคร จำข้ามการเปิดแอป | v0.18.286 |
 | Sprint 19 — notification เมื่องานเสร็จ คลิกแล้วเปิดแชทของตัวที่ส่ง | v0.19.288–290 |
-| Sprint 20 — Command window: สั่งงานทุก character พร้อมกัน | v0.20.301 |
+| Sprint 20 — Command window: สั่งงานทุก character พร้อมกัน | v0.20.301–308 |
+| Sprint 20.1 — เก็บงาน command box และ default character | v0.20.313 |
 
 **เลขสปรินต์เป็นของจริงที่นี่ที่เดียว** และตั้งแต่ 2026-08-18 ทุกหัวข้อใน
 `PRODUCT_BACKLOG_NEXT_SPRINTS.md` มีเลขจริงหมดแล้ว (20–24) ไม่มี `xxx`/`yyy`/`zzz`/`zzzz`
 เหลืออยู่ — เลขเรียงตามลำดับที่จะลงมือทำ เพราะนั่นคือความหมายของเลขหลักกลางใน version
 
 ---
-
-## Sprint 20.1 
- งานเพิ่ม
-  - ปุ่ม clear ไม่เอาเป็น hyperlink ให้เป็น คำว่า clear ที่ design เหมือนปุ่ม send และอยู่ใน text box มุมซ้ายล่าง
-  - เพิ่มความสูงให้ textbox ให้ใหญ่พอมีพื้นที่เผื่อให้ปุ่ม clear และ send เช่น สูงประมาณ 2.5 เท่าของความสูง default 
-  - ตอนที่ขยาย box ให้ใหญ่ ถ้า click ใน text box ก็ให้ cursor ขึ้นเลย (ตอนนี้ต้องป click ที่ placeholder)
-  - เอาปุ่ม attach ไปอยู่ใน textbox ข้างซ้ายของปุ่ม send ขยับปุ่ม "จบการทำงาน" ไปทางขอบซ้ายสุด
-  - ตอน new character ให้ใช้ profile default ใช้ App Icon เป็น default character
-  - อยากให้จำ location ของ character + command window ถ้าปิด app แล้วเปิดใหม่ก็อยู่ที่เดิม ยกเว้นถ้า character อยู่นอก screen เพราะเดิม share screen ไว้ ก็ค่อยดึงกลับมาที่ default position

@@ -175,7 +175,16 @@ struct CommandWindowView: View {
         .padding(.vertical, 4)
         .background(RoundedRectangle(cornerRadius: 6).fill(theme.chipFill.color))
         .overlay(RoundedRectangle(cornerRadius: 6).stroke(theme.hairline.color, lineWidth: 1))
-        .overlay(alignment: .bottomTrailing) { sendGlyph }
+        // The controls live *in* the box since 20.1 — the owner asked for
+        // Clear at its bottom-left corner drawn like the send affordance, and
+        // the paperclip beside ↵ rather than out in the footer.
+        .overlay(alignment: .bottomTrailing) {
+            HStack(spacing: 12) {
+                paperclipGlyph
+                sendGlyph
+            }
+        }
+        .overlay(alignment: .bottomLeading) { clearGlyph }
     }
 
     private var messageField: some View {
@@ -196,6 +205,9 @@ struct CommandWindowView: View {
                 }
                 .focused($boxFocused)
                 .padding(.trailing, sendGlyphLane)
+                // The control row's strip: text scrolls above Clear/📎/↵
+                // instead of running underneath them.
+                .padding(.bottom, sendGlyphSize + 12)
                 .background(
                     GeometryReader { proxy in
                         Color.clear.preference(key: MessageBoxHeightKey.self, value: proxy.size.height)
@@ -315,25 +327,6 @@ struct CommandWindowView: View {
 
     private var footer: some View {
         HStack(spacing: appearance.settings.panelSpacing * 1.5) {
-            // Link-shaped on purpose — the owner asked for hypertext, and a
-            // third bordered button here would outrank the two that act.
-            Button("Clear") { model.clearComposition() }
-                .buttonStyle(.plain)
-                .font(.system(size: appearance.settings.footnoteFontSize))
-                .foregroundStyle(theme.accent.color)
-                .underline()
-                .help("Empty the box and the waiting files — nothing is sent")
-            Button {
-                for url in AttachmentPicker.promptForFiles(message: "instruction files or attachments") {
-                    model.attach(url)
-                }
-            } label: {
-                Image(systemName: "paperclip")
-                    .font(.system(size: appearance.settings.footnoteFontSize))
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(theme.mutedText.color)
-            .help("Attach files without dragging")
             Button("จบการทำงาน") { model.endAll() }
                 .buttonStyle(.bordered)
                 .font(.system(size: appearance.settings.footnoteFontSize))
@@ -348,7 +341,39 @@ struct CommandWindowView: View {
     }
 
     private var sendGlyphSize: Double { model.fontSize * 1.1 * 0.9 }
-    private var sendGlyphLane: Double { sendGlyphSize + 16 }
+    /// Two glyphs share the lane now — ↵ and the paperclip beside it.
+    private var sendGlyphLane: Double { sendGlyphSize * 2 + 32 }
+
+    /// "Clear", drawn exactly like the send affordance — a word, not a border
+    /// — at the box's bottom-left, per the 20.1 spec.
+    private var clearGlyph: some View {
+        Button("Clear") { model.clearComposition() }
+            .buttonStyle(.plain)
+            .font(.system(size: sendGlyphSize, weight: .medium))
+            .foregroundStyle(
+                canSend ? AnyShapeStyle(theme.primaryText.color)
+                        : AnyShapeStyle(theme.mutedText.color)
+            )
+            .disabled(!canSend)
+            .help("Empty the box and the waiting files — nothing is sent")
+            .padding(.leading, 8)
+            .padding(.bottom, 5)
+    }
+
+    private var paperclipGlyph: some View {
+        Button {
+            for url in AttachmentPicker.promptForFiles(message: "instruction files or attachments") {
+                model.attach(url)
+            }
+        } label: {
+            Image(systemName: "paperclip")
+                .font(.system(size: sendGlyphSize, weight: .medium))
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(theme.mutedText.color)
+        .help("Attach files without dragging")
+        .padding(.bottom, 5)
+    }
 
     private var sendGlyph: some View {
         Button(action: send) {
@@ -416,11 +441,16 @@ struct CommandWindowView: View {
 
     private var maxBoxHeight: Double { lineHeight * Double(ChatPanelView.inputLineLimit) }
 
+    /// Never shorter than 2.5 lines — the owner's number (20.1), room for the
+    /// control row without the box reading as a single cramped line.
     private var boxHeight: Double {
-        SecretaryCore.messageBoxHeight(
-            draft: draftHeight,
-            lineHeight: lineHeight,
-            lineLimit: ChatPanelView.inputLineLimit
+        max(
+            SecretaryCore.messageBoxHeight(
+                draft: draftHeight,
+                lineHeight: lineHeight,
+                lineLimit: ChatPanelView.inputLineLimit
+            ),
+            lineHeight * 2.5 + sendGlyphSize + 12
         )
     }
 }

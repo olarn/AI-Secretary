@@ -100,4 +100,10 @@ final class NewCharacterTests: XCTestCase {
 
         XCTAssertEqual(far.x, screen.minX)
     }
+
+        /// 20.1: New Character starts from the default profile; the stem the
+    /// numbering counts from is written down where a test can see it.
+    func testTheDefaultCharacterNameIsANonEmptyStem() {
+        XCTAssertEqual(defaultNewCharacterName, "Secretary")
+    }
 }

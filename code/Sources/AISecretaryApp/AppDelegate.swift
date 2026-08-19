@@ -324,13 +324,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
         case .clearPinned(let id):
             character(id)?.infoWindows.clearAll()
         case .newCharacter:
-            // Cloned from whoever is focused, so "another one like this" is one
-            // click. What she inherits and what she is called are decided by
-            // `newCharacterDraft`; adding her to the library brings her window
-            // up through `reconcileCharacters`.
-            let template = focused.map { profiles.profile($0.profileID) } ?? profiles.active
-            let fresh = newCharacterDraft(from: template, existing: profiles.profiles)
+            // From the default profile, not a clone of whoever is focused —
+            // the owner asked for that switch in 20.1. What she is called is
+            // still `newCharacterDraft`'s decision; adding her to the library
+            // brings her window up through `reconcileCharacters`.
+            let fresh = newCharacterDraft(
+                from: SecretaryProfile(name: defaultNewCharacterName),
+                existing: profiles.profiles
+            )
             profiles.add(fresh)
+            // Her default face is the app's own icon, read from the bundle's
+            // icns file — NOT `applicationIconImage`, which answers with a
+            // generic folder when the app runs unbundled (`swift run`, while
+            // driving) and put a folder on a character once; the owner asked
+            // why (2026-08-19). No icns — a dev run — means no picture at
+            // all, which is the built-in avatar: yesterday's behaviour, never
+            // a wrong face.
+            if let icns = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
+               let icon = NSImage(contentsOf: icns),
+               let tiff = icon.tiffRepresentation,
+               let bitmap = NSBitmapImageRep(data: tiff),
+               let png = bitmap.representation(using: .png, properties: [:]) {
+                _ = profiles.setArtwork(pngData: png, for: fresh.id)
+            }
             character(fresh.id)?.openChat()
         case .toggleCommandWindow:
             commandWindow.toggle(using: focused.appearance)

@@ -14,6 +14,12 @@ import Foundation
 /// only the identity is new. Her picture does not: artwork is stored per
 /// profile id and copying the file would leave two characters that are
 /// indistinguishable on screen, which defeats the point of having two.
+/// What a fresh character is called before anyone renames her. The stem the
+/// numbering counts from — "Secretary", "Secretary 2", … — chosen over cloning
+/// the focused character's name now that New Character starts from the default
+/// profile rather than a copy (owner, 2026-08-19).
+public let defaultNewCharacterName = "Secretary"
+
 public func newCharacterDraft(
     from template: SecretaryProfile,
     existing: [SecretaryProfile],
