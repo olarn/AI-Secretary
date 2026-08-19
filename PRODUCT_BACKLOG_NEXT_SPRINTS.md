@@ -1,8 +1,6 @@
 # Product Backlog — Next Sprints
 
-งานของ sprint ถัดๆ ไป ยังไม่เริ่ม
-
-## Sprint 20
+งานของ sprint ถัดๆ ไป ยังไม่เริ่ม  
 
 ## Sprint 21: Voice
 - [ ] Push-to-talk or explicit voice activation.

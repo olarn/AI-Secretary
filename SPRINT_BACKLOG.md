@@ -24,3 +24,25 @@ Sprint ที่จบแล้ว บันทึกทุกอย่างอ
 เหลืออยู่ — เลขเรียงตามลำดับที่จะลงมือทำ เพราะนั่นคือความหมายของเลขหลักกลางใน version
 
 ---
+## Sprint 20: User work with all AI Secretary in the same time
+Requirement: ต้องการให้ user สั่งงานทุก character ทีเดียวพร้อมๆกัน แทนที่จะสั่งงานผ่าน 1 ตัว แล้วให้ตัวนั้นไปสั่งตัวอื่นๆอีกทอดหนึ่ง 
+- [ ] เพิ่ม command window โดยที่ใน window จะมี 
+  - chat box เหมือนกับใน chat window เป็น float แบบไม่มีขอบ (เหมือน Spotlight ของ Mac หรือ chat box ของ Claude desktop) และ drag ไปมาได้ 
+  - เมื่อเปิดมา, cursor จะ focus ใน chat box เลย
+  - มี chat box, ปุ่ม send ใช้ design และ behaviour เหมือน chatbox เดิม
+  - มี list ของ available characters ที่ user เลือกได้ว่าจะสั่งใคร โดยแสดง ชื่อ characters เหนือ chat box 
+  - user กด Ecs จะเป็นการซ่อน window, แต่ไม่ได้ปิด session
+  - มีปุ่ม "จบการทำงาน" ถ้ามี session ของ character ไหนที่ทำงานกับ command ค้างอยู่ ก็จบปิด session ทั้งหมด
+- [ ] การสั่งงาน 
+  - ต้องมี (และเลือก) character ที่จะสั่งให้ทำงานอย่างน้อย 1 ตัว (ถ้าไม่เลือก จะมี Error message สีแดงใต้ box บอกว่าให้เลือกอย่างน้อย 1 ตัว)
+  - สามารถสั่ง character แยกได้ เช่น เลือกไว้ 3 ตัว แต่สั่ง Miku ตัวเดียว ด้วยการระบุเป็นภาษาธรรมชาติ เช่น "Miku pin คำตอบล่าสุดไว้" เป็นตัน Miku จะทำงานตัวเดียวตามคำสั่ง แต่ Miku ต้องถูกอยู่ใน character list ที่ถูกเลือก
+  - สามารถเพิ่มลด character ได้ตลอด ทุกตัวจะรับคำสั่งตอนที่ถูกเลือกเท่านั้น
+- [ ] มีเมนู Show / Hide Command เพื่อเปิด/ซ่อน command window อยู่ระหว่าง New Character กับ Token Usage (มีเส้นคั่นด้วย) 
+  - defaul position คือ middle screen เลือนตำแหน่งแล้วจำ position ได้
+- [ ] สามารถ upload instruction ได้ (เป็น batch commands - drag/drop file) โดยใน file instruction สามาระระบุได้ด้วยว่าให้ใครทำอะไร 
+- [ ] สามารถกำหนด role ได้ ว่า ใคร role อะไร, แต่ละ role ทำอะไร/ไม่ทำอะไร แล้ว character จะทำงานเองตาม role ที่กำหนด เช่น 
+  - role เป็น 3 สี Miku=แดง, Pikachu=เหลือง, Ditto=น้ำเงิน
+  - เมื่อไหร่ที่คำสั่งสัมพันธ์กับสีไหน สีนั้นจะนับเลขไว้ 
+  - instruction จะเขียนใน chatbox เลยก็ได้ หรือจะเป็น file แล้ว drag/drop มาใส่ก็ได้
+  - ถ้ามี instruction มากกว่า 1 file ก็เอามา merge กัน ถ้ามีลำดับ instruction ก็ให้ทำลำดับใน file แรกก่อน แล้วต่อทำใน file ถัดๆไป
+  - ถ้าไม่ได้กำหนดใน instruction ว่าใครทำอะไร ให้ character แบ่งงานกันเองว่าใครจะทำอะไร
