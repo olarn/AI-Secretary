@@ -25,3 +25,11 @@ Sprint ที่จบแล้ว บันทึกทุกอย่างอ
 เหลืออยู่ — เลขเรียงตามลำดับที่จะลงมือทำ เพราะนั่นคือความหมายของเลขหลักกลางใน version
 
 ---
+
+## Sprint 20.1 
+ งานเพิ่ม
+  - ปุ่ม clear ไม่เอาเป็น hyperlink ให้เป็น คำว่า clear ที่ design เหมือนปุ่ม send และอยู่ใน text box มุมซ้ายล่าง
+  - เพิ่มความสูงให้ textbox ให้ใหญ่พอมีพื้นที่เผื่อให้ปุ่ม clear และ send เช่น สูงประมาณ 2.5 เท่าของความสูง default 
+  - ตอนที่ขยาย box ให้ใหญ่ ถ้า click ใน text box ก็ให้ cursor ขึ้นเลย (ตอนนี้ต้องป click ที่ placeholder)
+  - เอาปุ่ม attach ไปอยู่ใน textbox ข้างซ้ายของปุ่ม send ขยับปุ่ม "จบการทำงาน" ไปทางขอบซ้ายสุด
+  - ตอน new character ให้ใช้ profile default ใช้ App Icon เป็น default character
