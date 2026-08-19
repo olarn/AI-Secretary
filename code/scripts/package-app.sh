@@ -63,10 +63,14 @@ mkdir -p "$MACOS" "$CONTENTS/Resources"
 
 cp "$BIN_PATH" "$MACOS/$EXECUTABLE"
 
-# Generate the app icon from the local character image, if present. The art is
-# never committed (it may be licensed), so the icon is built at package time
-# from whatever character.png the user has installed. Override with ICON_SRC.
-ICON_SRC="${ICON_SRC:-$HOME/Library/Application Support/AISecretary/character.png}"
+# Generate the app icon. The source is committed at docs/App-Icon.png — the
+# app's own artwork, drawn for this purpose, so unlike the character portraits
+# it carries no licence question and doesn't have to be built from whatever
+# image the person running the script happens to have installed. It used to
+# default to ~/Library/Application Support/AISecretary/character.png, which
+# meant two machines packaging the same commit produced two different icons.
+# Override with ICON_SRC.
+ICON_SRC="${ICON_SRC:-$ROOT/../docs/App-Icon.png}"
 ICON_LINE=""
 if [[ -f "$ICON_SRC" ]]; then
     echo "▸ Building icon from ${ICON_SRC}…"
@@ -77,7 +81,7 @@ if [[ -f "$ICON_SRC" ]]; then
         echo "  (icon generation failed — bundling without a custom icon)"
     fi
 else
-    echo "▸ No character.png found — bundling without a custom icon."
+    echo "▸ No icon source at ${ICON_SRC} — bundling without a custom icon."
     echo "  (set ICON_SRC=/path/to/image.png to use your own)"
 fi
 
