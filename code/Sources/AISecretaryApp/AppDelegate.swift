@@ -52,6 +52,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     /// Who had a chat open when everything went away, so "Show All" can put the
     /// conversation back rather than only the characters.
     private var chatsHiddenByShortcut: Set<UUID> = []
+    /// Whether ⌘H took the command window too, so Show All brings it back.
+    private var commandHiddenByShortcut = false
+
+    /// The command window's state: who is ticked, and who has been commanded.
+    /// Delivery goes through `submit` — a broadcast is the same act as typing
+    /// the same thing in each ticked character's own chat, which is the whole
+    /// promise of the window.
+    private lazy var commandCenter = CommandCenter(
+        roster: { [weak self] in (self?.characters ?? []).map(\.card) },
+        deliver: { [weak self] id, text in self?.character(id)?.secretary.submit(text) },
+        endSessions: { [weak self] ids in
+            ids.forEach { self?.character($0)?.secretary.newConversation() }
+        }
+    )
+    // No visibility callback: the status menu rebuilds itself every time it
+    // opens, which is the only moment its wording can be seen.
+    private lazy var commandWindow = CommandWindowController(model: commandCenter)
+
     /// Who the usage window adds up. Kept in step by `reconcileCharacters`.
     private let usageRoster = UsageRoster()
     private lazy var usageWindow = UsageWindow(
@@ -258,7 +276,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
                         PinnedMenuRow(id: $0.id, title: $0.title)
                     }
                 )
-            }
+            },
+            isCommandWindowVisible: commandWindow.isVisible
         )
     }
 
@@ -303,6 +322,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
             let fresh = newCharacterDraft(from: template, existing: profiles.profiles)
             profiles.add(fresh)
             character(fresh.id)?.openChat()
+        case .toggleCommandWindow:
+            commandWindow.toggle(using: focused.appearance)
         case .showTokenUsage:
             usageWindow.toggle(using: focused.appearance)
         case .showAbout:
@@ -323,6 +344,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     ///   decide whether to swallow the keystroke or hand it on.
     @discardableResult
     private func dismissWhateverIsInFront(trigger: DismissTrigger) -> Bool {
+        // The command window first, on either path. While it holds the
+        // keyboard, Esc typed into it is what the backlog specifies: hide the
+        // window, leave the sessions running. Without this rung the hot key —
+        // claimed whenever any chat bubble is dismissable — consumes the press
+        // and spends it on a chat the person is not even typing in.
+        if commandWindow.isKey, commandWindow.isVisible {
+            commandWindow.hide()
+            return true
+        }
         let decision = dismissDecision(
             characters.map {
                 DismissCandidate(
@@ -405,6 +435,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
         // Taken before they close, because that is the only moment it is
         // knowable — and it is what "bring it all back" has to mean.
         chatsHiddenByShortcut = Set(characters.filter(\.isChatVisible).map(\.profileID))
+        // Remembered before the blanket sweep below takes it, or "Show All"
+        // could never bring it back — the asymmetry this method's doc warns of.
+        commandHiddenByShortcut = commandWindow.isVisible
         characters.forEach { $0.hideEverythingOfHers() }
         usageWindow.close()
         // The About window is AppKit's, opened by
@@ -432,8 +465,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
         characters
             .filter { chatsHiddenByShortcut.contains($0.profileID) }
             .forEach { $0.openChat() }
+        if commandHiddenByShortcut, let focused { commandWindow.show(using: focused.appearance) }
         hiddenByShortcut = []
         chatsHiddenByShortcut = []
+        commandHiddenByShortcut = false
     }
 
     /// Esc is worth claiming only while something is on screen to dismiss —

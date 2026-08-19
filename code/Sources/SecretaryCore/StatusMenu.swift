@@ -67,6 +67,9 @@ public enum StatusMenuAction: Equatable, Sendable {
     case showAllPinned(character: UUID)
     case clearPinned(character: UUID)
     case newCharacter
+    /// The command window on or off screen — hidden, not torn down, so the
+    /// sessions it started keep running.
+    case toggleCommandWindow
     case showTokenUsage
     case showAbout
     case quit
@@ -133,7 +136,11 @@ public enum StatusMenuEntry: Equatable, Sendable {
 /// The characters used to sit one level further in, under a "Characters" row.
 /// That row held nothing of its own — it existed to be hovered past — so the
 /// owner asked for it gone and the characters moved up into its place.
-public func statusBarMenu(summary: String, characters: [CharacterMenuState]) -> [StatusMenuEntry] {
+public func statusBarMenu(
+    summary: String,
+    characters: [CharacterMenuState],
+    isCommandWindowVisible: Bool = false
+) -> [StatusMenuEntry] {
     [
         // A label, not a row to click: it answers "which version am I running"
         // without opening anything.
@@ -142,6 +149,14 @@ public func statusBarMenu(summary: String, characters: [CharacterMenuState]) -> 
     ]
     + charactersSubmenu(characters)
     + [
+        // Asked for between New Character and Token Usage, with a line on each
+        // side: commanding everyone at once is neither one character's business
+        // nor the app's bookkeeping, so it stands alone.
+        .separator,
+        .item(StatusMenuItem(
+            title: commandWindowMenuTitle(isVisible: isCommandWindowVisible),
+            action: .toggleCommandWindow
+        )),
         .separator,
         .item(StatusMenuItem(title: "Token Usage", action: .showTokenUsage, shortcut: .commandU)),
         .item(StatusMenuItem(title: "About \(AppInfo.name)", action: .showAbout)),

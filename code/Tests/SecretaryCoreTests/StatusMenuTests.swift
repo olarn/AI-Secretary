@@ -62,6 +62,8 @@ final class StatusMenuTests: XCTestCase {
             "Hide All",
             "New Character…",
             "—",
+            "Show Command",
+            "—",
             "Token Usage",
             "About AI Secretary",
             "—",
@@ -86,6 +88,28 @@ final class StatusMenuTests: XCTestCase {
             titles(menu).dropFirst(2).prefix(5),
             ["Miku", "Anya", "—", "Hide All", "New Character…"]
         )
+    }
+
+    /// Asked for between New Character and Token Usage, separated on both
+    /// sides, and worded from what is on screen — never from remembered state.
+    func testTheCommandRowSitsBetweenNewCharacterAndTokenUsage() {
+        let hidden = statusBarMenu(summary: "x", characters: [state(miku, "Miku")])
+        let showing = statusBarMenu(
+            summary: "x",
+            characters: [state(miku, "Miku")],
+            isCommandWindowVisible: true
+        )
+
+        XCTAssertTrue(isSublist(["New Character…", "—", "Show Command", "—", "Token Usage"], of: titles(hidden)))
+        XCTAssertTrue(isSublist(["New Character…", "—", "Hide Command", "—", "Token Usage"], of: titles(showing)))
+        XCTAssertEqual(item(hidden, "Show Command")?.action, .toggleCommandWindow)
+        XCTAssertEqual(item(showing, "Hide Command")?.action, .toggleCommandWindow)
+    }
+
+    private func isSublist(_ needle: [String], of haystack: [String]) -> Bool {
+        haystack.indices.contains { start in
+            Array(haystack[start...].prefix(needle.count)) == needle
+        }
     }
 
     /// With nobody on the desktop the row that makes somebody is still there.

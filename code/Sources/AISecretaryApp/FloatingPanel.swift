@@ -30,7 +30,10 @@ final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
 /// A transparent, floating, non-activating panel used for both the desktop
 /// character and its chat panel. Stays above normal windows without stealing
 /// focus from the frontmost app, and can be dragged by its background.
-final class FloatingPanel: NSPanel {
+///
+/// Not `final` since Sprint 20: the command window subclasses it for edge
+/// resizing, which a borderless window has to do by hand.
+class FloatingPanel: NSPanel {
     /// Whether a click anywhere in this panel should hand it the keyboard.
     ///
     /// Off for the character, on for the chat — see `sendEvent`.
