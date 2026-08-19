@@ -33,3 +33,4 @@ Sprint ที่จบแล้ว บันทึกทุกอย่างอ
   - ตอนที่ขยาย box ให้ใหญ่ ถ้า click ใน text box ก็ให้ cursor ขึ้นเลย (ตอนนี้ต้องป click ที่ placeholder)
   - เอาปุ่ม attach ไปอยู่ใน textbox ข้างซ้ายของปุ่ม send ขยับปุ่ม "จบการทำงาน" ไปทางขอบซ้ายสุด
   - ตอน new character ให้ใช้ profile default ใช้ App Icon เป็น default character
+  - อยากให้จำ location ของ character + command window ถ้าปิด app แล้วเปิดใหม่ก็อยู่ที่เดิม ยกเว้นถ้า character อยู่นอก screen เพราะเดิม share screen ไว้ ก็ค่อยดึงกลับมาที่ default position
