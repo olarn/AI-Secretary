@@ -37,8 +37,9 @@ struct PanelToggleStyle: ToggleStyle {
     /// `chipFill` stands off the glass in both palettes.
     let liquidGlass: Bool
 
+    @ViewBuilder
     func makeBody(configuration: Configuration) -> some View {
-        Button {
+        let button = Button {
             configuration.isOn.toggle()
         } label: {
             configuration.label
@@ -50,33 +51,68 @@ struct PanelToggleStyle: ToggleStyle {
                 // help.
                 .minimumScaleFactor(0.55)
         }
-        .buttonStyle(.bordered)
-        .controlSize(controlSize)
-        // Behind the bezel rather than instead of it, so the corner radius and
-        // hit area stay whatever the bordered style gives every other button
-        // in the row.
-        .background(stateFill(isOn: configuration.isOn), in: RoundedRectangle(cornerRadius: fontSize * 0.4))
-        .foregroundStyle(labelColor(isOn: configuration.isOn))
-        // `.tint`, not only `.foregroundStyle`: a bordered button takes its
-        // label colour from the tint, so the foreground style alone left the
-        // selected button's label the same blue as the fill drawn behind it —
-        // a solid blue block with the word invisible inside it. Seen in the
-        // running app; nothing about the code read wrong.
-        .tint(labelColor(isOn: configuration.isOn))
-    }
-
-    private func stateFill(isOn: Bool) -> AnyShapeStyle {
-        switch (liquidGlass, isOn) {
-        case (true, true): AnyShapeStyle(palette.chipFill.color)
-        case (true, false): AnyShapeStyle(Color.clear)
-        case (false, true): AnyShapeStyle(palette.accent.color)
-        case (false, false): AnyShapeStyle(Color.clear)
+        if liquidGlass {
+            // Glass buttons at the owner's request — but built on
+            // `glassEffect`, NOT on `.buttonStyle(.glass)`/`.glassProminent`.
+            // The system styles were tried first and failed this window's
+            // founding test: with Finder frontmost their labels dim and the
+            // prominent tint washes out to grey, exactly the non-key de-tint
+            // this type exists to work around. The `glassEffect` *surface* was
+            // proven alive on a non-key window by the sprint's gate spike, and
+            // a drawn label colour stays put. (One deliberate breach of "no
+            // glass on glass": these sit on the bubble's sheet, and the owner
+            // asked for them anyway.)
+            //
+            // `.plain` with hand-drawn padding, not `.bordered`: the bordered
+            // bezel is a rounded *rectangle*, and its corners showed through
+            // the capsule's ends as a second, squarer outline — the owner
+            // spotted the double edge in a screenshot before anyone here did.
+            // The glass capsule is the whole surface now, so it must also be
+            // the hit area, hence the `contentShape`.
+            Button {
+                configuration.isOn.toggle()
+            } label: {
+                configuration.label
+                    .font(.system(size: fontSize))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.55)
+                    .padding(.horizontal, fontSize * 0.85)
+                    .padding(.vertical, fontSize * 0.35)
+            }
+            .buttonStyle(.plain)
+            .background(
+                Color.clear.glassEffect(
+                    configuration.isOn ? .regular.tint(palette.accentFill.color) : .regular,
+                    in: Capsule()
+                )
+            )
+            .contentShape(Capsule())
+            .foregroundStyle(palette.primaryText.color)
+        } else {
+            button
+                .buttonStyle(.bordered)
+                .controlSize(controlSize)
+                // Behind the bezel rather than instead of it, so the corner
+                // radius and hit area stay whatever the bordered style gives
+                // every other button in the row.
+                .background(stateFill(isOn: configuration.isOn), in: RoundedRectangle(cornerRadius: fontSize * 0.4))
+                .foregroundStyle(labelColor(isOn: configuration.isOn))
+                // `.tint`, not only `.foregroundStyle`: a bordered button takes
+                // its label colour from the tint, so the foreground style alone
+                // left the selected button's label the same blue as the fill
+                // drawn behind it — a solid blue block with the word invisible
+                // inside it. Seen in the running app; nothing about the code
+                // read wrong.
+                .tint(labelColor(isOn: configuration.isOn))
         }
     }
 
-    /// On glass the open button's ground is `chipFill`, which `primaryText`
-    /// already clears by the tested floor — `onAccent` only pairs with `accent`.
+    /// Solid mode only — in glass mode the state lives in the glass itself.
+    private func stateFill(isOn: Bool) -> AnyShapeStyle {
+        isOn ? AnyShapeStyle(palette.accent.color) : AnyShapeStyle(Color.clear)
+    }
+
     private func labelColor(isOn: Bool) -> Color {
-        isOn && !liquidGlass ? palette.onAccent.color : palette.primaryText.color
+        isOn ? palette.onAccent.color : palette.primaryText.color
     }
 }
