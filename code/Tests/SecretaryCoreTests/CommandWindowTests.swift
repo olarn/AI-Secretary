@@ -223,6 +223,58 @@ final class CommandWindowTests: XCTestCase {
         )
     }
 
+    // MARK: - Saving what came back
+
+    /// Screen order, not "the order it happened": the file is a copy of what
+    /// the person is looking at.
+    func testTheSavedDocumentKeepsTheOrderTheStripShows() {
+        let markdown = commandResultsMarkdown([
+            CommandTranscriptEntry(name: "Miku", text: "newest", succeeded: true),
+            CommandTranscriptEntry(name: "Ditto", text: "oldest", succeeded: true)
+        ])
+        XCTAssertEqual(
+            markdown,
+            """
+            # Command results
+
+            ## Miku
+
+            newest
+
+            ## Ditto
+
+            oldest
+
+            """
+        )
+    }
+
+    /// The coloured dot is what says "she couldn't finish" on screen, and it
+    /// does not survive being written to a file.
+    func testAFailedAnswerIsMarkedBecauseTheDotIsNotInTheFile() {
+        let markdown = commandResultsMarkdown([
+            CommandTranscriptEntry(name: "Pikachu", text: "no permission", succeeded: false)
+        ])
+        XCTAssertTrue(markdown.contains("## Pikachu — couldn't finish"), "Got: \(markdown)")
+    }
+
+    /// A turn that ran a tool and said nothing has an empty body; a heading
+    /// followed by two blank lines reads as a bug.
+    func testAnAnswerWithNothingInItIsJustItsHeading() {
+        let markdown = commandResultsMarkdown([
+            CommandTranscriptEntry(name: "Miku", text: "   \n ", succeeded: true)
+        ])
+        XCTAssertEqual(markdown, "# Command results\n\n## Miku\n")
+    }
+
+    func testAnEmptyStripStillWritesADocument() {
+        XCTAssertEqual(commandResultsMarkdown([]), "# Command results\n")
+    }
+
+    func testTheDefaultFileNameIsMarkdown() {
+        XCTAssertTrue(commandResultsFileName.hasSuffix(".md"))
+    }
+
     // MARK: - The menu row
 
     func testTheMenuRowWordsItselfFromWhatIsOnScreen() {

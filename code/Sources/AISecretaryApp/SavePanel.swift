@@ -27,21 +27,7 @@ enum SavePanel {
     @MainActor
     @discardableResult
     static func save(_ file: OfferedFile) -> URL? {
-        let panel = NSSavePanel()
-        panel.nameFieldStringValue = file.name
-        panel.directoryURL = startingDirectory
-        panel.canCreateDirectories = true
-        panel.prompt = "Save"
-        panel.message = "Save “\(file.name)”"
-
-        // A panel owned by an inactive app is not key and ignores clicks until
-        // something activates the app — the same reason `AttachmentPicker`,
-        // `ProjectPicker` and `ImagePicker` all do this. The character's window
-        // never takes focus on its own, so this app is very often the inactive
-        // one when a button in it is pressed.
-        NSApp.activate(ignoringOtherApps: true)
-
-        guard panel.runModal() == .OK, let destination = panel.url else { return nil }
+        guard let destination = ask(name: file.name, message: "Save “\(file.name)”") else { return nil }
 
         do {
             // The panel already asked about replacing, so an existing file here
@@ -56,6 +42,45 @@ enum SavePanel {
             present(error, saving: file.name)
             return nil
         }
+    }
+
+    /// Writes text the app made up itself — the command window's results
+    /// strip — wherever the person says.
+    ///
+    /// A write, not the copy above: there is no file yet. The panel is still
+    /// the consent, so this needs no permission card for the same reason.
+    @MainActor
+    @discardableResult
+    static func saveText(_ text: String, named name: String) -> URL? {
+        guard let destination = ask(name: name, message: "Save “\(name)”") else { return nil }
+        do {
+            try text.write(to: destination, atomically: true, encoding: .utf8)
+            return destination
+        } catch {
+            present(error, saving: name)
+            return nil
+        }
+    }
+
+    /// The panel itself, asked the same way for both kinds of save.
+    @MainActor
+    private static func ask(name: String, message: String) -> URL? {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = name
+        panel.directoryURL = startingDirectory
+        panel.canCreateDirectories = true
+        panel.prompt = "Save"
+        panel.message = message
+
+        // A panel owned by an inactive app is not key and ignores clicks until
+        // something activates the app — the same reason `AttachmentPicker`,
+        // `ProjectPicker` and `ImagePicker` all do this. The character's window
+        // never takes focus on its own, so this app is very often the inactive
+        // one when a button in it is pressed.
+        NSApp.activate(ignoringOtherApps: true)
+
+        guard panel.runModal() == .OK else { return nil }
+        return panel.url
     }
 
     /// Says so when the copy fails. Rare — the panel has already settled the

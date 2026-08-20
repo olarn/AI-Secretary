@@ -56,11 +56,11 @@ public func commandRecipients(
 
 /// The red line under the box when nobody is ticked. In the product's own
 /// words — the backlog states this string, not just that one exists.
-public let selectAtLeastOneCharacterMessage = "เลือกอย่างน้อย 1 ตัว"
+public let selectAtLeastOneCharacterMessage = "Tick at least one character"
 
 /// The red line when the command names only characters that are not ticked.
 public func namedNotSelectedMessage(_ names: [String]) -> String {
-    "\(names.joined(separator: ", ")) ไม่ได้ถูกเลือก — เลือกก่อน หรือแก้คำสั่ง"
+    "\(names.joined(separator: ", ")) not ticked — tick them, or reword the command"
 }
 
 // MARK: - What each recipient is told
@@ -203,3 +203,44 @@ public func clampedCommandFontSize(_ size: Double) -> Double {
 public func commandWindowMenuTitle(isVisible: Bool) -> String {
     isVisible ? "Hide Command" : "Show Command"
 }
+
+// MARK: - Saving what came back
+
+/// One answer, as the saved document holds it.
+///
+/// A value of its own rather than the strip's own row type: `CommandResult`
+/// lives in `AISecretaryApp`, which is never linked into the test bundle, and
+/// laying out a document is a decision — so it is written and tested here, and
+/// the strip only hands over what it is showing.
+public struct CommandTranscriptEntry: Equatable, Sendable {
+    public let name: String
+    public let text: String
+    public let succeeded: Bool
+
+    public init(name: String, text: String, succeeded: Bool) {
+        self.name = name
+        self.text = text
+        self.succeeded = succeeded
+    }
+}
+
+/// What Save writes: the strip as Markdown, in the order it is on screen.
+///
+/// Screen order, newest first, deliberately — the file is a copy of what the
+/// person is looking at, and re-sorting it into "the order it happened" would
+/// hand them a document they cannot line up against the window it came from.
+///
+/// A character who could not finish is marked, because "she answered" and "she
+/// failed" read identically once the coloured dot is gone.
+public func commandResultsMarkdown(_ entries: [CommandTranscriptEntry]) -> String {
+    let body = entries.map { entry -> String in
+        let heading = entry.succeeded ? "## \(entry.name)" : "## \(entry.name) — couldn't finish"
+        let said = entry.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return said.isEmpty ? heading : "\(heading)\n\n\(said)"
+    }
+    return (["# Command results"] + body).joined(separator: "\n\n") + "\n"
+}
+
+/// The name the save panel opens with. Markdown, because the answers are
+/// Markdown — the owner named the default.
+public let commandResultsFileName = "command-results.md"

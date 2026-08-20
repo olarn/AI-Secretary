@@ -186,6 +186,36 @@ public struct AppearanceSettings: Equatable, Sendable {
 
     // MARK: - Derived sizes
 
+    /// Every size that follows from the body size, in one value.
+    ///
+    /// Split out of this struct so a window whose text size is *not* the chat's
+    /// can still scale as one piece. The command window is the one that made it
+    /// necessary: it carries its own ⌘+/⌘− size, and read its captions, hints
+    /// and rhythm off the chat's settings instead — so growing the box grew the
+    /// text being typed and nothing else on the slab (the owner's report,
+    /// Sprint 21.2).
+    public var metrics: TextMetrics { TextMetrics(fontSize: fontSize) }
+
+    public var secondaryFontSize: Double { metrics.secondaryFontSize }
+    public var footnoteFontSize: Double { metrics.footnoteFontSize }
+    public var captionFontSize: Double { metrics.captionFontSize }
+    public var hintFontSize: Double { metrics.hintFontSize }
+    public var panelSpacing: Double { metrics.panelSpacing }
+    public var panelPadding: Double { metrics.panelPadding }
+}
+
+/// The sizes that follow from one body text size.
+///
+/// A function of `fontSize` and nothing else, so the same number always yields
+/// the same panel — and so any window can ask for the set, whichever size it
+/// happens to be scaling from.
+public struct TextMetrics: Equatable, Sendable {
+    public let fontSize: Double
+
+    public init(fontSize: Double) {
+        self.fontSize = fontSize
+    }
+
     /// Secondary text tracks the body size so the panel scales as one piece
     /// instead of leaving captions tiny beside 32pt text.
     public var secondaryFontSize: Double { max(9, fontSize - 2) }

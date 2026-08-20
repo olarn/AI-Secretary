@@ -470,3 +470,33 @@ extension AppearanceSettingsTests {
         }
     }
 }
+
+
+extension AppearanceSettingsTests {
+    /// The derived sizes moved into `TextMetrics` so a window with its own text
+    /// size can have them. The chat must still read exactly the same, or the
+    /// extraction changed behaviour rather than moving it.
+    func testTheChatReadsTheSameSizesThroughTheExtractedMetrics() {
+        for fontSize in stride(from: 10.0, through: 32.0, by: 2.0) {
+            let settings = AppearanceSettings(fontSize: fontSize, chatWidth: 400, chatHeight: 700)
+            let metrics = TextMetrics(fontSize: fontSize)
+            XCTAssertEqual(settings.secondaryFontSize, metrics.secondaryFontSize, "at \(fontSize)pt")
+            XCTAssertEqual(settings.footnoteFontSize, metrics.footnoteFontSize, "at \(fontSize)pt")
+            XCTAssertEqual(settings.captionFontSize, metrics.captionFontSize, "at \(fontSize)pt")
+            XCTAssertEqual(settings.hintFontSize, metrics.hintFontSize, "at \(fontSize)pt")
+            XCTAssertEqual(settings.panelSpacing, metrics.panelSpacing, "at \(fontSize)pt")
+            XCTAssertEqual(settings.panelPadding, metrics.panelPadding, "at \(fontSize)pt")
+        }
+    }
+
+    /// The command window's whole complaint: growing its box's size has to grow
+    /// everything drawn beside the box, not just the words being typed.
+    func testMetricsFromABiggerSizeAreBiggerThroughout() {
+        let small = TextMetrics(fontSize: 12)
+        let large = TextMetrics(fontSize: 24)
+        XCTAssertGreaterThan(large.footnoteFontSize, small.footnoteFontSize)
+        XCTAssertGreaterThan(large.hintFontSize, small.hintFontSize)
+        XCTAssertGreaterThan(large.panelSpacing, small.panelSpacing)
+        XCTAssertGreaterThan(large.panelPadding, small.panelPadding)
+    }
+}

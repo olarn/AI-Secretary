@@ -247,8 +247,8 @@ public func memoryApprovalSummary(_ note: MemoryNote) -> String {
 }
 
 public func memorySavedLine(_ note: MemoryNote, project: String) -> String {
-    "จำไว้แล้วสำหรับ \(project) — “\(note.title)” อยู่ใน memory ของ project นี้ "
-        + "ทั้งผมและ `claude` ในเทอร์มินัลจะอ่านเจอรอบหน้า"
+    "Kept for \(project) — “\(note.title)” is in this project's memory. "
+        + "Both I and `claude` in the terminal will read it next time."
 }
 
 /// One decision is pending at a time, and something else got there first.
@@ -258,11 +258,12 @@ public func memorySavedLine(_ note: MemoryNote, project: String) -> String {
 /// error is announced for, and rare enough that nobody would ever find it by
 /// using the app.
 public func memoryBusyLine(_ note: MemoryNote) -> String {
-    "ยังมีเรื่องอื่นรอคุณตอบอยู่ ผมเลยยังไม่ได้เก็บ “\(note.title)” — บอกอีกทีหลังตอบเรื่องนั้นเสร็จได้ครับ"
+    "Something else is still waiting on your answer, so I haven't kept “\(note.title)” yet "
+        + "— tell me again once that one's settled."
 }
 
 public func memoryFailedLine(_ note: MemoryNote, reason: String) -> String {
-    "เขียน “\(note.title)” ลง memory ไม่สำเร็จ — \(reason)"
+    "Couldn't write “\(note.title)” to memory — \(reason)"
 }
 
 /// Refused before it is written, when the fact itself reads as an instruction.

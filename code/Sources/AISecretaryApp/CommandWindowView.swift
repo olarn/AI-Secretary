@@ -31,26 +31,33 @@ struct CommandWindowView: View {
     @State private var draftHeight: Double = 0
     @State private var resultsHeight: Double = 0
     @State private var droppingFile = false
+    /// Whether Copy has just run, so the glyph can say so.
+    @State private var copied = false
     @FocusState private var boxFocused: Bool
 
     private var theme: Palette { appearance.colors }
+    /// Every size on the slab, from *this box's* text size rather than the
+    /// chat's. They came off `appearance.settings` before, so ⌘+ grew the words
+    /// being typed and left the chips, the results and the rhythm where they
+    /// were — the owner's report opening Sprint 21.2.
+    private var metrics: TextMetrics { TextMetrics(fontSize: model.fontSize) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: appearance.settings.panelSpacing) {
+        VStack(alignment: .leading, spacing: metrics.panelSpacing) {
             characterRow
             if droppingFile { dropHint }
             if !model.droppedFiles.isEmpty || !model.pendingAttachments.isEmpty { fileRow }
             messageBox
             if let error = model.errorText {
                 Text(error)
-                    .font(.system(size: appearance.settings.footnoteFontSize))
+                    .font(.system(size: metrics.footnoteFontSize))
                     .foregroundStyle(theme.danger.color)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if !model.results.isEmpty { resultsSection }
             footer
         }
-        .padding(appearance.settings.panelPadding * 1.5)
+        .padding(metrics.panelPadding * 1.5)
         .frame(width: model.slabWidth, alignment: .leading)
         .background {
             // The gesture rides on the fill itself, the way the resize grip
@@ -85,7 +92,7 @@ struct CommandWindowView: View {
     /// Who is listening. Every character on the desktop, tick by click; a
     /// command only ever reaches the ticked.
     private var characterRow: some View {
-        HStack(spacing: appearance.settings.panelSpacing) {
+        HStack(spacing: metrics.panelSpacing) {
             ForEach(model.roster(), id: \.id) { card in
                 characterChip(card)
             }
@@ -102,7 +109,7 @@ struct CommandWindowView: View {
                 Image(systemName: ticked ? "checkmark.circle.fill" : "circle")
                 Text(card.name)
             }
-            .font(.system(size: appearance.settings.footnoteFontSize, weight: ticked ? .semibold : .regular))
+            .font(.system(size: metrics.footnoteFontSize, weight: ticked ? .semibold : .regular))
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
             .background(ticked ? theme.accentFill.color : theme.chipFill.color, in: Capsule())
@@ -114,15 +121,15 @@ struct CommandWindowView: View {
     }
 
     private var dropHint: some View {
-        HStack(spacing: appearance.settings.panelSpacing) {
+        HStack(spacing: metrics.panelSpacing) {
             Image(systemName: "arrow.down.doc")
             Text("Drop instruction files — they run in this order")
             Spacer(minLength: 0)
         }
-        .font(.system(size: appearance.settings.footnoteFontSize, weight: .semibold))
+        .font(.system(size: metrics.footnoteFontSize, weight: .semibold))
         .foregroundStyle(theme.accent.color)
-        .padding(.horizontal, appearance.settings.panelPadding)
-        .frame(height: appearance.settings.fontSize * 2.4)
+        .padding(.horizontal, metrics.panelPadding)
+        .frame(height: model.fontSize * 2.4)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(theme.accentFill.color, in: RoundedRectangle(cornerRadius: 8))
         .overlay(
@@ -136,7 +143,7 @@ struct CommandWindowView: View {
     /// merge order, then the attachments.
     private var fileRow: some View {
         ScrollView(.horizontal) {
-            HStack(spacing: appearance.settings.panelSpacing) {
+            HStack(spacing: metrics.panelSpacing) {
                 ForEach(model.droppedFiles) { file in
                     fileChip(name: file.name, glyph: "doc.text", id: file.id)
                 }
@@ -161,7 +168,7 @@ struct CommandWindowView: View {
             .buttonStyle(.plain)
             .help("Don't send this one")
         }
-        .font(.system(size: appearance.settings.footnoteFontSize))
+        .font(.system(size: metrics.footnoteFontSize))
         .padding(.horizontal, 8)
         .padding(.vertical, 3)
         .background(theme.chipFill.color, in: Capsule())
@@ -189,7 +196,7 @@ struct CommandWindowView: View {
 
     private var messageField: some View {
         ScrollView(.vertical) {
-            TextField("", text: $model.draft, prompt: Text("สั่งงานทุกตัวที่เลือก…"), axis: .vertical)
+            TextField("", text: $model.draft, prompt: Text("Command everyone ticked…"), axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(.system(size: model.fontSize))
                 // Return sends, Shift/Option-Return breaks the line — the same
@@ -240,20 +247,20 @@ struct CommandWindowView: View {
     /// What has come back, foldable like the usage window's sections — the
     /// whole header row is the target, not a 10pt chevron.
     private var resultsSection: some View {
-        VStack(alignment: .leading, spacing: appearance.settings.panelSpacing) {
+        VStack(alignment: .leading, spacing: metrics.panelSpacing) {
             HStack(spacing: 6) {
                 Button {
                     withAnimation(.easeInOut(duration: 0.15)) { model.showResults.toggle() }
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "chevron.right")
-                            .font(.system(size: max(8, appearance.settings.footnoteFontSize - 3), weight: .bold))
+                            .font(.system(size: max(8, metrics.footnoteFontSize - 3), weight: .bold))
                             .foregroundStyle(theme.mutedText.color)
                             .rotationEffect(.degrees(model.showResults ? 90 : 0))
-                        Text("ผลลัพธ์")
-                            .font(.system(size: appearance.settings.footnoteFontSize, weight: .semibold))
+                        Text("Results")
+                            .font(.system(size: metrics.footnoteFontSize, weight: .semibold))
                         Text("\(model.results.count)")
-                            .font(.system(size: appearance.settings.hintFontSize))
+                            .font(.system(size: metrics.hintFontSize))
                             .foregroundStyle(theme.mutedText.color)
                         Spacer()
                     }
@@ -261,9 +268,11 @@ struct CommandWindowView: View {
                 }
                 .buttonStyle(.plain)
                 if model.showResults {
+                    saveResultsButton
+                    copyResultsButton
                     Button("clear") { model.clearResults() }
                         .buttonStyle(.plain)
-                        .font(.system(size: appearance.settings.hintFontSize))
+                        .font(.system(size: metrics.hintFontSize))
                         .foregroundStyle(theme.mutedText.color)
                         .help("Empty the results strip — sessions are untouched")
                 }
@@ -271,7 +280,7 @@ struct CommandWindowView: View {
 
             if model.showResults {
                 ScrollView(.vertical) {
-                    VStack(alignment: .leading, spacing: appearance.settings.panelSpacing) {
+                    VStack(alignment: .leading, spacing: metrics.panelSpacing) {
                         ForEach(model.results) { result in
                             resultRow(result)
                         }
@@ -291,8 +300,42 @@ struct CommandWindowView: View {
                 .frame(height: min(220, resultsHeight))
             }
         }
-        .padding(appearance.settings.panelSpacing)
+        .padding(metrics.panelSpacing)
         .background(theme.infoFill.color(opacity: 0.5), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    /// Writes the strip to a file the person names. Markdown by default —
+    /// the answers are Markdown, and the owner named the extension.
+    private var saveResultsButton: some View {
+        Button("Save") {
+            SavePanel.saveText(model.resultsMarkdown, named: commandResultsFileName)
+        }
+        .buttonStyle(.plain)
+        .font(.system(size: metrics.hintFontSize))
+        .foregroundStyle(theme.mutedText.color)
+        .help("Save the results to a file")
+    }
+
+    /// The same document, on the clipboard. The glyph turns into a tick for a
+    /// moment: a copy that changes nothing on screen is indistinguishable from
+    /// a button that did nothing.
+    private var copyResultsButton: some View {
+        Button {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(model.resultsMarkdown, forType: .string)
+            copied = true
+        } label: {
+            Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                .font(.system(size: metrics.hintFontSize))
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(copied ? theme.success.color : theme.mutedText.color)
+        .help("Copy the results to the clipboard")
+        .task(id: copied) {
+            guard copied else { return }
+            try? await Task.sleep(for: .seconds(1.2))
+            copied = false
+        }
     }
 
     private func resultRow(_ result: CommandResult) -> some View {
@@ -302,10 +345,10 @@ struct CommandWindowView: View {
                     .fill(result.succeeded ? theme.success.color : theme.danger.color)
                     .frame(width: 6, height: 6)
                 Text(result.name)
-                    .font(.system(size: appearance.settings.footnoteFontSize, weight: .semibold))
+                    .font(.system(size: metrics.footnoteFontSize, weight: .semibold))
             }
             Text(result.text)
-                .font(.system(size: appearance.settings.footnoteFontSize))
+                .font(.system(size: metrics.footnoteFontSize))
                 .lineLimit(8)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
@@ -315,7 +358,7 @@ struct CommandWindowView: View {
                 // bare letter is ambiguous for the next turn.
                 WrappingChoices(
                     options: result.choices,
-                    fontSize: appearance.settings.footnoteFontSize,
+                    fontSize: metrics.footnoteFontSize,
                     theme: theme
                 ) { option in
                     model.pick(option, from: result)
@@ -326,16 +369,16 @@ struct CommandWindowView: View {
     }
 
     private var footer: some View {
-        HStack(spacing: appearance.settings.panelSpacing * 1.5) {
-            Button("จบการทำงาน") { model.endAll() }
+        HStack(spacing: metrics.panelSpacing * 1.5) {
+            Button("End all") { model.endAll() }
                 .buttonStyle(.bordered)
-                .font(.system(size: appearance.settings.footnoteFontSize))
+                .font(.system(size: metrics.footnoteFontSize))
                 .foregroundStyle(model.commanded.isEmpty ? theme.mutedText.color : theme.danger.color)
                 .disabled(model.commanded.isEmpty)
                 .help("End every session this window has commanded")
             Spacer()
-            Text("Esc ซ่อนหน้าต่าง — session ยังทำงานต่อ")
-                .font(.system(size: appearance.settings.hintFontSize))
+            Text("Esc hides the window — sessions keep running")
+                .font(.system(size: metrics.hintFontSize))
                 .foregroundStyle(theme.mutedText.color)
         }
     }
@@ -402,7 +445,7 @@ struct CommandWindowView: View {
     private var closeButton: some View {
         Button(action: hideWindow) {
             Image(systemName: "xmark.circle.fill")
-                .font(.system(size: appearance.settings.footnoteFontSize * 1.2))
+                .font(.system(size: metrics.footnoteFontSize * 1.2))
                 .foregroundStyle(theme.mutedText.color)
         }
         .buttonStyle(.plain)

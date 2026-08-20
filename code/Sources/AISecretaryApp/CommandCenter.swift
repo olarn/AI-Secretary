@@ -65,7 +65,7 @@ final class CommandCenter {
     /// Files waiting to go as attachments.
     var pendingAttachments: [DroppedAttachment] = []
     /// Everyone this window has sent a command to since the last
-    /// "จบการทำงาน". Hiding the window does not touch it — hiding keeps
+    /// "End all". Hiding the window does not touch it — hiding keeps
     /// sessions alive by design.
     private(set) var commanded: Set<UUID> = []
     /// Bumped by the controller when the window comes up, so the caret lands
@@ -119,7 +119,7 @@ final class CommandCenter {
         switch commandDropRole(forExtension: url.pathExtension) {
         case .instruction:
             guard let text = try? String(contentsOf: url, encoding: .utf8) else {
-                errorText = "อ่านไฟล์ \(url.lastPathComponent) ไม่ได้"
+                errorText = "Couldn't read \(url.lastPathComponent)"
                 return
             }
             droppedFiles.append(DroppedInstruction(name: url.lastPathComponent, text: text))
@@ -258,6 +258,16 @@ final class CommandCenter {
         }
     }
 
+    /// The strip as one document — what Save writes and what Copy puts on the
+    /// clipboard, so the two can never disagree about what "the results" are.
+    var resultsMarkdown: String {
+        commandResultsMarkdown(
+            results.map {
+                CommandTranscriptEntry(name: $0.name, text: $0.text, succeeded: $0.succeeded)
+            }
+        )
+    }
+
     func clearResults() { results = [] }
 
     // MARK: - Text size
@@ -269,7 +279,7 @@ final class CommandCenter {
         UserDefaults.standard.set(fontSize, forKey: commandFontSizeKey)
     }
 
-    /// "จบการทำงาน": every session this window commanded is ended, whether or
+    /// "End all": every session this window commanded is ended, whether or
     /// not it is still mid-turn — ending the stuck ones is the button's job.
     func endAll() {
         endSessions(commanded)

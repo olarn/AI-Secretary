@@ -2421,3 +2421,62 @@ footer ในโหมด glass เป็นแคปซูล `glassEffect` ว
 ของ `Appearance.apply` — ไม่งั้นติ๊ก checkbox เฉยๆ ไม่มีอะไรไปบอกหน้าต่าง
 (เหตุผลเดียวกับที่ theme ต้องอยู่ในลิสต์นั้น: มันเป็น property ของ NSWindow
 ไม่ใช่สิ่งที่ SwiftUI body คืนได้) เจ้าของจะเทสต์เงาด้วยตาเอง
+
+## Sprint 21.2 — the command window scales, saves, copies, and speaks English (v0.21.326)
+
+Three of the six items the owner opened Sprint 21.2 with. Written in English
+because the charter's language rule covers everything a session writes; the
+Thai above it is the record as earlier sessions left it, and is not rewritten.
+
+**⌘+ grew the words being typed and nothing else (#1).** The slab read its
+captions, hints and rhythm off `appearance.settings` — the *chat's* text size —
+while the box itself uses `CommandCenter.fontSize`, which is what ⌘+/⌘− moves.
+So the two disagreed by design: the typed text grew, the chips, the results
+strip, the footer and the spacing stayed where they were.
+
+The derived sizes are now a value of their own, `TextMetrics(fontSize:)` in
+`AppearanceSettings.swift`, and `AppearanceSettings` reads its own through it —
+so any window with its own text size can have the whole set. `CommandWindowView`
+asks for `TextMetrics(fontSize: model.fontSize)` and every size on the slab
+follows the box. `AppearanceSettingsTests` pins the extraction: the chat's
+sizes must come out identical through the new value at every size from 10 to 32,
+or this moved behaviour rather than moving code.
+
+**Save and Copy in the results strip (#5).** With the strip open, `Save` sits
+left of `clear` and a copy glyph between them, per the owner's layout. Save
+opens the system panel with `command-results.md` (the owner named `.md` as the
+default); copy puts the same text on the clipboard and the glyph turns into a
+tick for 1.2s, because a copy that changes nothing on screen is
+indistinguishable from a button that did nothing.
+
+Both write the same document — `commandResultsMarkdown` in `SecretaryCore`,
+tested — so the two can never disagree about what "the results" are. It keeps
+**screen order** (newest first): the file is a copy of what the person is
+looking at, and re-sorting it into the order things happened hands them a
+document they cannot line up against the window. A character who could not
+finish is marked in the heading, because the coloured dot is what says so on
+screen and it does not survive being written to a file.
+`SavePanel.saveText` is the new door — a write, not the copy the offered-file
+path does; the panel is still the consent, so it needs no permission card for
+the same reason.
+
+**English UI (#6).** The command window's own words (`Command everyone ticked…`,
+`Results`, `End all`, the Esc hint, the unreadable-file line), the two red-line
+messages in `CommandWindow.swift`, and the three memory lines in
+`ProjectMemory.swift` — the last Thai the app said out of its own mouth while
+every other line it wrote was English.
+
+**Thai that stayed, deliberately:** the input keywords (`DelegationIntent`,
+`InstructionRisk`, `LoopSchedule`, `HandOffBlock`, `ErrandPlan`, `Intent`) —
+they read what the owner *types*, and translating them would delete the app's
+ability to understand Thai; the pronoun and persona text in `SecretaryProfile`
+and the loop's default prompt, which are model instructions, not UI; and the
+comments quoting what the character actually said when a bug happened, which
+the charter's Comments section protects as bug evidence.
+
+**Driven** (2026-08-20, from the worktree): ⌘+ three times — chips, `End all`,
+the Esc hint and the spacing all grew with the box. Ticked Miku, sent a command,
+got an answer into the strip; Copy put `# Command results / ## Miku (2nd Brain) /
+hello` on the clipboard and showed the tick; Save opened on `command-results.md`
+in Downloads and wrote exactly that (the drive-test file was removed afterwards).
+1324 tests pass.
