@@ -20,7 +20,7 @@ Sprint ที่จบแล้ว บันทึกทุกอย่างอ
 | Sprint 19 — notification เมื่องานเสร็จ คลิกแล้วเปิดแชทของตัวที่ส่ง | v0.19.288–290 |
 | Sprint 20 — Command window: สั่งงานทุก character พร้อมกัน | v0.20.301–308 |
 | Sprint 20.1 — เก็บงาน command box และ default character | v0.20.313 |
-| Sprint 21 — Liquid Glass Theme (#5 ยังรอเจ้าของตัดสินใจ) | v0.21.319–321 |
+| Sprint 21 — Liquid Glass Theme (#5 ยังรอเจ้าของตัดสินใจ) | v0.21.319–322 |
 
 **เลขสปรินต์เป็นของจริงที่นี่ที่เดียว** และตั้งแต่ 2026-08-18 ทุกหัวข้อใน
 `PRODUCT_BACKLOG_NEXT_SPRINTS.md` มีเลขจริงหมดแล้ว (20–24) ไม่มี `xxx`/`yyy`/`zzz`/`zzzz`

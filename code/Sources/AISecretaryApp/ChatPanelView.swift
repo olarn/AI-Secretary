@@ -196,7 +196,21 @@ struct ChatPanelView: View {
             isMirrored: layout.isMirrored, isFlippedVertically: layout.isFlippedVertically
         )
         if appearance.settings.liquidGlass {
-            Color.clear.glassEffect(.regular, in: shape)
+            ZStack {
+                // Not decoration — this is what makes the bubble clickable.
+                // A borderless window lets clicks fall through wherever its
+                // pixels are fully transparent, and `Color.clear` under a
+                // `glassEffect` IS transparent to that test even though the
+                // eye sees frosted glass: with glass on, the resize grip and
+                // every empty stretch of the bubble went dead (drag measured
+                // 2026-08-20 — five steps, window never moved). The faint
+                // ground fill puts real pixels under the whole shape; 0.15 is
+                // comfortably above the window server's ~5% click-through
+                // threshold and invisible under the frosting. Do not "clean
+                // this up" into Color.clear again.
+                shape.fill(theme.ground.color(opacity: 0.15))
+                Color.clear.glassEffect(.regular, in: shape)
+            }
         } else {
             shape.fill(theme.ground.color)
         }
