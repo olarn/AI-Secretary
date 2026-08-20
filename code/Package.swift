@@ -4,7 +4,13 @@ import PackageDescription
 let package = Package(
     name: "AISecretary",
     platforms: [
-        .macOS(.v14)
+        // 26, not 14, since Sprint 21: the Liquid Glass APIs (`glassEffect`,
+        // `.buttonStyle(.glass)`) exist only from macOS 26, and the owner chose
+        // dropping 14/15 over maintaining every surface in two shapes behind
+        // `if #available`. The app has not shipped, so the cost was near zero.
+        // The string form: tools 5.9 predates a `.v26` case, and bumping the
+        // tools version would drag the language mode along with it.
+        .macOS("26.0")
     ],
     products: [
         .executable(name: "AISecretaryApp", targets: ["AISecretaryApp"])

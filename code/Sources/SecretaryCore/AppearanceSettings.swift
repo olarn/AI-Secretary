@@ -64,6 +64,13 @@ public struct AppearanceSettings: Equatable, Sendable {
     /// Which face the conversation is set in. Unclamped for the same reason as
     /// the theme: there is no such thing as a value out of range.
     public var font: FontChoice
+    /// Whether the chrome — the bubble itself and the footer buttons — is drawn
+    /// as Liquid Glass instead of the palette's solid ground. A surface over
+    /// both palettes rather than a third palette: every colour still comes from
+    /// `theme`, so the contrast rules `ThemeTests` enforces keep holding for
+    /// everything drawn *on* a surface. Off by default — the solid look is the
+    /// one that never depends on the wallpaper.
+    public var liquidGlass: Bool
 
     /// The most the bubble may become: the usable area of the screen it's on.
     /// Deliberately not persisted — the display can change between launches, so
@@ -79,11 +86,13 @@ public struct AppearanceSettings: Equatable, Sendable {
         maxHeight: Double = Self.defaultHeight,
         characterScale: CharacterScale = .medium,
         theme: ThemeChoice = .system,
-        font: FontChoice = .system
+        font: FontChoice = .system,
+        liquidGlass: Bool = false
     ) {
         self.characterScale = characterScale
         self.theme = theme
         self.font = font
+        self.liquidGlass = liquidGlass
         self.fontSize = min(max(fontSize, Self.minFontSize), Self.maxFontSize)
         self.maxHeight = max(maxHeight, Self.defaultHeight)
         self.maxWidth = max(maxWidth, Self.defaultWidth)
@@ -210,6 +219,7 @@ public struct StoredAppearance: Equatable, Sendable {
     public var characterScale: CharacterScale
     public var theme: ThemeChoice
     public var font: FontChoice
+    public var liquidGlass: Bool
 
     public init(
         fontSize: Double = AppearanceSettings.defaultFontSize,
@@ -217,7 +227,8 @@ public struct StoredAppearance: Equatable, Sendable {
         chatHeight: Double = AppearanceSettings.defaultHeight,
         characterScale: CharacterScale = .medium,
         theme: ThemeChoice = .system,
-        font: FontChoice = .system
+        font: FontChoice = .system,
+        liquidGlass: Bool = false
     ) {
         self.fontSize = fontSize
         self.chatWidth = chatWidth
@@ -225,6 +236,7 @@ public struct StoredAppearance: Equatable, Sendable {
         self.characterScale = characterScale
         self.theme = theme
         self.font = font
+        self.liquidGlass = liquidGlass
     }
 }
 
@@ -244,7 +256,8 @@ public final class UserDefaultsAppearanceStore: AppearanceStoring, @unchecked Se
         height: "chatHeight",
         scale: "appScale",
         theme: "theme",
-        fontDesign: "fontDesign"
+        fontDesign: "fontDesign",
+        liquidGlass: "liquidGlass"
     )
     private let defaults: UserDefaults
     private let character: UUID?
@@ -287,7 +300,8 @@ public final class UserDefaultsAppearanceStore: AppearanceStoring, @unchecked Se
             chatHeight: read(names.height) { $0 as? Double } ?? AppearanceSettings.defaultHeight,
             characterScale: read(names.scale) { ($0 as? String).flatMap(CharacterScale.init(rawValue:)) } ?? .medium,
             theme: read(names.theme) { ($0 as? String).flatMap(ThemeChoice.init(rawValue:)) } ?? .system,
-            font: read(names.fontDesign) { ($0 as? String).flatMap(FontChoice.init(rawValue:)) } ?? .system
+            font: read(names.fontDesign) { ($0 as? String).flatMap(FontChoice.init(rawValue:)) } ?? .system,
+            liquidGlass: read(names.liquidGlass) { $0 as? Bool } ?? false
         )
     }
 
@@ -303,6 +317,7 @@ public final class UserDefaultsAppearanceStore: AppearanceStoring, @unchecked Se
         defaults.set(appearance.characterScale.rawValue, forKey: key(names.scale))
         defaults.set(appearance.theme.rawValue, forKey: key(names.theme))
         defaults.set(appearance.font.rawValue, forKey: key(names.fontDesign))
+        defaults.set(appearance.liquidGlass, forKey: key(names.liquidGlass))
     }
 }
 

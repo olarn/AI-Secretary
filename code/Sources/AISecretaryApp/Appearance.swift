@@ -48,7 +48,8 @@ final class Appearance {
             maxHeight: screen.map { Double($0.height) } ?? saved.chatHeight,
             characterScale: saved.characterScale,
             theme: saved.theme,
-            font: saved.font
+            font: saved.font,
+            liquidGlass: saved.liquidGlass
         )
         watchSystemTheme()
     }
@@ -113,6 +114,7 @@ final class Appearance {
     func decreaseHeight() { mutate { $0.decreaseHeight() } }
     func selectCharacterScale(_ scale: CharacterScale) { mutate { $0.characterScale = scale } }
     func selectTheme(_ theme: ThemeChoice) { mutate { $0.theme = theme } }
+    func setLiquidGlass(_ on: Bool) { mutate { $0.liquidGlass = on } }
     func selectFont(_ font: FontChoice) { mutate { $0.font = font } }
     func widenChat() { mutate { $0.widenChat() } }
     func restoreChatWidth() { mutate { $0.restoreChatWidth() } }
@@ -145,7 +147,8 @@ final class Appearance {
                 chatHeight: updated.chatHeight,
                 characterScale: updated.characterScale,
                 theme: updated.theme,
-                font: updated.font
+                font: updated.font,
+                liquidGlass: updated.liquidGlass
             )
         )
         if needsRelayout { onChange?() }

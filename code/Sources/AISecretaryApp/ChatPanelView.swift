@@ -148,10 +148,7 @@ struct ChatPanelView: View {
         }
         .frame(width: appearance.settings.chatWidth)
         .frame(maxHeight: .infinity, alignment: .top)
-        .background(
-            SpeechBubbleShape(isMirrored: layout.isMirrored, isFlippedVertically: layout.isFlippedVertically)
-                .fill(theme.ground.color)
-        )
+        .background(bubbleSurface)
         // The whole bubble takes the file, not the composer alone. A drop two
         // points outside a small target is a file the person believes they
         // handed over, and the composer is a strip at the bottom of a window
@@ -162,10 +159,14 @@ struct ChatPanelView: View {
             for url in urls { secretary.attach(url) }
             return !urls.isEmpty
         } isTargeted: { droppingFile = $0 }
-        .overlay(
-            SpeechBubbleShape(isMirrored: layout.isMirrored, isFlippedVertically: layout.isFlippedVertically)
-                .stroke(theme.panelBorder.color, lineWidth: theme.panelBorderWidth)
-        )
+        .overlay {
+            // Glass draws its own rim; a painted border on top of it reads as
+            // a sticker stuck to the pane, so the stroke is solid-mode only.
+            if !appearance.settings.liquidGlass {
+                SpeechBubbleShape(isMirrored: layout.isMirrored, isFlippedVertically: layout.isFlippedVertically)
+                    .stroke(theme.panelBorder.color, lineWidth: theme.panelBorderWidth)
+            }
+        }
         // The button row stays on the tail's side of the top edge; the grip goes
         // to the corner the bubble actually grows out of, which is not always a
         // top corner. Both follow the bubble as it mirrors and flips, and they
@@ -178,6 +179,27 @@ struct ChatPanelView: View {
         .overlay(alignment: gripAlignment) { resizeGrip }
         .padding(layout.isFlippedVertically ? .top : .bottom, SpeechBubbleShape.defaultTailLength)
         .frame(width: appearance.settings.chatWidth, height: appearance.settings.chatHeight)
+    }
+
+    /// The bubble's ground: Liquid Glass when the user has switched it on,
+    /// otherwise the palette's solid ground. Glass here is safe on this
+    /// never-key panel — checked by eye on 2026-08-20, frontmost and not,
+    /// before the sprint was allowed to start: unlike the accent tint that
+    /// `PanelToggleStyle` exists to work around, `glassEffect` does not go
+    /// dead when the window isn't key.
+    ///
+    /// Content drawn on top keeps its solid palette fills either way — glass
+    /// is only ever the chrome underneath, never a wash over text.
+    @ViewBuilder
+    private var bubbleSurface: some View {
+        let shape = SpeechBubbleShape(
+            isMirrored: layout.isMirrored, isFlippedVertically: layout.isFlippedVertically
+        )
+        if appearance.settings.liquidGlass {
+            Color.clear.glassEffect(.regular, in: shape)
+        } else {
+            shape.fill(theme.ground.color)
+        }
     }
 
     /// Widen, restore, close — reversed when the row moves to the other corner,

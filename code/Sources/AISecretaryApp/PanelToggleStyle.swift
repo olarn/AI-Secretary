@@ -32,6 +32,10 @@ struct PanelToggleStyle: ToggleStyle {
     /// Passed in, not read from the environment: a `ToggleStyle` is not a
     /// `View`, so `@Environment` in one is never populated.
     let palette: Palette
+    /// Glass mode swaps the accent fill for a neutral one: on glass chrome the
+    /// state is said by the surface, not by colour (Liquid Glass rule #7), and
+    /// `chipFill` stands off the glass in both palettes.
+    let liquidGlass: Bool
 
     func makeBody(configuration: Configuration) -> some View {
         Button {
@@ -51,16 +55,28 @@ struct PanelToggleStyle: ToggleStyle {
         // Behind the bezel rather than instead of it, so the corner radius and
         // hit area stay whatever the bordered style gives every other button
         // in the row.
-        .background(
-            configuration.isOn ? AnyShapeStyle(palette.accent.color) : AnyShapeStyle(Color.clear),
-            in: RoundedRectangle(cornerRadius: fontSize * 0.4)
-        )
-        .foregroundStyle(configuration.isOn ? AnyShapeStyle(palette.onAccent.color) : AnyShapeStyle(palette.primaryText.color))
+        .background(stateFill(isOn: configuration.isOn), in: RoundedRectangle(cornerRadius: fontSize * 0.4))
+        .foregroundStyle(labelColor(isOn: configuration.isOn))
         // `.tint`, not only `.foregroundStyle`: a bordered button takes its
         // label colour from the tint, so the foreground style alone left the
         // selected button's label the same blue as the fill drawn behind it —
         // a solid blue block with the word invisible inside it. Seen in the
         // running app; nothing about the code read wrong.
-        .tint(configuration.isOn ? palette.onAccent.color : palette.primaryText.color)
+        .tint(labelColor(isOn: configuration.isOn))
+    }
+
+    private func stateFill(isOn: Bool) -> AnyShapeStyle {
+        switch (liquidGlass, isOn) {
+        case (true, true): AnyShapeStyle(palette.chipFill.color)
+        case (true, false): AnyShapeStyle(Color.clear)
+        case (false, true): AnyShapeStyle(palette.accent.color)
+        case (false, false): AnyShapeStyle(Color.clear)
+        }
+    }
+
+    /// On glass the open button's ground is `chipFill`, which `primaryText`
+    /// already clears by the tested floor — `onAccent` only pairs with `accent`.
+    private func labelColor(isOn: Bool) -> Color {
+        isOn && !liquidGlass ? palette.onAccent.color : palette.primaryText.color
     }
 }

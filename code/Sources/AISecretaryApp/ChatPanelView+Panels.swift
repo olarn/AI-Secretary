@@ -13,6 +13,8 @@ extension ChatPanelView {
 
             themeRow
 
+            liquidGlassRow
+
             characterScaleRow
 
             fontRow
@@ -55,6 +57,25 @@ extension ChatPanelView {
                 (choice.label, appearance.settings.theme == choice, { appearance.selectTheme(choice) })
             })
             Text(appearance.settings.theme.explanation)
+                .font(.system(size: appearance.settings.hintFontSize))
+                .foregroundStyle(theme.mutedText.color)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// A checkbox rather than a fourth theme button: glass is a surface the
+    /// bubble is drawn as, and it composes with all three theme choices — the
+    /// palette still decides every colour, glass only replaces the ground it
+    /// sits on. A fourth button would have made "Dark + glass" unsayable.
+    private var liquidGlassRow: some View {
+        VStack(alignment: .leading, spacing: appearance.settings.panelSpacing * 0.5) {
+            Toggle("Liquid Glass", isOn: Binding(
+                get: { appearance.settings.liquidGlass },
+                set: { appearance.setLiquidGlass($0) }
+            ))
+            .toggleStyle(.checkbox)
+            .font(.system(size: appearance.settings.footnoteFontSize))
+            Text("Draws the bubble as glass over your desktop. Works with every Theme above.")
                 .font(.system(size: appearance.settings.hintFontSize))
                 .foregroundStyle(theme.mutedText.color)
                 .fixedSize(horizontal: false, vertical: true)
@@ -428,7 +449,8 @@ extension ChatPanelView {
         .toggleStyle(PanelToggleStyle(
             fontSize: appearance.settings.secondaryFontSize,
             controlSize: appearance.settings.fontSize > 16 ? .regular : .small,
-            palette: theme
+            palette: theme,
+            liquidGlass: appearance.settings.liquidGlass
         ))
         .font(.system(size: appearance.settings.secondaryFontSize))
     }

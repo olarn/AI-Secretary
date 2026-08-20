@@ -167,6 +167,37 @@ final class AppearanceSettingsTests: XCTestCase {
         XCTAssertEqual(UserDefaultsAppearanceStore(defaults: defaults).load().theme, .system)
     }
 
+    // MARK: - Liquid Glass
+
+    /// Off by default: the solid look is the one whose readability never
+    /// depends on the wallpaper, so glass is something the user walks into.
+    func testLiquidGlassIsOffByDefault() {
+        XCTAssertFalse(AppearanceSettings().liquidGlass)
+        XCTAssertFalse(StoredAppearance().liquidGlass)
+    }
+
+    func testLiquidGlassSurvivesQuitting() {
+        let name = "AppearanceLiquidGlassRoundTripTests"
+        let defaults = UserDefaults(suiteName: name)!
+        defaults.removePersistentDomain(forName: name)
+        let store = UserDefaultsAppearanceStore(defaults: defaults)
+
+        store.save(StoredAppearance(liquidGlass: true))
+
+        XCTAssertTrue(store.load().liquidGlass)
+    }
+
+    /// Nobody upgrading has this key, and absent must read as off, not as
+    /// whatever `bool(forKey:)` would invent.
+    func testAMissingStoredLiquidGlassFallsBackToOff() {
+        let name = "AppearanceLiquidGlassFallbackTests"
+        let defaults = UserDefaults(suiteName: name)!
+        defaults.removePersistentDomain(forName: name)
+        defaults.set(14.0, forKey: "appearance.fontSize")
+
+        XCTAssertFalse(UserDefaultsAppearanceStore(defaults: defaults).load().liquidGlass)
+    }
+
     // MARK: - Persistence
 
     func testTheChoiceIsSavedAndReloaded() {

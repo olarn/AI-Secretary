@@ -54,6 +54,14 @@ extension ChatPanelView {
         .padding(.top, Self.headerTopClearance)
     }
 
+    /// What the standing badges sit on. Accent-tinted normally; neutral in
+    /// glass mode, where colour is reserved for content and state is not a
+    /// thing the chrome shouts (Liquid Glass rule #7 — the same swap
+    /// `PanelToggleStyle` makes for the open footer button).
+    private var badgeFill: Color {
+        appearance.settings.liquidGlass ? theme.chipFill.color : theme.accentFill.color
+    }
+
     /// What the sub-agent working on her behalf is doing, and whether it is
     /// still answering.
     ///
@@ -78,7 +86,7 @@ extension ChatPanelView {
                 .font(.system(size: appearance.settings.secondaryFontSize, weight: .semibold))
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
-                .background(theme.accentFill.color, in: Capsule())
+                .background(badgeFill, in: Capsule())
                 .help("A sub-agent is working on this. Stop ends the whole turn.")
             }
             // Truncates before anything with an off switch on it, the same rule
@@ -109,7 +117,7 @@ extension ChatPanelView {
                 .font(.system(size: appearance.settings.secondaryFontSize, weight: .semibold))
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
-                .background(theme.accentFill.color, in: Capsule())
+                .background(badgeFill, in: Capsule())
                 .contentShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -136,7 +144,7 @@ extension ChatPanelView {
                 .font(.system(size: appearance.settings.secondaryFontSize, weight: .semibold))
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
-                .background(theme.accentFill.color, in: Capsule())
+                .background(badgeFill, in: Capsule())
                 .contentShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -184,8 +192,10 @@ extension ChatPanelView {
                 .font(.system(size: appearance.settings.secondaryFontSize, weight: .semibold))
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
+                // Paused keeps `warningFill` in glass mode too — "held" is a
+                // meaning, not chrome decoration, so #7 does not neutralise it.
                 .background(
-                    (secretary.queuePaused ? theme.warningFill : theme.accentFill).color,
+                    secretary.queuePaused ? theme.warningFill.color : badgeFill,
                     in: Capsule()
                 )
                 .contentShape(Capsule())
@@ -232,7 +242,7 @@ extension ChatPanelView {
                 .font(.system(size: appearance.settings.secondaryFontSize, weight: .semibold))
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
-                .background(theme.accentFill.color, in: Capsule())
+                .background(badgeFill, in: Capsule())
                 .contentShape(Capsule())
             }
             .buttonStyle(.plain)
