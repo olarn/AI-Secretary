@@ -88,3 +88,57 @@ public struct BlockedBlock: Equatable, Sendable {
         self.missing = missing
     }
 }
+
+// MARK: - The one kind of missing nobody can hand over
+
+/// Whether what the assistant marked as missing is a *permission*.
+///
+/// This is not prose-reading of the kind the charter forbids: the text comes
+/// out of a ` ```blocked ` block, a field we defined and asked for, and the
+/// question asked of it is only "is this the sort of missing that waiting
+/// cannot fix". Nothing is acted on from an unmarked sentence.
+///
+/// Why it needs answering at all — the deadlock the owner hit on 2026-08-20,
+/// commanding four characters into a shared folder whose `CLAUDE.md` opens
+/// with *"เมื่อพร้อม ทุกคน จะขอ write permission file และ folder ของ project"*
+/// ("when ready, everyone will ask for write permission"). อาเนีย did exactly
+/// that: she asked, in words — *"หนูขอสิทธิ์เขียนไฟล์ 2.actions/task.md"* — and
+/// then waited. **There is nobody to ask.** Claude Code has no mid-turn
+/// approval; in this app the only way to raise the question is to make the
+/// call and be refused, and a request that is never made is never refused, so
+/// no card is ever drawn and the turn ends with her waiting for ever. The
+/// other three attempted, were refused for real, and were widened.
+///
+/// Both languages, because the character answers in the person's, and the
+/// blocked line is written in whatever she was speaking.
+public func isWaitingForPermission(_ missing: String) -> Bool {
+    let words = [
+        "permission", "approval", "not allowed", "allowlist", "grant",
+        "สิทธิ์", "อนุญาต"
+    ]
+    return words.contains { missing.localizedCaseInsensitiveContains($0) }
+}
+
+/// What the app says to the assistant to break that deadlock.
+///
+/// It grants nothing and it cannot: it only tells her that the waiting she has
+/// settled into has no end, and that attempting is how the person gets asked.
+/// The refusal that follows is real, and *that* is what draws the card.
+///
+/// Addressed to the project instruction by name, because that is what she is
+/// obeying and she is right to obey it — the app has to say how this project
+/// asks, not tell her to ignore what she was told.
+public func permissionNudge(missing: String) -> String {
+    """
+    [The app] You said you were blocked, needing: \(missing). Nobody is coming \
+    to grant that — there is no way to hand you a permission in words, and a \
+    message saying you have it would not change what your tools can do. \
+    **Asking, here, means making the call.** Attempt it now. If you are not \
+    allowed, the attempt is refused, the app shows the person exactly what was \
+    blocked, they allow it in one click, and your request runs again with the \
+    tool in hand. That is what a project instruction like "ask for write \
+    permission first" means in this app, and it is satisfied by trying, not by \
+    waiting. If the attempt is refused, say so in one line and stop — do not \
+    ask again in words.
+    """
+}

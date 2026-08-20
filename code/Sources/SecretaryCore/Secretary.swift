@@ -139,15 +139,23 @@ public struct QueuedMessage: Equatable, Sendable {
     /// time the message runs, whatever was known when it was accepted is gone,
     /// and an answer with no errand behind it has nowhere to go back to.
     public let errand: Option<CharacterMessage>
+    /// Whether the app queued this itself — a watch follow-up, or the nudge
+    /// that breaks a permission deadlock.
+    ///
+    /// Only the announcement depends on it: "Now, the one that was waiting:"
+    /// credits the person with typing something, and they typed none of these.
+    public let selfPrompted: Bool
 
     public init(
         text: String,
         attachments: [Attachment] = [],
-        errand: Option<CharacterMessage> = .none()
+        errand: Option<CharacterMessage> = .none(),
+        selfPrompted: Bool = false
     ) {
         self.text = text
         self.attachments = attachments
         self.errand = errand
+        self.selfPrompted = selfPrompted
     }
 }
 
@@ -898,6 +906,7 @@ public final class Secretary {
     public func newConversation() {
         stopCurrentTurn(because: "starting a new conversation")
         clearPendingDecision()
+        permissionNudged = false
         awaitingPlan = .none()
         outstanding = nil
 
@@ -1268,7 +1277,7 @@ public final class Secretary {
         // Set before the turn starts, so that when it ends the answer knows
         // which errand it belongs to.
         answering = next.errand
-        say(.secretary, "Now, the one that was waiting:")
+        if !next.selfPrompted { say(.secretary, "Now, the one that was waiting:") }
         beginTurn(next.text, attachments: next.attachments)
     }
 
@@ -2253,6 +2262,15 @@ public final class Secretary {
     /// permission card, so it cannot simply be a parameter.
     private var pendingWatchInstruction = ""
 
+    /// Whether the nudge that breaks a permission deadlock has already been
+    /// spent on this dead end.
+    ///
+    /// Once, never twice: if she marks herself blocked on a permission *again*
+    /// after being told that attempting is how one asks, the wall is real and
+    /// saying the same thing a second time is a turn spent to no purpose. It is
+    /// released by any turn that finishes without declaring itself blocked.
+    private var permissionNudged = false
+
     /// Whether a watch has already handed the model something to act on that
     /// has not come back yet.
     ///
@@ -2310,6 +2328,31 @@ public final class Secretary {
         }
     }
 
+    /// Answers a reply that has settled into waiting for a permission.
+    ///
+    /// The dead end is real and it is silent: the turn ends, the state machine
+    /// goes idle, nothing is pending, and she is waiting for a grant that no
+    /// message can carry. Nothing here grants anything — it tells her that
+    /// attempting is how the question reaches the person, and the refusal that
+    /// follows is what draws the card. See `isWaitingForPermission`.
+    ///
+    /// Not when a card is already up: then the question *has* reached the
+    /// person and she is waiting for exactly the right thing.
+    private func breakPermissionDeadlock(missing: String) {
+        guard !permissionNudged,
+              !pendingDecision.isDefined,
+              isWaitingForPermission(missing)
+        else { return }
+
+        permissionNudged = true
+        audit.record(AuditEntry(
+            taskID: activeTaskID.getOrElse("-"),
+            kind: .requestReceived,
+            detail: "breaking a permission deadlock: \(missing)"
+        ))
+        queue.append(QueuedMessage(text: permissionNudge(missing: missing), selfPrompted: true))
+    }
+
     /// Hands a change to the model, when the watch was started by somebody
     /// asking for something to happen.
     ///
@@ -2326,7 +2369,7 @@ public final class Secretary {
         else { return }
 
         watchFollowUpInFlight = true
-        queue.append(QueuedMessage(text: prompt, attachments: []))
+        queue.append(QueuedMessage(text: prompt, attachments: [], selfPrompted: true))
         dispatchNextQueued()
     }
 
@@ -3430,8 +3473,12 @@ public final class Secretary {
         if let missing = blocked.missing,
            let request = conversation.last(where: { $0.role == .user })?.content {
             outstanding = OutstandingRequest(request: request, missing: missing)
+            breakPermissionDeadlock(missing: missing)
         } else if success {
             outstanding = nil
+            // She got somewhere this turn, so the next dead end is a new one
+            // and deserves its own nudge.
+            permissionNudged = false
         }
         // The blocks came out of the whole turn above; what goes on screen is
         // this bubble's share of it, stripped the same way.

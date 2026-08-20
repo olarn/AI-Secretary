@@ -334,8 +334,9 @@ struct CommandWindowView: View {
                 }
                 .buttonStyle(.plain)
                 if model.showResults {
-                    saveResultsButton
+                    // copy, Save, clear — the owner's order (2026-08-20).
                     copyResultsButton
+                    saveResultsButton
                     Button("clear") { model.clearResults() }
                         .buttonStyle(.plain)
                         .font(.system(size: metrics.hintFontSize))

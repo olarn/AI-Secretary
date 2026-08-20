@@ -402,6 +402,15 @@ func agentPermissionNote(sessionTools: Set<String>) -> String {
     the tool in hand. Never answer that you lack permission instead of trying. \
     Saying it without attempting is the one thing that stops the user from ever \
     being asked, and the work then stops for good.
+
+    This holds when a project instruction tells you to ask for permission \
+    first — a CLAUDE.md that opens "everyone must request write permission", \
+    for instance. Obey it: **the way to ask, here, is to make the call.** There \
+    is no one to petition in words, no message anybody can send that widens \
+    what your tools may do, and a request written in prose reaches nobody at \
+    all. Attempt the write; the refusal puts the question in front of the \
+    person, which is the asking that instruction is after. Waiting for a reply \
+    to a question you asked in words is waiting for ever.
     """
 }
 

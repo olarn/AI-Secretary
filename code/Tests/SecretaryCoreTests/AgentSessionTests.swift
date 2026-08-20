@@ -433,6 +433,91 @@ final class AgentSessionTests: XCTestCase {
 
     /// Claude Code refuses un-granted tools mid-turn rather than asking, so the
     /// only way to widen is to notice the refusal and offer a retry.
+    // MARK: - Waiting for a permission nobody can hand over
+
+    /// The owner's deadlock, 2026-08-20. Their shared folder's `CLAUDE.md`
+    /// opens "everyone must ask for write permission first", so the character
+    /// asked — in words — and waited. Nothing was pending, no tool had been
+    /// refused, and no card could exist, because the request was never made.
+    /// Four characters were commanded; the three that attempted got through
+    /// and the one that asked politely stopped for ever.
+    func testAReplyBlockedOnAPermissionIsToldThatAttemptingIsTheAsking() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        provider.replyForNextTurn = """
+        As CLAUDE.md says, I have to ask for write permission first.
+
+        ```blocked
+        write permission for 2.actions/task.md
+        ```
+        """
+        secretary.submit("write the action items")
+        await waitUntilIdle()
+
+        XCTAssertTrue(
+            provider.lastMessages.contains { $0.content.contains("Asking, here, means making the call") },
+            "Got: \(provider.lastMessages.map(\.content).joined(separator: " | "))"
+        )
+    }
+
+    /// Once. If she declares herself blocked on a permission *again* after
+    /// being told, the wall is real and repeating it is a turn spent for
+    /// nothing — the loop that would otherwise run for as long as she keeps
+    /// saying it.
+    func testTheNudgeIsSpentOnceOnADeadEnd() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        let blockedReply = """
+        Still waiting for permission.
+
+        ```blocked
+        write permission for 2.actions/task.md
+        ```
+        """
+        provider.replyForNextTurn = blockedReply
+        secretary.submit("write the action items")
+        await waitUntilIdle()
+        let afterFirst = provider.callCount
+
+        provider.replyForNextTurn = blockedReply
+        await waitUntilIdle()
+        XCTAssertLessThanOrEqual(
+            provider.callCount, afterFirst + 1,
+            "A second dead end must not start a third turn"
+        )
+    }
+
+    /// Something else missing — a file, a folder, a fact — is not this. Those
+    /// are answered by the person, and the reminder already handles them.
+    func testAnOrdinaryBlockedReplyIsLeftAlone() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        provider.replyForNextTurn = """
+        I couldn't find it.
+
+        ```blocked
+        which folder the ratebook is in
+        ```
+        """
+        secretary.submit("find the ratebook")
+        await waitUntilIdle()
+
+        XCTAssertFalse(
+            provider.lastMessages.contains { $0.content.contains("Asking, here, means making the call") },
+            "Only a permission is the kind of missing nobody can hand over"
+        )
+    }
+
+    /// A card already up means the question *has* reached the person, and
+    /// waiting is exactly right.
+    func testNothingIsNudgedWhileACardIsWaiting() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: false)])
+        secretary.submit("write the action items")
+        await waitUntilIdle()
+        XCTAssertTrue(secretary.pendingDecision.isDefined, "Expected the project card")
+
+        XCTAssertFalse(
+            provider.lastMessages.contains { $0.content.contains("Asking, here, means making the call") }
+        )
+    }
+
     // MARK: - The card, told to whoever is listening from outside
 
     /// Sprint 21.2, the owner's report: commanded from the command window,

@@ -2562,3 +2562,61 @@ wording matches none of `refusalPhrases`, so it raises no card — and a card wo
 be dishonest anyway: what is missing is `--add-dir` for that folder, not
 permission for `ls`, so granting the tool rule would not unblock it. It needs a
 way to widen the *directories*, which is a scope decision for the owner.
+
+## Asking for permission in words is waiting for ever (v0.21.331)
+
+The owner commanded all four characters into their shared Second Brain folder
+and one of them stopped dead: *"ยังติดที่เดิมค่ะ — รอสิทธิ์เขียนไฟล์ `2.actions/task.md`
+อยู่ ยังไม่ได้รับอนุญาตเลย"*, and nothing after it. The other three finished. This is
+a **third** cause of the same reported symptom, and it is not the one v0.21.329
+fixed.
+
+The reason is in the project's own instructions. `~/Temp/ai-team-work/CLAUDE.md`
+opens with:
+
+```
+1. เมื่อพร้อม ทุกคน จะขอ write permission file และ folder ของ project
+```
+
+อาเนีย obeyed it exactly, and *asked* — in words, in the chat: "หนูขอสิทธิ์เขียนไฟล์
+2.actions/task.md". **There is nobody to ask.** No message widens what her tools
+may do; the only way the question reaches the person is a tool call that gets
+refused. She never made one, so nothing was refused, no card could be drawn, and
+the app waited for her while she waited for the app. The instruction is
+perfectly reasonable — the owner should not have to know the mechanism — so the
+fix is not to the instruction.
+
+Two halves, because a prompt alone is a hope and the app must not deadlock.
+
+**The prompt now names that exact case.** `agentPermissionNote` said "never
+answer that you lack permission instead of trying", which the model set aside
+because its project told it to ask first. It now says what obeying that
+instruction *means here*: the way to ask is to make the call; there is no one to
+petition in words; attempt it, and the refusal is what puts the question in
+front of the person. Driven after the change, same folder, same four characters:
+"หนูสั่งเขียนไปแล้วนะคะ แต่โดนบล็อก" — she attempted, was refused for real, was widened,
+and the next line was "เขียนแล้วค่ะ! `2.actions/probe.md`". The file was on disk.
+
+**And the app breaks the deadlock itself.** A reply that marks itself
+` ```blocked ` for want of a *permission* now gets one turn back saying that
+nobody is coming and attempting is the asking (`isWaitingForPermission`,
+`permissionNudge`). It grants nothing — it cannot — so the refusal that follows
+is real and draws a real card.
+
+- **Read from a marked block, never from prose.** The charter's rule is that the
+  app doesn't act on what it guesses a sentence means; this reads the "what is
+  missing" line of a block we defined and asked for.
+- **Once per dead end.** Declaring itself blocked on a permission a second time
+  after being told means the wall is real, and repeating the nudge would be a
+  turn spent for nothing. Released by any turn that finishes without declaring
+  itself blocked.
+- **Never while a card is up.** Then the question *has* reached the person, and
+  waiting is exactly the right thing to be doing.
+- **It is not announced as the person's own.** `QueuedMessage.selfPrompted` keeps
+  "Now, the one that was waiting:" for things the person actually typed. The
+  watch follow-up is marked the same way.
+
+## Results box: copy, Save, clear (v0.21.331)
+
+The owner's order, asked for while the above was being driven. It shipped as
+Save-then-copy in v0.21.326; the copy glyph now leads.
