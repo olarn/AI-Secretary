@@ -2808,3 +2808,47 @@ round, so this was aimed from the code at the one surface that was still AppKit'
 to paint. If a pinned window still comes up in the system's theme, the next thing
 to look at is whether `NSPanel` is honouring `appearance` for utility windows at
 all on this macOS, and the answer would be to drop `.titled` for a custom bar.
+
+## Pinned windows take Liquid Glass too (v0.21.337)
+
+The owner: the pin window doesn't apply Liquid Glass when the theme has it
+switched on. It didn't — the pane was painted with the palette's solid ground
+whatever the checkbox said, so glass stopped at the chat.
+
+Two halves have to agree, and neither is enough alone.
+
+**The content** now has a `surface` built exactly like the bubble's
+`bubbleSurface`: `glassEffect(.regular)` over a `ground` fill at **0.15**
+opacity. That fill is not decoration and the comment says so where the next
+person will meet it — a window is click-through wherever its pixels are fully
+transparent, and `Color.clear` under a `glassEffect` counts as transparent
+however frosted it looks. That is what killed the chat bubble's resize grip at
+0.21.322, and pure `Color.clear` here would have made a pinned window unclickable
+in exactly the same way.
+
+**The window** has to let the desktop through, or the glass has nothing to
+frost and comes out a flat slab: `isOpaque = false` and a clear background,
+which means undoing the solid ground painted on for 0.21.336 — and only in glass
+mode, so that fix stands where it was needed. Its shadow goes off with
+`invalidateShadow()`, the same lesson as the bubble at 0.21.323, where a window
+shadow behind frosted glass reads as a dark smear rather than as depth.
+
+**One place this pane differs from the bubble, deliberately:** the title bar is
+left to AppKit. A `.titled` window's bar is already a translucent material and
+it is lit by `panel.appearance`, which is the character's — while making it
+transparent would leave a strip of bare desktop across the top, since the
+content view does not reach under the bar without `.fullSizeContentView`.
+
+`themedWindow` is taken apart rather than used, and that is the whole reason:
+its `.background` is a solid ground, and a solid ground *behind* glass is the one
+thing glass must not have. The palette, foreground and tint it also sets are
+still applied.
+
+Both halves follow a change while a pane is open: the panel through
+`Appearance.onChange` → `applyControlAppearance` → `paint`, and the surface
+because it reads the setting.
+
+**Not driven** — no app testing this round, by request. 1345 tests pass, but
+glass is a thing you check by looking: worth pinning a message with the checkbox
+on and off, and — the one that has bitten twice — clicking an empty part of the
+pinned window with glass on, to be sure the click does not fall through.

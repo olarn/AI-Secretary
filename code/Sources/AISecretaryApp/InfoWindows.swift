@@ -63,8 +63,34 @@ final class InfoWindows: NSObject, NSWindowDelegate {
         // Still set: it decides the caret, the scroller and the title text,
         // which are drawn by AppKit and are not colours we can hand it.
         panel.appearance = controls
-        panel.titlebarAppearsTransparent = true
-        panel.backgroundColor = appearance.colors.ground.nsColor
+
+        guard appearance.settings.liquidGlass else {
+            panel.titlebarAppearsTransparent = true
+            panel.isOpaque = true
+            panel.backgroundColor = appearance.colors.ground.nsColor
+            panel.hasShadow = true
+            panel.invalidateShadow()
+            return
+        }
+
+        // Glass frosts what is *behind the window*, so an opaque window gives
+        // it nothing to work with and the surface comes out a flat slab. The
+        // ground colour painted above is exactly what has to go.
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        // Left to AppKit here, deliberately, and it is the one place this
+        // window differs from the bubble: a `.titled` window's bar is already a
+        // translucent material lit by `panel.appearance`, which is hers.
+        // Making it transparent instead would leave a strip of bare desktop
+        // across the top, because the content view does not reach under the bar
+        // without `.fullSizeContentView`.
+        panel.titlebarAppearsTransparent = false
+        // The same lesson as the chat bubble at 0.21.323: the window's own
+        // shadow is invisible behind a solid ground and shows through a frosted
+        // one as a dark smear. AppKit caches the shape, so switching it off is
+        // not enough on its own.
+        panel.hasShadow = false
+        panel.invalidateShadow()
     }
 
     /// Also the door a ` ```window ` block in a reply comes through, so a pane
@@ -233,6 +259,28 @@ private struct InfoWindowView: View {
     @State private var copied = false
     @State private var hovering = false
 
+    /// The pane's ground: Liquid Glass when the character has switched it on,
+    /// otherwise her solid ground — the same rule, and the same shape of code,
+    /// as the chat bubble's `bubbleSurface`.
+    @ViewBuilder
+    private var surface: some View {
+        if appearance.settings.liquidGlass {
+            ZStack {
+                // Not decoration. A window is click-through wherever its pixels
+                // are fully transparent, and `Color.clear` under a
+                // `glassEffect` counts as transparent however frosted it looks
+                // — that is what killed the chat bubble's resize grip at
+                // 0.21.322. 0.15 is above the window server's ~5% threshold and
+                // invisible under the frosting. Do not "clean this up" into
+                // `Color.clear`.
+                Rectangle().fill(theme.ground.color(opacity: 0.15))
+                Color.clear.glassEffect(.regular, in: Rectangle())
+            }
+        } else {
+            theme.ground.color
+        }
+    }
+
     var body: some View {
         ScrollView {
             MarkdownBodyView(
@@ -251,7 +299,14 @@ private struct InfoWindowView: View {
             if hovering { copyButton }
         }
         .onHover { hovering = $0 }
-        .themedWindow(theme)
+        // `themedWindow` is deliberately taken apart here. Its `.background`
+        // is a solid ground, and a solid ground behind glass is the one thing
+        // glass must not have — it would frost that instead of the desktop and
+        // come out flat. Everything else it does is wanted.
+        .background(surface)
+        .environment(\.palette, theme)
+        .foregroundStyle(theme.primaryText.color)
+        .tint(theme.accent.color)
     }
 
     private var copyButton: some View {
