@@ -139,6 +139,11 @@ final class Appearance {
             || updated.chatWidth != settings.chatWidth
             || updated.characterScale != settings.characterScale
             || updated.theme != settings.theme
+            // Glass flips an NSWindow property too — the shadow, which hides
+            // behind the solid bubble and hangs as a dark blot behind the
+            // glass one. Same reasoning as theme: not something a SwiftUI
+            // body can return.
+            || updated.liquidGlass != settings.liquidGlass
         settings = updated
         store.save(
             StoredAppearance(

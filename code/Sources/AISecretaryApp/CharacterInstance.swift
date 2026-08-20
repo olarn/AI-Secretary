@@ -209,6 +209,7 @@ final class CharacterInstance {
             takesKeyOnClick: true
         )
         chatPanel.alphaValue = 0
+        applyChatShadow()
 
         // A reply can ask for part of itself to be kept on screen.
         secretary.onPinWindow = { [weak self] spec in self?.infoWindows.open(spec) }
@@ -315,6 +316,7 @@ final class CharacterInstance {
     /// with the bubble above it, and growing from the top-left corner instead
     /// would walk it across the desktop each time the size changed.
     func applyWindowSizes() {
+        applyChatShadow()
         let old = characterPanel.frame
         let size = characterSize
         let characterResized = old.size != size
@@ -361,6 +363,23 @@ final class CharacterInstance {
         if x != frame.minX || y != frame.minY {
             characterPanel.setFrameOrigin(NSPoint(x: x, y: y))
         }
+    }
+
+    /// The NSWindow shadow follows the glass setting: on for the solid bubble,
+    /// off for glass. Sprint 21's backlog warned about exactly this ("glass's
+    /// shadow stacking with the NSWindow's") and the owner saw it on a real
+    /// desktop (2026-08-20): with glass on, a dark blot hung behind the chat
+    /// window — the window shadow, now cast for a mostly-transparent shape and
+    /// showing *through* the glass it used to hide behind. Screen captures
+    /// never show it, because `screencapture` records the window's own layer
+    /// without the system-drawn shadow; only eyes on the desktop catch it.
+    /// `invalidateShadow` because AppKit caches the shadow's shape and does not
+    /// recompute it just because the flag flipped.
+    private func applyChatShadow() {
+        let wantsShadow = !appearance.settings.liquidGlass
+        guard let chatPanel, chatPanel.hasShadow != wantsShadow else { return }
+        chatPanel.hasShadow = wantsShadow
+        chatPanel.invalidateShadow()
     }
 
     /// Tells AppKit which way this character's windows are lit.
