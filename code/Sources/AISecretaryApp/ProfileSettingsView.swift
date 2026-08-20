@@ -90,7 +90,7 @@ struct ProfileSettingsView: View {
             }
         }
         .padding(appearance.settings.panelPadding)
-        .background(theme.chipFill.color, in: RoundedRectangle(cornerRadius: 8))
+        .background(PanelBoxGround(palette: theme, liquidGlass: appearance.settings.liquidGlass))
         // Keeps the fields in step when this character is edited from anywhere
         // else. Keyed on the revision rather than on the id, which no longer
         // changes: this panel is about one character for its whole life.

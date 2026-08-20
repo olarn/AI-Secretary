@@ -62,3 +62,26 @@ extension Palette {
         NSAppearance(named: prefersDarkControls ? .darkAqua : .aqua)
     }
 }
+
+/// The ground under an opened Settings/Profile/Projects/Skills box — one view
+/// so the four boxes cannot drift apart. Solid `chipFill` normally; in glass
+/// mode the same colour as a `glassEffect` tint, which keeps the surface
+/// defined enough for the small `mutedText` hints while letting the desktop
+/// glow through. Tinted, not plain `.regular`: these boxes carry the smallest
+/// text in the app, and an untinted pane's brightness is whatever the
+/// wallpaper says it is.
+struct PanelBoxGround: View {
+    let palette: Palette
+    let liquidGlass: Bool
+
+    var body: some View {
+        if liquidGlass {
+            Color.clear.glassEffect(
+                .regular.tint(palette.chipFill.color),
+                in: RoundedRectangle(cornerRadius: 8)
+            )
+        } else {
+            RoundedRectangle(cornerRadius: 8).fill(palette.chipFill.color)
+        }
+    }
+}

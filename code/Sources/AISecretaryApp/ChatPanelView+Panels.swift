@@ -46,7 +46,7 @@ extension ChatPanelView {
             }
         }
         .padding(appearance.settings.panelPadding)
-        .background(theme.chipFill.color, in: RoundedRectangle(cornerRadius: 8))
+        .background(PanelBoxGround(palette: theme, liquidGlass: appearance.settings.liquidGlass))
     }
 
     /// Built from `ThemeChoice.allCases`, so adding a theme adds a button
@@ -252,7 +252,7 @@ extension ChatPanelView {
             .fixedSize(horizontal: false, vertical: true)
         }
         .padding(appearance.settings.panelPadding)
-        .background(theme.chipFill.color, in: RoundedRectangle(cornerRadius: 8))
+        .background(PanelBoxGround(palette: theme, liquidGlass: appearance.settings.liquidGlass))
     }
 
     /// A menu rather than a toggle switch, so this is a deliberate pick from a
@@ -345,7 +345,7 @@ extension ChatPanelView {
             .fixedSize(horizontal: false, vertical: true)
         }
         .padding(appearance.settings.panelPadding)
-        .background(theme.chipFill.color, in: RoundedRectangle(cornerRadius: 8))
+        .background(PanelBoxGround(palette: theme, liquidGlass: appearance.settings.liquidGlass))
     }
 
     /// Held to a share of the window and given its own scroll, which is what
