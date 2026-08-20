@@ -256,3 +256,79 @@ final class WatchRequestTests: XCTestCase {
         XCTAssertEqual(WatchRequest(relativePath: "docs").actionClass, .readOnly)
     }
 }
+
+
+extension FolderWatchTests {
+    // MARK: - Acting on a change, not only announcing it
+
+    /// Sprint 21.2: told to watch a folder and follow whatever instruction
+    /// lands there, the assistant reported the new file and did nothing with
+    /// it. It had never been told — the report went into the transcript and
+    /// never into the conversation — so the standing instruction has to be
+    /// quoted back with the change.
+    func testTheFollowUpQuotesTheInstructionBackWithTheChange() {
+        let prompt = watchFollowUpPrompt(
+            watchName: "inbox",
+            changes: [.added("order.csv")],
+            instruction: "watch inbox and do whatever the file that lands there says"
+        )
+        guard let prompt else { return XCTFail("Expected a follow-up") }
+        XCTAssertTrue(prompt.contains("order.csv"), "Got: \(prompt)")
+        XCTAssertTrue(prompt.contains("inbox"), "Got: \(prompt)")
+        XCTAssertTrue(
+            prompt.contains("do whatever the file that lands there says"),
+            "The instruction is several turns old — it has to be quoted. Got: \(prompt)"
+        )
+    }
+
+    /// A typed `/watch` says only "watch this". There is nothing to carry out,
+    /// and a turn spent on it is a turn nobody asked for.
+    func testASlashCommandWatchAsksForNothing() {
+        XCTAssertNil(
+            watchFollowUpPrompt(
+                watchName: "docs",
+                changes: [.added("a.txt")],
+                instruction: "/watch docs"
+            )
+        )
+    }
+
+    func testAWatchWithNoInstructionAsksForNothing() {
+        XCTAssertNil(
+            watchFollowUpPrompt(watchName: "docs", changes: [.added("a.txt")], instruction: "   ")
+        )
+    }
+
+    func testNoChangesMeansNothingToSay() {
+        XCTAssertNil(
+            watchFollowUpPrompt(watchName: "docs", changes: [], instruction: "act on new files")
+        )
+    }
+
+    /// It must not read as a fresh request: the assistant restarting the
+    /// original job on every file that lands is the other way this goes wrong.
+    func testTheFollowUpSaysItIsNotANewRequest() {
+        let prompt = watchFollowUpPrompt(
+            watchName: "inbox",
+            changes: [.added("a.txt")],
+            instruction: "act on new files"
+        )
+        XCTAssertTrue(prompt?.contains("not a new") ?? false, "Got: \(String(describing: prompt))")
+    }
+
+    /// The instruction has to survive every tick, or the second change is
+    /// reported to a model that was told nothing.
+    func testAdvancingKeepsTheInstruction() {
+        let watch = FolderWatch(
+            relativePath: "inbox",
+            project: Project(name: "P", path: "/tmp", allowedTools: [], allowedActions: []),
+            resolvedPath: "/tmp/inbox",
+            snapshot: WatchSnapshot(stamps: [:]),
+            instruction: "act on new files"
+        )
+        XCTAssertEqual(
+            watch.advancing(to: WatchSnapshot(stamps: ["a": "1"]), reported: true).instruction,
+            "act on new files"
+        )
+    }
+}

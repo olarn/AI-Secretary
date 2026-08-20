@@ -34,21 +34,43 @@ final class SecretaryPromptsTests: XCTestCase {
         XCTAssertEqual(
             agentPermissionNote(sessionTools: []),
             """
-            Right now your tools are read-only: you can read, search and browse, \
-            but writing or running commands will be refused.
+            Right now you can read, search and browse. Anything beyond that will be refused — and being refused is how \
+            you ask for it. If the work needs a tool you have not been given, make the \
+            tool call anyway. The refusal is not the end of the request: the app shows \
+            the user what was blocked, they allow it, and your request runs again with \
+            the tool in hand. Never answer that you lack permission instead of trying. \
+            Saying it without attempting is the one thing that stops the user from ever \
+            being asked, and the work then stops for good.
             """
         )
     }
 
     func testWidenedPermissionNoteListsTheToolsSorted() {
-        XCTAssertEqual(
-            agentPermissionNote(sessionTools: ["Write", "Bash(git add:*)"]),
-            """
-            You can read, search and browse. The user has also allowed these for this \
-            session: Bash(git add:*), Write. Anything \
-            beyond that is still refused.
-            """
+        let note = agentPermissionNote(sessionTools: ["Write", "Bash(git add:*)"])
+        XCTAssertTrue(
+            note.hasPrefix("You can read, search and browse. The user has also allowed these for this session: Bash(git add:*), Write."),
+            "Got: \(note)"
         )
+    }
+
+    /// The Sprint 21.2 bug, as a test. The old note ended "writing or running
+    /// commands will be refused", and the model stopped before the tool call
+    /// and said so in prose — which raises no refusal, so no card, so nobody is
+    /// ever asked and the work stops for good. Whatever this note says, it has
+    /// to ask for the attempt.
+    func testTheNoteAsksForTheAttemptRatherThanTheApology() {
+        for tools in [Set<String>(), ["Write"]] {
+            let note = agentPermissionNote(sessionTools: tools)
+            XCTAssertTrue(note.contains("make the tool call anyway"), "Got: \(note)")
+            XCTAssertTrue(
+                note.contains("Never answer that you lack permission instead of trying"),
+                "Got: \(note)"
+            )
+            XCTAssertFalse(
+                note.contains("will be refused.\n"),
+                "It must not end on the refusal — that is the sentence the model obeyed. Got: \(note)"
+            )
+        }
     }
 
     // MARK: - Which pieces appear

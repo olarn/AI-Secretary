@@ -313,6 +313,19 @@ public struct FolderWatch: Equatable, Sendable, Identifiable {
     /// How many times something has been reported. Shown when it stops, so the
     /// person can tell "nothing happened" from "I wasn't looking".
     public let reportCount: Int
+    /// What the person asked for when this watch started, verbatim.
+    ///
+    /// Held because the model is not: a change report was said into the
+    /// transcript and never into the conversation, so the assistant never saw
+    /// it happen and could not act on the standing instruction it had been
+    /// given. Told "watch this folder and follow the instructions in whatever
+    /// lands there", it reported the new file and did nothing with it — the
+    /// owner's Sprint 21.2 report, and it reads as forgetting when it is really
+    /// never having been told.
+    ///
+    /// Empty means nobody is asked to do anything: the watch reports, as it
+    /// always did.
+    public let instruction: String
 
     /// The folder itself, which is what "already watching that" is really
     /// asking about.
@@ -330,13 +343,15 @@ public struct FolderWatch: Equatable, Sendable, Identifiable {
         project: Project,
         resolvedPath: String,
         snapshot: WatchSnapshot,
-        reportCount: Int = 0
+        reportCount: Int = 0,
+        instruction: String = ""
     ) {
         self.relativePath = relativePath
         self.project = project
         self.resolvedPath = resolvedPath
         self.snapshot = snapshot
         self.reportCount = reportCount
+        self.instruction = instruction
     }
 
     /// The name to use in a message. The project's own folder has no relative
@@ -358,7 +373,46 @@ public struct FolderWatch: Equatable, Sendable, Identifiable {
             project: project,
             resolvedPath: resolvedPath,
             snapshot: snapshot,
-            reportCount: reportCount + (reported ? 1 : 0)
+            reportCount: reportCount + (reported ? 1 : 0),
+            instruction: instruction
         )
     }
+}
+
+/// What the assistant is told when something changes under a watch it was asked
+/// to act on.
+///
+/// The change goes to the *model*, not only into the transcript. `say` writes a
+/// bubble and nothing else, so before this the assistant learned nothing at all
+/// from a watch: the person saw "👁 1 change", the model saw nothing, and the
+/// standing instruction — "when a file lands here, do what it says" — was never
+/// reached. It looked like forgetting.
+///
+/// The instruction is quoted back rather than trusted to memory for the same
+/// reason `OutstandingRequest.reminder` quotes the request back: it is several
+/// turns old by now, and the app has it written down.
+///
+/// Returns nothing when nobody asked for anything to happen — a bare `/watch`
+/// is a request to be told, and told is what `say` already did.
+public func watchFollowUpPrompt(
+    watchName: String,
+    changes: [WatchChange],
+    instruction: String
+) -> String? {
+    let asked = instruction.trimmingCharacters(in: .whitespacesAndNewlines)
+    // A typed slash command says only "watch this", so there is nothing to
+    // carry out and no turn worth spending on it.
+    guard !asked.isEmpty, !asked.hasPrefix("/") else { return nil }
+    guard !changes.isEmpty else { return nil }
+
+    return """
+    [Folder watch] \(WatchReport.headline(changes)) in \(watchName):
+    \(WatchReport.describe(changes))
+
+    This is the folder you were asked to keep an eye on. What you were asked was: \
+    "\(asked)". If that says what to do when something turns up here — read it, \
+    follow it, act on it — then do that now, for these files, and say what you did. \
+    If it only asked to be told, answer in one short line. This is not a new \
+    request and not a reason to start the earlier work again.
+    """
 }

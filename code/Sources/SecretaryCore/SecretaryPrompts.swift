@@ -371,17 +371,37 @@ func browserPromptNote(enabled: Bool) -> String {
 /// Kept in step with the allowlist actually passed to the backend. Telling
 /// the model it is read-only after the user widened permissions would stop
 /// it retrying the very thing they just approved.
+///
+/// **It must never tell the model to give up instead of trying.** This note
+/// used to end "writing or running commands will be refused", and the model did
+/// the obedient thing: it stopped before the tool call and answered "I don't
+/// have write permission". No tool call means no refusal, no refusal means
+/// `offerToWiden` has nothing to offer, and no card is ever put in front of
+/// anybody — so the work simply stopped, for ever, with a polite sentence.
+/// That is the owner's Sprint 21.2 report, driven and reproduced on 2026-08-20:
+/// commanded to write a file, every character said it had no permission, and
+/// the ones that eventually succeeded were the ones standing in a project with
+/// a write grant already on record, where the refusal happens for real and is
+/// widened silently.
+///
+/// The refusal *is* the mechanism. Claude Code has no mid-turn approval, so the
+/// only way the person is ever asked is: attempt, be refused, show the card,
+/// retry. A note that stops the attempt removes the only step that can start it.
 func agentPermissionNote(sessionTools: Set<String>) -> String {
-    guard !sessionTools.isEmpty else {
-        return """
-        Right now your tools are read-only: you can read, search and browse, \
-        but writing or running commands will be refused.
-        """
-    }
+    let allowed = sessionTools.isEmpty
+        ? "Right now you can read, search and browse."
+        : """
+          You can read, search and browse. The user has also allowed these for \
+          this session: \(sessionTools.sorted().joined(separator: ", ")).
+          """
     return """
-    You can read, search and browse. The user has also allowed these for this \
-    session: \(sessionTools.sorted().joined(separator: ", ")). Anything \
-    beyond that is still refused.
+    \(allowed) Anything beyond that will be refused — and being refused is how \
+    you ask for it. If the work needs a tool you have not been given, make the \
+    tool call anyway. The refusal is not the end of the request: the app shows \
+    the user what was blocked, they allow it, and your request runs again with \
+    the tool in hand. Never answer that you lack permission instead of trying. \
+    Saying it without attempting is the one thing that stops the user from ever \
+    being asked, and the work then stops for good.
     """
 }
 

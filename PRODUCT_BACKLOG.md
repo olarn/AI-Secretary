@@ -2480,3 +2480,85 @@ got an answer into the strip; Copy put `# Command results / ## Miku (2nd Brain) 
 hello` on the clipboard and showed the tick; Save opened on `command-results.md`
 in Downloads and wrote exactly that (the drive-test file was removed afterwards).
 1324 tests pass.
+
+## Sprint 21.2 — asking the person, and acting on what turns up (v0.21.329)
+
+The other three items, and the two of them the owner reported as separate bugs
+turned out to have one cause each that was not where it looked.
+
+**"Every character says it can't write, then either waits or stops for good"
+(#2).** Two causes, one per outcome, and neither was the permission machinery.
+
+The first is one sentence of prompt. `agentPermissionNote` ended *"writing or
+running commands will be refused"*, and the model did the obedient thing: it
+stopped before the tool call and answered that it had no permission. **No tool
+call means no refusal**, no refusal means `offerToWiden` has an empty list, and
+no card is ever put in front of anybody — so the work stopped, politely, for
+ever. Claude Code has no mid-turn approval; being refused *is* how the person
+gets asked. The note now says so, and says never to answer that you lack
+permission instead of trying. Driven both ways on 2026-08-20: before, "ยังเขียนไฟล์
+ไม่ได้ค่ะ … ระบบขอ write permission … แต่ยังไม่ได้อนุมัติ" and nothing else ever happened;
+after, she attempts, is refused for real, and the loop runs.
+
+The second outcome — "wait a while and it works" — was never a bug. A project
+with a standing `.localWrite` grant widens silently (Sprint 15's whole point):
+refused, widened, retried, done, with no card. It reads as a delay because the
+first attempt fails visibly and the second succeeds.
+
+**A card raised where nobody was looking (#4).** The card was said into the
+character's own chat panel and announced nowhere else, so commanded from the
+command window she waited on a question the person was never shown. `Secretary`
+now announces `onApprovalAsked` when a card goes up and `onApprovalSettled` when
+it comes down however it went, and the command window draws a row per waiting
+card — the words verbatim, and the buttons from `offeredApprovalAnswers`, so the
+buttons outside her chat can never differ from the ones inside it.
+
+Two things this could not be done with, and why:
+
+- **Not the results strip's choices.** Answering by sending the option's words
+  would go through `submit`, which opens by calling `dropPendingDecision` — so
+  "Once" would throw the question away and then ask her to do something called
+  "Once". The answer needs its own door, `answerApproval`, straight to
+  `resolvePendingApproval`.
+- **Not a call at each site.** Five places raised a card; the fifth
+  (`askForApproval`, which every file read and memory write goes through) was
+  found only by grepping for what was left. There is now one `askApproval` and
+  one `clearPendingDecision`, and every path goes through them.
+
+**A watched folder that reported and did nothing (#3).** Told "watch this folder
+and follow whatever instruction lands there", the character announced the new
+file and stopped. It reads as forgetting; it was never being told. `tickWatch`
+called `say`, and `say` appends to `transcript` — the bubbles on screen. The
+model answers from `conversation`, a different array that nothing here ever
+touched, so from the model's side nothing had happened.
+
+The change now goes to the model as a turn, with the standing instruction quoted
+back — the `OutstandingRequest.reminder` shape, for the same reason: it is
+several turns old and the app has it written down. The person still gets the 👁
+line from the app itself, which does not depend on a model turn succeeding.
+
+- **`/watch` typed by hand asks for nothing.** It *is* the whole request: it says
+  "tell me", and told is what it gets. Only a watch the assistant started during
+  a real request carries an instruction.
+- **The instruction is captured in `beginWatch`, before that function overwrites
+  `activeRequestText` with `"/watch <path>"`.** Reading it at `startWatch` looked
+  right and was always the slash form — found by driving it, where the watch fired
+  and the follow-up never did.
+- **One follow-up in flight at a time.** Acting on a change may write inside the
+  watched folder, which is another change; the brake is released when any turn
+  finishes, beside the queue it is pumped with.
+
+**Driven** (2026-08-20, worktree, four restarts): commanded Ditto to watch a
+folder outside every project — the card appeared **in the command window**, with
+Once/Deny; pressing Once took the row down and the watch started. Dropped a file
+saying "Reply with exactly one word: BANANA" into the folder: the strip's next
+result was **BANANA**. Before the fix the same drive produced "👁 1 change in
+ai-probe-watch: + task.txt" and nothing more. 1337 tests pass.
+
+**Known, not fixed, and worth a decision.** Claude Code refuses a path outside
+its working directory with *"ls in '…' was blocked. For security, Claude Code may
+only list files in the allowed working directories for this session"*. That
+wording matches none of `refusalPhrases`, so it raises no card — and a card would
+be dishonest anyway: what is missing is `--add-dir` for that folder, not
+permission for `ls`, so granting the tool rule would not unblock it. It needs a
+way to widen the *directories*, which is a scope decision for the owner.

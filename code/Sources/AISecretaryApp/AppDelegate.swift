@@ -70,6 +70,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
         },
         endSessions: { [weak self] ids in
             ids.forEach { self?.character($0)?.secretary.newConversation() }
+        },
+        answerApproval: { [weak self] id, answer in
+            self?.character(id)?.secretary.resolvePendingApproval(answer: answer)
         }
     )
     // No visibility callback: the status menu rebuilds itself every time it
@@ -174,6 +177,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
         }
         character.secretary.onSend = { [weak self] message in self?.bus.deliver(message) }
         character.secretary.onTurnFinished = { [weak self] turn in self?.announce(turn, from: id) }
+        // A card raised while she is under command belongs where the person is
+        // looking. Told both ways: put up, and taken down again.
+        character.secretary.onApprovalAsked = { [weak self] asked in
+            self?.commandCenter.record(asked, from: id)
+        }
+        character.secretary.onApprovalSettled = { [weak self] in
+            self?.commandCenter.approvalSettled(for: id)
+        }
         character.onUsed = { [weak self] in
             guard self?.lastUsed != id else { return }
             self?.lastUsed = id

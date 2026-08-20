@@ -1,4 +1,5 @@
 import SwiftUI
+import Permissions
 import SecretaryCore
 
 /// The command window: tick who should listen, type once, everyone ticked
@@ -54,6 +55,7 @@ struct CommandWindowView: View {
                     .foregroundStyle(theme.danger.color)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            if !model.approvals.isEmpty { approvalsSection }
             if !model.results.isEmpty { resultsSection }
             footer
         }
@@ -240,6 +242,70 @@ struct CommandWindowView: View {
         .onTapGesture { boxFocused = true }
         .scrollDisabled(draftHeight <= maxBoxHeight + model.extraBoxHeight)
         .defaultScrollAnchor(.bottom)
+    }
+
+    // MARK: - Permission cards
+
+    /// What a commanded character is blocked on, asked here.
+    ///
+    /// Never foldable, unlike the results: this is the one thing on the slab
+    /// that is waiting on the person, and a question tucked behind a chevron is
+    /// the bug this was written to fix.
+    private var approvalsSection: some View {
+        VStack(alignment: .leading, spacing: metrics.panelSpacing) {
+            ForEach(model.approvals) { approval in
+                approvalRow(approval)
+            }
+        }
+        .padding(metrics.panelSpacing)
+        .background(theme.warningFill.color, in: RoundedRectangle(cornerRadius: 8))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(theme.warning.color, lineWidth: 1)
+        )
+    }
+
+    private func approvalRow(_ approval: CommandApproval) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 5) {
+                Image(systemName: "lock")
+                    .font(.system(size: metrics.footnoteFontSize))
+                Text("\(approval.name) needs your permission")
+                    .font(.system(size: metrics.footnoteFontSize, weight: .semibold))
+            }
+            Text(approval.question)
+                .font(.system(size: metrics.footnoteFontSize))
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+            // The card's own answers, so the buttons here and the buttons in
+            // her chat can never come apart — `offeredApprovalAnswers` decides
+            // whether Always is on offer at all.
+            HStack(spacing: 6) {
+                ForEach(approval.answers, id: \.self) { permission in
+                    Button(permission.title) {
+                        model.answer(permission, to: approval)
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: metrics.footnoteFontSize, weight: .medium))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 3)
+                    .background(
+                        permission == .deny ? theme.chipFill.color : theme.accentFill.color,
+                        in: Capsule()
+                    )
+                    .overlay(
+                        Capsule().stroke(
+                            permission == .deny ? theme.hairline.color : theme.accent.color,
+                            lineWidth: 1
+                        )
+                    )
+                    .foregroundStyle(
+                        permission == .deny ? theme.mutedText.color : theme.accent.color
+                    )
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Results

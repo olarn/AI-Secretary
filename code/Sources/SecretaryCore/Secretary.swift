@@ -816,6 +816,17 @@ public final class Secretary {
     /// only the app knows whether her chat is on screen.
     @ObservationIgnored public var onTurnFinished: ((FinishedTurn) -> Void)?
 
+    /// Told each time a permission card goes up, so somewhere other than her
+    /// chat panel can put the question in front of the person. See
+    /// `ApprovalAsked` for why: commanded from the command window, she would
+    /// otherwise wait on a card nobody was ever shown.
+    @ObservationIgnored public var onApprovalAsked: ((ApprovalAsked) -> Void)?
+    /// Told when that card is gone, however it went — answered here, answered
+    /// in her chat, or dropped because the person typed something else. A
+    /// listener drawing buttons for it has to take them away, or it offers an
+    /// answer to a question that is already settled.
+    @ObservationIgnored public var onApprovalSettled: (() -> Void)?
+
     /// Errands sent and not yet answered. Session-only, like the grants and the
     /// queue: one that outlived a relaunch would have nobody left to answer it.
     private(set) var sentErrands: [OutstandingErrand] = []
@@ -886,7 +897,7 @@ public final class Secretary {
     /// rather than a loss.
     public func newConversation() {
         stopCurrentTurn(because: "starting a new conversation")
-        pendingDecision = .none()
+        clearPendingDecision()
         awaitingPlan = .none()
         outstanding = nil
 
@@ -1113,7 +1124,7 @@ public final class Secretary {
     public func resolveInterruption(_ answer: InterruptionAnswer) {
         guard case .interruption(let text, let carried, let candidates)
             = pendingDecision.toOptional() else { return }
-        pendingDecision = .none()
+        clearPendingDecision()
 
         if case .delegate(let card) = answer {
             delegate(text, carried, to: card, fallbackCandidates: candidates)
@@ -1611,7 +1622,7 @@ public final class Secretary {
     public func resolvePendingApproval(answer: PermissionAnswer) {
         let granted = answer != .deny
         guard case .approval(let request, let operation) = pendingDecision.toOptional() else { return }
-        pendingDecision = .none()
+        clearPendingDecision()
 
         guard granted else {
             audit.record(AuditEntry(taskID: request.taskID, kind: .approvalDenied, detail: request.commandSummary))
@@ -1758,7 +1769,7 @@ public final class Secretary {
     /// raised the question, so nothing has to be typed twice.
     public func resolveWebTask(granted: Bool) {
         guard case .website(let request) = pendingDecision.toOptional() else { return }
-        pendingDecision = .none()
+        clearPendingDecision()
 
         guard granted else {
             audit.record(AuditEntry(taskID: request.taskID, kind: .approvalDenied, detail: request.summary))
@@ -1780,10 +1791,51 @@ public final class Secretary {
 
     public func choose(project: Project) {
         guard case .projectChoice(_, let operation) = pendingDecision.toOptional() else { return }
-        pendingDecision = .none()
+        clearPendingDecision()
         say(.secretary, "\(chosenLine(project.name)) — working in it from here.")
         lastProject = .some(project)
         proceed(operation: operation, project: project)
+    }
+
+    /// Puts a permission card up: says it where she is, and tells whoever is
+    /// listening from outside her chat.
+    ///
+    /// The words are passed in rather than built here because each caller says
+    /// it differently — a browser action, a folder outside every project, a
+    /// skill to install — and the person outside the chat has to read the same
+    /// sentence the person inside it does, not a summary of it.
+    ///
+    /// Order matters: `offeredApprovalAnswers` reads the decision that was just
+    /// set, so the card has to be standing before the answers are asked for.
+    private func askApproval(
+        _ request: ApprovalRequest,
+        operation: PlannedOperation,
+        saying words: String
+    ) {
+        say(.secretary, words)
+        pendingDecision = .some(.approval(request, operation: operation))
+        onApprovalAsked?(ApprovalAsked(
+            characterName: profile.displayName,
+            question: words,
+            answers: offeredApprovalAnswers
+        ))
+    }
+
+    /// Takes the waiting card down, and says so if it was one somebody outside
+    /// was shown.
+    ///
+    /// Every clear goes through here rather than assigning `.none()` in place:
+    /// a row of Once/Always/Deny buttons in the command window outlives the
+    /// question otherwise, and pressing one then answers nothing.
+    private func clearPendingDecision() {
+        let wasApproval = pendingDecision
+            .map { decision -> Bool in
+                guard case .approval = decision else { return false }
+                return true
+            }^
+            .getOrElse(false)
+        pendingDecision = .none()
+        if wasApproval { onApprovalSettled?() }
     }
 
     /// Clears a waiting card and records that it never happened.
@@ -1792,7 +1844,7 @@ public final class Secretary {
     }
 
     private func dropDecision(_ decision: PendingDecision) {
-        pendingDecision = .none()
+        clearPendingDecision()
 
         // Typing again while being asked "wait or replace?" answers nothing, so
         // the message that raised the question is put in the queue rather than
@@ -1821,7 +1873,7 @@ public final class Secretary {
 
     public func cancelPendingDecision() {
         pendingDecision.fold({}) { decision in
-            pendingDecision = .none()
+            clearPendingDecision()
             // A plan turned down has no tool in flight to fail — the turn that
             // produced it already finished — so it says so and leaves the state
             // machine where it is.
@@ -1965,6 +2017,16 @@ public final class Secretary {
     private func beginWatch(path: String, askedByAssistant: Bool) {
         let taskID = String(UUID().uuidString.prefix(8).lowercased())
         activeTaskID = .some(taskID)
+        // Taken before the line below overwrites it, which is the whole reason
+        // this is a field and not read at `startWatch`: by then the request
+        // text says "/watch <path>" — this function put it there — and the
+        // person's own standing instruction, the thing the watch exists to
+        // carry out, is gone. Found by driving it (Sprint 21.2): the watch
+        // remembered "/watch /Users/…/inbox" and so had nothing to act on.
+        //
+        // Only when the assistant raised it. A typed `/watch` *is* the whole
+        // request: it asks to be told, and told is all it gets.
+        pendingWatchInstruction = askedByAssistant ? activeRequestText.getOrElse("") : ""
         activeRequestText = .some("/watch \(path)")
         audit.record(AuditEntry(
             taskID: taskID,
@@ -2027,17 +2089,17 @@ public final class Secretary {
         // The resolved path, spelled out. "May I watch aaa?" is not a question
         // anyone can answer — `..` and symlinks are precisely where the folder
         // you typed and the folder you get come apart.
-        say(.secretary, """
+        askApproval(
+            request,
+            operation: .watch(WatchRequest(relativePath: "")),
+            saying: """
             \(url.path) isn't inside any project you've added. May I watch it?
 
             I'd be reading the names of files there every few seconds and telling \
             you what changed — nothing else, and only until you stop me or quit. \
             This is for this one time; I won't add it to your projects.
-            """)
-        pendingDecision = .some(.approval(
-            request,
-            operation: .watch(WatchRequest(relativePath: ""))
-        ))
+            """
+        )
     }
 
 
@@ -2092,7 +2154,10 @@ public final class Secretary {
             relativePath: request.displayPath,
             project: project,
             resolvedPath: url.path,
-            snapshot: WatchScan.snapshot(of: url)
+            snapshot: WatchScan.snapshot(of: url),
+            // What the person actually asked for, so a change can be acted on
+            // rather than only announced. See `watchFollowUpPrompt`.
+            instruction: pendingWatchInstruction
         )
 
         // Asking twice for the same thing is a no-op, not a second watch that
@@ -2183,6 +2248,21 @@ public final class Secretary {
         say(.secretary, "👁 Stopped watching \(names.joined(separator: ", "))\(because).\(remaining)")
     }
 
+    /// The request a watch is being started for, held between `beginWatch` and
+    /// `startWatch` — the two are separated by a path resolution and often by a
+    /// permission card, so it cannot simply be a parameter.
+    private var pendingWatchInstruction = ""
+
+    /// Whether a watch has already handed the model something to act on that
+    /// has not come back yet.
+    ///
+    /// The brake on the obvious hazard: the assistant acting on a change may
+    /// write inside the folder it is watching, and that is another change. One
+    /// in flight at a time means a busy folder cannot turn into a queue of
+    /// turns the person never asked for. Released when any turn finishes,
+    /// beside the queue it is pumped with.
+    private var watchFollowUpInFlight = false
+
     private func startWatchTimer() {
         guard watchTask == nil else { return }
         watchTask = Task { @MainActor [weak self] in
@@ -2217,6 +2297,8 @@ public final class Secretary {
             }
 
             activeWatches[index] = watch.advancing(to: latest, reported: true)
+            // The person is told by the app, always — this line does not depend
+            // on a model turn succeeding, or on there being one at all.
             say(
                 .secretary,
                 """
@@ -2224,7 +2306,28 @@ public final class Secretary {
                 \(WatchReport.describe(changes))
                 """
             )
+            followUp(on: watch, changes: changes)
         }
+    }
+
+    /// Hands a change to the model, when the watch was started by somebody
+    /// asking for something to happen.
+    ///
+    /// Queued rather than run on the spot: she may be mid-turn, and the queue
+    /// is the app's existing answer to "this arrived while she was busy" —
+    /// `dispatchNextQueued` starts it the moment she is free.
+    private func followUp(on watch: FolderWatch, changes: [WatchChange]) {
+        guard !watchFollowUpInFlight,
+              let prompt = watchFollowUpPrompt(
+                  watchName: watch.displayName,
+                  changes: changes,
+                  instruction: watch.instruction
+              )
+        else { return }
+
+        watchFollowUpInFlight = true
+        queue.append(QueuedMessage(text: prompt, attachments: []))
+        dispatchNextQueued()
     }
 
     // MARK: - Following a file's instructions
@@ -2652,15 +2755,18 @@ public final class Secretary {
               as you, in your signed-in session.\n\n
               """
             : ""
-        say(.secretary, """
+        askApproval(
+            request,
+            operation: .widenAgentTools(rules: rules, prompt: prompt),
+            saying: """
             I was blocked from doing this in \(project.name):
 
             \(what)
 
             \(scope)Shall I go ahead? \(howLong) Either way I'll try your \
             request again.
-            """)
-        pendingDecision = .some(.approval(request, operation: .widenAgentTools(rules: rules, prompt: prompt)))
+            """
+        )
     }
 
     /// The assistant says it needs a skill it hasn't got, and asks to install it.
@@ -2695,7 +2801,10 @@ public final class Secretary {
         )
         audit.record(AuditEntry(taskID: taskID, kind: .approvalRequested, detail: request.commandSummary))
 
-        say(.secretary, """
+        askApproval(
+            request,
+            operation: .installSkill(plugin: plugin, prompt: prompt),
+            saying: """
             I need the **\(plugin)** skill for this, and it isn't installed.
 
             • `claude plugin install \(plugin)`
@@ -2703,8 +2812,8 @@ public final class Secretary {
             It comes from the Claude Code marketplaces you've already added, and \
             it stays installed afterwards. Shall I? I'll try your request again \
             once it's in.
-            """)
-        pendingDecision = .some(.approval(request, operation: .installSkill(plugin: plugin, prompt: prompt)))
+            """
+        )
     }
 
     /// Puts a card up for something the assistant asked to keep.
@@ -2976,13 +3085,16 @@ public final class Secretary {
             rationale: "Let Claude Code read and work in this project"
         )
         audit.record(AuditEntry(taskID: taskID, kind: .approvalRequested, detail: request.commandSummary))
-        say(.secretary, """
+        askApproval(
+            request,
+            operation: .startAgent(prompt: prompt),
+            saying: """
             May I work in \(project.name) using your Claude Code? It runs on your \
             own Claude Code account, reads files in that folder, and can search the \
             web. I'll ask again before anything that writes or changes files. \
             Approving covers this project from now on.
-            """)
-        pendingDecision = .some(.approval(request, operation: .startAgent(prompt: prompt)))
+            """
+        )
     }
 
     /// Persists the grant, points the backend at the project, and runs the turn
@@ -3368,6 +3480,9 @@ public final class Secretary {
         // Last of all: whatever was typed while this was running goes now, with
         // the finished turn behind it in the conversation — which is what makes
         // "wait its turn" different from "ask me again later".
+        // A finished turn releases the watch brake. Beside the pump because it
+        // is the same moment: whatever was waiting may go now.
+        watchFollowUpInFlight = false
         defer { dispatchNextQueued() }
         for pane in pinned.requests { onPinWindow?(pane) }
 
@@ -3643,8 +3758,11 @@ public final class Secretary {
         let beyond = request.outsideAllowlist
             ? " This isn't on \(project.name)'s allowed-tools list — saying yes covers this one time only."
             : ""
-        say(.secretary, "May I run `\(request.commandSummary)` in \(project.name)?" + caveat + beyond)
-        pendingDecision = .some(.approval(request, operation: operation))
+        askApproval(
+            request,
+            operation: operation,
+            saying: "May I run `\(request.commandSummary)` in \(project.name)?" + caveat + beyond
+        )
     }
 
     private func execute(_ operation: PlannedOperation, in project: Project) {
@@ -4025,7 +4143,7 @@ public final class Secretary {
     /// The user confirmed the steps. From here each one runs as its own turn.
     public func startPlannedInstructions() {
         guard case .instructionPlan(let plan, _, _) = pendingDecision.toOptional() else { return }
-        pendingDecision = .none()
+        clearPendingDecision()
 
         instructionMemory = instructionMemory.recording(
             path: plan.relativePath,

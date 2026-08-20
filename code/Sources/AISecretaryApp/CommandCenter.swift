@@ -1,4 +1,5 @@
 import Foundation
+import Permissions
 import SecretaryCore
 
 /// One instruction file dropped on the command window, already read: the drop
@@ -32,6 +33,21 @@ struct CommandResult: Identifiable, Equatable {
     var choices: [String]
 }
 
+/// A commanded character's permission card, waiting for an answer here rather
+/// than in her chat.
+///
+/// Keyed by the character, because she holds at most one `pendingDecision` at a
+/// time: a second card from the same character replaces the first rather than
+/// stacking, which is exactly what her own panel shows.
+struct CommandApproval: Identifiable, Equatable {
+    let characterID: UUID
+    let name: String
+    let question: String
+    let answers: [PermissionAnswer]
+
+    var id: UUID { characterID }
+}
+
 /// What the command window is holding: who is ticked, what is waiting to go,
 /// who has been commanded, and what has come back.
 ///
@@ -49,6 +65,13 @@ final class CommandCenter {
     @ObservationIgnored let deliver: (UUID, String, [URL]) -> Void
     /// Ends the sessions of everyone in the set.
     @ObservationIgnored let endSessions: (Set<UUID>) -> Void
+    /// Answers one character's waiting permission card.
+    ///
+    /// Its own door rather than another `deliver` of the answer's words:
+    /// `submit` opens by dropping whatever card is pending, so sending "Once"
+    /// as a message would throw the question away and then ask her to do
+    /// something called "Once".
+    @ObservationIgnored let answerApproval: (UUID, PermissionAnswer) -> Void
 
     /// Who is ticked. Commands only ever reach ticked characters; the set can
     /// change at any time and takes effect on the next send.
@@ -89,6 +112,9 @@ final class CommandCenter {
     private(set) var results: [CommandResult] = []
     /// The results strip folds — the owner asked for it closable.
     var showResults = true
+    /// Cards waiting on the person, oldest first. Never folded away with the
+    /// results: a question nobody can see is the bug this exists to fix.
+    private(set) var approvals: [CommandApproval] = []
 
     /// What was sent from this box, for ↑↓ recall — this window's own, not
     /// any character's, and this session's only, same as the chat's.
@@ -99,11 +125,13 @@ final class CommandCenter {
     init(
         roster: @escaping () -> [CharacterCard],
         deliver: @escaping (UUID, String, [URL]) -> Void,
-        endSessions: @escaping (Set<UUID>) -> Void
+        endSessions: @escaping (Set<UUID>) -> Void,
+        answerApproval: @escaping (UUID, PermissionAnswer) -> Void
     ) {
         self.roster = roster
         self.deliver = deliver
         self.endSessions = endSessions
+        self.answerApproval = answerApproval
     }
 
     func toggle(_ id: UUID) {
@@ -270,6 +298,38 @@ final class CommandCenter {
 
     func clearResults() { results = [] }
 
+    // MARK: - Permission cards
+
+    /// A commanded character is blocked and is asking. Same rule as `record`:
+    /// only characters this window commanded, because a card raised in a chat
+    /// the person opened themselves belongs in that chat.
+    func record(_ asked: ApprovalAsked, from id: UUID) {
+        guard commanded.contains(id) else { return }
+        approvals.removeAll { $0.characterID == id }
+        approvals.append(
+            CommandApproval(
+                characterID: id,
+                name: asked.characterName,
+                question: asked.question,
+                answers: asked.answers
+            )
+        )
+    }
+
+    /// Her card is gone — she may have been answered in her own chat, or have
+    /// dropped it. Either way the buttons here would answer nothing.
+    func approvalSettled(for id: UUID) {
+        approvals.removeAll { $0.characterID == id }
+    }
+
+    /// The person pressed Once / Always / Deny here. Taken off the strip
+    /// immediately rather than waiting to be told it settled: she may go
+    /// straight back to work, and buttons that linger read as unanswered.
+    func answer(_ permission: PermissionAnswer, to approval: CommandApproval) {
+        approvals.removeAll { $0.characterID == approval.characterID }
+        answerApproval(approval.characterID, permission)
+    }
+
     // MARK: - Text size
 
     /// ⌘+ / ⌘−. Persisted like the window's frame — a size chosen once is a
@@ -284,5 +344,7 @@ final class CommandCenter {
     func endAll() {
         endSessions(commanded)
         commanded = []
+        // The sessions those cards belonged to are gone.
+        approvals = []
     }
 }

@@ -433,6 +433,90 @@ final class AgentSessionTests: XCTestCase {
 
     /// Claude Code refuses un-granted tools mid-turn rather than asking, so the
     /// only way to widen is to notice the refusal and offer a retry.
+    // MARK: - The card, told to whoever is listening from outside
+
+    /// Sprint 21.2, the owner's report: commanded from the command window,
+    /// every character said it had no permission to write and then either
+    /// waited a long time or stopped for ever. The card was raised in her chat
+    /// panel and announced nowhere, so the person commanding her never saw the
+    /// question they were being asked.
+    func testARaisedCardIsAnnouncedToWhoeverIsListening() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        var asked: [ApprovalAsked] = []
+        secretary.onApprovalAsked = { asked.append($0) }
+
+        provider.denialsForNextTurn = [denyWrite()]
+        secretary.submit("create out.txt")
+        await waitUntilIdle()
+
+        XCTAssertEqual(asked.count, 1, "Got: \(asked)")
+        XCTAssertTrue(asked.first?.question.contains("out.txt") ?? false,
+                      "It has to carry the words, not a summary. Got: \(String(describing: asked.first))")
+        // The buttons outside her chat are the buttons inside it, or one of the
+        // two is offering something the other refuses.
+        XCTAssertEqual(asked.first?.answers, secretary.offeredApprovalAnswers)
+        XCTAssertFalse(asked.first?.answers.isEmpty ?? true)
+    }
+
+    /// Answering in her own chat has to take the buttons down everywhere else,
+    /// or the command window keeps offering an answer to a settled question.
+    func testTheCardBeingSettledIsAnnouncedToo() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        var settled = 0
+        secretary.onApprovalSettled = { settled += 1 }
+
+        provider.denialsForNextTurn = [denyWrite()]
+        secretary.submit("create out.txt")
+        await waitUntilIdle()
+        XCTAssertEqual(settled, 0, "Nothing is settled while the card is still up")
+
+        secretary.resolvePendingApproval(answer: .deny)
+        XCTAssertEqual(settled, 1)
+    }
+
+    /// Typing something else drops the card. That is a settling too — the
+    /// question is gone, and buttons for it answer nothing.
+    func testTypingSomethingElseTakesTheCardDownEverywhere() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        var settled = 0
+        secretary.onApprovalSettled = { settled += 1 }
+
+        provider.denialsForNextTurn = [denyWrite()]
+        secretary.submit("create out.txt")
+        await waitUntilIdle()
+
+        secretary.submit("never mind")
+        await waitUntilIdle()
+        XCTAssertGreaterThanOrEqual(settled, 1)
+        XCTAssertEqual(secretary.pendingDecision, .none())
+    }
+
+    /// The silent path must stay silent: a project already answered Always for
+    /// raises no card, so there is nothing to announce.
+    func testNothingIsAnnouncedWhenNoCardGoesUp() async {
+        let allowed = project(grantingAgent: true)
+        let secretary = makeSecretary(
+            projects: [allowed],
+            grantStore: InMemoryStandingGrantStore(grants: [
+                StandingGrant(
+                    projectID: allowed.id,
+                    toolID: Secretary.claudeCodeToolID,
+                    actionClass: .localWrite
+                )
+            ])
+        )
+        var asked: [ApprovalAsked] = []
+        secretary.onApprovalAsked = { asked.append($0) }
+
+        secretary.submit("hello")
+        await waitUntilIdle()
+        provider.denialsForNextTurn = [denyWrite()]
+        secretary.submit("create out.txt")
+        await waitUntilIdle()
+
+        XCTAssertEqual(asked, [], "A silent widen must not put a question in front of anyone")
+    }
+
     func testARefusedToolOffersToAllowItAndTryAgain() async {
         let secretary = makeSecretary(projects: [project(grantingAgent: true)])
         provider.denialsForNextTurn = [denyWrite()]

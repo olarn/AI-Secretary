@@ -353,6 +353,92 @@ final class SecretaryTests: XCTestCase {
         )
     }
 
+    /// Sprint 21.2: the change has to reach the *model*, not only the
+    /// transcript. `say` writes a bubble; the conversation the assistant
+    /// answers from is a different array, and before this nothing ever put the
+    /// change into it — so a watch started with "and do what the file says"
+    /// reported the file and did nothing, every time.
+    func testAWatchStartedWithAnInstructionHandsTheChangeToTheModel() async throws {
+        let outside = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("outside-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: outside) }
+
+        // The assistant raising it, which is how a watch starts from a real
+        // request: the person says what they want, she asks the app to watch.
+        let chat = FakeChatProvider(.events([
+            .textDelta("Watching it now."),
+            .textDelta("\n\n```watch\n\(outside.path)\n```"),
+            .completed(stopReason: .none(), usage: .none())
+        ]))
+        let secretary = makeSecretary(
+            projects: [Project(name: "Registered", path: "/tmp/registered")],
+            chat: chat
+        )
+        secretary.submit("Watch \(outside.path) and do what any file that lands there says")
+        await waitUntilIdle()
+        secretary.resolvePendingApproval(granted: true)
+
+        XCTAssertEqual(secretary.activeWatches.count, 1)
+        XCTAssertTrue(
+            secretary.activeWatches.first?.instruction.contains("do what any file that lands there says") ?? false,
+            "The watch has to remember what it was started for. Got: \(String(describing: secretary.activeWatches.first?.instruction))"
+        )
+
+        try "hello".write(
+            to: outside.appendingPathComponent("new.txt"),
+            atomically: true,
+            encoding: .utf8
+        )
+        secretary.tickWatch()
+
+        XCTAssertTrue(
+            secretary.transcript.contains { $0.text.contains("new.txt") },
+            "The person is still told by the app itself."
+        )
+        // The point of the whole change: the model is *sent* it. A transcript
+        // bubble is not the same thing — that is what it had before, and it is
+        // why it never acted.
+        await waitUntilIdle()
+        XCTAssertTrue(
+            chat.lastMessages.contains { $0.content.contains("[Folder watch]") },
+            """
+            The model has to be handed the change. \
+            Got: \(chat.lastMessages.map(\.content).joined(separator: " | "))
+            """
+        )
+        XCTAssertTrue(
+            chat.lastMessages.contains { $0.content.contains("do what any file that lands there says") },
+            "…with the standing instruction quoted back."
+        )
+    }
+
+    /// A typed `/watch` asks to be told and nothing more. It must not start
+    /// spending turns on every file that appears.
+    func testATypedWatchStillOnlyReports() throws {
+        let outside = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("outside-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: outside) }
+
+        let secretary = makeSecretary(projects: [Project(name: "Registered", path: "/tmp/registered")])
+        secretary.submit("/watch \(outside.path)")
+        secretary.resolvePendingApproval(granted: true)
+        XCTAssertEqual(secretary.activeWatches.first?.instruction, "")
+
+        try "hello".write(
+            to: outside.appendingPathComponent("new.txt"),
+            atomically: true,
+            encoding: .utf8
+        )
+        secretary.tickWatch()
+
+        XCTAssertFalse(
+            secretary.transcript.contains { $0.text.contains("[Folder watch]") },
+            "Nobody asked for anything to happen."
+        )
+    }
+
     /// A symlink inside the approved folder still can't lead out of it. The
     /// boundary moved to the folder that was agreed to; it did not disappear.
     func testTheEscapeCheckNowGuardsTheApprovedFolder() throws {
