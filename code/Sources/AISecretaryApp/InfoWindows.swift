@@ -44,7 +44,27 @@ final class InfoWindows: NSObject, NSWindowDelegate {
     }
 
     func applyControlAppearance(_ controls: NSAppearance?) {
-        panels.values.forEach { $0.appearance = controls }
+        panels.values.forEach { paint($0, controls: controls) }
+    }
+
+    /// Everything about a pinned window that AppKit draws rather than SwiftUI.
+    ///
+    /// The owner (2026-08-20): a pinned window came up in the *system's* theme
+    /// rather than the character's. Her palette was reaching the content —
+    /// `InfoWindowView` sets it — so what was left showing was the window
+    /// itself: the title bar, and the ground behind the hosting view. Those are
+    /// AppKit's, and `appearance` alone was evidently not enough to move them.
+    ///
+    /// So the surface is painted from her palette outright, in her own sRGB
+    /// values, and the title bar is made transparent so it takes that colour
+    /// instead of drawing its own. Nothing here can resolve against the
+    /// system's setting, because nothing here asks the system anything.
+    private func paint(_ panel: NSPanel, controls: NSAppearance?) {
+        // Still set: it decides the caret, the scroller and the title text,
+        // which are drawn by AppKit and are not colours we can hand it.
+        panel.appearance = controls
+        panel.titlebarAppearsTransparent = true
+        panel.backgroundColor = appearance.colors.ground.nsColor
     }
 
     /// Also the door a ` ```window ` block in a reply comes through, so a pane
@@ -100,7 +120,7 @@ final class InfoWindows: NSObject, NSWindowDelegate {
         panel.isRestorable = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.delegate = self
-        panel.appearance = appearance.colors.controlAppearance
+        paint(panel, controls: appearance.colors.controlAppearance)
         panel.contentView = host
         panel.setFrameTopLeftPoint(nextOrigin())
         panel.makeKeyAndOrderFront(nil)

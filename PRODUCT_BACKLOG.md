@@ -2769,3 +2769,42 @@ and the walk is a pure function of `(id, url)`.
 **Not driven** — the owner asked for no app testing this round. 1345 tests pass,
 including the two that drive `tickWatch` directly (now `await`ed; the assertions
 are unchanged).
+
+## A pinned window came up in the system's theme, not the character's (v0.21.336)
+
+The owner asked for the pinned window to wear the theme set on the character,
+and said what it wore instead: **the system's**.
+
+Reading the path found nothing wrong with the wiring, and that turned out to be
+the useful part of the answer. `InfoWindows` is built per character with her own
+`Appearance`; `InfoWindowView` sets `.themedWindow(appearance.colors)`, so the
+content is hers; `panel.appearance` is set from her palette at creation and
+re-applied whenever she changes her theme (`Appearance.onChange` →
+`applyControlAppearance`). Every part we paint was already hers.
+
+What is left is the part **AppKit** paints: the title bar of a `.titled`
+`.utilityWindow` panel, and the window's own ground behind the hosting view.
+Those follow the window's `backgroundColor` and its effective appearance, and
+setting `appearance` alone was evidently not moving them.
+
+So the window is now painted outright, from her palette, in her own sRGB values:
+`titlebarAppearsTransparent` so the bar takes the window's colour instead of
+drawing its own, and `backgroundColor` from `ground.nsColor`. `panel.appearance`
+is still set — it decides the caret, the scroller and the title *text*, which are
+AppKit's own and not colours we can hand it.
+
+**Why the colour is built from components and never from a system colour**: a
+dynamic `NSColor` resolves against the window's effective appearance, and
+resolving is exactly how the system's light/dark setting gets back in after a
+character has chosen otherwise. That reason now sits on `ThemeColor.nsColor`,
+which is load-bearing for this.
+
+Painting happens in one place, `paint(_:controls:)`, used by both the creation
+path and the re-lighting path — an open pinned window and a newly pinned one
+cannot end up looking different.
+
+**Not driven, and not reproduced.** The owner asked for no app testing this
+round, so this was aimed from the code at the one surface that was still AppKit's
+to paint. If a pinned window still comes up in the system's theme, the next thing
+to look at is whether `NSPanel` is honouring `appearance` for utility windows at
+all on this macOS, and the answer would be to drop `.titled` for a custom bar.

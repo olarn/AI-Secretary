@@ -17,6 +17,13 @@ extension ThemeColor {
         Color(.sRGB, red: red, green: green, blue: blue, opacity: opacity)
     }
 
+    /// The same colour for the parts of a window SwiftUI does not paint — the
+    /// title bar, and the ground behind a hosting view.
+    ///
+    /// Built from the stored sRGB components rather than from a system colour,
+    /// and that is load-bearing: a dynamic `NSColor` resolves against the
+    /// window's effective appearance, and resolving is how the system's
+    /// light/dark setting gets back in after a character has chosen otherwise.
     var nsColor: NSColor {
         NSColor(srgbRed: red, green: green, blue: blue, alpha: 1)
     }
@@ -62,6 +69,7 @@ extension Palette {
         NSAppearance(named: prefersDarkControls ? .darkAqua : .aqua)
     }
 }
+
 
 /// The ground under an opened Settings/Profile/Projects/Skills box — one view
 /// so the four boxes cannot drift apart. Solid `chipFill` normally; in glass
