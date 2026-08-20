@@ -52,6 +52,38 @@ pasteboard means the text is never parsed by anything.
 Pid below always means the app's pid:
 `pgrep -f "AISecretary.app/Contents/MacOS"`.
 
+### Opening the status menu — not with a synthetic click
+
+**A `glide … click` on the status item works sometimes and silently does nothing
+the rest of the time**, with no error and no menu; it cost half a session on
+2026-08-20 before the cause was clear. The item was at the pixel being clicked —
+Accessibility reported `position 1212, 4`, `size 33, 24`, dead centre of the
+click — and the app was frontmost and answering clicks in its own windows. The
+synthetic press simply does not open a status menu reliably. `menubar.swift`
+does not help here either: the item's window is often absent from
+`CGWindowListCopyWindowInfo`, so the script prints the character windows and no
+bar window, which reads as "the status item isn't there" when it is.
+
+Drive it through Accessibility instead. It opens the menu every time, and it
+picks items by their name, so nothing depends on measuring a screenshot:
+
+```
+osascript -e 'tell application "System Events" to tell process "AISecretaryApp" \
+  to click menu bar item 1 of menu bar 2'
+osascript -e 'tell application "System Events" to tell process "AISecretaryApp" \
+  to click menu item "Show Command" of menu 1 of menu bar item 1 of menu bar 2'
+```
+
+**The process name is not the same in both builds.** `swift run` from a worktree
+is `AISecretaryApp`; the packaged bundle is `AI Secretary`, with the space. The
+wrong one fails with `Can't get process … (-1728)`, which reads like a
+permissions problem and isn't. To see what a menu holds without clicking it:
+
+```
+osascript -e 'tell application "System Events" to tell process "AISecretaryApp" \
+  to get name of every menu item of menu 1 of menu bar item 1 of menu bar 2'
+```
+
 ### Finding things
 
 | Script | Args | What it tells you |
@@ -59,7 +91,7 @@ Pid below always means the app's pid:
 | `win.swift` | `[pid]` | On-screen windows with `x= y= w= h= alpha=`. The panel is the one wider than 200pt. |
 | `wins.swift` | — | This app's windows including hidden ones, with alpha and on-screen flag. For "did it get created at all?" — a panel that exists at `alpha: 0` is a different problem from one that was never made. |
 | `onscreen.swift` | — | On-screen windows, desktop elements excluded. |
-| `menubar.swift` | `pid` | The status item's bar window, for clicking the menu. |
+| `menubar.swift` | `pid` | The status item's bar window, for clicking the menu. **It often lists nothing at all** — see below. |
 | `screens.swift` | — | `frame` and `visibleFrame` of every display. |
 | `front.swift` | — | Frontmost pid and name. |
 | `hidden.swift` | `pid` | `isHidden` / `isActive` — an app can be running and invisible. |
