@@ -2686,3 +2686,45 @@ The owner asked for the time beside the name. Stamped on arrival and shown with
 `MessageTime.label`, the same words the chat puts beside a name — the strip holds
 answers from four characters that finished minutes apart, and without it they
 read as one conversation that happened at once.
+
+## Typing in the chat box re-laid out the whole conversation (v0.21.334)
+
+The owner: "เวลาพิมพ์ใน text ของ chat window มันหน่วงๆ เป็นแค่ใน app". Measured, not
+guessed — sampled while real keystrokes went into a chat holding a long Thai
+conversation:
+
+- **1130 of ~1910 layout samples sat under `ForEachChild.updateValue()`** — the
+  transcript's own `ForEach`, building every message again.
+- The leaves underneath it were `libThaiTokenizer` (`LoudsTrie::find_child`,
+  `MarisaTrieWrapper::lookup`), `liblangid`, `DataDetectorsCore` and CoreText
+  glyph work: the conversation's Thai being re-tokenised and re-laid out from
+  the top, on every keystroke.
+
+`draft` is `@State` on `ChatPanelView`, so each keystroke re-evaluates that
+view's whole body — and the body holds the transcript eagerly, one view per
+message (eager on purpose; `LazyVStack` was tried and put the scroll thumb in
+the wrong place). Nothing was wrong with the parsing: `MessagePartsCache`
+already caches that. The cost was pure layout, and it grows with the
+conversation, which is why it feels worse the longer you talk.
+
+`TranscriptRows` is now an `Equatable` view around that `ForEach`, compared on
+the entries and a `TranscriptLook` of everything else that changes how a message
+is drawn. When the parent re-renders and neither has changed — which is exactly
+what a keystroke is — the rows are left alone.
+
+**Why this does not freeze the transcript.** Being skipped from above is not the
+same as being detached: an `@Observable` read *inside* a row still invalidates
+that row directly. Hover is the case that proves it — `hover` is a `BoxHover`
+object read only in the `WhenPointingAt` leaves, which is a shape this file
+already had for the same reason. What *would* go stale is a plain `@State` of
+the parent read inside a message; there is none, and `partsCache` is keyed by
+the entry's id and text, both carried in `entries`. Anything added later that
+changes how a message looks has to become a field on `TranscriptLook` — the
+doc comment says so where the next person will meet it.
+
+**Not driven.** The owner asked for no testing in the app this round
+("ไม่ต้อง test check ใน code เลย"), so this shipped on the measurement, the reasoning
+above, and 1345 passing tests — but not on somebody watching a transcript
+repaint. It wants their eyes once: type into a long conversation, and check that
+a streaming reply still appears, hover buttons still show, and changing the text
+size still repaints.

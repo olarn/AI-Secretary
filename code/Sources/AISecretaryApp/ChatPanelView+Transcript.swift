@@ -38,9 +38,24 @@ extension ChatPanelView {
                             .font(.system(size: appearance.settings.fontSize))
                             .foregroundStyle(theme.mutedText.color)
                     }
-                    ForEach(secretary.transcript) { entry in
+                    // Wrapped so a keystroke in the message box does not
+                    // rebuild every message in the conversation — see
+                    // `TranscriptRows`, which is where the measurement is.
+                    TranscriptRows(
+                        entries: secretary.transcript,
+                        look: TranscriptLook(
+                            fontSize: appearance.settings.fontSize,
+                            secondaryFontSize: appearance.settings.secondaryFontSize,
+                            font: appearance.settings.font,
+                            width: appearance.settings.chatWidth,
+                            theme: appearance.settings.theme,
+                            liquidGlass: appearance.settings.liquidGlass,
+                            systemIsDark: appearance.systemIsDark
+                        )
+                    ) { entry in
                         messageBubble(entry).id(entry.id)
                     }
+                    .equatable()
                     // Breathing room under the last line, and the thing that
                     // reports whether the reader is at the bottom.
                     //
@@ -489,5 +504,61 @@ extension ChatPanelView {
         .padding(.leading, Self.bubbleTextInset)
         .padding(.trailing, messageBubbleGutter(panelWidth: appearance.settings.chatWidth))
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+
+/// Everything about the conversation's *appearance* that is not carried by the
+/// entries themselves.
+///
+/// Its whole job is to be compared. Anything that changes how a message is
+/// drawn, and is not part of `TranscriptEntry`, has to be a field here or the
+/// transcript will keep the look it last drew until the next message arrives.
+struct TranscriptLook: Equatable {
+    let fontSize: Double
+    let secondaryFontSize: Double
+    let font: FontChoice
+    let width: Double
+    let theme: ThemeChoice
+    let liquidGlass: Bool
+    let systemIsDark: Bool
+}
+
+/// The messages, rebuilt only when the messages or their look have changed.
+///
+/// **This is a performance fix with a measurement behind it** (2026-08-20, the
+/// owner: "เวลาพิมพ์ใน text ของ chat window มันหน่วงๆ"). `draft` is `@State` on
+/// `ChatPanelView`, so every keystroke re-evaluates that view's whole body —
+/// and the body holds this list, eagerly, one view per message. Sampling the
+/// app while typing put 1130 of ~1910 layout samples under
+/// `ForEachChild.updateValue()`, laying the conversation out again from the
+/// top: CoreText, `liblangid`, and `libThaiTokenizer` re-tokenising every Thai
+/// message in the thread. It gets worse the longer the conversation, which is
+/// exactly how it feels.
+///
+/// `.equatable()` is what stops it: when the parent re-renders and nothing here
+/// has changed, the rows are left exactly as they are.
+///
+/// **What this does not put at risk.** An `@Observable` read *inside* a row
+/// still invalidates that row directly — being skipped from above is not the
+/// same as being detached — which is why hovering still works: `hover` is a
+/// `BoxHover` object read only in the `WhenPointingAt` leaves. What would go
+/// stale is a plain `@State` of the parent read inside a message; there is
+/// none, and `partsCache` is keyed by the entry's id and text, both of which
+/// are in `entries`.
+private struct TranscriptRows<Row: View>: View, Equatable {
+    let entries: [TranscriptEntry]
+    let look: TranscriptLook
+    @ViewBuilder let row: (TranscriptEntry) -> Row
+
+    /// The closure is deliberately not compared — it is rebuilt on every parent
+    /// render and would never be equal, which would defeat the whole thing. It
+    /// reads nothing that `entries` and `look` do not already carry.
+    static func == (lhs: TranscriptRows, rhs: TranscriptRows) -> Bool {
+        lhs.entries == rhs.entries && lhs.look == rhs.look
+    }
+
+    var body: some View {
+        ForEach(entries) { entry in row(entry) }
     }
 }
