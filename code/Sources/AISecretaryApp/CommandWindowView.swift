@@ -413,6 +413,11 @@ struct CommandWindowView: View {
                     .frame(width: 6, height: 6)
                 Text(result.name)
                     .font(.system(size: metrics.footnoteFontSize, weight: .semibold))
+                // Same words the chat puts beside a name, so the two windows
+                // never disagree about what time something happened.
+                Text(MessageTime.label(for: result.receivedAt))
+                    .font(.system(size: metrics.hintFontSize))
+                    .foregroundStyle(theme.mutedText.color)
             }
             Text(result.text)
                 .font(.system(size: metrics.footnoteFontSize))

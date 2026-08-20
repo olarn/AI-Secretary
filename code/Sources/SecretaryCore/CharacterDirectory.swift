@@ -63,22 +63,38 @@ public func characterDirectory(_ all: [CharacterCard], excluding me: UUID) -> [C
 /// This paragraph alone answers Sprint 14.1's first item — knowing the others
 /// exist and which model each is running needs no message sent and no round
 /// trip, because the answer is already in front of her.
+/// The standing rules about the others: that they exist, what may be seen of
+/// them, and how to send one of them something.
+///
+/// **Nothing here may change between turns, and nothing about what a character
+/// is doing may be added to it.**
+///
+/// This text goes into `--append-system-prompt`, which is a *launch* flag: it
+/// is fixed when the `claude` process starts, so it is part of
+/// `WarmProcessKey`, and a process whose key no longer matches is terminated
+/// and started again. A value that moves therefore costs a whole cold start —
+/// the repo's own measurement, 5.47s to first text against 1.15s warm, plus the
+/// transcript read back with a cold prompt cache.
+///
+/// It used to carry a row per character with their model, effort, project and
+/// whether they were busy. With one character on the desktop this block is
+/// absent entirely and nothing was ever noticed; with four it moved constantly
+/// — first the busy flag, then, once that was removed, the project name, as
+/// each character opened the shared folder in turn. Measured on 2026-08-20
+/// while four answered one broadcast: three of the four warm processes were
+/// killed and respawned between two consecutive turns, and the diagnostic named
+/// the difference as `- Ditto — Default, effort medium, no project open` giving
+/// way to `working in “ai-team-work”`. That is the whole of "four characters
+/// answer much slower than one".
+///
+/// Who they are and what they are doing is not lost — it moved to
+/// `directoryStatus`, which rides on the turn itself, where it costs nothing
+/// and is fresher than it ever was here.
 public func directoryPrompt(_ others: [CharacterCard]) -> Option<String> {
     guard !others.isEmpty else { return .none() }
-    let rows = others.map { card in
-        let place = card.projectName
-            .map { "working in “\($0)”" }^
-            .getOrElse("no project open")
-        return "- \(card.name) — \(card.model), effort \(card.effort), \(place), \(card.isBusy ? "busy" : "free")"
-    }
     return .some("""
-        Other characters live on this desktop with you. As of the moment this \
-        turn started:
-
-        \(rows.joined(separator: "\n"))
-
-        Whether one was busy was true when this turn started and may not be \
-        true now, so don't promise the person that someone is free.
+        Other characters live on this desktop with you. Each turn you are told \
+        who they are and what each is doing, at the top of the message.
 
         You can see their names, their model and effort, and the name of the \
         project each has open. That is all you can see: you cannot read their \
@@ -123,4 +139,31 @@ public func directoryPrompt(_ others: [CharacterCard]) -> Option<String> {
 /// trusting what the card was drawn from.
 public func delegationCandidates(_ directory: [CharacterCard]) -> [CharacterCard] {
     directory.filter { !$0.isBusy }
+}
+
+/// Who the others are and what each is doing, right now.
+///
+/// The half of the neighbours block that moves. It rides on the turn — the
+/// message, not the launch flag — which is why it may be as fresh as it likes:
+/// see `directoryPrompt` for what carrying it in the system prompt cost, which
+/// was a whole `claude` restart for every character every time any of them
+/// opened a project or started working.
+///
+/// Being on the turn also makes it *more* accurate than it was. The busy flag
+/// is back, and it no longer needs the old apology about having been true when
+/// the process started: this is read at the moment the turn begins.
+public func directoryStatus(_ others: [CharacterCard]) -> Option<String> {
+    guard !others.isEmpty else { return .none() }
+    let rows = others.map { card in
+        let place = card.projectName
+            .map { "working in “\($0)”" }^
+            .getOrElse("no project open")
+        return "- \(card.name) — \(card.model), effort \(card.effort), \(place), \(card.isBusy ? "busy" : "free")"
+    }
+    return .some("""
+        [The others, as this turn starts]
+        \(rows.joined(separator: "\n"))
+        Busy means mid-turn this moment; send anyway if you need them, the app \
+        holds it until they are free.
+        """)
 }

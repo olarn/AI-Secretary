@@ -2620,3 +2620,69 @@ is real and draws a real card.
 
 The owner's order, asked for while the above was being driven. It shipped as
 Save-then-copy in v0.21.326; the copy glyph now leads.
+
+## Four characters were restarting each other's Claude Code every turn (v0.21.333)
+
+The owner: commanding four characters at once answers *much* slower than one on
+its own. It was ours, and it was measurable at every step.
+
+**First, ruling out the obvious.** Sampling the app under four live streams put
+the main thread idle for 6340 of 7945 samples — parked in `mach_msg2_trap` — so
+SwiftUI rendering was not the bottleneck. Then, outside the app entirely, four
+concurrent `claude -p` runs took 6.1–7.4s against 6.1s for one alone: the CLI
+and the account scale fine at four. Whatever it was, it was the app.
+
+**What it was.** The neighbours block — "who else is on this desktop" — was part
+of the system prompt, and the system prompt is `--append-system-prompt`, a
+*launch* flag. Launch flags are exactly what `WarmProcessKey` compares, because
+none of them can be changed on a running process; a key that no longer matches
+means the warm `claude` is terminated and a new one started, at the cost that
+justified keeping it warm in the first place — 5.47s to first text against 1.15s,
+plus the whole transcript read back with a cold prompt cache.
+
+That block carried each character's *current state*. With one character on the
+desktop it is absent entirely, which is why this was never noticed. With four it
+moved constantly:
+
+- first the busy flag, `- Ditto — Default, effort medium, no project open, busy`;
+- and with that removed, still the project name, as each character opened the
+  shared folder in turn.
+
+Measured, before: of four warm processes alive when a broadcast started, **one
+survived the next turn** — the other three were killed and respawned. A
+temporary diagnostic printed the differing lines and named it exactly:
+`- Ditto — … no project open` giving way to `working in “ai-team-work”`.
+
+**The fix is a split, not a deletion.** The standing rules — that the others
+exist, what may be seen of them, the ```to protocol — stay in the system prompt
+and never move. Everything about what a character is *doing* moved to
+`directoryStatus`, which rides on the turn's own message. The provider sends
+only the last user message (Claude Code keeps the thread), so that is where
+per-turn context belongs, and `conversation` still holds only what was really
+said.
+
+Nothing was lost and the busy flag came back **more** accurate: on the turn it
+is read as the turn starts, so it no longer needs the old apology about having
+been true when the process started.
+
+Measured, after: three consecutive broadcasts to all four, same four processes
+alive throughout (2m11s old at the end), and the diagnostic reported **zero**
+cold starts. The diagnostic was removed before committing.
+
+**The rule this leaves behind**, written on `directoryPrompt` where the next
+person will meet it: nothing that changes between turns may go in the system
+prompt. `CharacterRelayTests` now pins it — the same neighbours must produce the
+same text whatever they happen to be doing.
+
+**Still in the system prompt and still moving, deliberately noted:** the
+`outstanding.reminder` line (only while a request is blocked) and
+`agentPermissionNote`'s session tools (only when a permission is widened). Both
+are rare and both are the same shape as this bug; worth moving the same way if
+they ever show up in a measurement.
+
+## The Results box says when each answer arrived (v0.21.333)
+
+The owner asked for the time beside the name. Stamped on arrival and shown with
+`MessageTime.label`, the same words the chat puts beside a name — the strip holds
+answers from four characters that finished minutes apart, and without it they
+read as one conversation that happened at once.

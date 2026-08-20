@@ -69,23 +69,65 @@ final class CharacterRelayTests: XCTestCase {
 
     /// The 14.2 condition, checked at the only place it can be checked: what a
     /// neighbour is actually told.
-    func testThePromptNamesTheProjectAndNeverItsLocation() {
+    /// The standing half keeps the rule; the project name itself moved to the
+    /// turn, and is checked there.
+    func testThePromptKeepsTheRuleAndNamesNoLocation() {
         let prompt = directoryPrompt([card(anya, "Anya", project: "rate_book")]).getOrElse("")
-        XCTAssertTrue(prompt.contains("rate_book"))
         XCTAssertTrue(prompt.contains("cannot read their"))
         XCTAssertFalse(prompt.contains("/Users"))
     }
 
-    func testBusyIsStatedAsOfTheStartOfTheTurnRatherThanAsAFact() {
-        let prompt = directoryPrompt([card(anya, "Anya", busy: true)]).getOrElse("")
-        XCTAssertTrue(prompt.contains("busy"))
-        XCTAssertTrue(prompt.contains("may not be"))
+    /// **The measured one.** This text is `--append-system-prompt`, a launch
+    /// flag, so it is part of `WarmProcessKey`: a value that differs from the
+    /// running process's key terminates that process and pays a cold start —
+    /// 5.47s to first text against 1.15s warm. It used to end each row with
+    /// `busy`/`free`, which with four characters on the desktop changed on
+    /// nearly every turn. Driven 2026-08-20: of four warm processes alive when
+    /// a broadcast started, one survived the following turn. That was the whole
+    /// of "four characters answer much slower than one".
+    ///
+    /// So the rule is not "don't mention busy" — it is that **the same
+    /// characters must produce the same text**, whatever they happen to be
+    /// doing. Anything volatile added here brings the cold start back.
+    func testTheSameNeighboursProduceTheSameTextWhateverTheyAreDoing() {
+        let busy = directoryPrompt([
+            card(anya, "Anya", busy: true),
+            card(ditto, "Ditto", busy: false)
+        ]).getOrElse("")
+        let free = directoryPrompt([
+            card(anya, "Anya", busy: false),
+            card(ditto, "Ditto", busy: true)
+        ]).getOrElse("")
+
+        XCTAssertEqual(busy, free, "A launch flag that moves costs a whole process start")
+        XCTAssertFalse(busy.isEmpty)
+    }
+
+    /// Nothing was lost by taking the state out of the launch flag — it moved
+    /// to the turn, where it may be as fresh as it likes. These are the same
+    /// guarantees as before, asked of the half that now carries them.
+    func testTheTurnCarriesWhatEachOfThemIsDoing() {
+        let status = directoryStatus([card(anya, "Anya", busy: true)]).getOrElse("")
+        XCTAssertTrue(status.contains("busy"), "Got: \(status)")
+        XCTAssertTrue(status.contains("holds it until they are free"), "Got: \(status)")
     }
 
     func testModelAndEffortAreThereToBeReadWithoutSendingAnything() {
-        let prompt = directoryPrompt([card(anya, "Anya", model: "Sonnet 5", effort: "high")]).getOrElse("")
-        XCTAssertTrue(prompt.contains("Sonnet 5"))
-        XCTAssertTrue(prompt.contains("effort high"))
+        let status = directoryStatus([card(anya, "Anya", model: "Sonnet 5", effort: "high")]).getOrElse("")
+        XCTAssertTrue(status.contains("Sonnet 5"))
+        XCTAssertTrue(status.contains("effort high"))
+    }
+
+    /// The 14.2 condition, still checked: a neighbour's project may be named
+    /// and its location may never be.
+    func testTheTurnNamesTheProjectAndNeverItsLocation() {
+        let status = directoryStatus([card(anya, "Anya", project: "rate_book")]).getOrElse("")
+        XCTAssertTrue(status.contains("rate_book"))
+        XCTAssertFalse(status.contains("/Users"))
+    }
+
+    func testAloneOnTheDesktopTheTurnCarriesNoStatusAtAll() {
+        XCTAssertEqual(directoryStatus([]), Option.none())
     }
 
     // MARK: - The envelope carries no capability

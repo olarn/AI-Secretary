@@ -27,6 +27,13 @@ struct CommandResult: Identifiable, Equatable {
     let name: String
     let text: String
     let succeeded: Bool
+    /// When this answer reached the window.
+    ///
+    /// Stamped on arrival rather than derived from anything on screen: the
+    /// strip holds answers from four characters that finished minutes apart,
+    /// and without the time it reads as one conversation that all happened at
+    /// once (the owner asked for it, 2026-08-20).
+    let receivedAt: Date
     /// The reply's own question, offered as buttons. Emptied once picked —
     /// the question has been answered, and a second click would answer it
     /// again.
@@ -264,6 +271,7 @@ final class CommandCenter {
                 text: MessageChoices.parse(turn.text).body
                     .trimmingCharacters(in: .whitespacesAndNewlines),
                 succeeded: turn.succeeded,
+                receivedAt: Date(),
                 choices: turn.choices
             ),
             at: 0

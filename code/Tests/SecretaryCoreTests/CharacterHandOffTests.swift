@@ -534,10 +534,16 @@ final class CharacterHandOffTests: XCTestCase {
         miku.submit("who else is around?")
         await waitUntilIdle(mikuMachine)
 
+        // Who is here is in the standing prompt; what each is running rides on
+        // the turn, because a value that moves in the system prompt costs a
+        // whole `claude` restart. Both still reach the model, which is what
+        // 14.1 asked for.
         let system = mikuProvider.lastSystem ?? ""
+        let sent = mikuProvider.lastMessages.map(\.content).joined(separator: "\n")
         XCTAssertTrue(system.contains("Anya"), "Got: \(system)")
-        XCTAssertTrue(system.contains("Opus 5"))
+        XCTAssertTrue(sent.contains("Opus 5"), "Got: \(sent)")
         XCTAssertFalse(system.contains("Miku — "), "She is not her own neighbour")
+        XCTAssertFalse(sent.contains("Miku — "), "nor on the turn")
     }
 
     func testAloneOnTheDesktopThePromptSaysNothingAboutAnybody() async {

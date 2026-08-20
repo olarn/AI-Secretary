@@ -3200,7 +3200,7 @@ public final class Secretary {
         audit.record(AuditEntry(taskID: taskID, kind: .executionStarted, detail: "chat model=\(modelDescription) effort=\(effortDescription)"))
 
         let stream = chatProvider.stream(
-            messages: messages,
+            messages: withTurnContext(messages),
             model: model,
             effort: effort,
             maxTokens: chatMaxTokens,
@@ -4450,6 +4450,33 @@ public final class Secretary {
             return "understandFile(\(request.task.rawValue) \(request.relativePath)) project=\(query.getOrElse("-"))"
         case .help: return "help"
         case .unknown: return "chat"
+        }
+    }
+
+    /// Whatever this turn needs to know that was not true when the process
+    /// started — today, who else is on the desktop and what each is doing.
+    ///
+    /// On the message rather than in the system prompt, and that is not a
+    /// stylistic choice: the system prompt is `--append-system-prompt`, a
+    /// launch flag, so a value that moves there terminates the warm `claude`
+    /// and starts a new one. Four characters answering one broadcast killed
+    /// three of their four processes between two consecutive turns, purely
+    /// because each had just opened the shared project and so every *other*
+    /// character's prompt had changed. See `directoryPrompt`.
+    ///
+    /// Only the last user message is sent — the provider reads that and Claude
+    /// Code keeps the thread — so this attaches there, and `conversation` keeps
+    /// holding what was actually said.
+    private func withTurnContext(_ messages: [ChatMessage]) -> [ChatMessage] {
+        let status = directoryStatus(characterDirectory(directorySnapshot(), excluding: profile.id))
+        return status.fold({ messages }) { note in
+            guard let index = messages.lastIndex(where: { $0.role == .user }) else { return messages }
+            var carried = messages
+            carried[index] = ChatMessage(
+                role: .user,
+                content: note + "\n\n" + carried[index].content
+            )
+            return carried
         }
     }
 
