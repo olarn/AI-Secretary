@@ -21,8 +21,35 @@ Sprint ที่จบแล้ว บันทึกทุกอย่างอ
 | Sprint 20 — Command window: สั่งงานทุก character พร้อมกัน | v0.20.301–308 |
 | Sprint 20.1 — เก็บงาน command box และ default character | v0.20.313 |
 | Sprint 21 — Liquid Glass Theme (#5 ยังรอเจ้าของตัดสินใจ) | v0.21.319–323 |
-| Sprint 21.2 — improvement (ฟอนต์, Save/Copy, UI อังกฤษ, permission, watch) | v0.21.326–329 |
 
 **เลขสปรินต์เป็นของจริงที่นี่ที่เดียว** และตั้งแต่ 2026-08-18 ทุกหัวข้อใน
 `PRODUCT_BACKLOG_NEXT_SPRINTS.md` มีเลขจริงหมดแล้ว (20–24) ไม่มี `xxx`/`yyy`/`zzz`/`zzzz`
 เหลืออยู่ — เลขเรียงตามลำดับที่จะลงมือทำ เพราะนั่นคือความหมายของเลขหลักกลางใน version
+
+## Sprint 21.2 - improvement
+
+ห้าข้อครึ่งจบแล้ว บันทึกอยู่ใน `PRODUCT_BACKLOG.md` (v0.21.326–329) หัวข้อนี้ยังไม่ย้าย
+เพราะข้อ 2 เหลืออีกครึ่ง ที่ต้องให้เจ้าของตัดสินใจก่อน
+
+- [x] ตอนขยายฟอนต์ในคอม Box ฟอนต์จะขยายแค่ input text แต่ไม่ขยายในส่วนอื่นๆ
+- [x] ปัญหา ตอนที่สั่งงานผ่าน command, ทุก character บอกว่าไม่มีสิทธิ์เขียนไฟล์ แล้วก็จะมี 2 เหตุการณ์ คือ
+  - รอสักพัก ก็เขียนได้ หรือ
+  - ค้างไปเลย
+
+  แก้แล้ว: `agentPermissionNote` เคยจบด้วย "writing or running commands will be
+  refused" โมเดลเลยไม่ยอมเรียก tool แล้วตอบเป็นร้อยแก้วว่าไม่มีสิทธิ์ — ไม่มี tool call
+  ก็ไม่มี refusal ไม่มี refusal ก็ไม่มีการ์ด งานเลยหยุดสนิท ส่วน "รอสักพักก็เขียนได้"
+  คือ standing grant ที่ widen ให้เงียบ ๆ ตามที่ Sprint 15 ตั้งใจ ไม่ใช่บั๊ก
+- [ ] **ที่เหลือของข้อบน — ต้องให้เจ้าของตัดสินใจ** Claude Code ปฏิเสธ path นอก working
+  directory ด้วยข้อความ *"ls in '…' was blocked. For security, Claude Code may only
+  list files in the allowed working directories for this session"* ซึ่งไม่ตรงกับ
+  `refusalPhrases` เลยไม่มีการ์ดขึ้น และต่อให้ขึ้นก็แก้ไม่ได้ เพราะสิ่งที่ขาดคือ `--add-dir`
+  ของโฟลเดอร์นั้น ไม่ใช่สิทธิ์ของ tool `ls` — ให้การ์ดที่กด allow แล้วยังทำไม่ได้ แย่กว่าไม่มี
+  ต้องมีทางขยาย *directory* ซึ่งเป็นการขยายขอบเขต filesystem ที่ charter ให้ถามก่อน
+  (เจอตอน drive 2026-08-20)
+- [x] ปัญหา ตอนที่สั่งงานผ่าน command, ใน instruction บอกว่า ให้ monitor ถ้ามี file ให้ทำตาม instruction ที่ให้ไว้เลย แต่หลังจากที่ character monitor และ user เพิ่มไฟล์ลงไปที่ folder ที่กำหนด character แค่ report เท่านั้นว่ามี file มาใหมม่ แต่ไม่ทำตาม instruction เหมือนไม่ได้จำว่าต้องทำอะไร
+- [x] ตอนที่สั่งงานผ่าน command, เวลา character ขอ permission อยากให้ส่งกลับมาขอที่ command session ให้ user approve แล้วส่งกลับไป
+- [x] เพิ่ม feature ใน command window - ในกล่องผลลัพธ์ ตอนที่ expand ออกมา
+  - มี Save ข้างซ้ายปุ่ม clear เพื่อเปิด save dialog และ save text ลง file ได้ (default เป็น .md)
+  - มี icon copy เพื่อ copy text ลง clipboard ได้ - อยู่ถัดจากปุ่ม save
+- [x] UI ทั้งหมด ให้เป็นภาษาอังกฤษ (ตอนนี้ไทยปนอังกฤษ)
