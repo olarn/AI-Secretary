@@ -329,7 +329,7 @@ final class SecretaryTests: XCTestCase {
     /// says nothing, because a failed resolve is a `continue`. Silence is the
     /// failure mode, which is why this asserts a report rather than an absence
     /// of errors.
-    func testAnApprovedOutsideFolderKeepsResolvingOnEveryLook() throws {
+    func testAnApprovedOutsideFolderKeepsResolvingOnEveryLook() async throws {
         let outside = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("outside-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
@@ -345,7 +345,7 @@ final class SecretaryTests: XCTestCase {
             atomically: true,
             encoding: .utf8
         )
-        secretary.tickWatch()
+        await secretary.tickWatch()
 
         XCTAssertTrue(
             secretary.transcript.last?.text.contains("new.txt") ?? false,
@@ -390,7 +390,7 @@ final class SecretaryTests: XCTestCase {
             atomically: true,
             encoding: .utf8
         )
-        secretary.tickWatch()
+        await secretary.tickWatch()
 
         XCTAssertTrue(
             secretary.transcript.contains { $0.text.contains("new.txt") },
@@ -415,7 +415,7 @@ final class SecretaryTests: XCTestCase {
 
     /// A typed `/watch` asks to be told and nothing more. It must not start
     /// spending turns on every file that appears.
-    func testATypedWatchStillOnlyReports() throws {
+    func testATypedWatchStillOnlyReports() async throws {
         let outside = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("outside-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
@@ -431,7 +431,7 @@ final class SecretaryTests: XCTestCase {
             atomically: true,
             encoding: .utf8
         )
-        secretary.tickWatch()
+        await secretary.tickWatch()
 
         XCTAssertFalse(
             secretary.transcript.contains { $0.text.contains("[Folder watch]") },

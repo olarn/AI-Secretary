@@ -2287,7 +2287,7 @@ public final class Secretary {
             while !Task.isCancelled {
                 try? await Task.sleep(for: Self.watchPollInterval)
                 guard !Task.isCancelled, let self else { return }
-                self.tickWatch()
+                await self.tickWatch()
             }
         }
     }
@@ -2298,14 +2298,26 @@ public final class Secretary {
     /// Each is reported in its own message rather than merged: they are
     /// different questions the person asked at different times, and "3 changes"
     /// spanning two unrelated folders would answer neither.
-    func tickWatch() {
-        for (index, watch) in activeWatches.enumerated() {
-            guard index < activeWatches.count else { return }
-            guard let url = fileAdapter.resolve(watch.relativePath, in: watch.project)
+    func tickWatch() async {
+        // Resolving is a *decision* — it re-checks that the path still lies
+        // inside what was approved — so it stays here, on the actor that owns
+        // the watches. Only the walk goes elsewhere.
+        let targets: [(id: String, url: URL)] = activeWatches.compactMap { watch in
+            fileAdapter.resolve(watch.relativePath, in: watch.project)
                 .toOption().toOptional()
-            else { continue }
+                .map { (watch.id, $0) }
+        }
+        guard !targets.isEmpty else { return }
 
-            let latest = WatchScan.snapshot(of: url)
+        let scanned = await Self.scan(targets)
+
+        // Back on the actor, and nothing is assumed to be where it was: a watch
+        // can be stopped, or the list re-ordered, while the disk was being read.
+        // Found by index it would report against the wrong folder; found by id
+        // it simply isn't there any more.
+        for (id, latest) in scanned {
+            guard let index = activeWatches.firstIndex(where: { $0.id == id }) else { continue }
+            let watch = activeWatches[index]
             let changes = watch.snapshot.changes(to: latest)
             guard !changes.isEmpty else {
                 // Still advanced, so a change that comes and goes between looks
@@ -2325,6 +2337,30 @@ public final class Secretary {
                 """
             )
             followUp(on: watch, changes: changes)
+        }
+    }
+
+    /// The looking, off the main actor.
+    ///
+    /// `WatchScan.snapshot` walks up to `WatchLimits.maxEntries` files and asks
+    /// each for its size and date — and for a single watched file, reads and
+    /// digests up to a megabyte of it. That ran on the main actor every four
+    /// seconds, per watch, up to five watches per character, on a desktop that
+    /// may have four characters watching folders at once. Nothing about it needs
+    /// the actor: it takes a URL and hands back a value.
+    ///
+    /// Concurrently, one child task per watch, because they are separate folders
+    /// and the slow one should not decide when the others are read.
+    private nonisolated static func scan(
+        _ targets: [(id: String, url: URL)]
+    ) async -> [(id: String, snapshot: WatchSnapshot)] {
+        await withTaskGroup(of: (String, WatchSnapshot).self) { group in
+            for target in targets {
+                group.addTask { (target.id, WatchScan.snapshot(of: target.url)) }
+            }
+            var scanned: [(id: String, snapshot: WatchSnapshot)] = []
+            for await result in group { scanned.append((result.0, result.1)) }
+            return scanned
         }
     }
 

@@ -2728,3 +2728,44 @@ above, and 1345 passing tests — but not on somebody watching a transcript
 repaint. It wants their eyes once: type into a long conversation, and check that
 a streaming reply still appears, hover buttons still show, and changing the text
 size still repaints.
+
+## The folder watch stopped walking the disk on the main actor (v0.21.335)
+
+Asked for by the owner — "use multi-thread to improve performance and
+responsiveness if needed" — with the warning that matters more than the request:
+*"be careful about app crash and race condition, that's why I preferred
+Functional Programming."*
+
+`WatchScan.snapshot` walks up to `WatchLimits.maxEntries` files and asks each for
+its size and modification date, and for a single watched *file* reads and digests
+up to a megabyte of it. That ran **on the main actor, every four seconds, per
+watch** — up to five watches per character, on a desktop that may have four
+characters watching folders at once. Nothing about the walk needs the actor: it
+takes a URL and returns a value.
+
+It now runs off the actor, one child task per watch, so a slow folder does not
+decide when the others are read.
+
+**The split is the FP one**, and it is why this is safe rather than merely
+faster: resolving the path is a *decision* — it re-checks that the path still
+lies inside what was approved — so it stays on the actor. Only the walk left,
+and the walk is a pure function of `(id, url)`.
+
+**The race audit, since Swift 5 mode gives no compiler help here:**
+
+- Nothing shared crosses the boundary. In go `String` and `URL`; out comes
+  `WatchSnapshot`, a struct of value types. The child tasks capture no `self` and
+  no mutable state — each builds its own dictionary.
+- **No index survives the suspension.** The old loop mutated `activeWatches[index]`
+  with the walk inline; putting an `await` in the middle of that is precisely the
+  out-of-bounds crash to fear, because the list can be re-ordered or emptied while
+  the disk is being read. The results are applied by **id** instead: a watch that
+  was stopped mid-scan is simply not found, and reports nothing. Being unable to
+  revive a stopped watch is the property that was worth the rewrite.
+- Ticks cannot overlap: the timer awaits each pass before sleeping again.
+- `FileManager`'s directory reads are safe from several threads, and each call
+  writes only into its own local snapshot.
+
+**Not driven** — the owner asked for no app testing this round. 1345 tests pass,
+including the two that drive `tickWatch` directly (now `await`ed; the assertions
+are unchanged).
