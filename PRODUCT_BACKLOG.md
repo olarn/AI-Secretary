@@ -3045,3 +3045,69 @@ already-open folder that must not be re-offered and must not be silent.
     การ์ดท้าย ๆ กับ Results หลุดจอ — cap ที่ 320pt แล้วเลื่อนในตัวเอง แบบเดียวกับ Results
   - drive จริง: 4 ตัวเขียนไฟล์นอกโปรเจกต์ → การ์ดขึ้นครบ → กด Once → ไฟล์ถูกเขียนจริง
     และเห็นทั้งการ์ดแบบ tool และแบบ directory พร้อมกันในหน้าต่างเดียว
+
+## Sprint 22: Re-architecture รองรับ AI มากกว่า 1 ค่าย (v0.22.343)
+
+เดิมแอปผูกกับ Claude Code ไว้ทุกชั้น และจุดที่ผูกจริง ๆ มีบรรทัดเดียว:
+`ChatBackend.adopt(_:)` เรียก `ClaudeCodeProvider(installation:)` ตรง ๆ ที่นั่น
+งานรอบนี้จึงไม่ใช่การ rename ทั้งต้นไม้ แต่เป็นการ**เพิ่ม seam** รอบจุดนั้น —
+ชื่อเดิม (`ClaudeCodeLocator`, `ClaudeCodeDetector`, `ClaudeCodeInstallation`)
+อยู่ครบ เพราะ requirement ข้อสุดท้ายของ sprint คือ "ทุกอย่างต้องทำงานเหมือนเดิม"
+และการ rename ทั้งต้นไม้คือวิธีที่เสี่ยงที่สุดที่จะทำข้อนั้นพัง
+**ยืนยันว่าเป็น refactor จริง: เทสเดิม 1,361 ตัวผ่านโดยไม่ต้องแก้แม้แต่ตัวเดียว**
+
+- [x] `AIVendor` — ค่าย AI เป็น *ข้อมูล* ไม่ใช่ `switch` ที่กระจายอยู่ 6 ไฟล์
+  ถือ `models`, `supportsEffort`, `supportsBrowser`, `supportsSkills`,
+  `executableIsUserSupplied` ซึ่งคือคำถามที่ settings panel ต้องถามก่อนวาด
+  (Sprint 23 ขอให้ซ่อนแถว effort ถ้าค่ายนั้นไม่มี — ตอนนี้ panel ถามได้แล้ว
+  และแถว Model ก็อ่านรายชื่อจาก vendor แทน `ChatModel.known` ตรง ๆ)
+  `ChatModel.known` **ไม่ได้ย้าย** — vendor อ่านจากมัน เพราะรายชื่อ 6 ตัวเดียวกัน
+  เก็บไว้ 2 ที่คือของที่จะ stale ข้างเดียว
+- [x] `VendorRuntime` — factory ที่แทนบรรทัดที่ผูกกับ Claude
+  `ChatBackend(detector:runtime:)` โดย `.claudeCode` เป็น default ทุกที่ ทำให้
+  วันที่ใส่ seam พฤติกรรมไม่เปลี่ยนเลย เพิ่มค่ายใหม่ = เพิ่ม `VendorRuntime` 1 ค่า
+  ไม่ต้องแตะ `ChatBackend`
+- [x] `AgentInstallation` — รูปแบบกลางที่ไม่ระบุค่าย factory จึงไม่ต้องเอ่ยชื่อ
+  type ของ CLI ตัวใดตัวหนึ่ง (`ClaudeCodeInstallation.agent` แปลงให้ที่ขอบเดียว)
+- [x] เลิก downcast เป็น class: `Secretary` เคยทำ `chatProvider as? ChatBackend`
+  เพื่อถาม 2 คำถามที่อ่านอย่างเดียว → เป็น `as? VendorBackend` แทน
+- [x] **บั๊กที่เจอระหว่างทำ: install skill ไม่เคยทำงานเลย** `ClaudeCodeProvider`
+  conform `SkillInstalling` มาตลอด แต่ตัวที่ orchestrator ถืออยู่คือ `ChatBackend`
+  ซึ่งไม่ conform → `as? SkillInstalling` fail ทุกครั้ง แล้วตัวละครตอบว่า
+  "I can't install skills without Claude Code" ทั้งที่ Claude Code อยู่ตรงนั้น
+  ไม่มีใครรายงานเพราะประโยคปฏิเสธมัน *ฟังดูสมเหตุสมผล* — ตอนนี้ forward แล้ว
+  และมีเทสจับไว้
+- [x] โครงสร้างใหม่ยังทำงานกับ Project ได้เหมือนเดิม — `prepare(workingDirectory:
+  additionalDirectories:allowedTools:)` ยังเป็นทางเดียวที่ project ถึง provider
+  ไม่ได้แตะเลย, panel Projects/Browser ยังทำงาน, drive จริงแล้ว
+- [x] **เช็คว่า connect ได้จริงไหม** — เดิมแอปตอบว่า "Ready" จากการ*เจอไฟล์*เฉย ๆ
+  ซึ่งแปลว่า Claude Code ที่ติดตั้งแล้วแต่ **sign out อยู่** ก็ขึ้น "Ready" และ
+  ผู้ใช้จะรู้ตอนที่เทิร์นถูกปฏิเสธไปแล้วเท่านั้น ตอนนี้ถาม `claude auth status`
+  จริง แล้วอ่านเฉพาะ `loggedIn` กับ `subscriptionType`
+  **คำเตือน: reply ตัวนั้นมี email / orgId / orgName ของผู้ใช้อยู่ด้วย ห้ามอ่านเพิ่ม
+  และห้าม log** — มีเทสยืนยันว่าไม่มีอะไรหลุดออกมาในบรรทัดที่แสดง
+- [x] แถว **AI** ใน Profile: ชื่อค่าย + ✓ เขียวถ้าต่อได้ / ✗ แดงพร้อมข้อความบอก
+  สาเหตุถ้าต่อไม่ได้ (เขียนแบบ required-field message คือบอกว่าผิดอะไรแล้วให้ทำอะไร)
+  + ปุ่ม Check ถามซ้ำได้ และถามเองทุกครั้งที่เปิด panel
+  - การตัดสินว่าเป็นสถานะไหนอยู่ใน `vendorConnection(vendor:executable:probe:)`
+    ซึ่งเป็น pure function ใน library target (100% coverage) — view แค่ทาสี
+    เพราะ `AISecretaryApp` ไม่เคยถูก link เข้า test bundle
+  - **"เจอไฟล์แล้วแต่ยังไม่ได้ถาม" = ยังไม่ติ๊กเขียว** ติ๊กต้องแปลว่าถามแล้วได้คำตอบ
+    ไม่งั้นก็คือ "Ready" ปลอมแบบเดิม
+  - ลำดับการตัดสินสำคัญ: ไม่เจอไฟล์ชนะทุกอย่าง เพราะการบอกว่า "ยังไม่ sign in"
+    กับเครื่องที่ยังไม่ได้ติดตั้ง คือส่งคนไปแก้ผิดที่
+- [x] `claude --version` ตอบ `2.1.238 (Claude Code)` พอเอามาต่อท้ายชื่อค่ายเลย
+  บรรทัดอ่านว่า "Claude Code · 2.1.238 (Claude Code) · Max" — ตัดเหลือเลขเวอร์ชัน
+  (เจอตอน drive จริง ไม่ใช่ตอนอ่านโค้ด)
+- [x] `scripts/uidrive/cap.sh` / `capchar.sh` อ่านหน้าต่างที่ x หรือ y ติดลบไม่ได้
+  (จอที่อยู่ซ้าย/เหนือจอหลัก) regex ไม่ match แล้วสคริปต์รายงานว่า "is the panel
+  open?" ทั้งที่เปิดอยู่ — เสียเวลาไปรอบหนึ่งก่อนจะรู้ว่าเป็นบั๊กของเครื่องมือเอง
+
+**drive จริงแล้ว** (จอซ้าย, จับภาพตาม bounds จริงจาก `win.swift`): เปิด Profile →
+เห็น spinner "Checking…" → เปลี่ยนเป็น ✓ เขียว `Claude Code · 2.1.238 · Max`,
+ปิด/เปิด panel ใหม่แล้วถามซ้ำเองจริง, ส่งข้อความจริงแล้วได้คำตอบกลับ (เทิร์นวิ่งผ่าน
+factory ใหม่), panel Projects + Browser picker ยังปกติ
+
+**สิ่งที่ยังไม่ได้ลองในแอปจริง**: ฝั่ง ✗ แดง — จะลองได้ต้อง sign out Claude Code
+ของเจ้าของจริง ๆ ซึ่งไม่ทำ ทุกสถานะ (ไม่เจอไฟล์ / sign out / อ่านคำตอบไม่ออก)
+มีเทสคุมครบ แต่ยังไม่มีใครเห็นกากบาทแดงด้วยตาตัวเอง

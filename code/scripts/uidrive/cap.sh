@@ -19,8 +19,12 @@ if [[ -z "$PID" || -z "$OUT" ]]; then
     echo "usage: cap.sh <pid> <out.png>" >&2
     exit 64
 fi
+# A window on a display left of or above the main one has negative x or y —
+# without the `-?` the line simply doesn't match and the script reports "is the
+# panel open?" about a panel that is open, which cost a session's confidence in
+# the tooling on 2026-08-21. Do not drop the `-?` when tidying this regex.
 r=$(swift win.swift "$PID" \
-    | sed -E 's/.* x=([0-9.]+) y=([0-9.]+) w=([0-9.]+) h=([0-9.]+).*/\1 \2 \3 \4/' \
+    | sed -E 's/.* x=(-?[0-9.]+) y=(-?[0-9.]+) w=([0-9.]+) h=([0-9.]+).*/\1 \2 \3 \4/' \
     | awk '$3+0>200 {print $1","$2","$3","$4; exit}')
 if [[ -z "$r" ]]; then
     echo "no window wider than 200pt for pid $PID — is the panel open?" >&2

@@ -125,15 +125,17 @@ extension ClaudeCodeProvider: WorkspaceScopedProvider {
 /// which is far too slow to do while the app is starting up, so the first turn
 /// (or an explicit background refresh) pays for it and everything after reads a
 /// cached answer.
-public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, @unchecked Sendable {
+public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, VendorBackend, SkillInstalling, @unchecked Sendable {
     /// Where Claude Code is. Shared with every other backend in the app — see
     /// `ClaudeCodeDetector` for why that half does not belong here.
     private let detector: ClaudeCodeDetector
+    /// How to build this character's provider once the tool has been found.
+    private let runtime: VendorRuntime
     private let lock = NSLock()
     /// This backend's own handle on Claude Code: its own session, working
     /// directory, allowlist and browser flag. One per character, which is the
     /// whole reason the detector is not one per character.
-    private var _claudeCode: ClaudeCodeProvider?
+    private var _provider: VendorProvider?
     private var _pending: (workingDirectory: URL?, additionalDirectories: [URL], allowedTools: [String]?)?
     private var _pendingBrowser = false
     /// A session adopted before Claude Code had been found yet.
@@ -144,8 +146,11 @@ public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, @unchecke
     /// way the working directory is.
     private var _pendingSession: String?
 
-    public init(detector: ClaudeCodeDetector) {
+    /// The maker is injected rather than named inside, so a second one is a
+    /// different argument at the call site and not a branch in here.
+    public init(detector: ClaudeCodeDetector, runtime: VendorRuntime = .claudeCode) {
         self.detector = detector
+        self.runtime = runtime
         // Whoever pays for detection, every backend gets the answer — including
         // one built after the search already finished, which `observe` delivers
         // to immediately. Without that, a character created later would sit
@@ -156,9 +161,15 @@ public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, @unchecke
 
     /// For a backend that answers to nobody else — a test, or a one-off. The
     /// app hands every character the same detector instead.
-    public convenience init(locator: ClaudeCodeLocator = ClaudeCodeLocator()) {
-        self.init(detector: ClaudeCodeDetector(locator: locator))
+    public convenience init(
+        locator: ClaudeCodeLocator = ClaudeCodeLocator(),
+        runtime: VendorRuntime = .claudeCode
+    ) {
+        self.init(detector: ClaudeCodeDetector(locator: locator), runtime: runtime)
     }
+
+    /// Which maker this character's work runs through.
+    public var vendor: AIVendor { runtime.vendor }
 
     /// Detection result, or nil if we haven't looked yet.
     public var availability: ClaudeCodeAvailability? { detector.availability }
@@ -184,9 +195,9 @@ public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, @unchecke
         guard case .available(let installation) = availability else { return }
         lock.lock()
         defer { lock.unlock() }
-        guard _claudeCode == nil else { return }
+        guard _provider == nil else { return }
 
-        let provider = ClaudeCodeProvider(installation: installation)
+        let provider = runtime.makeProvider(installation.agent)
         if let pending = _pending {
             provider.prepare(
                 workingDirectory: pending.workingDirectory,
@@ -195,8 +206,8 @@ public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, @unchecke
             )
         }
         provider.setBrowserEnabled(_pendingBrowser)
-        if let session = _pendingSession { provider.adopt(session: session) }
-        _claudeCode = provider
+        if let session = _pendingSession { provider.adoptSession(session) }
+        _provider = provider
     }
 
     // MARK: - ChatProvider
@@ -209,7 +220,7 @@ public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, @unchecke
         system: Option<String>
     ) -> ChatStream {
         resolve()
-        guard let provider = lock.withLock({ _claudeCode }) else {
+        guard let provider = lock.withLock({ _provider }) else {
             // Nothing to fall back to, and nothing to pretend: say what is
             // missing. The onboarding card says the same thing in the panel.
             return ChatStream { continuation in
@@ -231,9 +242,9 @@ public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, @unchecke
     /// Stored even before detection finishes, so a directory chosen at startup
     /// still applies to the first turn.
     public func prepare(workingDirectory: URL?, additionalDirectories: [URL], allowedTools: [String]?) {
-        let provider: ClaudeCodeProvider? = lock.withLock {
+        let provider: VendorProvider? = lock.withLock {
             _pending = (workingDirectory, additionalDirectories, allowedTools)
-            return _claudeCode
+            return _provider
         }
         provider?.prepare(
             workingDirectory: workingDirectory,
@@ -251,46 +262,67 @@ public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, @unchecke
     /// test double implemented them properly. No defaults now: a new backend
     /// has to say what it does here.
     public var currentSessionID: String? {
-        lock.withLock { _claudeCode?.currentSessionID ?? _pendingSession }
+        lock.withLock { _provider?.currentSessionID ?? _pendingSession }
     }
 
     public func adoptSession(_ id: String?) {
-        let provider: ClaudeCodeProvider? = lock.withLock {
+        let provider: VendorProvider? = lock.withLock {
             _pendingSession = id
-            return _claudeCode
+            return _provider
         }
         provider?.adoptSession(id)
     }
 
     public func resetConversation() {
         lock.withLock { _pendingSession = nil }
-        lock.withLock { _claudeCode }?.resetConversation()
+        lock.withLock { _provider }?.resetConversation()
     }
 
-    /// Only the user's own Claude Code carries the browser connection, and
-    /// whether we have one isn't known until detection has run — so the
-    /// preference is remembered either way and applied when the provider
-    /// appears, exactly as the working directory is.
+    /// Two conditions, and both have to hold: the maker must have a browser to
+    /// offer at all, and its tool must have been found. Whether we have one
+    /// isn't known until detection has run, so the preference is remembered
+    /// either way and applied when the provider appears, exactly as the working
+    /// directory is.
     public var supportsBrowser: Bool {
-        lock.withLock { _claudeCode } != nil
+        runtime.vendor.supportsBrowser && lock.withLock { _provider } != nil
     }
 
     public func setBrowserEnabled(_ enabled: Bool) {
-        let provider: ClaudeCodeProvider? = lock.withLock {
+        let provider: VendorProvider? = lock.withLock {
             _pendingBrowser = enabled
-            return _claudeCode
+            return _provider
         }
         provider?.setBrowserEnabled(enabled)
     }
 
     public func stopWarmProcess() {
-        lock.withLock { _claudeCode }?.stopWarmProcess()
+        lock.withLock { _provider }?.stopWarmProcess()
+    }
+
+    // MARK: - SkillInstalling
+
+    /// Forwarded, and it was not before.
+    ///
+    /// `ClaudeCodeProvider` has always conformed, but the object the
+    /// orchestrator holds is this wrapper, which did not — so the `as?
+    /// SkillInstalling` test in `installSkillAndRetry` failed every time and the
+    /// character answered "I can't install skills without Claude Code" while
+    /// Claude Code sat right there, found and working. Nothing surfaced it
+    /// because the refusal is a plausible sentence.
+    public func installSkill(named plugin: String) async -> Either<String, String> {
+        guard runtime.vendor.supportsSkills else {
+            return .left("\(runtime.vendor.displayName) can't install skills.")
+        }
+        guard let provider = lock.withLock({ _provider }) else {
+            return .left("\(runtime.vendor.displayName) isn't available.")
+        }
+        return await provider.installSkill(named: plugin)
     }
 
     /// What the user's own Claude Code is set up to use — read from their
     /// settings, then replaced by whatever a live session reports.
     public var inheritedDefaults: ClaudeCodeDefaults {
-        let live = Option.fromOptional(lock.withLock { _claudeCode }?.reportedModel)
+        let live = Option.fromOptional(lock.withLock { _provider }?.reportedModel)
             .flatMap { Option.fromOptional($0) }^
             .flatMap(ChatModel.named)^
         // The live half is this character's own session reporting what it ran
@@ -303,6 +335,6 @@ public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, @unchecke
     /// False until detection finishes, and false when falling back to the API
     /// provider — that one really can't look at anything itself.
     public var hasWorkspaceTools: Bool {
-        lock.withLock { _claudeCode } != nil
+        lock.withLock { _provider } != nil
     }
 }

@@ -4750,7 +4750,7 @@ public final class Secretary {
     public var isEffortInherited: Bool { !effort.isDefined }
 
     private var inheritedDefaults: ClaudeCodeDefaults {
-        Option.fromOptional(chatProvider as? ChatBackend)
+        Option.fromOptional(chatProvider as? VendorBackend)
             .map(\.inheritedDefaults)^
             .getOrElse(.unknown)
     }

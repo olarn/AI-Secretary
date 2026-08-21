@@ -26,6 +26,10 @@ struct ProfileSettingsView: View {
     /// menu, which is the one place that creates one.
     let profileID: UUID
     let appearance: Appearance
+    /// Where work runs, and whether it can be reached. Only this panel asks:
+    /// the maker and its sign-in state belong with the brain she thinks with,
+    /// not with the window's appearance.
+    let backendStatus: BackendStatus
     /// Only for the Model and Effort rows. They are settings of the running
     /// assistant rather than fields of the stored profile, which is why they
     /// take effect on click while everything above them waits for Save.
@@ -34,10 +38,17 @@ struct ProfileSettingsView: View {
     @State private var draft: Draft
     @State private var note: String?
 
-    init(profiles: ProfileLibrary, profileID: UUID, appearance: Appearance, secretary: Secretary) {
+    init(
+        profiles: ProfileLibrary,
+        profileID: UUID,
+        appearance: Appearance,
+        backendStatus: BackendStatus,
+        secretary: Secretary
+    ) {
         self.profiles = profiles
         self.profileID = profileID
         self.appearance = appearance
+        self.backendStatus = backendStatus
         self.secretary = secretary
         _draft = State(initialValue: Draft(profiles.profile(profileID)))
     }
@@ -65,8 +76,11 @@ struct ProfileSettingsView: View {
                 pictureRow
 
                 dividerRow
+                vendorRow
                 modelRow
-                effortRow
+                if backendStatus.runtime.vendor.supportsEffort {
+                    effortRow
+                }
             }
 
             HStack(spacing: appearance.settings.panelSpacing) {
@@ -222,6 +236,63 @@ struct ProfileSettingsView: View {
     /// commands use, so a change here is announced in the transcript too — the
     /// conversation is where the change takes effect, so that's where it should
     /// be visible.
+    /// Which maker the work runs through, and whether the app can reach it.
+    ///
+    /// The tick is the point. Finding the tool on disk used to be reported as
+    /// "Ready", which is true of a Claude Code that is installed and signed out
+    /// — and the user only discovered otherwise when a turn came back refused.
+    /// This row asks, and says what came back.
+    private var vendorRow: some View {
+        GridRow {
+            fieldLabel("AI")
+                .gridCellAnchor(.topLeading)
+            VStack(alignment: .leading, spacing: appearance.settings.panelSpacing * 0.35) {
+                HStack(spacing: appearance.settings.panelSpacing * 0.4) {
+                    Text(backendStatus.vendorName)
+                        .font(.system(size: appearance.settings.footnoteFontSize))
+                    connectionMarker
+                    Button("Check") { backendStatus.checkConnection() }
+                        .buttonStyle(.plain)
+                        .font(.system(size: appearance.settings.hintFontSize))
+                        .foregroundStyle(theme.mutedText.color)
+                }
+                if let message = backendStatus.connection.message {
+                    // Coloured only when it failed. A green line of prose under
+                    // every healthy row is noise; the tick already said so.
+                    Text(message)
+                        .font(.system(size: appearance.settings.hintFontSize))
+                        .foregroundStyle(
+                            backendStatus.connection.isFailed
+                                ? theme.danger.color
+                                : theme.mutedText.color
+                        )
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        // Asked when the panel opens, so the answer is about the configuration
+        // in front of the user rather than whatever was true at launch.
+        .onAppear { backendStatus.checkConnection() }
+    }
+
+    /// Paints the answer and decides nothing — which of the three it is was
+    /// settled by `vendorConnection`, in a target the tests can see.
+    @ViewBuilder
+    private var connectionMarker: some View {
+        if backendStatus.connection.isChecking {
+            ProgressView()
+                .controlSize(.small)
+        } else if backendStatus.connection.isConnected {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(theme.success.color)
+                .font(.system(size: appearance.settings.hintFontSize))
+        } else if backendStatus.connection.isFailed {
+            Image(systemName: "xmark.circle.fill")
+                .foregroundStyle(theme.danger.color)
+                .font(.system(size: appearance.settings.hintFontSize))
+        }
+    }
+
     private var modelRow: some View {
         GridRow {
             fieldLabel("Model")
@@ -238,7 +309,7 @@ struct ProfileSettingsView: View {
                     )
                 }
                 Divider()
-                ForEach(ChatModel.known, id: \.id) { candidate in
+                ForEach(backendStatus.runtime.vendor.models, id: \.id) { candidate in
                     Button {
                         secretary.chooseModel(candidate)
                     } label: {

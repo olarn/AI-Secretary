@@ -584,7 +584,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     /// it once is the point of the split.
     private func detectBackend() {
         detector.observe { [weak self] availability in
-            Task { @MainActor in self?.backendStatus.availability = availability }
+            Task { @MainActor in
+                self?.backendStatus.availability = availability
+                // Asking as soon as there is something to ask: the sign-in
+                // check needs the executable, so it cannot run any earlier, and
+                // waiting for the panel to be opened would leave the app with
+                // no idea whether it can work until somebody looked.
+                self?.backendStatus.checkConnection()
+            }
         }
         let detector = self.detector
         Task.detached(priority: .utility) { detector.resolve() }
