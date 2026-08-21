@@ -1,6 +1,6 @@
 # Product Backlog — Next Sprints
 
-งานของ sprint ถัดๆ ไป ยังไม่เริ่ม  
+งานของ sprint ถัดๆ ไป ยังไม่เริ่ม
 
 ## Sprint 23: Support OpenCode 
 - [ ] รองรับการทำงานกับ OpenCode (local AI)
