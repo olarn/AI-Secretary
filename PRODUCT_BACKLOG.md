@@ -2852,3 +2852,61 @@ because it reads the setting.
 glass is a thing you check by looking: worth pinning a message with the checkbox
 on and off, and — the one that has bitten twice — clicking an empty part of the
 pinned window with glass on, to be sure the click does not fall through.
+
+## The second wall: a folder Claude Code may not touch, and no card for it (v0.21.338)
+
+The owner, after 0.21.331 and 0.21.336: commanding several characters at once,
+one asks for write permission on a folder and **the dialog still never appears**.
+
+There are two walls, and only one of them was ever noticed.
+
+The familiar one is the **permission** wall — *"requested permissions"*,
+*"requires approval"* — which `isPermissionRefusal` matches and which a tool rule
+opens. The other is the **working-directory** wall, and Claude Code words it
+nothing like the first. Captured verbatim while driving on 2026-08-20:
+
+```
+ls in '/Users/Olarn/Temp/ai-probe-watch' was blocked. For security, Claude Code
+may only list files in the allowed working directories for this session:
+'/Users/Olarn/Temp/ai-team-work'.
+```
+
+That matched none of the permission phrases, so `refusals(in:)` never emitted a
+`toolDenied` event, `run.denied` came back empty, `offerToWiden` returned on its
+first line — and **no card was ever raised, in the chat or anywhere else**. The
+character reported that it was stuck and the work stopped. It was recorded at
+0.21.329 as "known, not fixed", because a card offering a *tool rule* would have
+been a button that changed nothing: what is missing is `--add-dir`.
+
+**Why it shows up with several characters.** A character with no project open is
+standing in the scratch directory, so every path into the shared folder is
+outside her session. Commanded one at a time in her own project she never meets
+this wall; commanded together into a shared folder, the ones without the project
+meet it immediately. The diagnostic from the warm-process work said as much in
+passing — three of the four were "no project open".
+
+**The fix follows the shape of the thing that was missing.** A refusal now
+carries the folder that would let it through (`DeniedTool.directory`), read from
+the tool's own input — the file's parent for a write, the folder itself for a
+search — and from the sentence only for `Bash`, which has no path field. It takes
+the path the refusal names **first**, because that is the one that was refused;
+the ones named afterwards are the allowed ones. Nothing is invented: no path
+means no card, since a card offering a folder nobody chose is worse than none.
+
+The card asks for a place rather than a permission, because that is what is
+being agreed to, and `.directoryAccess` is a new `ActionClass` that
+`mayBeRemembered` refuses — a grant is `(project, tool, class)` and none of those
+three can say *which* folder, so a remembered yes would quietly cover the next
+one. Once and Deny, no Always. Saying yes adds the folder to
+`sessionAgentDirectories`, which `prepareWorkspace` feeds into `--add-dir` on
+every later turn, and runs the request again.
+
+The backend restarts when it does, and that is correct rather than a cost:
+`--add-dir` is a launch flag, so it is part of `WarmProcessKey`, and a process
+already running cannot be told about a new folder.
+
+Every message in `DirectoryRefusalTests` is Claude Code's own wording from a real
+refusal, not invented for the test — including the two that must **not** match,
+so the two walls cannot be conflated again.
+
+**Not driven** — no app testing this round. 1359 tests pass, 14 of them new.

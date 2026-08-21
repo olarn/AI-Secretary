@@ -119,11 +119,25 @@ public struct DeniedTool: Equatable, Sendable {
     /// chain to be permitted separately. A single rule covered the first one
     /// and the retry was refused again — see `bashPermissionRules`.
     public let rules: [String]
+    /// The folder that would unblock it, when what stopped the call was *where*
+    /// it pointed rather than what it was.
+    ///
+    /// Absent for an ordinary permission refusal, which a rule in `rules`
+    /// opens. Present for the working-directory wall, which no rule opens —
+    /// see `isDirectoryRefusal`, where the two are told apart, and why one of
+    /// them went unnoticed for so long.
+    public let directory: Option<String>
 
-    public init(name: String, target: Option<String>, rules: [String]) {
+    public init(
+        name: String,
+        target: Option<String>,
+        rules: [String],
+        directory: Option<String> = .none()
+    ) {
         self.name = name
         self.target = target
         self.rules = rules
+        self.directory = directory
     }
 
     /// One line a human can decide on.

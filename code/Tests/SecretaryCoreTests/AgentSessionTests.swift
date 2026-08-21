@@ -433,6 +433,87 @@ final class AgentSessionTests: XCTestCase {
 
     /// Claude Code refuses un-granted tools mid-turn rather than asking, so the
     /// only way to widen is to notice the refusal and offer a retry.
+    // MARK: - Blocked for where it pointed, not for what it was
+
+    private func denyFolder() -> DeniedTool {
+        DeniedTool(
+            name: "Write",
+            target: .some("/tmp/elsewhere/task.md"),
+            rules: ["Write"],
+            directory: .some("/tmp/elsewhere")
+        )
+    }
+
+    /// The owner's report: commanding several characters at once, one asks for
+    /// write permission on a folder and no dialog ever appears. Claude Code has
+    /// a second wall — the working-directory one — worded nothing like the
+    /// permission wall, so the refusal was never recognised, nothing was
+    /// offered, and the turn ended with the character saying it was stuck.
+    func testAFolderRefusalPutsACardUp() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        provider.denialsForNextTurn = [denyFolder()]
+        secretary.submit("write the action items")
+        await waitUntilIdle()
+
+        guard case .approval(let request, let operation) = secretary.pendingDecision.toOptional() else {
+            return XCTFail("Expected a card, got: \(String(describing: secretary.pendingDecision))")
+        }
+        XCTAssertEqual(operation, .widenAgentDirectories(paths: ["/tmp/elsewhere"], prompt: "write the action items"))
+        XCTAssertEqual(request.actionClass, .directoryAccess)
+        XCTAssertTrue(
+            secretary.transcript.contains { $0.text.contains("/tmp/elsewhere") },
+            "The card has to name the folder being agreed to"
+        )
+    }
+
+    /// Opening a folder is never remembered — a grant is (project, tool, class)
+    /// and none of those says *which* folder — so the card offers Once and Deny
+    /// and no Always.
+    func testOpeningAFolderIsNeverRememberedAndSaysSo() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        provider.denialsForNextTurn = [denyFolder()]
+        secretary.submit("write the action items")
+        await waitUntilIdle()
+
+        XCTAssertEqual(secretary.offeredApprovalAnswers, [.once, .deny])
+    }
+
+    /// And the question reaches whoever is listening from outside her chat,
+    /// which is the command window — the place the owner was commanding from
+    /// when they saw nothing.
+    func testTheFolderCardIsAnnouncedToTheCommandWindow() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        var asked: [ApprovalAsked] = []
+        secretary.onApprovalAsked = { asked.append($0) }
+
+        provider.denialsForNextTurn = [denyFolder()]
+        secretary.submit("write the action items")
+        await waitUntilIdle()
+
+        XCTAssertEqual(asked.count, 1, "Got: \(asked)")
+        XCTAssertTrue(asked.first?.question.contains("/tmp/elsewhere") ?? false)
+    }
+
+    /// Saying yes opens the folder to Claude Code and runs the request again —
+    /// `--add-dir`, which is the only thing that opens this wall. A tool rule
+    /// would have been a button that changed nothing.
+    func testSayingYesOpensTheFolderAndRetries() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        provider.denialsForNextTurn = [denyFolder()]
+        secretary.submit("write the action items")
+        await waitUntilIdle()
+
+        let before = provider.callCount
+        secretary.resolvePendingApproval(answer: .once)
+        await waitUntilIdle()
+
+        XCTAssertGreaterThan(provider.callCount, before, "the request has to run again")
+        XCTAssertTrue(
+            provider.preparedExtras.last?.contains(where: { $0.path == "/tmp/elsewhere" }) ?? false,
+            "the folder has to be handed to the backend. Got: \(String(describing: provider.preparedExtras.last))"
+        )
+    }
+
     // MARK: - Waiting for a permission nobody can hand over
 
     /// The owner's deadlock, 2026-08-20. Their shared folder's `CLAUDE.md`

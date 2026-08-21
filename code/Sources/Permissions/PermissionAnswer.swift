@@ -86,7 +86,10 @@ public func mayBeRemembered(_ actionClass: ActionClass) -> Bool {
     case .readOnly, .localWrite:
         return true
     case .projectMemoryWrite, .externalNetwork, .browserAction,
-         .destructive, .gitHistoryChanging, .dependencyInstalling:
+         .destructive, .gitHistoryChanging, .dependencyInstalling,
+         // A grant is `(project, tool, class)` and cannot name a folder, so
+         // remembering this one would quietly cover every *other* folder too.
+         .directoryAccess:
         return false
     }
 }

@@ -40,7 +40,7 @@ Sprint ที่จบแล้ว บันทึกทุกอย่างอ
   refused" โมเดลเลยไม่ยอมเรียก tool แล้วตอบเป็นร้อยแก้วว่าไม่มีสิทธิ์ — ไม่มี tool call
   ก็ไม่มี refusal ไม่มี refusal ก็ไม่มีการ์ด งานเลยหยุดสนิท ส่วน "รอสักพักก็เขียนได้"
   คือ standing grant ที่ widen ให้เงียบ ๆ ตามที่ Sprint 15 ตั้งใจ ไม่ใช่บั๊ก
-- [ ] **ที่เหลือของข้อบน — ต้องให้เจ้าของตัดสินใจ** Claude Code ปฏิเสธ path นอก working
+- [x] **ที่เหลือของข้อบน — แก้แล้ว (v0.21.338)** Claude Code ปฏิเสธ path นอก working
   directory ด้วยข้อความ *"ls in '…' was blocked. For security, Claude Code may only
   list files in the allowed working directories for this session"* ซึ่งไม่ตรงกับ
   `refusalPhrases` เลยไม่มีการ์ดขึ้น และต่อให้ขึ้นก็แก้ไม่ได้ เพราะสิ่งที่ขาดคือ `--add-dir`
@@ -94,3 +94,13 @@ Sprint ที่จบแล้ว บันทึกทุกอย่างอ
   หน้าต่าง (`invalidateShadow`) ตามบทเรียน 0.21.323 — แถบหัวปล่อยให้ AppKit วาด
   เพราะเป็น material อยู่แล้วและสว่าง/มืดตาม `panel.appearance` ของตัวละคร (v0.21.337)
   **ยังไม่ได้ลองในแอป** — อยากให้ลองคลิกที่ว่าง ๆ ในหน้าต่าง pin ตอนเปิด glass ด้วย
+- [x] สั่งหลาย character พร้อมกันแล้วขอ write folder permission ยังไม่ขึ้น dialog —
+  ต้นเหตุคือ Claude Code มี **กำแพงที่สอง** คือ working-directory ซึ่งข้อความไม่ตรงกับ
+  วลี permission เดิมเลย (`"...may only ... in the allowed working directories for this
+  session"`) จึงไม่เคยเกิด event `toolDenied` → `offerToWiden` ออกตั้งแต่บรรทัดแรก →
+  ไม่มีการ์ดที่ไหนเลย และการให้ tool rule ก็แก้ไม่ได้ ต้องเป็น `--add-dir`
+  ที่เจอตอนสั่งหลายตัวเพราะตัวที่ไม่ได้เปิด project จะยืนอยู่ใน scratch dir ทุก path
+  ในโฟลเดอร์ที่ใช้ร่วมกันจึงอยู่นอก session หมด แก้: `DeniedTool.directory` +
+  ActionClass `.directoryAccess` (จำไม่ได้ตลอดไป เพราะ grant บอกไม่ได้ว่าโฟลเดอร์ไหน)
+  + การ์ดถามเป็น "ขอทำงานในโฟลเดอร์นี้" แล้ว retry ด้วย `--add-dir` (v0.21.338)
+  **ยังไม่ได้ลองในแอป**

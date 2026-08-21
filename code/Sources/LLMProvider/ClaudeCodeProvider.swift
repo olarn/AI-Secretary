@@ -442,12 +442,25 @@ public final class ClaudeCodeProvider: ChatProvider, SkillInstalling, @unchecked
     /// approving one `npm test` must not hand over the whole shell — and it is
     /// commands, plural: see `bashPermissionRules` for why one rule for the
     /// whole line left the person approving something that then failed anyway.
-    static func describe(tool name: String, input: [String: Any]) -> DeniedTool {
+    static func describe(
+        tool name: String,
+        input: [String: Any],
+        message: String = ""
+    ) -> DeniedTool {
+        // Only when the refusal was about where the call pointed. Offering a
+        // folder for an ordinary permission refusal would ask the person to
+        // widen something that was never in the way.
+        let directory = Option.fromOptional(
+            isDirectoryRefusal(message)
+                ? blockedDirectory(tool: name, input: input, message: message)
+                : nil
+        )
         if name == "Bash", let command = input["command"] as? String {
             return DeniedTool(
                 name: name,
                 target: .some(command),
-                rules: bashPermissionRules(for: command)
+                rules: bashPermissionRules(for: command),
+                directory: directory
             )
         }
         let target = Option.fromOptional(
@@ -455,7 +468,7 @@ public final class ClaudeCodeProvider: ChatProvider, SkillInstalling, @unchecked
                 ?? (input["path"] as? String)
                 ?? (input["url"] as? String)
         )
-        return DeniedTool(name: name, target: target, rules: [name])
+        return DeniedTool(name: name, target: target, rules: [name], directory: directory)
     }
 
     // MARK: - Wire format
@@ -583,12 +596,17 @@ public final class ClaudeCodeProvider: ChatProvider, SkillInstalling, @unchecked
                 else { return nil }
                 // Which tool it was decides which refusals count, so the call is
                 // looked up first and only dropped once it's been judged.
-                guard Self.isPermissionRefusal(
-                    String(describing: block["content"] ?? ""),
-                    tool: call.name
-                ) else { return nil }
+                let message = String(describing: block["content"] ?? "")
+                // Two different walls: the permission one, which a rule opens,
+                // and the working-directory one, which only `--add-dir` opens.
+                // Both have to be reported or the person is never asked.
+                guard Self.isPermissionRefusal(message, tool: call.name)
+                        || isDirectoryRefusal(message)
+                else { return nil }
                 stateLock.withLock { _pendingToolUses.removeValue(forKey: id) }
-                return .toolDenied(Self.describe(tool: call.name, input: call.input))
+                return .toolDenied(
+                    Self.describe(tool: call.name, input: call.input, message: message)
+                )
             }
     }
 

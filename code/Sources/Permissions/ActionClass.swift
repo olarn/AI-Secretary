@@ -28,6 +28,15 @@ public enum ActionClass: String, Codable, CaseIterable, Sendable {
     /// `externalNetwork` it would read as sending data out, which is not it
     /// either. What matters is whose session it acts in — theirs.
     case browserAction
+    /// Opens a folder to the assistant that was not part of the session.
+    ///
+    /// Its own class because the grant is about a *place*, and no other class
+    /// says where. It is also why it can never be remembered: a grant is keyed
+    /// by `(project, tool, class)`, which cannot name a folder, so a remembered
+    /// "yes" here would silently cover the next folder as well. The charter
+    /// lists accessing a new directory among the things that need approval,
+    /// and this is that approval.
+    case directoryAccess
 
     public var humanDescription: String {
         switch self {
@@ -39,6 +48,7 @@ public enum ActionClass: String, Codable, CaseIterable, Sendable {
         case .dependencyInstalling: return "Installs software or dependencies"
         case .externalNetwork: return "Sends data to an external service"
         case .browserAction: return "Acts in your browser, as you"
+        case .directoryAccess: return "Opens another folder to the assistant"
         }
     }
 }

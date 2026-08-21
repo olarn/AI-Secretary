@@ -36,7 +36,10 @@ final class ActionClassTests: XCTestCase {
     /// rather than defaulting into whichever arm the switch happens to have.
     func testEveryClassIsAccountedFor() {
         XCTAssertEqual(Set(ActionClass.allCases.filter(mayBeRemembered)), [.readOnly, .localWrite])
-        XCTAssertEqual(ActionClass.allCases.count, 8)
+        // 9 since `.directoryAccess` — opening a folder to Claude Code, which
+        // cannot be remembered because a grant is `(project, tool, class)` and
+        // none of those three says *which* folder.
+        XCTAssertEqual(ActionClass.allCases.count, 9)
     }
 
     /// The sentence on the card and the buttons under it are decided by one

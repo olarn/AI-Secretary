@@ -80,6 +80,12 @@ public enum PlannedOperation: Equatable, Sendable {
     /// `.localWrite` — the door to changing the user's files, so it is asked,
     /// but the answer may be kept for the project: see `mayBeRemembered`.
     case widenAgentTools(rules: [String], prompt: String)
+    /// Re-run a turn with another folder open to Claude Code, after it refused
+    /// a call for pointing outside the session's working directories.
+    ///
+    /// Not the same as widening tools, and no tool rule substitutes for it:
+    /// what was missing is `--add-dir`. See `isDirectoryRefusal`.
+    case widenAgentDirectories(paths: [String], prompt: String)
     /// Install a skill the assistant says it needs, then ask again.
     /// `.dependencyInstalling`, so it is asked every time: this puts software
     /// on the person's machine.
@@ -100,6 +106,7 @@ public enum PlannedOperation: Equatable, Sendable {
         // Approve-once: the grant is per project, and the prompt says so.
         case .startAgent: return .readOnly
         case .widenAgentTools: return .localWrite
+        case .widenAgentDirectories: return .directoryAccess
         case .installSkill: return .dependencyInstalling
         case .rememberNote: return .projectMemoryWrite
         }
@@ -115,6 +122,8 @@ public enum PlannedOperation: Equatable, Sendable {
         case .startAgent: return "Let Claude Code read and work in this project"
         case .widenAgentTools(let rules, _):
             return "Allow \(rules.joined(separator: ", ")) for the rest of this session"
+        case .widenAgentDirectories(let paths, _):
+            return "Work in \(paths.joined(separator: ", ")) for the rest of this session"
         case .installSkill(let plugin, _):
             return "Install the \(plugin) skill from your Claude Code marketplaces"
         case .rememberNote:
@@ -2759,6 +2768,17 @@ public final class Secretary {
     private func offerToWiden(_ denied: [DeniedTool], prompt: String, taskID: String) {
         let project = lastProject.getOrElse(Self.scratchProject)
 
+        // A folder first, because no tool rule opens that wall and the card
+        // that offered one would be a button that changes nothing. A call
+        // refused for pointing outside the session carries the folder that
+        // would let it through; see `isDirectoryRefusal` for how the two kinds
+        // of refusal are told apart, and for what it cost to conflate them.
+        let folders = denied.compactMap { $0.directory.toOptional() }.reduced()
+        if !folders.isEmpty {
+            offerToOpen(folders: folders, prompt: prompt, taskID: taskID, project: project)
+            return
+        }
+
         let rules = denied.flatMap(\.rules).reduced()
         guard !rules.isEmpty else { return }
 
@@ -2844,6 +2864,52 @@ public final class Secretary {
 
             \(scope)Shall I go ahead? \(howLong) Either way I'll try your \
             request again.
+            """
+        )
+    }
+
+    /// Asks to open a folder Claude Code was refused for being outside the
+    /// session's working directories.
+    ///
+    /// A separate card from the tool one, and worded as a place rather than as
+    /// a permission, because that is what is being agreed to: the assistant
+    /// gets to read and write in another folder for the rest of this
+    /// conversation. The charter puts accessing a new directory on the list of
+    /// things a human has to approve, and this is where that happens.
+    ///
+    /// Never remembered — `.directoryAccess` refuses it in `mayBeRemembered`,
+    /// since a grant keyed by `(project, tool, class)` cannot say *which*
+    /// folder and would quietly cover the next one too.
+    private func offerToOpen(
+        folders: [String],
+        prompt: String,
+        taskID: String,
+        project: Project
+    ) {
+        let request = ApprovalRequest(
+            taskID: taskID,
+            toolID: Self.claudeCodeToolID,
+            actionClass: .directoryAccess,
+            project: project,
+            commandSummary: folders.joined(separator: ", "),
+            rationale: "Work in this folder and try again"
+        )
+        audit.record(AuditEntry(taskID: taskID, kind: .approvalRequested, detail: request.commandSummary))
+
+        let names = folders.map { "• \($0)" }.joined(separator: "\n")
+        let plural = folders.count == 1 ? "that folder" : "those folders"
+        askApproval(
+            request,
+            operation: .widenAgentDirectories(paths: folders, prompt: prompt),
+            saying: """
+            I was stopped before I could touch this — it's outside the folders \
+            this session may work in:
+
+            \(names)
+
+            May I work in \(plural)? It lasts for this conversation only, and \
+            I'll ask again for anywhere else. Either way I'll try your request \
+            again.
             """
         )
     }
@@ -3076,6 +3142,37 @@ public final class Secretary {
     static let languagePrompt = SecretaryPrompt.language
 
     /// Adds the rules for this session and retries the request that was blocked.
+    /// The folder the person just agreed to is opened to Claude Code, and the
+    /// request runs again.
+    ///
+    /// Session-only and never written down: `mayBeRemembered` refuses
+    /// `.directoryAccess` because a grant cannot name a folder, so the next
+    /// folder is asked about afresh rather than inheriting this yes.
+    ///
+    /// The backend restarts here, and that is correct rather than a cost to
+    /// avoid: `--add-dir` is a launch flag, so it is part of `WarmProcessKey`,
+    /// and a process already running cannot be told about a new folder.
+    private func openDirectoriesAndRetry(paths: [String], prompt: String, in project: Project) {
+        let taskID = activeTaskID.getOrElse("-")
+        sessionAgentDirectories.formUnion(paths.map { URL(fileURLWithPath: $0) })
+        audit.record(AuditEntry(
+            taskID: taskID,
+            kind: .approvalGranted,
+            detail: "session directories: \(paths.joined(separator: ", "))"
+        ))
+
+        guard let scoped = chatProvider as? WorkspaceScopedProvider else { return }
+        prepareWorkspace(primary: lastProject, on: scoped)
+
+        // Same re-entry as `widenAndRetry`: the previous turn finished, so the
+        // machine is at IDLE and `.beginExecuting` from there is invalid.
+        stateMachine.send(.userBeganInput, reason: "retrying with another folder open", taskID: .some(taskID))
+        stateMachine.send(.beginInterpreting, reason: "retrying with another folder open", taskID: .some(taskID))
+        _ = prompt
+        _ = project
+        streamReply(messages: conversation, taskID: taskID)
+    }
+
     private func widenAndRetry(rules: [String], prompt: String, in project: Project) {
         let taskID = activeTaskID.getOrElse("-")
         sessionAgentTools.formUnion(rules)
@@ -3118,6 +3215,11 @@ public final class Secretary {
     /// alongside it, so a question spanning projects can be answered without
     /// making the user switch. Only approved folders are ever passed — the
     /// per-project grant is what widens this set.
+    /// Folders the person opened to Claude Code this session, on top of the
+    /// projects — see `openDirectoriesAndRetry`. Session-only, like
+    /// `sessionAgentTools`, and for the same reason.
+    private var sessionAgentDirectories: Set<URL> = []
+
     private func prepareWorkspace(primary: Option<Project>, on scoped: WorkspaceScopedProvider) {
         // Remembered before streaming so the system prompt can name the folder
         // the backend is actually standing in.
@@ -3133,6 +3235,10 @@ public final class Secretary {
         if stagedThisSession {
             attachmentStore.stagingDirectory.fold({}) { others.append($0) }
         }
+        // Folders agreed to mid-session. Appended here rather than at the one
+        // call site that grants them, so every later `prepare` keeps them —
+        // dropping them on the next turn would ask the same question again.
+        others.append(contentsOf: sessionAgentDirectories.sorted { $0.path < $1.path })
         scoped.prepare(
             workingDirectory: primary.map(\.url)^.getOrElse(Self.scratchDirectory),
             additionalDirectories: others,
@@ -3780,6 +3886,10 @@ public final class Secretary {
             widenAndRetry(rules: rules, prompt: prompt, in: project)
             return
         }
+        if case .widenAgentDirectories(let paths, let prompt) = operation {
+            openDirectoriesAndRetry(paths: paths, prompt: prompt, in: project)
+            return
+        }
         if case .installSkill(let plugin, let prompt) = operation {
             installSkillAndRetry(plugin: plugin, prompt: prompt, in: project)
             return
@@ -3878,6 +3988,10 @@ public final class Secretary {
             widenAndRetry(rules: rules, prompt: prompt, in: project)
             return
         }
+        if case .widenAgentDirectories(let paths, let prompt) = operation {
+            openDirectoriesAndRetry(paths: paths, prompt: prompt, in: project)
+            return
+        }
         if case .installSkill(let plugin, let prompt) = operation {
             installSkillAndRetry(plugin: plugin, prompt: prompt, in: project)
             return
@@ -3971,7 +4085,7 @@ public final class Secretary {
             """ + (wasTruncated ? "\n(Only the first \(readContextMaxBytes / 1024) KB is shown here.)" : "")
 
         case .understand, .followInstructions, .watch, .startAgent, .widenAgentTools,
-             .installSkill, .rememberNote:
+             .widenAgentDirectories, .installSkill, .rememberNote:
             // These write their own history: the model's reply is the record.
             return
         }
@@ -4377,7 +4491,8 @@ public final class Secretary {
 
     private func toolID(for operation: PlannedOperation) -> String {
         switch operation {
-        case .startAgent, .widenAgentTools, .installSkill, .rememberNote: return Self.claudeCodeToolID
+        case .startAgent, .widenAgentTools, .widenAgentDirectories, .installSkill, .rememberNote:
+            return Self.claudeCodeToolID
         case .git: return adapter.toolID
         // Understanding reads through the same adapter, so it is gated by the
         // same project allowlist entry. What makes it stricter is its action
@@ -4398,6 +4513,7 @@ public final class Secretary {
             return "watch \(op.displayPath.isEmpty ? "this project folder" : op.displayPath) for changes"
         case .startAgent: return "run Claude Code here"
         case .widenAgentTools(let rules, _): return rules.joined(separator: ", ")
+        case .widenAgentDirectories(let paths, _): return paths.joined(separator: ", ")
         case .installSkill(let plugin, _): return "claude plugin install \(plugin)"
         case .rememberNote(let note): return memoryApprovalSummary(note)
         }
@@ -4413,7 +4529,7 @@ public final class Secretary {
             return fileAdapter.run(.readFile(relativePath: op.relativePath), in: project)
         case .watch:
             preconditionFailure("watching is handled before adapter dispatch")
-        case .startAgent, .widenAgentTools, .installSkill, .rememberNote:
+        case .startAgent, .widenAgentTools, .widenAgentDirectories, .installSkill, .rememberNote:
             preconditionFailure("agent operations are handled before adapter dispatch")
         }
     }
