@@ -138,6 +138,26 @@ func openCodeUsage(_ part: [String: Any]) -> Option<ChatUsage> {
     )
 }
 
+/// The character's standing instructions, in front of what she was just asked.
+///
+/// opencode has no `--append-system-prompt`. Its equivalent is `--agent`, which
+/// means a file the user has to write and keep in step with a profile they edit
+/// in this app — two places to change one personality. Prepending is the honest
+/// alternative and it is not free: the model sees the instructions as something
+/// the user said, which is weaker than a real system prompt. Said here so the
+/// next person weighing `--agent` knows the trade rather than rediscovering it.
+///
+/// Without this the persona never arrived at all: the first turn driven through
+/// opencode carried the roster preamble and the question, and nothing about who
+/// she is (2026-08-21).
+public func openCodePrompt(system: Option<String>, message: String) -> String {
+    system
+        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }^
+        .filter { !$0.isEmpty }^
+        .map { "\($0)\n\n---\n\n\(message)" }^
+        .getOrElse(message)
+}
+
 /// The argv for one turn.
 ///
 /// Free and pure so the flags can be asserted without spawning anything — the

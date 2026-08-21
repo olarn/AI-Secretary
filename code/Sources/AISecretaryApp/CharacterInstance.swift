@@ -40,6 +40,8 @@ final class CharacterInstance {
     /// given.
     private let registry: ProjectRegistry
     private let backendStatus: BackendStatus
+    /// Hers: which maker she works through, and whether it can be reached.
+    private let vendorStatus: VendorStatus
 
     private(set) var characterPanel: FloatingPanel!
     private(set) var chatPanel: FloatingPanel!
@@ -142,6 +144,20 @@ final class CharacterInstance {
             // into the person's own preferences.
             choiceStore: UserDefaultsAssistantChoiceStore(character: profileID)
         )
+        // After the secretary, because it reads and writes her chosen model:
+        // one that belongs to the maker she just left has to be dropped.
+        //
+        // Hers, keyed by profile like the model and effort beside it — two
+        // characters on one desktop may reasonably run through different
+        // makers, one on the Claude Code subscription and one on a local model.
+        let secretary = self.secretary
+        self.vendorStatus = VendorStatus(
+            store: UserDefaultsVendorChoiceStore(character: profileID),
+            backend: backend,
+            claudeAvailability: { [weak backendStatus] in backendStatus?.availability },
+            chosenModel: { [weak secretary] in secretary?.chosenModel },
+            chooseModel: { [weak secretary] chosen in secretary?.chooseModel(chosen) }
+        )
     }
 
     // MARK: - Windows
@@ -189,6 +205,7 @@ final class CharacterInstance {
                 secretary: secretary,
                 registry: registry,
                 backendStatus: backendStatus,
+                vendorStatus: vendorStatus,
                 appearance: appearance,
                 profiles: profiles,
                 profileID: profileID,

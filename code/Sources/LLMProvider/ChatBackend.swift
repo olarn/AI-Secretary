@@ -130,7 +130,9 @@ public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, VendorBac
     /// `ClaudeCodeDetector` for why that half does not belong here.
     private let detector: ClaudeCodeDetector
     /// How to build this character's provider once the tool has been found.
-    private let runtime: VendorRuntime
+    /// Mutable because the maker is a per-character setting the user can change
+    /// while the app is running — see `use(runtime:installation:)`.
+    private var _runtime: VendorRuntime
     private let lock = NSLock()
     /// This backend's own handle on Claude Code: its own session, working
     /// directory, allowlist and browser flag. One per character, which is the
@@ -150,7 +152,7 @@ public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, VendorBac
     /// different argument at the call site and not a branch in here.
     public init(detector: ClaudeCodeDetector, runtime: VendorRuntime = .claudeCode) {
         self.detector = detector
-        self.runtime = runtime
+        self._runtime = runtime
         // Whoever pays for detection, every backend gets the answer — including
         // one built after the search already finished, which `observe` delivers
         // to immediately. Without that, a character created later would sit
@@ -169,7 +171,37 @@ public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, VendorBac
     }
 
     /// Which maker this character's work runs through.
-    public var vendor: AIVendor { runtime.vendor }
+    public var vendor: AIVendor { lock.withLock { _runtime }.vendor }
+
+    /// Switches this character to another maker, now.
+    ///
+    /// The provider is replaced rather than kept alongside, and the thread is
+    /// dropped with it: a session id belongs to the tool that issued it, and
+    /// handing opencode a Claude session id — or the reverse — asks it to
+    /// resume something that was never its. Any process the old provider kept
+    /// warm is ended, or it would outlive the only thing that referred to it.
+    ///
+    /// `installation` absent means the maker's tool could not be found, which
+    /// leaves this character with no provider until it is. That is the honest
+    /// state: a turn then says the tool is missing, rather than quietly running
+    /// on the maker she was moved away from.
+    public func use(runtime: VendorRuntime, installation: AgentInstallation?) {
+        let previous: VendorProvider? = lock.withLock {
+            let old = _provider
+            _runtime = runtime
+            _pendingSession = nil
+            _provider = installation.map { runtime.makeProvider($0) }
+            if let built = _provider, let pending = _pending {
+                built.prepare(
+                    workingDirectory: pending.workingDirectory,
+                    additionalDirectories: pending.additionalDirectories,
+                    allowedTools: pending.allowedTools
+                )
+            }
+            return old
+        }
+        previous?.stopWarmProcess()
+    }
 
     /// Detection result, or nil if we haven't looked yet.
     public var availability: ClaudeCodeAvailability? { detector.availability }
@@ -191,13 +223,19 @@ public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, VendorBac
     }
 
     /// Carries over anything chosen while there was nothing yet to carry it to.
+    ///
+    /// **Only for the Claude runtime.** What arrives here is where *Claude Code*
+    /// was found, and the factory is whichever maker this character is set to —
+    /// so without the guard, a character switched to OpenCode would be handed an
+    /// OpenCodeProvider pointed at the `claude` binary. Every other maker is
+    /// installed by `use(runtime:installation:)`, which is given its own tool.
     private func adopt(_ availability: ClaudeCodeAvailability) {
         guard case .available(let installation) = availability else { return }
         lock.lock()
         defer { lock.unlock() }
-        guard _provider == nil else { return }
+        guard _provider == nil, _runtime.vendor.id == AIVendor.claudeCode.id else { return }
 
-        let provider = runtime.makeProvider(installation.agent)
+        let provider = _runtime.makeProvider(installation.agent)
         if let pending = _pending {
             provider.prepare(
                 workingDirectory: pending.workingDirectory,
@@ -219,7 +257,9 @@ public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, VendorBac
         maxTokens: Int,
         system: Option<String>
     ) -> ChatStream {
-        resolve()
+        // Only the Claude path is found by searching; every other maker was
+        // installed with its own tool and must not pay for a login shell here.
+        if lock.withLock({ _runtime.vendor.id }) == AIVendor.claudeCode.id { resolve() }
         guard let provider = lock.withLock({ _provider }) else {
             // Nothing to fall back to, and nothing to pretend: say what is
             // missing. The onboarding card says the same thing in the panel.
@@ -284,7 +324,7 @@ public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, VendorBac
     /// either way and applied when the provider appears, exactly as the working
     /// directory is.
     public var supportsBrowser: Bool {
-        runtime.vendor.supportsBrowser && lock.withLock { _provider } != nil
+        lock.withLock { _runtime.vendor.supportsBrowser && _provider != nil }
     }
 
     public func setBrowserEnabled(_ enabled: Bool) {
@@ -310,11 +350,12 @@ public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, VendorBac
     /// Claude Code sat right there, found and working. Nothing surfaced it
     /// because the refusal is a plausible sentence.
     public func installSkill(named plugin: String) async -> Either<String, String> {
-        guard runtime.vendor.supportsSkills else {
-            return .left("\(runtime.vendor.displayName) can't install skills.")
+        let maker = vendor
+        guard maker.supportsSkills else {
+            return .left("\(maker.displayName) can't install skills.")
         }
         guard let provider = lock.withLock({ _provider }) else {
-            return .left("\(runtime.vendor.displayName) isn't available.")
+            return .left("\(maker.displayName) isn't available.")
         }
         return await provider.installSkill(named: plugin)
     }

@@ -44,6 +44,15 @@ public struct AIVendor: Equatable, Sendable, Identifiable {
     /// than inferred from whether the search happened to fail.
     public let executableIsUserSupplied: Bool
 
+    /// What the person choosing this maker has to be told, if anything.
+    ///
+    /// Data rather than a branch in the panel, so the sentence lives beside the
+    /// facts it describes and a new maker cannot be added without someone
+    /// deciding what its caution is. Absent means there is nothing unusual to
+    /// say — which is itself a claim, so do not leave it absent by default when
+    /// adding one.
+    public let caution: String?
+
     public init(
         id: String,
         displayName: String,
@@ -51,7 +60,8 @@ public struct AIVendor: Equatable, Sendable, Identifiable {
         supportsEffort: Bool,
         supportsBrowser: Bool,
         supportsSkills: Bool,
-        executableIsUserSupplied: Bool
+        executableIsUserSupplied: Bool,
+        caution: String? = nil
     ) {
         self.id = id
         self.displayName = displayName
@@ -60,6 +70,7 @@ public struct AIVendor: Equatable, Sendable, Identifiable {
         self.supportsBrowser = supportsBrowser
         self.supportsSkills = supportsSkills
         self.executableIsUserSupplied = executableIsUserSupplied
+        self.caution = caution
     }
 }
 
@@ -96,6 +107,18 @@ public extension AIVendor {
     func offers(model: ChatModel) -> Bool {
         models.contains(model)
     }
+}
+
+/// The model to keep when the maker changes.
+///
+/// A chosen model belongs to the maker that offered it. Switching from opencode
+/// back to Claude Code left `qwen3.8:27b-mlx` sitting in the Model row under
+/// Claude Code — found by driving it on 2026-08-21 — where it is not a model
+/// that exists, and the row offered no way to notice. Absent means "inherit the
+/// maker's own default", which is the honest thing to fall back to: the app
+/// must not pick a replacement on the user's behalf.
+public func modelSurviving(_ model: Option<ChatModel>, switchingTo vendor: AIVendor) -> Option<ChatModel> {
+    model.filter(vendor.offers(model:))^
 }
 
 /// Where a maker's executable is, without saying which maker found it.

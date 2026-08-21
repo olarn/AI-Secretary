@@ -373,7 +373,7 @@ extension ChatPanelView {
                         profiles: profiles,
                         profileID: profileID,
                         appearance: appearance,
-                        backendStatus: backendStatus,
+                        vendorStatus: vendorStatus,
                         secretary: secretary
                     )
                 case .projects: projectsSection

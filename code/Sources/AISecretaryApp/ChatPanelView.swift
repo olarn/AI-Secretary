@@ -13,6 +13,9 @@ struct ChatPanelView: View {
     let secretary: Secretary
     let registry: ProjectRegistry
     let backendStatus: BackendStatus
+    /// Which maker this character works through. Only the Profile panel reads
+    /// it; it is carried here because that panel is mounted from this one.
+    let vendorStatus: VendorStatus
     let appearance: Appearance
     let profiles: ProfileLibrary
     /// Which character's window this is. Passed to the Profile panel, which

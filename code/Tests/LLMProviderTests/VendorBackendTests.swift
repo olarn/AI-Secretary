@@ -71,11 +71,45 @@ final class VendorBackendTests: XCTestCase {
             detector: ClaudeCodeDetector(locator: locatorFindingClaude()),
             runtime: stubRuntime(vendor, provider: stub)
         )
+        // The Claude search must NOT build this one. What that search finds is
+        // where *Claude Code* is, so building another maker's provider from it
+        // would point OpenCode at the `claude` binary. Changed deliberately when
+        // the second maker arrived; this assertion is the old behaviour
+        // inverted, not a test weakened to go green.
         backend.resolve()
-
         XCTAssertEqual(backend.vendor, vendor)
-        // No branch inside the backend chose this — the runtime did.
+        XCTAssertFalse(backend.hasWorkspaceTools)
+
+        // Every maker but Claude is installed with its own tool.
+        backend.use(
+            runtime: stubRuntime(vendor, provider: stub),
+            installation: AgentInstallation(
+                vendorID: vendor.id,
+                executableURL: URL(fileURLWithPath: "/opt/homebrew/bin/stub")
+            )
+        )
         XCTAssertTrue(backend.hasWorkspaceTools)
+        // No branch inside the backend chose the provider — the runtime did.
+        XCTAssertEqual(backend.vendor, vendor)
+    }
+
+    func testSwitchingMakerDropsTheThreadWithIt() {
+        // A session id belongs to the tool that issued it. Carrying one across
+        // would ask the new maker to resume something that was never its.
+        let backend = ChatBackend(
+            detector: ClaudeCodeDetector(locator: locatorFindingClaude()),
+            runtime: stubRuntime(.claudeCode, provider: StubProvider())
+        )
+        backend.adoptSession("ses_from_the_other_one")
+        XCTAssertEqual(backend.currentSessionID, "ses_from_the_other_one")
+
+        backend.use(runtime: .claudeCode, installation: nil)
+
+        XCTAssertNil(backend.currentSessionID)
+        // Nothing found means no provider, which is the honest state: a turn
+        // then says the tool is missing rather than quietly running on the
+        // maker she was moved away from.
+        XCTAssertFalse(backend.hasWorkspaceTools)
     }
 
     func testInstallingASkillReachesTheProvider() async {

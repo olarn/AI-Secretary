@@ -62,7 +62,10 @@ public final class OpenCodeProvider: ChatProvider, @unchecked Sendable {
     ) -> ChatStream {
         // opencode keeps the thread itself, so only the newest message is sent
         // — the same shape the Claude path uses, and for the same reason.
-        let prompt = messages.last(where: { $0.role == .user })?.content ?? ""
+        let prompt = openCodePrompt(
+            system: system,
+            message: messages.last(where: { $0.role == .user })?.content ?? ""
+        )
         return ChatStream { continuation in
             let work = Task { await self.run(prompt: prompt, model: model, into: continuation) }
             continuation.onTermination = { _ in work.cancel() }

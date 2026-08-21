@@ -3118,3 +3118,70 @@ isn't where the app looked. Looked in: …" ที่ไล่ path ที่ห
 revert แล้ว ไม่ได้ commit)
 **เหลือสถานะเดียวที่ยังไม่ได้เห็นด้วยตา**: sign out จริง ๆ ซึ่งต้องใช้บัญชีเจ้าของ
 มีเทสคุมไว้แทน
+
+## Sprint 23: Support OpenCode (v0.23.348)
+
+ค่ายที่สองวิ่งได้จริงแล้ว — spike ของจริงก่อนเขียนโค้ด (opencode 1.18.15 บนเครื่องนี้)
+เพราะความเสี่ยงทั้งหมดของ reader คือการเชื่อ shape ที่เครื่องมือไม่ได้พ่นออกมาจริง
+`run --format json` พ่น JSON บรรทัดละ object: `step_start`, `tool_use`
+(มี `state.title` เป็น label มนุษย์อ่านได้ของมันเอง), `text`, `step_finish`
+(tokens แยก input/output/cache + cost) และ `sessionID` ที่ `--session` รับกลับได้
+**fixture ในเทสทุกบรรทัดคือบรรทัดที่ opencode พ่นออกมาจริง**
+
+- [x] รองรับการทำงานกับ OpenCode (local AI) — `OpenCodeProvider` หนึ่ง process ต่อหนึ่งเทิร์น
+  (ไม่มี warm process เพราะ `run` เป็น one-shot)
+  - text ส่งกลับเป็น **tail** ไม่ใช่ทั้งก้อน เพราะ `textDelta` ของแอปแปลว่า "ต่อท้าย"
+    ถ้าส่งทั้ง part ที่โชว์ไปแล้วบางส่วน จะพิมพ์ต้นประโยคซ้ำ ส่วน part ที่ถูก*เขียนใหม่*
+    (ไม่ใช่ต่อท้าย) ส่งทั้งก้อน เพราะพิมพ์เฉพาะส่วนต่างคือพิมพ์กลางประโยค
+  - message อยู่ท้ายสุดและอยู่หลัง `--` กฎเดียวกับฝั่ง Claude เหตุผลเดียวกัน
+- [x] ใน Profile เลือกค่าย AI ได้ (Claude Code / OpenCode) เก็บ**แยกตามตัวละคร**
+  เหมือน model/effort — สองตัวบนจอเดียวกันจะคนละค่ายก็ได้
+- [x] เลือก OpenCode แล้วมี config เพิ่ม
+  - **CLI Path** ที่ user กรอกเอง ว่างไว้ = ให้หาในที่ปกติ
+  - **ปุ่ม Test** หลังช่อง — และ Test *คือ* Save ของแถวนี้ (แถวอื่นรอ Save แต่
+    "พิมพ์ path ไว้แล้วยังไม่ได้ลอง" คือสถานะที่ไม่ควรปล่อยให้ใครค้างอยู่)
+  - **effort ถูกซ่อน** ตามที่ขอ: opencode มี `--variant` ก็จริง แต่ help ของมันเอง
+    บอกว่า provider-specific และ local model ไม่สนใจ — โชว์ไว้เฉย ๆ คือสร้าง
+    ปุ่มที่กดแล้วไม่เกิดอะไรขึ้น
+  - **model list ไม่ได้ hardcode** — ถาม `opencode models` เอาจากเครื่องจริง
+    (เครื่องนี้ได้ local สองตัว + hosted อีกชุด) เครื่องอื่นได้คนละอย่าง
+    ถ้าถามแล้วว่าง จะ fallback ไป list ของค่ายนั้น เพราะ picker ว่างแย่กว่า picker เก่า
+
+**เรื่องที่ต้องอ่าน: OpenCode ไม่ผ่านการ์ดขออนุญาตของแอป**
+spike แล้วพบว่า `run` **สร้างไฟล์ได้เลยโดยไม่ถามและไม่มี refusal event** ต่างจาก
+Claude Code ที่การถูกปฏิเสธคือสิ่งที่แอปเอาไปทำเป็นการ์ด — ของ opencode ไม่มีอะไรให้จับ
+สิ่งเดียวที่กั้นคือ working directory ที่ส่งเป็น `--dir` (นี่คือเหตุผลที่ `prepare`
+**ทิ้ง** `additionalDirectories`/`allowedTools` แทนที่จะแกล้งทำเป็นใช้)
+เจ้าของตัดสินใจ (2026-08-21) ว่า ship บนเงื่อนไขนี้โดยเขียนเตือนตรง ๆ ใน Profile
+บรรทัดตอน connect ได้จึงอ่านว่า `runs · no approval cards` เพื่อไม่ให้ติ๊กเขียวของ
+OpenCode ดูเท่ากับของ Claude และมีแถบเตือนสีเหลืองใต้แถว AI
+
+- [x] `ChatError.vendorFailed(vendor:detail:)` — บอกชื่อค่ายด้วย เพราะคนที่ตั้งไว้สองค่าย
+  อ่านคำว่า "พัง" เฉย ๆ แล้วทำอะไรต่อไม่ได้ และไม่จัดหมวดหมู่ error เพราะหมวดของ
+  `ClaudeCodeFailure` เรียนมาจากคำพูดของ Claude Code ซึ่งไม่มีความหมายกับ opencode
+- [x] `ChatBackend.use(runtime:installation:)` เปลี่ยนค่ายกลางคันได้ และ**ทิ้ง session ไปด้วย**
+  เพราะ session id เป็นของเครื่องมือที่ออกให้ ยื่น session ของ Claude ให้ opencode
+  (หรือกลับกัน) คือขอให้มัน resume สิ่งที่ไม่เคยเป็นของมัน
+
+**สามอย่างที่เจอตอน drive จริง ไม่ใช่ตอนอ่านโค้ด:**
+1. **system prompt ไม่เคยไปถึง opencode เลย** — เทิร์นแรกที่ยิงจริงส่งไปแต่คำถาม
+   ไม่มีอะไรบอกว่าเธอเป็นใคร (opencode ไม่มี `--append-system-prompt`) แก้โดย
+   prepend ไว้หน้า message ทางเลือกคือ `--agent` ซึ่งแปลว่าต้องมีไฟล์ที่ user ต้อง
+   เขียนเองและคอยให้ตรงกับ profile ในแอป = ที่เดียวกันสองที่ ข้อเสียของการ prepend
+   เขียนไว้ในโค้ดแล้ว (โมเดลจะมองว่าเป็นคำพูด user ซึ่งอ่อนกว่า system จริง)
+2. **สลับค่ายแล้ว model ค้าง** — กลับมา Claude Code แล้วช่อง Model ยังเป็น
+   `qwen3.8:27b-mlx` ซึ่งไม่ใช่โมเดลที่มีอยู่จริงฝั่ง Claude แก้ด้วย `modelSurviving`
+   (pure, มีเทส) และตอนนี้เธอพูดออกมาด้วยว่า "Model: back to your Claude Code default"
+3. Claude detector เกือบสร้าง provider ผิดค่าย — สิ่งที่ search เจอคือที่อยู่ของ
+   *Claude Code* ถ้าไม่ guard ตัวละครที่สลับไป OpenCode จะได้ OpenCodeProvider
+   ที่ชี้ไปที่ binary ของ claude (เทสเดิมที่ผูกพฤติกรรมเก่าไว้ ถูกกลับด้านและเขียน
+   เหตุผลกำกับ — ไม่ใช่เทสที่ถูกลดเพื่อให้ผ่าน)
+
+**drive จริงครบทั้ง flow**: เลือก OpenCode → ติ๊กเขียว `OpenCode · 1.18.15 · runs · no
+approval cards` + แถบเตือน + แถว CLI Path มีปุ่ม Test → effort หายไป → เมนู Model ขึ้น
+โมเดลจริงของเครื่อง → เลือก `qwen3.8:27b-mlx` → **ส่งข้อความจริงแล้วได้ "pong" กลับ**
+(เทิร์นวิ่งผ่าน opencode จริง ยืนยันจาก process argv) → สลับกลับ Claude Code →
+model reset, effort กลับมา, CLI Path หายไป
+
+**ยังไม่ได้ทำ / รู้ไว้**: badge บนหัวหน้าต่างยังโชว์ `| medium` ตอนใช้ OpenCode
+ทั้งที่ค่ายนี้ไม่ใช้ effort — `modelBadge` ยังไม่รู้จักค่าย ไว้เก็บรอบหน้า

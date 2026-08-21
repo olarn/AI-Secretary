@@ -26,7 +26,17 @@ public extension AIVendor {
         supportsEffort: false,
         supportsBrowser: false,
         supportsSkills: false,
-        executableIsUserSupplied: true
+        executableIsUserSupplied: true,
+        // Measured, not assumed: the spike had `opencode run` create a file with
+        // no prompt and no refusal event, so there is nothing for the app to
+        // turn into an approval card. Said on the panel because a person
+        // choosing between the two makers is choosing between two different
+        // safety models, and only one of them stops to ask.
+        caution: """
+        OpenCode works inside the project folder without asking first — \
+        it can create and change files there with no approval card. \
+        Claude Code stops and asks; this doesn't.
+        """
     )
 }
 

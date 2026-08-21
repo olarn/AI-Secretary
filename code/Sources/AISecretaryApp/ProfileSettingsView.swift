@@ -26,10 +26,10 @@ struct ProfileSettingsView: View {
     /// menu, which is the one place that creates one.
     let profileID: UUID
     let appearance: Appearance
-    /// Where work runs, and whether it can be reached. Only this panel asks:
-    /// the maker and its sign-in state belong with the brain she thinks with,
-    /// not with the window's appearance.
-    let backendStatus: BackendStatus
+    /// Which maker she works through, where its tool is, and whether it can be
+    /// reached. Only this panel asks: the maker belongs with the brain she
+    /// thinks with, not with the window's appearance.
+    let vendorStatus: VendorStatus
     /// Only for the Model and Effort rows. They are settings of the running
     /// assistant rather than fields of the stored profile, which is why they
     /// take effect on click while everything above them waits for Save.
@@ -37,20 +37,23 @@ struct ProfileSettingsView: View {
 
     @State private var draft: Draft
     @State private var note: String?
+    /// The path box's own text. Applied by Test, not by Save — see `cliPathRow`.
+    @State private var cliPathDraft: String
 
     init(
         profiles: ProfileLibrary,
         profileID: UUID,
         appearance: Appearance,
-        backendStatus: BackendStatus,
+        vendorStatus: VendorStatus,
         secretary: Secretary
     ) {
         self.profiles = profiles
         self.profileID = profileID
         self.appearance = appearance
-        self.backendStatus = backendStatus
+        self.vendorStatus = vendorStatus
         self.secretary = secretary
         _draft = State(initialValue: Draft(profiles.profile(profileID)))
+        _cliPathDraft = State(initialValue: vendorStatus.cliPath)
     }
 
     /// Who this panel is about, read fresh so a rename from anywhere else shows.
@@ -77,8 +80,14 @@ struct ProfileSettingsView: View {
 
                 dividerRow
                 vendorRow
+                if vendorStatus.vendor.executableIsUserSupplied {
+                    cliPathRow
+                }
                 modelRow
-                if backendStatus.runtime.vendor.supportsEffort {
+                // Hidden rather than shown and inert. opencode's own effort
+                // setting is provider-specific and a local model ignores it, so
+                // a row here would be a control that does nothing.
+                if vendorStatus.vendor.supportsEffort {
                     effortRow
                 }
             }
@@ -248,45 +257,95 @@ struct ProfileSettingsView: View {
                 .gridCellAnchor(.topLeading)
             VStack(alignment: .leading, spacing: appearance.settings.panelSpacing * 0.35) {
                 HStack(spacing: appearance.settings.panelSpacing * 0.4) {
-                    Text(backendStatus.vendorName)
-                        .font(.system(size: appearance.settings.footnoteFontSize))
+                    Menu(vendorStatus.vendor.displayName) {
+                        ForEach(AIVendor.known) { candidate in
+                            Button {
+                                vendorStatus.choose(vendorID: candidate.id)
+                            } label: {
+                                Label(
+                                    candidate.displayName,
+                                    systemImage: candidate.id == vendorStatus.vendor.id ? "checkmark" : ""
+                                )
+                            }
+                        }
+                    }
+                    .font(.system(size: appearance.settings.footnoteFontSize))
+                    .fixedSize()
                     connectionMarker
-                    Button("Check") { backendStatus.checkConnection() }
+                    Button("Check") { vendorStatus.refresh() }
                         .buttonStyle(.plain)
                         .font(.system(size: appearance.settings.hintFontSize))
                         .foregroundStyle(theme.mutedText.color)
                 }
-                if let message = backendStatus.connection.message {
+                if let message = vendorStatus.connection.message {
                     // Coloured only when it failed. A green line of prose under
                     // every healthy row is noise; the tick already said so.
                     Text(message)
                         .font(.system(size: appearance.settings.hintFontSize))
                         .foregroundStyle(
-                            backendStatus.connection.isFailed
+                            vendorStatus.connection.isFailed
                                 ? theme.danger.color
                                 : theme.mutedText.color
                         )
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let caution = vendorStatus.vendor.caution {
+                    // Warning-coloured rather than muted: choosing between these
+                    // two makers is choosing between two safety models, and only
+                    // one of them stops to ask.
+                    Label(caution, systemImage: "exclamationmark.triangle")
+                        .font(.system(size: appearance.settings.hintFontSize))
+                        .foregroundStyle(theme.warning.color)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
         // Asked when the panel opens, so the answer is about the configuration
         // in front of the user rather than whatever was true at launch.
-        .onAppear { backendStatus.checkConnection() }
+        .onAppear { vendorStatus.refresh() }
+    }
+
+    /// Where the maker's tool is, for one the user installs themselves.
+    ///
+    /// Unlike the other text fields in this panel it does not wait for Save:
+    /// Test *is* the Save for this row, and a path typed but never tested is the
+    /// one state nobody wants to be left in.
+    private var cliPathRow: some View {
+        GridRow {
+            fieldLabel("CLI Path")
+                .gridCellAnchor(.topLeading)
+            VStack(alignment: .leading, spacing: appearance.settings.panelSpacing * 0.35) {
+                HStack(spacing: appearance.settings.panelSpacing * 0.4) {
+                    TextField("", text: $cliPathDraft, prompt: Text(OpenCodeLocator.knownPaths[0]))
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: appearance.settings.footnoteFontSize))
+                        .onSubmit { vendorStatus.choose(cliPath: cliPathDraft) }
+                    Button("Test") { vendorStatus.choose(cliPath: cliPathDraft) }
+                        .buttonStyle(.bordered)
+                        .font(.system(size: appearance.settings.footnoteFontSize))
+                }
+                Text("Leave it empty and I'll look in the usual places. Test keeps what you typed and checks it.")
+                    .font(.system(size: appearance.settings.hintFontSize))
+                    .foregroundStyle(theme.mutedText.color)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        // Follows a switch of maker, which replaces what the box should show.
+        .onChange(of: vendorStatus.cliPath) { _, path in cliPathDraft = path }
     }
 
     /// Paints the answer and decides nothing — which of the three it is was
     /// settled by `vendorConnection`, in a target the tests can see.
     @ViewBuilder
     private var connectionMarker: some View {
-        if backendStatus.connection.isChecking {
+        if vendorStatus.connection.isChecking {
             ProgressView()
                 .controlSize(.small)
-        } else if backendStatus.connection.isConnected {
+        } else if vendorStatus.connection.isConnected {
             Image(systemName: "checkmark.circle.fill")
                 .foregroundStyle(theme.success.color)
                 .font(.system(size: appearance.settings.hintFontSize))
-        } else if backendStatus.connection.isFailed {
+        } else if vendorStatus.connection.isFailed {
             Image(systemName: "xmark.circle.fill")
                 .foregroundStyle(theme.danger.color)
                 .font(.system(size: appearance.settings.hintFontSize))
@@ -309,7 +368,7 @@ struct ProfileSettingsView: View {
                     )
                 }
                 Divider()
-                ForEach(backendStatus.runtime.vendor.models, id: \.id) { candidate in
+                ForEach(vendorStatus.models, id: \.id) { candidate in
                     Button {
                         secretary.chooseModel(candidate)
                     } label: {

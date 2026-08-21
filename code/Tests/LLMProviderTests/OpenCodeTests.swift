@@ -156,6 +156,21 @@ final class OpenCodeTests: XCTestCase {
         XCTAssertFalse(arguments.contains("--session"))
     }
 
+    func testTheCharactersInstructionsGoInFrontOfTheQuestion() {
+        // opencode has no --append-system-prompt, so without this the persona
+        // never arrived at all — the first turn driven through it carried the
+        // question and nothing about who she is.
+        XCTAssertEqual(
+            openCodePrompt(system: .some("You are Pikachu."), message: "hello"),
+            "You are Pikachu.\n\n---\n\nhello"
+        )
+    }
+
+    func testNoInstructionsMeansTheMessageIsSentAsItIs() {
+        XCTAssertEqual(openCodePrompt(system: .none(), message: "hello"), "hello")
+        XCTAssertEqual(openCodePrompt(system: .some("   "), message: "hello"), "hello")
+    }
+
     // MARK: - The machine's own model list
 
     /// Verbatim from `opencode models` on 2026-08-21.
@@ -211,6 +226,27 @@ final class OpenCodeTests: XCTestCase {
         XCTAssertEqual(AIVendor.known.map(\.id), ["claude-code", "opencode"])
         XCTAssertEqual(VendorRuntime.all.map(\.vendor.id), ["claude-code", "opencode"])
         XCTAssertEqual(VendorRuntime.named("opencode").map(\.vendor)^, Option.some(AIVendor.openCode))
+    }
+
+    func testAModelBelongingToTheOldMakerDoesNotSurviveTheSwitch() {
+        // Found by driving it: switching from opencode back to Claude Code left
+        // `qwen3.8:27b-mlx` sitting in the Model row under Claude Code, where it
+        // is not a model that exists.
+        let openCodeModel = ChatModel(id: "ollama/qwen3.8:27b-mlx", displayName: "qwen3.8:27b-mlx")
+        XCTAssertEqual(
+            modelSurviving(.some(openCodeModel), switchingTo: .claudeCode),
+            Option.none()
+        )
+    }
+
+    func testAModelTheNewMakerOffersIsKept() {
+        XCTAssertEqual(
+            modelSurviving(.some(ChatModel.opus5), switchingTo: .claudeCode),
+            Option.some(ChatModel.opus5)
+        )
+        // Inheriting stays inheriting — the app must not pick one on the user's
+        // behalf just because the maker changed.
+        XCTAssertEqual(modelSurviving(.none(), switchingTo: .openCode), Option.none())
     }
 
     // MARK: - Finding it
