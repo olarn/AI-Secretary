@@ -69,7 +69,7 @@ struct ProfileSettingsView: View {
             // longest word and with the app size. "Personality" broke a 52pt
             // column the day it replaced "Style" — it wrapped mid-word — and
             // any number picked to fit it would break again at size L.
-            Grid(alignment: .leading, horizontalSpacing: appearance.settings.panelSpacing, verticalSpacing: appearance.settings.panelSpacing) {
+            Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: appearance.settings.panelSpacing, verticalSpacing: appearance.settings.panelSpacing) {
                 nameField
                 genderRow
                 ageRow
@@ -134,7 +134,7 @@ struct ProfileSettingsView: View {
     private var genderRow: some View {
         GridRow {
             fieldLabel("Gender")
-            HStack(spacing: appearance.settings.panelSpacing) {
+            HStack(alignment: .firstTextBaseline, spacing: appearance.settings.panelSpacing) {
             Menu {
                 Button("Female") { draft.genderChoice = .female }
                 Button("Male") { draft.genderChoice = .male }
@@ -160,7 +160,7 @@ struct ProfileSettingsView: View {
     private var ageRow: some View {
         GridRow {
             fieldLabel("Age")
-            HStack(spacing: appearance.settings.panelSpacing) {
+            HStack(alignment: .firstTextBaseline, spacing: appearance.settings.panelSpacing) {
             Menu {
                 Button("Child") { draft.ageChoice = .child }
                 Button("Teenager") { draft.ageChoice = .teenager }
@@ -186,9 +186,12 @@ struct ProfileSettingsView: View {
     private var personalityField: some View {
         GridRow {
             // Beside two lines of content, a centred label floats between them
-            // and stops reading as the name of the field above it.
+            // and stops reading as the name of the field above it. The grid's
+            // first-baseline alignment is what holds it against the first line
+            // now; `.gridCellAnchor(.topLeading)` did it before and cannot,
+            // because an anchored cell leaves the alignment system altogether
+            // and sat a baseline off from the control beside it.
             fieldLabel("Personality")
-                .gridCellAnchor(.topLeading)
             VStack(alignment: .leading, spacing: appearance.settings.panelSpacing * 0.35) {
                 TextField(SecretaryProfile.defaultPersonality, text: $draft.personality)
                     .textFieldStyle(.roundedBorder)
@@ -208,9 +211,8 @@ struct ProfileSettingsView: View {
 
         return GridRow {
             fieldLabel("Picture")
-                .gridCellAnchor(.topLeading)
             VStack(alignment: .leading, spacing: appearance.settings.panelSpacing * 0.35) {
-                HStack(spacing: appearance.settings.panelSpacing) {
+                HStack(alignment: .firstTextBaseline, spacing: appearance.settings.panelSpacing) {
                 Menu {
                     Button(hasPicture ? "Replace picture…" : "Choose picture…") {
                         choosePicture()
@@ -254,9 +256,8 @@ struct ProfileSettingsView: View {
     private var vendorRow: some View {
         GridRow {
             fieldLabel("AI")
-                .gridCellAnchor(.topLeading)
             VStack(alignment: .leading, spacing: appearance.settings.panelSpacing * 0.35) {
-                HStack(spacing: appearance.settings.panelSpacing * 0.4) {
+                HStack(alignment: .firstTextBaseline, spacing: appearance.settings.panelSpacing * 0.4) {
                     Menu(vendorStatus.vendor.displayName) {
                         ForEach(AIVendor.known) { candidate in
                             Button {
@@ -313,9 +314,8 @@ struct ProfileSettingsView: View {
     private var cliPathRow: some View {
         GridRow {
             fieldLabel("CLI Path")
-                .gridCellAnchor(.topLeading)
             VStack(alignment: .leading, spacing: appearance.settings.panelSpacing * 0.35) {
-                HStack(spacing: appearance.settings.panelSpacing * 0.4) {
+                HStack(alignment: .firstTextBaseline, spacing: appearance.settings.panelSpacing * 0.4) {
                     TextField("", text: $cliPathDraft, prompt: Text(OpenCodeLocator.knownPaths[0]))
                         .textFieldStyle(.roundedBorder)
                         .font(.system(size: appearance.settings.footnoteFontSize))
@@ -385,7 +385,6 @@ struct ProfileSettingsView: View {
     private var effortRow: some View {
         GridRow {
             fieldLabel("Effort")
-                .gridCellAnchor(.topLeading)
             VStack(alignment: .leading, spacing: appearance.settings.panelSpacing * 0.35) {
                 settingControl(
                     value: secretary.effectiveEffortName,
@@ -430,7 +429,7 @@ struct ProfileSettingsView: View {
         inherited: Bool,
         @ViewBuilder choices: () -> Choices
     ) -> some View {
-        HStack(spacing: appearance.settings.panelSpacing * 0.5) {
+        HStack(alignment: .firstTextBaseline, spacing: appearance.settings.panelSpacing * 0.5) {
             Menu(content: choices) {
                 Text(value)
             }

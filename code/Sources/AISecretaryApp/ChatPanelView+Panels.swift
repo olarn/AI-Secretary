@@ -119,7 +119,7 @@ extension ChatPanelView {
         _ label: String,
         _ options: [(title: String, isCurrent: Bool, choose: () -> Void)]
     ) -> some View {
-        HStack(spacing: appearance.settings.panelSpacing) {
+        HStack(alignment: .firstTextBaseline, spacing: appearance.settings.panelSpacing) {
             Text(label)
                 .font(.system(size: appearance.settings.footnoteFontSize))
             Spacer(minLength: 0)
@@ -158,7 +158,7 @@ extension ChatPanelView {
         onDecrease: @escaping () -> Void,
         onIncrease: @escaping () -> Void
     ) -> some View {
-        HStack(spacing: appearance.settings.panelSpacing) {
+        HStack(alignment: .firstTextBaseline, spacing: appearance.settings.panelSpacing) {
             Text(label)
                 .font(.system(size: appearance.settings.footnoteFontSize))
                 .foregroundStyle(theme.mutedText.color)
@@ -258,7 +258,7 @@ extension ChatPanelView {
     /// A menu rather than a toggle switch, so this is a deliberate pick from a
     /// list and not a switch brushed by accident.
     private var browserPicker: some View {
-        HStack(spacing: 3) {
+        HStack(alignment: .firstTextBaseline, spacing: 3) {
             // Outside the menu on purpose. A menu label built from several
             // views renders as the chevron alone here, and the one thing this
             // row has to say is whether the browser is connected. Model and

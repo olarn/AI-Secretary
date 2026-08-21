@@ -3192,3 +3192,18 @@ model reset, effort กลับมา, CLI Path หายไป
   OpenCode อยู่ ตอนนี้เป็น "the tool's own default" ทั้งหมด
   (เทสหนึ่งตัวที่ assert ข้อความนี้ถูกแก้ตาม เพราะข้อความ*ตั้งใจ*เปลี่ยน ไม่ใช่
   เทสที่ถูกลดให้ผ่าน)
+
+- [x] **Labels and their controls sit on one baseline** (owner asked, 2026-08-21,
+  with a screenshot ruling the two lines that should have been one). Profile's
+  Personality, Picture, AI, CLI Path and Effort rows each carried
+  `.gridCellAnchor(.topLeading)` on the label — and an anchored cell leaves the
+  grid's alignment system altogether, so the label was positioned by that unit
+  point and no longer lined up with anything. Those were exactly the rows the
+  owner marked. The `Grid` now aligns on `.leadingFirstTextBaseline`, the anchors
+  are gone, and the inner `HStack`s that pair a control with a second control
+  (menu + Check, path field + Test, menu + inherited ring) align the same way,
+  or the grid would be lining up with a stack whose own children still were not.
+  Settings got the same treatment where a label meets a control: `choiceRow`,
+  `stepperRow` and the Browser picker. No tuned offsets — a padding number that
+  fixes a baseline at one font size is wrong at the next, which is the same trap
+  the panel-overflow lesson records.
