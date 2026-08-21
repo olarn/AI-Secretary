@@ -2956,3 +2956,92 @@ commanded to write into a folder outside every project.
 
 1361 tests pass, two of them new: both walls in one turn, and the
 already-open folder that must not be re-offered and must not be silent.
+
+## Sprint 21.2 - improvement
+
+ห้าข้อครึ่งจบแล้ว บันทึกอยู่ใน `PRODUCT_BACKLOG.md` (v0.21.326–329) หัวข้อนี้ยังไม่ย้าย
+เพราะข้อ 2 เหลืออีกครึ่ง ที่ต้องให้เจ้าของตัดสินใจก่อน
+
+- [x] ตอนขยายฟอนต์ในคอม Box ฟอนต์จะขยายแค่ input text แต่ไม่ขยายในส่วนอื่นๆ
+- [x] ปัญหา ตอนที่สั่งงานผ่าน command, ทุก character บอกว่าไม่มีสิทธิ์เขียนไฟล์ แล้วก็จะมี 2 เหตุการณ์ คือ
+  - รอสักพัก ก็เขียนได้ หรือ
+  - ค้างไปเลย
+
+  แก้แล้ว: `agentPermissionNote` เคยจบด้วย "writing or running commands will be
+  refused" โมเดลเลยไม่ยอมเรียก tool แล้วตอบเป็นร้อยแก้วว่าไม่มีสิทธิ์ — ไม่มี tool call
+  ก็ไม่มี refusal ไม่มี refusal ก็ไม่มีการ์ด งานเลยหยุดสนิท ส่วน "รอสักพักก็เขียนได้"
+  คือ standing grant ที่ widen ให้เงียบ ๆ ตามที่ Sprint 15 ตั้งใจ ไม่ใช่บั๊ก
+- [x] **ที่เหลือของข้อบน — แก้แล้ว (v0.21.338)** Claude Code ปฏิเสธ path นอก working
+  directory ด้วยข้อความ *"ls in '…' was blocked. For security, Claude Code may only
+  list files in the allowed working directories for this session"* ซึ่งไม่ตรงกับ
+  `refusalPhrases` เลยไม่มีการ์ดขึ้น และต่อให้ขึ้นก็แก้ไม่ได้ เพราะสิ่งที่ขาดคือ `--add-dir`
+  ของโฟลเดอร์นั้น ไม่ใช่สิทธิ์ของ tool `ls` — ให้การ์ดที่กด allow แล้วยังทำไม่ได้ แย่กว่าไม่มี
+  ต้องมีทางขยาย *directory* ซึ่งเป็นการขยายขอบเขต filesystem ที่ charter ให้ถามก่อน
+  (เจอตอน drive 2026-08-20)
+- [x] **สาเหตุที่สามของข้อบน (เจอ 2026-08-20 ตอนสั่ง 4 ตัวพร้อมกัน)** `CLAUDE.md` ของ
+  project เขียนว่า "ทุกคน จะขอ write permission ก่อน" อาเนียเลยขอเป็น *คำพูด* แล้วรอ —
+  ซึ่งไม่มีใครตอบได้ เพราะทางเดียวที่คำถามจะถึงคนใช้คือเรียก tool แล้วโดนปฏิเสธ
+  แก้สองชั้น: prompt บอกตรง ๆ ว่า "ขอ" ในแอปนี้แปลว่าเรียก tool, และแอปเองแก้ deadlock
+  ให้ (ตอบกลับหนึ่งเทิร์นเมื่อ ```blocked บอกว่าขาด permission) — ไม่ให้สิทธิ์อะไรทั้งนั้น
+  แค่บอกว่ารอไปก็ไม่มีใครมา (v0.21.331)
+- [x] ปัญหา ตอนที่สั่งงานผ่าน command, ใน instruction บอกว่า ให้ monitor ถ้ามี file ให้ทำตาม instruction ที่ให้ไว้เลย แต่หลังจากที่ character monitor และ user เพิ่มไฟล์ลงไปที่ folder ที่กำหนด character แค่ report เท่านั้นว่ามี file มาใหมม่ แต่ไม่ทำตาม instruction เหมือนไม่ได้จำว่าต้องทำอะไร
+- [x] ตอนที่สั่งงานผ่าน command, เวลา character ขอ permission อยากให้ส่งกลับมาขอที่ command session ให้ user approve แล้วส่งกลับไป
+- [x] เพิ่ม feature ใน command window - ในกล่องผลลัพธ์ ตอนที่ expand ออกมา
+  - มี Save ข้างซ้ายปุ่ม clear เพื่อเปิด save dialog และ save text ลง file ได้ (default เป็น .md)
+  - มี icon copy เพื่อ copy text ลง clipboard ได้ - อยู่ถัดจากปุ่ม save
+- [x] UI ทั้งหมด ให้เป็นภาษาอังกฤษ (ตอนนี้ไทยปนอังกฤษ)
+- [x] เปลี่ยนลำดับปุ่มในกล่องผลลัพธ์เป็น copy (icon), Save, Clear (v0.21.331)
+- [x] เพิ่มเวลาที่ได้รับ message หลังชื่อ character ในกล่อง Result (v0.21.333)
+- [x] **4 character พร้อมกันช้ากว่า session เดียวมาก** — วัดแล้ว: main thread ว่าง 80%,
+  และ `claude -p` 4 ตัวพร้อมกันนอกแอปเร็วปกติ (6.1s vs 6.1–7.4s) ตัวการคือ blockของ
+  "ใครอยู่บนเดสก์ท็อปบ้าง" อยู่ใน `--append-system-prompt` ซึ่งเป็น launch flag และเป็น
+  ส่วนหนึ่งของ `WarmProcessKey` — พอสถานะเพื่อน (busy / project ที่เปิด) เปลี่ยน
+  warm process ก็ถูกฆ่าแล้วเปิดใหม่แทบทุกเทิร์น (วัดได้: 4 process เหลือรอด 1)
+  แก้โดยย้ายส่วนที่เปลี่ยนไปอยู่ในข้อความของเทิร์นแทน — วัดหลังแก้: 3 เทิร์นติด
+  process เดิมครบ 4 ตัว, cold start = 0 (v0.21.333)
+- [x] พิมพ์ใน chat box แล้วหน่วง — วัดแล้ว: ทุกครั้งที่กดปุ่ม `ChatPanelView.body` ถูก
+  ประเมินใหม่ทั้งก้อน แล้ว `ForEach` ของ transcript สร้างทุกข้อความใหม่หมด
+  (1130 จาก ~1910 layout samples อยู่ใต้ `ForEachChild.updateValue()` ข้างล่างเป็น
+  libThaiTokenizer / liblangid / CoreText) แก้ด้วย `TranscriptRows` ที่เป็น Equatable
+  ข้ามการ rebuild เมื่อข้อความและหน้าตาไม่เปลี่ยน (v0.21.334) **ยังไม่ได้ลองในแอปจริง
+  ตามที่เจ้าของบอกว่าไม่ต้อง test — อยากให้เจ้าของลองพิมพ์ในแชทยาว ๆ ดูสักครั้ง**
+- [x] theme ของ pinned window ให้ตามของ character — เจ้าของบอกว่าเห็นเป็น**ธีมระบบ**
+  ส่วนที่เราวาดเองเป็นของตัวละครอยู่แล้วทั้งหมด ที่เหลือคือส่วนที่ **AppKit วาด** คือ
+  แถบหัวของ `.titled` `.utilityWindow` กับพื้นหน้าต่างหลัง hosting view — ตั้ง
+  `panel.appearance` อย่างเดียวไม่พอ ตอนนี้ทาสีเองจาก palette ของตัวละคร
+  (`titlebarAppearsTransparent` + `backgroundColor` จาก `ground.nsColor` ซึ่งสร้างจาก
+  ค่า sRGB ตรง ๆ ไม่ใช่สีระบบที่จะ resolve กลับไปหาธีมระบบ) รวมไว้ที่ `paint()` ที่เดียว
+  ทั้งตอนสร้างและตอนเปลี่ยนธีม (v0.21.336) **ยังไม่ได้ลองในแอป** ถ้ายังเป็นธีมระบบอยู่
+  ขั้นต่อไปคือเลิกใช้ `.titled` แล้วทำแถบหัวเอง
+- [x] ย้าย folder-watch ไปเดินดิสก์นอก main actor (เดิมเดินไฟล์ได้ถึง 500 ไฟล์ ทุก 4 วิ
+  ต่อ 1 watch บน main thread) การตัดสินใจเรื่อง path ยังอยู่บน actor เหมือนเดิม
+  ย้ายเฉพาะการเดินไฟล์ซึ่งเป็น pure function — และ apply ผลกลับด้วย **id ไม่ใช่ index**
+  เพื่อไม่ให้ index ค้างข้าม await (กัน crash/ไม่ให้ watch ที่ถูกหยุดแล้วกลับมารายงาน)
+  (v0.21.335)
+- [x] pin window ไม่ได้ apply liquid glass ตามที่ตั้งใน theme — แก้แล้ว 2 ฝั่งที่ต้องตรงกัน:
+  ตัว content ใช้ `glassEffect` ทับพื้น `ground` opacity **0.15** (ห้ามเป็น `Color.clear`
+  เด็ดขาด ไม่งั้นคลิกทะลุหน้าต่าง แบบเดียวกับที่ resize grip ตายตอน 0.21.322) และตัว
+  หน้าต่างต้อง `isOpaque = false` + พื้นใส ไม่งั้น glass ไม่มีอะไรให้ฝ้า พร้อมปิดเงา
+  หน้าต่าง (`invalidateShadow`) ตามบทเรียน 0.21.323 — แถบหัวปล่อยให้ AppKit วาด
+  เพราะเป็น material อยู่แล้วและสว่าง/มืดตาม `panel.appearance` ของตัวละคร (v0.21.337)
+  **ยังไม่ได้ลองในแอป** — อยากให้ลองคลิกที่ว่าง ๆ ในหน้าต่าง pin ตอนเปิด glass ด้วย
+- [x] สั่งหลาย character พร้อมกันแล้วขอ write folder permission ยังไม่ขึ้น dialog —
+  ต้นเหตุคือ Claude Code มี **กำแพงที่สอง** คือ working-directory ซึ่งข้อความไม่ตรงกับ
+  วลี permission เดิมเลย (`"...may only ... in the allowed working directories for this
+  session"`) จึงไม่เคยเกิด event `toolDenied` → `offerToWiden` ออกตั้งแต่บรรทัดแรก →
+  ไม่มีการ์ดที่ไหนเลย และการให้ tool rule ก็แก้ไม่ได้ ต้องเป็น `--add-dir`
+  ที่เจอตอนสั่งหลายตัวเพราะตัวที่ไม่ได้เปิด project จะยืนอยู่ใน scratch dir ทุก path
+  ในโฟลเดอร์ที่ใช้ร่วมกันจึงอยู่นอก session หมด แก้: `DeniedTool.directory` +
+  ActionClass `.directoryAccess` (จำไม่ได้ตลอดไป เพราะ grant บอกไม่ได้ว่าโฟลเดอร์ไหน)
+  + การ์ดถามเป็น "ขอทำงานในโฟลเดอร์นี้" แล้ว retry ด้วย `--add-dir` (v0.21.338)
+  **ยังไม่ได้ลองในแอป**
+- [x] ทำพฤติกรรมการขอ permission ให้สอดคล้องกันทุกกรณี + **ทดสอบในแอปจริงแล้ว** (v0.21.340)
+  - เทิร์นเดียวชนได้ทั้งสองกำแพง: เดิมถามเรื่องโฟลเดอร์แล้ว `return` ทิ้ง tool refusal
+    ไปเงียบ ๆ ตอนนี้ถามโฟลเดอร์ก่อน (เพราะข้ามไม่ได้) แล้ว tool refusal จะกลับมา
+    ตอน retry และได้การ์ดของตัวเอง
+  - โฟลเดอร์ที่เปิดให้แล้วจะไม่ถูกถามซ้ำ (เบรกเดียวกับ `isNew` ของฝั่ง tool) และถ้า
+    ไม่เหลืออะไรให้อนุญาตแล้วจะ**พูดออกมา** ไม่เงียบหาย
+  - **การ์ดต้องกดถึงได้**: 4 ตัวพร้อมกัน = 4 การ์ด เดิมดันหน้าต่างสูง 921pt บนจอ 1030pt
+    การ์ดท้าย ๆ กับ Results หลุดจอ — cap ที่ 320pt แล้วเลื่อนในตัวเอง แบบเดียวกับ Results
+  - drive จริง: 4 ตัวเขียนไฟล์นอกโปรเจกต์ → การ์ดขึ้นครบ → กด Once → ไฟล์ถูกเขียนจริง
+    และเห็นทั้งการ์ดแบบ tool และแบบ directory พร้อมกันในหน้าต่างเดียว
