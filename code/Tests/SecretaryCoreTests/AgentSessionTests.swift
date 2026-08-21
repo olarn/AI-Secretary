@@ -514,6 +514,60 @@ final class AgentSessionTests: XCTestCase {
         )
     }
 
+    /// Both walls in one turn. The folder is asked for first because nothing
+    /// else can get past it, and the tool refusal is not lost — the retry hits
+    /// it again and it gets its own card.
+    func testAFolderIsAskedForFirstAndTheToolWallStillArrives() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        provider.denialsForNextTurn = [denyFolder()]
+        secretary.submit("write the action items")
+        await waitUntilIdle()
+
+        guard case .approval(_, let first) = secretary.pendingDecision.toOptional() else {
+            return XCTFail("Expected the folder card")
+        }
+        XCTAssertEqual(first, .widenAgentDirectories(paths: ["/tmp/elsewhere"], prompt: "write the action items"))
+
+        // The retry is refused again, this time for the tool.
+        provider.denialsForNextTurn = [denyWrite()]
+        secretary.resolvePendingApproval(answer: .once)
+        await waitUntilIdle()
+
+        guard case .approval(_, let second) = secretary.pendingDecision.toOptional() else {
+            return XCTFail("The tool refusal has to get its own card, not be swallowed")
+        }
+        XCTAssertEqual(second, .widenAgentTools(rules: ["Write"], prompt: "write the action items"))
+    }
+
+    /// A folder already opened, refused again, is not something the person can
+    /// fix by agreeing a second time — the same brake the tool wall has. It
+    /// must not offer the same button again, and it must not fall silent
+    /// either, which is what "it just hangs" has meant all sprint.
+    func testAFolderAlreadyOpenIsNotOfferedAgainAndIsNotSilent() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        provider.denialsForNextTurn = [denyFolder()]
+        secretary.submit("write the action items")
+        await waitUntilIdle()
+        secretary.resolvePendingApproval(answer: .once)
+        await waitUntilIdle()
+
+        // Refused for the very same folder, after it was granted.
+        provider.denialsForNextTurn = [
+            DeniedTool(name: "Write", target: .some("/tmp/elsewhere/task.md"), rules: [], directory: .some("/tmp/elsewhere"))
+        ]
+        secretary.submit("try again")
+        await waitUntilIdle()
+
+        XCTAssertEqual(
+            secretary.pendingDecision, .none(),
+            "Offering a folder that is already open is a button that does nothing"
+        )
+        XCTAssertTrue(
+            secretary.transcript.contains { $0.text.contains("already let me work there") },
+            "and it has to say so. Got: \(secretary.transcript.map(\.text).joined(separator: " | "))"
+        )
+    }
+
     // MARK: - Waiting for a permission nobody can hand over
 
     /// The owner's deadlock, 2026-08-20. Their shared folder's `CLAUDE.md`

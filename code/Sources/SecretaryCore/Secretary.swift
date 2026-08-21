@@ -2768,19 +2768,45 @@ public final class Secretary {
     private func offerToWiden(_ denied: [DeniedTool], prompt: String, taskID: String) {
         let project = lastProject.getOrElse(Self.scratchProject)
 
-        // A folder first, because no tool rule opens that wall and the card
-        // that offered one would be a button that changes nothing. A call
-        // refused for pointing outside the session carries the folder that
-        // would let it through; see `isDirectoryRefusal` for how the two kinds
-        // of refusal are told apart, and for what it cost to conflate them.
+        // A folder first, because no tool rule opens that wall and a card
+        // offering one would be a button that changes nothing. A call refused
+        // for pointing outside the session carries the folder that would let it
+        // through; see `isDirectoryRefusal` for how the two walls are told
+        // apart, and what it cost to conflate them.
+        //
+        // Only folders that are not already open, and that is the same brake
+        // the tool wall has in `isNew` below: a folder this session has already
+        // been granted, refused again, is not a folder the person can fix by
+        // agreeing to it a second time. Offering it again would be a card whose
+        // button does nothing, pressed forever.
+        //
+        // Falling *through* rather than returning when they are all already
+        // open is the point of the rewrite: a turn can hit both walls at once,
+        // and stopping here would swallow the tool refusal in silence — which
+        // is the exact shape of the bug this whole run has been chasing.
         let folders = denied.compactMap { $0.directory.toOptional() }.reduced()
-        if !folders.isEmpty {
-            offerToOpen(folders: folders, prompt: prompt, taskID: taskID, project: project)
+        let unopened = folders.filter { !sessionAgentDirectories.contains(URL(fileURLWithPath: $0)) }
+        if !unopened.isEmpty {
+            offerToOpen(folders: unopened, prompt: prompt, taskID: taskID, project: project)
             return
         }
 
         let rules = denied.flatMap(\.rules).reduced()
-        guard !rules.isEmpty else { return }
+        // Nothing either wall can open. It reaches here when a folder was
+        // granted and the call was refused again anyway, and saying so is the
+        // honest end: the person has agreed to everything there is to agree to,
+        // and a silent stop would read as the app losing the request — which is
+        // what "it just hangs" has meant every time in this sprint.
+        guard !rules.isEmpty else {
+            if !folders.isEmpty {
+                say(.secretary, """
+                    I still can't reach \(folders.joined(separator: ", ")) — you've already \
+                    let me work there, so something else is stopping it, and agreeing again \
+                    wouldn't change that.
+                    """)
+            }
+            return
+        }
 
         let inBrowser = denied.contains { BrowserTools.changesState($0.name) }
 

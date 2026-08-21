@@ -2910,3 +2910,49 @@ refusal, not invented for the test — including the two that must **not** match
 so the two walls cannot be conflated again.
 
 **Not driven** — no app testing this round. 1359 tests pass, 14 of them new.
+
+## Asking for permission behaves the same way whichever wall you hit (v0.21.340)
+
+The owner: make the permission behaviour consistent in every case, then prove it
+works. Two things were still inconsistent after 0.21.338, and driving it found a
+third that would have brought the original bug straight back.
+
+**A turn can hit both walls, and one of them was being swallowed.** The folder
+card returned early, so a turn refused for a folder *and* for a tool asked about
+the folder and dropped the tool refusal on the floor. It now falls through: the
+folder is asked first, because nothing gets past it, and the tool refusal
+returns on the retry and gets its own card. Driven, and this is the part that
+convinced me — with three characters waiting, two showed the tool card and Ditto
+showed the *directory* card, because she had already been granted `Write` and so
+her next refusal was the other wall. It moved from one to the next instead of
+falling silent.
+
+**A folder already open must not be offered again.** That is the same brake the
+tool wall has in `isNew`, and without it the card was a button that could do
+nothing, pressable forever. When everything has already been agreed to, it says
+so in a line — because a silent stop is what "it just hangs" has meant every
+single time this sprint.
+
+**And the cards must be reachable, which is not a given.** Four characters
+commanded at once raise four cards, and uncapped they grew the command window to
+**921pt on a 1030pt screen** (measured 2026-08-21) — the later cards and the
+whole results strip were pushed off the bottom of the display. **A card nobody
+can reach is exactly the bug this section was written to fix.** The approvals
+strip is now capped at 320pt and scrolls inside itself, the same shape as the
+results strip, and measured-then-capped rather than a bare `maxHeight`, which is
+how that strip once collapsed to nothing.
+
+**Driven, end to end** (the owner asked for proof this time): four characters
+commanded to write into a folder outside every project.
+
+- Before answering: three cards in the command window, one per character, each
+  naming the exact file. That is the report — "no dialog appears" — gone.
+- Pressing Once: the card cleared, the request ran again, and
+  `/Users/Olarn/Temp/ai-outside-probe/hello.txt` appeared on disk containing
+  `Ditto`, the character who had been approved.
+- With the cap in place the window sat at 827pt and repositioned itself onto the
+  screen, with `End all` and the results strip visible again.
+- The probe folder and its files were removed afterwards.
+
+1361 tests pass, two of them new: both walls in one turn, and the
+already-open folder that must not be re-offered and must not be silent.

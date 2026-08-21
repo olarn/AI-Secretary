@@ -34,6 +34,7 @@ struct CommandWindowView: View {
     @State private var droppingFile = false
     /// Whether Copy has just run, so the glyph can say so.
     @State private var copied = false
+    @State private var approvalsHeight: Double = 0
     @FocusState private var boxFocused: Bool
 
     private var theme: Palette { appearance.colors }
@@ -252,11 +253,33 @@ struct CommandWindowView: View {
     /// that is waiting on the person, and a question tucked behind a chevron is
     /// the bug this was written to fix.
     private var approvalsSection: some View {
-        VStack(alignment: .leading, spacing: metrics.panelSpacing) {
-            ForEach(model.approvals) { approval in
-                approvalRow(approval)
+        // Capped and scrolling inside itself, exactly like the results strip
+        // and for a stronger reason. Four characters commanded at once raise
+        // four cards, and uncapped they grew the window to 921pt on a 1030pt
+        // screen — driven 2026-08-21 — which pushed the later cards and the
+        // whole results strip off the bottom of the display. **A card nobody
+        // can reach is the bug this section was written to fix**, so it must
+        // not be able to come back by the window simply getting too tall.
+        //
+        // Measured-then-capped rather than a bare `maxHeight`: a `ScrollView`
+        // with an unbounded max collapses to nothing, which is how the results
+        // strip once showed its header and not one row.
+        ScrollView(.vertical) {
+            VStack(alignment: .leading, spacing: metrics.panelSpacing) {
+                ForEach(model.approvals) { approval in
+                    approvalRow(approval)
+                }
             }
+            .background(
+                GeometryReader { proxy in
+                    Color.clear.preference(key: ApprovalsHeightKey.self, value: proxy.size.height)
+                }
+            )
         }
+        .onPreferenceChange(ApprovalsHeightKey.self) { approvalsHeight = $0 }
+        // Room for two cards at a comfortable size; the rest scroll. Questions
+        // outrank answers, so this is given more of the slab than the results.
+        .frame(height: min(320, approvalsHeight))
         .padding(metrics.panelSpacing)
         .background(theme.warningFill.color, in: RoundedRectangle(cornerRadius: 8))
         .overlay(
@@ -633,6 +656,15 @@ private struct FlowLayout: Layout {
             widest = max(widest, x - spacing)
         }
         return (origins, CGSize(width: widest, height: y + rowHeight))
+    }
+}
+
+/// Carries the waiting cards' height out to the strip that has to cap it, so
+/// four of them cannot push the window past the bottom of the screen.
+private struct ApprovalsHeightKey: PreferenceKey {
+    static let defaultValue: Double = 0
+    static func reduce(value: inout Double, nextValue: () -> Double) {
+        value = max(value, nextValue())
     }
 }
 
