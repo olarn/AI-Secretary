@@ -79,9 +79,10 @@ public extension AIVendor {
         executableIsUserSupplied: false
     )
 
-    /// Every maker the app can run. One today; this is the list the settings
-    /// panel will offer once there is a second.
-    static let known: [AIVendor] = [.claudeCode]
+    /// Every maker the app can run, in the order the picker offers them.
+    /// Claude Code first because it is the one the app was built around and the
+    /// only one whose tool use goes through approval cards.
+    static let known: [AIVendor] = [.claudeCode, .openCode]
 
     /// Absent rather than a crash for an id this build has never heard of — a
     /// settings file written by a later build can name one, and the caller falls

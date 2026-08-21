@@ -34,15 +34,33 @@ public struct VendorRuntime: Sendable {
     /// besides build a provider, and a one-method protocol here would exist
     /// solely to be substituted in a test.
     public let probe: @Sendable (AgentInstallation) async -> VendorProbe
+    /// Asks the installed tool what models it can actually run.
+    ///
+    /// Absent for a maker whose list is fixed and known ahead of time. Present
+    /// for one where the list belongs to *this machine* — opencode answers
+    /// whatever that user configured, so a list compiled into the app would be
+    /// wrong for nearly everybody.
+    private let discoverModels: (@Sendable (AgentInstallation) async -> [ChatModel])?
 
     public init(
         vendor: AIVendor,
         makeProvider: @escaping @Sendable (AgentInstallation) -> VendorProvider,
-        probe: @escaping @Sendable (AgentInstallation) async -> VendorProbe
+        probe: @escaping @Sendable (AgentInstallation) async -> VendorProbe,
+        discoverModels: (@Sendable (AgentInstallation) async -> [ChatModel])? = nil
     ) {
         self.vendor = vendor
         self.makeProvider = makeProvider
         self.probe = probe
+        self.discoverModels = discoverModels
+    }
+
+    /// What the picker should offer. The maker's own fixed list unless it has a
+    /// way of asking the machine, and the fixed list again if asking came back
+    /// with nothing — an empty picker is worse than a stale one.
+    public func offeredModels(_ installation: AgentInstallation) async -> [ChatModel] {
+        guard let discoverModels else { return vendor.models }
+        let found = await discoverModels(installation)
+        return found.isEmpty ? vendor.models : found
     }
 }
 
@@ -65,8 +83,11 @@ public extension VendorRuntime {
     /// Absent for an id with no runtime wired up — a settings file naming a
     /// maker this build cannot run is a fallback, not a crash.
     static func named(_ id: String) -> Option<VendorRuntime> {
-        Option.fromOptional([VendorRuntime.claudeCode].first { $0.vendor.id == id })
+        Option.fromOptional(all.first { $0.vendor.id == id })
     }
+
+    /// Every wired-up maker, in the same order the picker lists them.
+    static let all: [VendorRuntime] = [.claudeCode, .openCode]
 }
 
 /// The per-character backend, as the orchestrator needs to see it.

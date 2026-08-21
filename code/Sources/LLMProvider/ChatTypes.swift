@@ -275,6 +275,14 @@ public enum ChatError: Error, Equatable, Sendable, LocalizedError {
     case network(String)
     case claudeCodeNotFound
     case claudeCodeFailed(String)
+    /// A maker that is not Claude Code could not do the turn.
+    ///
+    /// Carries the maker's name because the message is read by someone who may
+    /// have several set up, and "it failed" without saying which is a sentence
+    /// that cannot be acted on. The detail is passed through rather than
+    /// classified — `ClaudeCodeFailure`'s categories were learnt from Claude
+    /// Code's own wording and mean nothing here.
+    case vendorFailed(vendor: String, detail: String)
 
     public var errorDescription: String? {
         switch self {
@@ -287,6 +295,8 @@ public enum ChatError: Error, Equatable, Sendable, LocalizedError {
             Claude Code isn't installed on this Mac — I work by driving your own \
             copy of it. Install it and sign in, then try again.
             """
+        case .vendorFailed(let vendor, let detail):
+            return "\(vendor) couldn't finish: \(detail)"
         case .claudeCodeFailed(let detail):
             // Read for a cause rather than shown raw: "Claude Code failed:" in
             // front of a stack trace leaves the reader to work out whether they
