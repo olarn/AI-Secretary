@@ -334,6 +334,14 @@ public final class ChatBackend: ChatProvider, WorkspaceScopedProvider, VendorBac
 
     /// False until detection finishes, and false when falling back to the API
     /// provider — that one really can't look at anything itself.
+    ///
+    /// Left as a presence check on purpose when the vendor seam went in. The
+    /// doc on `WorkspaceScopedProvider` describes this as a capability — can
+    /// the backend look at the directory itself — which is a property of the
+    /// maker, not of whether one has been built yet. Moving it onto `AIVendor`
+    /// would have changed what this answers, and the sprint that added the seam
+    /// was required to change nothing. The second maker is where it has to be
+    /// decided properly.
     public var hasWorkspaceTools: Bool {
         lock.withLock { _provider } != nil
     }

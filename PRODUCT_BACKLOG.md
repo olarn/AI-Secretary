@@ -3099,6 +3099,9 @@ already-open folder that must not be re-offered and must not be silent.
 - [x] `claude --version` ตอบ `2.1.238 (Claude Code)` พอเอามาต่อท้ายชื่อค่ายเลย
   บรรทัดอ่านว่า "Claude Code · 2.1.238 (Claude Code) · Max" — ตัดเหลือเลขเวอร์ชัน
   (เจอตอน drive จริง ไม่ใช่ตอนอ่านโค้ด)
+- [ ] **ค้างไว้ให้ Sprint 23**: `hasWorkspaceTools` ยังเป็นแค่ "มี provider แล้วหรือยัง"
+  ทั้งที่ความหมายตาม doc คือความสามารถของค่าย (มองไฟล์เองได้ไหม) — รอบนี้ตั้งใจไม่ย้าย
+  เพราะจะเปลี่ยนความหมาย และ `AIVendor` ยังไม่มี flag นี้ ค่ายที่สองจะชนแน่
 - [x] `scripts/uidrive/cap.sh` / `capchar.sh` อ่านหน้าต่างที่ x หรือ y ติดลบไม่ได้
   (จอที่อยู่ซ้าย/เหนือจอหลัก) regex ไม่ match แล้วสคริปต์รายงานว่า "is the panel
   open?" ทั้งที่เปิดอยู่ — เสียเวลาไปรอบหนึ่งก่อนจะรู้ว่าเป็นบั๊กของเครื่องมือเอง
@@ -3108,6 +3111,10 @@ already-open folder that must not be re-offered and must not be silent.
 ปิด/เปิด panel ใหม่แล้วถามซ้ำเองจริง, ส่งข้อความจริงแล้วได้คำตอบกลับ (เทิร์นวิ่งผ่าน
 factory ใหม่), panel Projects + Browser picker ยังปกติ
 
-**สิ่งที่ยังไม่ได้ลองในแอปจริง**: ฝั่ง ✗ แดง — จะลองได้ต้อง sign out Claude Code
-ของเจ้าของจริง ๆ ซึ่งไม่ทำ ทุกสถานะ (ไม่เจอไฟล์ / sign out / อ่านคำตอบไม่ออก)
-มีเทสคุมครบ แต่ยังไม่มีใครเห็นกากบาทแดงด้วยตาตัวเอง
+**ฝั่ง ✗ แดงก็ drive แล้ว** โดยไม่ต้อง sign out ของเจ้าของ: ชี้ locator ให้หาไม่เจอ
+(`ClaudeCodeLocator(isExecutable: { _ in false })`) แล้ว `.missing` วิ่งผ่าน view
+เดียวกันทุกบรรทัด — ได้กากบาทแดงจริงพร้อมข้อความ "Claude Code isn't installed, or
+isn't where the app looked. Looked in: …" ที่ไล่ path ที่หาไว้ครบ (patch ชั่วคราว
+revert แล้ว ไม่ได้ commit)
+**เหลือสถานะเดียวที่ยังไม่ได้เห็นด้วยตา**: sign out จริง ๆ ซึ่งต้องใช้บัญชีเจ้าของ
+มีเทสคุมไว้แทน
