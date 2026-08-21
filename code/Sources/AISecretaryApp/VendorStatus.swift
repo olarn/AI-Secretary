@@ -28,6 +28,17 @@ final class VendorStatus {
     /// orchestrator: this needs two questions answered, not a collaborator.
     private let chosenModel: () -> ChatModel?
     private let chooseModel: (ChatModel?) -> Void
+    /// Whether a real turn is running. The warm-up must not queue behind the
+    /// person's own question on the same model — both come back slower than if
+    /// neither had run.
+    private let turnInFlight: () -> Bool
+    /// Where the next turn would run. The warm-up has to use it, or it prefills
+    /// a prompt no real turn will send.
+    private let workingDirectory: () -> URL?
+    /// What has already been paid for this run. Not persisted: the cache it
+    /// warms lives in whatever is serving the model, and that does not survive
+    /// a restart either.
+    private var warmed: Set<WarmUpTarget> = []
 
     private(set) var choice: VendorChoice
     private(set) var connection: VendorConnection = .unchecked
@@ -40,13 +51,17 @@ final class VendorStatus {
         backend: ChatBackend,
         claudeAvailability: @escaping () -> ClaudeCodeAvailability?,
         chosenModel: @escaping () -> ChatModel? = { nil },
-        chooseModel: @escaping (ChatModel?) -> Void = { _ in }
+        chooseModel: @escaping (ChatModel?) -> Void = { _ in },
+        turnInFlight: @escaping () -> Bool = { false },
+        workingDirectory: @escaping () -> URL? = { nil }
     ) {
         self.store = store
         self.backend = backend
         self.claudeAvailability = claudeAvailability
         self.chosenModel = chosenModel
         self.chooseModel = chooseModel
+        self.turnInFlight = turnInFlight
+        self.workingDirectory = workingDirectory
         self.choice = store.load()
         self.models = runtime.vendor.models
     }
@@ -107,7 +122,37 @@ final class VendorStatus {
             self.backend.use(runtime: runtime, installation: found)
             if let found {
                 self.models = await runtime.offeredModels(found)
+                self.warmUpIfWorthIt(runtime: runtime, installation: found)
             }
+        }
+    }
+
+    /// Reads the maker's system prompt into the model's cache now, so the
+    /// person's first question doesn't pay for it.
+    ///
+    /// Whether it is worth doing is `shouldWarmUp`'s answer, in a library target
+    /// the tests can see. Detached and never awaited: this takes minutes on a
+    /// local model, and nothing on screen should wait for it.
+    private func warmUpIfWorthIt(runtime: VendorRuntime, installation: AgentInstallation) {
+        let directory = workingDirectory()
+        let model = chosenModel()
+        let target = WarmUpTarget(
+            vendorID: runtime.vendor.id,
+            modelID: model?.id,
+            directory: directory?.path
+        )
+        guard shouldWarmUp(
+            target,
+            alreadyWarmed: warmed,
+            vendorWarmsUp: runtime.warmsUp,
+            turnInFlight: turnInFlight()
+        ) else { return }
+        // Marked before it finishes, on purpose: two panel openings a second
+        // apart would otherwise both start one, and the second would sit behind
+        // the first on the same model for no gain.
+        warmed.insert(target)
+        Task.detached(priority: .utility) {
+            await runtime.warmUp(installation, directory: directory, model: model)
         }
     }
 

@@ -156,7 +156,9 @@ final class CharacterInstance {
             backend: backend,
             claudeAvailability: { [weak backendStatus] in backendStatus?.availability },
             chosenModel: { [weak secretary] in secretary?.chosenModel },
-            chooseModel: { [weak secretary] chosen in secretary?.chooseModel(chosen) }
+            chooseModel: { [weak secretary] chosen in secretary?.chooseModel(chosen) },
+            turnInFlight: { [weak secretary] in secretary?.stateMachine.state.isBusy ?? false },
+            workingDirectory: { [weak secretary] in secretary?.workingDirectory }
         )
     }
 

@@ -127,7 +127,8 @@ public extension VendorRuntime {
         vendor: .openCode,
         makeProvider: { installation in OpenCodeProvider(installation: installation) },
         probe: VendorRuntime.openCodeConnectionProbe,
-        discoverModels: VendorRuntime.openCodeModelDiscovery
+        discoverModels: VendorRuntime.openCodeModelDiscovery,
+        warmUpTool: VendorRuntime.openCodeWarmUp
     )
 
     /// Asks the installed opencode what this machine can run. Cheap and local —

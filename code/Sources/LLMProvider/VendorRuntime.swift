@@ -41,17 +41,32 @@ public struct VendorRuntime: Sendable {
     /// whatever that user configured, so a list compiled into the app would be
     /// wrong for nearly everybody.
     private let discoverModels: (@Sendable (AgentInstallation) async -> [ChatModel])?
+    /// Pays the first turn's cost early, for a maker where that cost is worth
+    /// paying. Absent means there is nothing useful to warm — see
+    /// `WarmUpTarget` for the measurements that decide which is which.
+    private let warmUpTool: (@Sendable (AgentInstallation, URL?, ChatModel?) async -> Void)?
 
     public init(
         vendor: AIVendor,
         makeProvider: @escaping @Sendable (AgentInstallation) -> VendorProvider,
         probe: @escaping @Sendable (AgentInstallation) async -> VendorProbe,
-        discoverModels: (@Sendable (AgentInstallation) async -> [ChatModel])? = nil
+        discoverModels: (@Sendable (AgentInstallation) async -> [ChatModel])? = nil,
+        warmUpTool: (@Sendable (AgentInstallation, URL?, ChatModel?) async -> Void)? = nil
     ) {
         self.vendor = vendor
         self.makeProvider = makeProvider
         self.probe = probe
         self.discoverModels = discoverModels
+        self.warmUpTool = warmUpTool
+    }
+
+    /// Whether this maker has a first-turn cost worth paying up front.
+    public var warmsUp: Bool { warmUpTool != nil }
+
+    /// Does nothing for a maker with nothing to warm, so the caller needs no
+    /// branch of its own.
+    public func warmUp(_ installation: AgentInstallation, directory: URL?, model: ChatModel?) async {
+        await warmUpTool?(installation, directory, model)
     }
 
     /// What the picker should offer. The maker's own fixed list unless it has a

@@ -503,6 +503,17 @@ public final class Secretary {
     /// path on purpose, so knowing where someone is working never becomes
     /// access to it.
     public var openProjectName: Option<String> { lastProject.map(\.name)^ }
+
+    /// Where a turn would run if one started now — the open project, or the
+    /// scratch directory when none is open.
+    ///
+    /// The same expression `prepareWorkspace` uses, exposed because a maker
+    /// whose prompt is built from the project's own files has to be warmed in
+    /// the directory the next turn will actually use; warming elsewhere prefills
+    /// a prompt nothing will send.
+    public var workingDirectory: URL {
+        lastProject.map(\.url)^.getOrElse(Self.scratchDirectory)
+    }
     @ObservationIgnored private var _sessionAgentTools: Set<String> = []
     /// Sites the person has agreed the assistant may work in, this session.
     @ObservationIgnored private var webSites = WebSiteGrants()
