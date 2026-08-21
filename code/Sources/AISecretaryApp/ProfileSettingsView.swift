@@ -363,7 +363,7 @@ struct ProfileSettingsView: View {
                     secretary.chooseModel(nil)
                 } label: {
                     Label(
-                        "Your Claude Code default",
+                        "The tool's own default",
                         systemImage: secretary.isModelInherited ? "checkmark" : ""
                     )
                 }
@@ -395,7 +395,7 @@ struct ProfileSettingsView: View {
                         secretary.chooseEffort(nil)
                     } label: {
                         Label(
-                            "Your Claude Code default",
+                            "The tool's own default",
                             systemImage: secretary.isEffortInherited ? "checkmark" : ""
                         )
                     }
@@ -413,7 +413,7 @@ struct ProfileSettingsView: View {
                 }
                 // One hint for both rows, under the second of them, the way
                 // Personality and Picture carry theirs in the content column.
-                Text("Change with /model <id> or /effort <level> in the chat. The dashed ring marks one the app didn't pick, which can move if you reconfigure Claude Code.")
+                Text("Change with /model <id> or /effort <level> in the chat. The dashed ring marks one the app didn't pick, which can move if you reconfigure the tool it runs on.")
                     .font(.system(size: appearance.settings.hintFontSize))
                     .foregroundStyle(theme.mutedText.color)
                     .fixedSize(horizontal: false, vertical: true)

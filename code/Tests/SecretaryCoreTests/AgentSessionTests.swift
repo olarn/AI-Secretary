@@ -1033,7 +1033,7 @@ final class AgentSessionTests: XCTestCase {
 
         XCTAssertEqual(secretary.model, Option.none())
         XCTAssertTrue(secretary.isModelInherited)
-        XCTAssertTrue(secretary.transcript.last?.text.contains("Claude Code default") == true,
+        XCTAssertTrue(secretary.transcript.last?.text.contains("the tool's own default") == true,
                       "Got: \(secretary.transcript.last?.text ?? "-")")
     }
 

@@ -1930,7 +1930,7 @@ public final class Secretary {
         case "model":
             guard let argument else {
                 let list = ChatModel.known.map(\.id).joined(separator: ", ")
-                say(.secretary, "Model: \(modelDescription)\nAvailable: \(list)\nShort names: opus, sonnet, fable, haiku — or `default` to use your Claude Code setting.")
+                say(.secretary, "Model: \(modelDescription)\nAvailable: \(list)\nShort names: opus, sonnet, fable, haiku — or `default` to use the tool's own setting.")
                 return
             }
             if ChatModel.meansInherit(argument) {
@@ -1947,7 +1947,7 @@ public final class Secretary {
         case "effort":
             guard let argument else {
                 let list = Effort.allCases.map(\.rawValue).joined(separator: ", ")
-                say(.secretary, "Effort: \(effortDescription)\nAvailable: \(list) — or `default` to use your Claude Code setting.")
+                say(.secretary, "Effort: \(effortDescription)\nAvailable: \(list) — or `default` to use the tool's own setting.")
                 return
             }
             if ChatModel.meansInherit(argument) {
@@ -4720,7 +4720,7 @@ public final class Secretary {
     /// so whatever Claude Code defaults to is what will run. "Unknown" said
     /// that as a fault — it reads as *something is wrong with your settings* —
     /// and it sat directly above a menu item already spelling out the true
-    /// answer, "Your Claude Code default".
+    /// answer, "The tool's own default".
     public var effectiveModelName: String {
         effectiveModel.map(\.displayName)^.getOrElse(Self.inheritedName)
     }
@@ -4732,7 +4732,7 @@ public final class Secretary {
     /// What is actually running, short enough for the header beside her name.
     ///
     /// Built from the *effective* pair, not from `modelDescription`, which says
-    /// "your Claude Code default" — a phrase that is right in a sentence and
+    /// "the tool's own default" — a phrase that is right in a sentence and
     /// absurd in a badge.
     public var modelBadgeText: String {
         modelBadge(model: effectiveModelName, effort: effectiveEffortName)
@@ -4765,7 +4765,7 @@ public final class Secretary {
         say(
             .secretary,
             chosen.fold(
-                { "Model: back to your Claude Code default (\(self.effectiveModelName))." },
+                { "Model: back to the tool's own default (\(self.effectiveModelName))." },
                 { "Model set to \($0.displayName)." }
             )
         )
@@ -4778,7 +4778,7 @@ public final class Secretary {
         say(
             .secretary,
             chosen.fold(
-                { "Effort: back to your Claude Code default (\(self.effectiveEffortName))." },
+                { "Effort: back to the tool's own default (\(self.effectiveEffortName))." },
                 { "Effort set to \($0.rawValue)." }
             )
         )
@@ -4792,11 +4792,11 @@ public final class Secretary {
 
     /// What to show the user for a setting they may never have touched.
     public var modelDescription: String {
-        model.map(\.id)^.getOrElse("your Claude Code default")
+        model.map(\.id)^.getOrElse("the tool's own default")
     }
 
     public var effortDescription: String {
-        effort.map(\.rawValue)^.getOrElse("your Claude Code default")
+        effort.map(\.rawValue)^.getOrElse("the tool's own default")
     }
 
     private var chatOnlyPrompt: String {
