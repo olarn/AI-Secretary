@@ -341,14 +341,17 @@ struct ProfileSettingsView: View {
         if vendorStatus.connection.isChecking {
             ProgressView()
                 .controlSize(.small)
+                .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] }
         } else if vendorStatus.connection.isConnected {
             Image(systemName: "checkmark.circle.fill")
                 .foregroundStyle(theme.success.color)
                 .font(.system(size: appearance.settings.hintFontSize))
+                .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] }
         } else if vendorStatus.connection.isFailed {
             Image(systemName: "xmark.circle.fill")
                 .foregroundStyle(theme.danger.color)
                 .font(.system(size: appearance.settings.hintFontSize))
+                .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] }
         }
     }
 
@@ -439,6 +442,7 @@ struct ProfileSettingsView: View {
                 Image(systemName: "circle.dashed")
                     .font(.system(size: appearance.settings.hintFontSize * 0.8))
                     .foregroundStyle(theme.mutedText.color)
+                    .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] }
             }
             Spacer(minLength: 0)
         }

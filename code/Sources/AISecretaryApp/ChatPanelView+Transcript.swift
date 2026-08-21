@@ -1,12 +1,16 @@
 import AppKit
 import SwiftUI
+import LLMProvider
 import SecretaryCore
 
 /// The thread itself: the scroller and its follow-the-bottom rule, and how one
 /// message becomes bubbles, tables, code blocks and activity lines.
 extension ChatPanelView {
     var emptyTranscriptHint: String {
-        SecretaryCore.emptyTranscriptHint(backendStatus.readiness)
+        SecretaryCore.emptyTranscriptHint(
+            backendStatus.readiness,
+            makers: AIVendor.known.map(\.displayName)
+        )
     }
 
     var transcript: some View {

@@ -3207,3 +3207,29 @@ model reset, effort กลับมา, CLI Path หายไป
   `stepperRow` and the Browser picker. No tuned offsets — a padding number that
   fixes a baseline at one font size is wrong at the next, which is the same trap
   the panel-overflow lesson records.
+
+- [x] **The markers beside a value are centred on it, not sat on its baseline**
+  — the first pass took `circle.dashed`, the connection tick and the checking
+  spinner onto the row's baseline along with everything else, and a small glyph
+  aligned that way hangs above the text it belongs to (visible at 20pt on the
+  Model and Effort rows). `.alignmentGuide(.firstTextBaseline)` reading the
+  glyph's own centre puts it back without taking the row off its baseline.
+  Driven at the moment of a Check, so the spinner — the child with no baseline
+  at all — was seen in place rather than assumed.
+
+- [x] **The greeting stopped naming Claude Code** (owner asked, 2026-08-21).
+  Every character was greeted with "Ready — I'll work through your own Claude
+  Code", including the ones set to OpenCode; it now reads "Ready — I'll work
+  through the AI tool you've set up", and which tool was actually found is
+  still in the brackets right after it. The other two states of the same hint
+  had the same fault — "Checking for Claude Code…" and "Install Claude Code
+  and sign in" — so `emptyTranscriptHint` now takes the makers as an argument
+  (`AIVendor.known`, passed by the view) instead of naming one, and the
+  install line lists what the app can actually run. Her `/help` opening carried
+  the sentence too and is neutral now. `ClaudeCodeFailure` deliberately still
+  says Claude Code: those messages are Claude Code's own words parsed back, and
+  OpenCode fails through `ChatError.vendorFailed` instead.
+  Four tests added for `makerList`, including the empty list — "Install  and
+  sign in" is exactly the invisible double-space defect that file exists for.
+  The string assertions changed because the strings intentionally changed; none
+  was weakened to pass.

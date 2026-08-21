@@ -318,9 +318,9 @@ enum SecretaryPrompt {
         let opening = workspaceTools
             ? """
               Just tell me what you need, in your own words and in any language \
-              — I work through your own Claude Code, so I can open the files in \
-              a registered project and look for myself. Anything that writes \
-              stops and asks you first.
+              — I work through the AI tool you've set up, so I can open the \
+              files in a registered project and look for myself. Anything that \
+              writes stops and asks you first.
               """
             : helpTypedCommands
         return opening + "\n\n" + helpSlashCommands
