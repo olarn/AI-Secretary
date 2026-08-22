@@ -3415,3 +3415,26 @@ default) ซึ่งทำให้ cache หายไปด้วย — ค�
   (header ขึ้น "- THINKING" แล้วกลับ idle), badge เปลี่ยนจาก Default → Fable 5
   (`liveHalfFromThisCharactersOwnSession`), เปิด Settings แล้ว **ไม่ล้นหน้าต่าง**
   (เห็น header ครบตามกฎใน charter), Esc ปิดแชทได้
+
+## v0.23.362 — แถว AI ในหน้า Profile เข้าแนวเดียวกับแถวอื่น
+
+เจ้าของรายงานพร้อมภาพ: แถว AI เป็นแถวเดียวในหน้า Profile ที่ dropdown มีกรอบทึบ
+(bordered) ขณะที่ Gender / Age / Model / Effort เป็น borderless หมด กรอบดันตัวอักษร
+เข้าไป ~19pt ทำให้ "Claude Code" บนปุ่มกับ caption "Claude Code · 2.1.239 · Max"
+ข้างล่างเยื้องกันเห็นชัด — design note ของไฟล์นี้เขียนธรรมเนียมไว้อยู่แล้วว่า picker
+ทุกตัวในหน้านี้ใช้รูปแบบเดียวกัน (Picture: "The same menu shape as the Model and
+Effort pickers") แถว AI คือตัวเดียวที่หลุด
+
+- [x] เติม `.menuStyle(.borderlessButton)` ให้เมนู AI — ตรงกับทุก picker ในหน้านี้แล้ว
+- [x] เจ้าของสั่งเพิ่มกลางคัน: ย้ายไอคอนสถานะ (✓/✗/กำลังเช็ค) ไปไว้**หลัง**ปุ่ม Check
+  และวางแนวเดียวกับปุ่ม — ลำดับใหม่คือ dropdown, Check, ไอคอน
+- [x] Drive แล้วทั้งสองตัวละคร (OpenCode และ Claude Code): แถวตรง, caption ตรงคอลัมน์,
+  ไอคอนอยู่หลัง Check, ปุ่ม Check ยังกดได้ (เห็น spinner ตอน probe วิ่ง)
+- 1438 tests ผ่านหมด (fix นี้อยู่ใน `AISecretaryApp` ซึ่ง test มองไม่เห็น — หลักฐานคือ
+  การ drive)
+
+**แก้ข้อมูลจากรายงานรอบที่แล้ว**: "build ไม่มี warning" ที่รายงานไว้วัดจาก incremental
+build ที่ไม่ได้ compile อะไรจริง — full build มี warning เดิม 4 จุด (`@Sendable` ใน
+`VendorRuntime.swift:55`, `OpenCodeVendor.swift:85-87` และ `withLock` ใน
+`ClaudeCodeProvider.swift:438`) ตรวจกับ `pre-clean-code-sweep` แล้ว**มีมาก่อน sweep
+ทั้งหมด** ไม่ได้เกิดจากงาน clean code

@@ -212,13 +212,14 @@ struct ProfileSettingsView: View {
                             }
                         }
                     }
+                    .menuStyle(.borderlessButton)
                     .font(.system(size: appearance.settings.footnoteFontSize))
                     .fixedSize()
-                    connectionMarker
                     Button("Check") { vendorStatus.refresh() }
                         .buttonStyle(.plain)
                         .font(.system(size: appearance.settings.hintFontSize))
                         .foregroundStyle(theme.mutedText.color)
+                    connectionMarker
                 }
                 if let message = vendorStatus.connection.message {
                     Text(message)
