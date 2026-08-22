@@ -3,8 +3,6 @@ import XCTest
 @testable import AssistantState
 
 final class AssistantStateReducerTests: XCTestCase {
-    /// Walk the table by folding each step into the next, so a broken
-    /// transition shows up as the state it stopped at rather than a crash.
     func testFullHappyPathToSuccess() {
         let path: [(AssistantEvent, AssistantState)] = [
             (.userBeganInput, .listening),
@@ -61,6 +59,52 @@ final class AssistantStateReducerTests: XCTestCase {
     }
 }
 
+final class AssistantBusyTests: XCTestCase {
+    func testThinkingAndWorkingAreBusyBecauseARequestIsInFlight() {
+        XCTAssertTrue(AssistantState.thinking.isBusy)
+        XCTAssertTrue(AssistantState.working.isBusy)
+    }
+
+    func testListeningIsNotBusyBecauseItIsThePersonTypingTheNextMessage() {
+        XCTAssertFalse(AssistantState.listening.isBusy)
+    }
+
+    func testRestAndFinishedStatesAreNotBusy() {
+        XCTAssertFalse(AssistantState.idle.isBusy)
+        XCTAssertFalse(AssistantState.success.isBusy)
+        XCTAssertFalse(AssistantState.error.isBusy)
+    }
+}
+
+final class SurvivingTaskIDTests: XCTestCase {
+    func testATaskSurvivesEveryTransitionUntilTheMachineComesToRest() {
+        XCTAssertEqual(
+            taskIDSurvivingTransition(
+                explicit: .none(), arrivingAt: .working, current: .some("task-42")
+            ),
+            .some("task-42")
+        )
+    }
+
+    func testArrivingAtRestForgetsTheTask() {
+        XCTAssertEqual(
+            taskIDSurvivingTransition(
+                explicit: .none(), arrivingAt: .idle, current: .some("task-42")
+            ),
+            Option.none()
+        )
+    }
+
+    func testAnExplicitTaskOnTheEventAlwaysWinsEvenArrivingAtRest() {
+        XCTAssertEqual(
+            taskIDSurvivingTransition(
+                explicit: .some("task-new"), arrivingAt: .idle, current: .some("task-42")
+            ),
+            .some("task-new")
+        )
+    }
+}
+
 final class AssistantStateMachineTests: XCTestCase {
     func testSendAppliesValidTransitionAndRecordsHistory() {
         let machine = AssistantStateMachine()
@@ -104,11 +148,8 @@ final class AssistantStateMachineTests: XCTestCase {
     }
 }
 
-/// What the character is called on screen.
 final class CharacterStatusLabelTests: XCTestCase {
-    /// Idle is where the character spends nearly all its life, and a word that
-    /// is always there is a word nobody reads. The name is the useful half.
-    func testIdleIsJustTheName() {
+    func testIdleIsJustTheNameBecauseAWordAlwaysOnScreenIsAWordNobodyReads() {
         XCTAssertNil(characterStatusTag(for: .idle))
         XCTAssertEqual(characterStatusLabel(name: "Miku", state: .idle), "Miku")
     }
@@ -118,9 +159,7 @@ final class CharacterStatusLabelTests: XCTestCase {
         XCTAssertEqual(characterStatusLabel(name: "อาเนีย", state: .error), "อาเนีย - ERROR")
     }
 
-    /// Every state that isn't idle says something, including any added later —
-    /// the rule is "not idle", not a list that a new case can fall off.
-    func testOnlyIdleIsSilent() {
+    func testEveryStateButIdleSpeaksIncludingAnyAddedLater() {
         for state in [AssistantState.listening, .thinking, .working, .success, .error] {
             XCTAssertEqual(
                 characterStatusLabel(name: "N", state: state),

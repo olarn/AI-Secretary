@@ -1,42 +1,29 @@
 import XCTest
 @testable import SecretaryCore
 
-/// Every place the version is written must agree with the code.
-///
-/// `AppVersion.current` is the single source, and the About window and the
-/// packaging script both read it — but prose can't. The root README states the
-/// version in words, which is a second copy, and a second copy of a number is a
-/// number that goes stale. Rather than trusting whoever bumps it to remember
-/// the README, the disagreement fails here.
-///
-/// Add a row to `versionMentions` whenever another document starts quoting the
-/// version.
 final class VersionInSyncTests: XCTestCase {
-    /// Files that state the version, and the pattern that finds it.
-    private let versionMentions: [(path: String, pattern: String)] = [
+    private let documentsQuotingTheVersion: [(path: String, pattern: String)] = [
         ("README.md", #"Version (\d+\.\d+\.\d+)"#)
     ]
 
-    /// The repository root, found by walking up from this file rather than from
-    /// the working directory, which differs between `swift test` and Xcode.
     private var repositoryRoot: URL {
-        URL(fileURLWithPath: #filePath)          // …/code/Tests/SecretaryCoreTests/ThisFile.swift
-            .deletingLastPathComponent()         // …/code/Tests/SecretaryCoreTests
-            .deletingLastPathComponent()         // …/code/Tests
-            .deletingLastPathComponent()         // …/code
-            .deletingLastPathComponent()         // repository root
+        let thisFile = URL(fileURLWithPath: #filePath)
+        let testTarget = thisFile.deletingLastPathComponent()
+        let testsDirectory = testTarget.deletingLastPathComponent()
+        let codeDirectory = testsDirectory.deletingLastPathComponent()
+        return codeDirectory.deletingLastPathComponent()
     }
 
-    func testEveryDocumentedVersionMatchesTheCode() throws {
+    private func textIfTheFileIsPresent(at url: URL) -> String? {
+        try? String(contentsOf: url, encoding: .utf8)
+    }
+
+    func testEveryDocumentQuotingTheVersionAgreesWithTheCode() throws {
         let expected = AppVersion.current.description
 
-        for mention in versionMentions {
+        for mention in documentsQuotingTheVersion {
             let url = repositoryRoot.appendingPathComponent(mention.path)
-            guard let text = try? String(contentsOf: url, encoding: .utf8) else {
-                // A worktree may not carry every document; a missing file is
-                // not a stale one.
-                continue
-            }
+            guard let text = textIfTheFileIsPresent(at: url) else { continue }
             let regex = try NSRegularExpression(pattern: mention.pattern)
             let range = NSRange(text.startIndex..., in: text)
             let matches = regex.matches(in: text, range: range)
@@ -56,10 +43,7 @@ final class VersionInSyncTests: XCTestCase {
         }
     }
 
-    /// The packaging script parses the declaration with `sed`, so its exact
-    /// shape is load-bearing: reformatted onto several lines, the bundle would
-    /// silently carry no version at all.
-    func testTheVersionDeclarationStaysOnOneLineForTheScript() throws {
+    func testTheVersionDeclarationStaysOnOneLineOrThePackagedBundleCarriesNoVersion() throws {
         let source = repositoryRoot
             .appendingPathComponent("code/Sources/SecretaryCore/AppVersion.swift")
         let text = try String(contentsOf: source, encoding: .utf8)

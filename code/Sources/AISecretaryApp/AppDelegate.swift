@@ -285,7 +285,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     /// decides what the menu contains. Gathering, not deciding.
     private func menuState() -> [StatusMenuEntry] {
         statusBarMenu(
-            summary: AppInfo.summary,
+            summary: AppInfo.statusMenuHeader,
             characters: characters.map { character in
                 CharacterMenuState(
                     id: character.profileID,

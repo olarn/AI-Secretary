@@ -3,13 +3,6 @@ import Foundation
 import Observation
 import os
 
-/// Owns the current `AssistantState` and the audit trail of transitions.
-///
-/// **Never set `state` from outside — submit an event.** A direct write skips
-/// the transition table, the history entry and the log line all at once.
-///
-/// The decision itself lives in `decideTransition`; this type only holds the
-/// result and logs it, so the transition table stays testable without an object.
 @Observable
 public final class AssistantStateMachine {
     public private(set) var state: AssistantState
@@ -59,9 +52,9 @@ public final class AssistantStateMachine {
         )
 
         state = next
-        // A task survives until the machine comes to rest; an explicit taskID
-        // on this event always wins.
-        activeTaskID = taskID.orElse(next == .idle ? Option.none() : activeTaskID)
+        activeTaskID = taskIDSurvivingTransition(
+            explicit: taskID, arrivingAt: next, current: activeTaskID
+        )
         history.append(transition)
 
         logger.info(

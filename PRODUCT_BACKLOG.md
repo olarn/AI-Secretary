@@ -3281,3 +3281,37 @@ default) ซึ่งทำให้ cache หายไปด้วย — ค�
 **สิ่งที่เจ้าของต้องทำเองบนเครื่อง** (นอก repo): ตั้ง `OLLAMA_KEEP_ALIVE` ให้ยาว
 เพื่อไม่ให้โมเดลถูกเขี่ยทิ้งทุก 5 นาที — ระหว่าง session นี้ pin ให้ชั่วคราวแล้วด้วย
 คำสั่ง keep_alive แต่จะหายเมื่อ Ollama restart
+
+---
+
+## Clean code — โค้ดอธิบายตัวเอง ไม่เหลือ comment (v0.23.354 เป็นต้นไป)
+
+เจ้าของสั่งให้ทั้ง repo อ่านแล้วเข้าใจได้จาก source อย่างเดียว — ไม่เหลือ comment
+สักบรรทัด แต่ **ความรู้ต้องไม่หาย** ทุก comment ถูกจัดที่ใหม่ตามกฎสี่ข้อ:
+
+1. comment ที่พูดซ้ำกับบรรทัดถัดไป → ลบ
+2. comment ที่กำลัง "ตั้งชื่อ" ให้บล็อกโค้ด → กลายเป็นชื่อฟังก์ชัน/ตัวแปร แล้วลบ
+3. comment ที่เป็นบันทึกบั๊ก (มี input ที่ทำให้พัง) → กลายเป็น **ชื่อ test** ที่
+   input นั้นคือตัว reproduce
+4. เหลือจากสามข้อบน (ข้อจำกัดของแพลตฟอร์ม, การผูกกับ build script, ตัวเลขที่
+   เหตุผลคือ "วัดมาแล้ว") → `docs/design-notes/` ไฟล์ละ target
+
+`git tag pre-clean-code-sweep` ชี้ไว้ที่ 4d7ec8f ก่อนเริ่ม — rollback ด้วย
+`git reset --hard pre-clean-code-sweep && ./scripts/package-app.sh`
+
+**Baseline ก่อนเริ่ม: 1432 tests ผ่านหมด** ทุกรอบต้องผ่านเท่าเดิมหรือมากกว่า และ
+**ห้ามแก้ assertion เพื่อให้เขียว** — ถ้าต้องแก้ แปลว่าไม่ใช่ refactor แล้ว
+
+- [x] `AssistantState` (4 ไฟล์) — target นำร่อง พิสูจน์กฎบนโค้ดที่ coverage 100%
+  - `isWorthAnnouncing` / `isAtRest` ตั้งชื่อให้เงื่อนไข `!= .idle` ที่เคยอธิบายด้วย comment
+  - `taskIDSurvivingTransition` ดึงกฎ "task อยู่จนกว่าจะกลับมาพัก" ออกจาก inline comment
+    มาเป็นฟังก์ชัน pure ที่ test ได้
+  - `pulseProgress(at:)` เปลี่ยนชื่อพารามิเตอร์ในเป็น `absoluteSeconds` — เวลาสัมบูรณ์
+    ไม่ใช่เวลาที่ผ่านไป คือเหตุผลที่ halo กับ badge เดินตรงกัน
+  - บันทึกบั๊ก `@State` + `repeatForever` ที่หายใจต่อหลัง idle → `docs/design-notes/assistant-state.md`
+  - +6 tests ใหม่ (`isBusy` สามสถานะ, `taskIDSurvivingTransition` สามเคส) → 1438 ผ่านหมด
+- [x] `AppVersion.swift` + test คู่กัน — comment เตือน "อย่าตัดบรรทัด `AppVersion(...)`"
+  ลบได้เพราะ `testTheVersionDeclarationStaysOnOneLineOrThePackagedBundleCarriesNoVersion`
+  เฝ้าอยู่แล้วจริง (เช็กแล้ว ไม่ใช่เชื่อตาม CLAUDE.md)
+  - `AppInfo.summary` → `AppInfo.statusMenuHeader` ชื่อบอกที่ใช้ จึงไม่ต้องอธิบายว่า
+    ทำไมมีแค่ชื่อกับเวอร์ชัน
