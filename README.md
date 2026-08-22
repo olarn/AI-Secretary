@@ -61,7 +61,7 @@ it — no Claude Code, no reply.
 ```bash
 git clone https://github.com/olarn/AI-Secretary.git
 cd AI-Secretary/code
-swift build            # or: swift test   (1,438 tests)
+swift build            # or: swift test
 ./scripts/package-app.sh
 open AISecretary.app
 ```
