@@ -2267,10 +2267,14 @@ public final class Secretary {
         )
     }
 
+    private func runStayingInThinkingUntilTheFirstToken(_ run: ReplyRun) -> ReplyRun {
+        run
+    }
+
     private func render(_ event: ChatStreamEvent, _ run: ReplyRun) -> ReplyRun {
         switch event {
         case .thinking:
-            return run // stay in THINKING until the first token
+            return runStayingInThinkingUntilTheFirstToken(run)
         case .textBlockBegan:
             return closeSegment(run)
         case .sessionLost:

@@ -1,9 +1,5 @@
 import CoreGraphics
 import Foundation
-// Moves the pointer the way a hand does — in steps, posting a mouseMoved for
-// each — then clicks. A warp teleports, which can deliver a control's
-// mouse-entered before the box's mouse-exited and leave hover in a state a
-// real pointer never reaches.
 let x2 = CGFloat(Double(CommandLine.arguments[1])!)
 let y2 = CGFloat(Double(CommandLine.arguments[2])!)
 let click = CommandLine.arguments.count > 3 && CommandLine.arguments[3] == "click"

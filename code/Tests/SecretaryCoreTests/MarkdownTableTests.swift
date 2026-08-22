@@ -1,9 +1,6 @@
 import XCTest
 @testable import SecretaryCore
 
-/// Replies routinely contain pipe tables — the shoe-price answer that prompted
-/// this arrived as one. SwiftUI renders them as a wall of pipes unless they're
-/// pulled out and laid out.
 final class MarkdownTableTests: XCTestCase {
     private func segments(_ text: String) -> [TranscriptSegment] {
         MarkdownTableParser.segments(of: text)
@@ -67,11 +64,6 @@ final class MarkdownTableTests: XCTestCase {
         XCTAssertEqual(table?.rows.first, ["**รุ่นเริ่มต้น**", "6,200–6,600"])
     }
 
-    // MARK: - Leaving prose alone
-
-    /// A message is model output, not a document we control. Mangling ordinary
-    /// text that happens to contain a pipe would be worse than not styling one
-    /// table, so a separator row is required.
     func testAPipeInProseIsNotATable() {
         let parsed = segments("Run `ls | grep foo` to filter the list.")
         XCTAssertEqual(parsed.count, 1)
@@ -94,10 +86,6 @@ final class MarkdownTableTests: XCTestCase {
         XCTAssertEqual(segments(""), [])
     }
 
-    // MARK: - Ragged and awkward input
-
-    /// Generated markdown often has rows that don't match the header. Dropping
-    /// or crashing on those would lose data; the grid just has to stay square.
     func testShortRowsArePaddedAndLongOnesTrimmed() {
         let table = onlyTable("""
         | A | B | C |

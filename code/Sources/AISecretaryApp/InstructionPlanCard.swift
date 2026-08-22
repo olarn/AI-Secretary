@@ -1,29 +1,12 @@
 import SwiftUI
 import SecretaryCore
 
-/// The steps read out of an instruction file, shown in full before any of them
-/// runs.
-///
-/// This card *is* the safety of the feature. Everything else — the untrusted
-/// framing in the prompt, the pattern scan, the per-action permission cards —
-/// supports it; none of it replaces someone reading the list and saying yes.
-/// So the steps are shown verbatim, in order, with no summarising and no
-/// scrolling past: what the app is about to do fits on the screen or the file
-/// is too big to run blind.
-///
-/// It decides nothing. Whether there are risks, and whether the file changed,
-/// are answered in `SecretaryCore`; this only renders the answers and calls
-/// back.
 struct InstructionPlanCard: View {
-    /// The colours in force, set by whichever window this view is inside.
     @Environment(\.palette) private var theme
 
     let plan: InstructionPlan
     let risks: [InstructionRisk]
     let changedSinceLastRun: Bool
-    /// Sizes come from the app's text setting, like everything else the
-    /// person reads — a card pinned at 11pt beside 28pt replies is the same
-    /// bug the panels had.
     let fontSize: Double
     let hintSize: Double
     let spacing: Double
@@ -31,9 +14,6 @@ struct InstructionPlanCard: View {
     let start: () -> Void
     let cancel: () -> Void
 
-    /// Ticked by hand when something was flagged. The extra click is the whole
-    /// point: a warning that sits beside an already-enabled button is a warning
-    /// nobody has to have read.
     @State private var acknowledged = false
 
     private var needsAcknowledgement: Bool { !risks.isEmpty }
@@ -74,8 +54,6 @@ struct InstructionPlanCard: View {
             if !risks.isEmpty {
                 VStack(alignment: .leading, spacing: spacing * 0.5) {
                     ForEach(risks) { risk in
-                        // The words that triggered it, not just the verdict:
-                        // a warning you can check is a warning you can weigh.
                         Text("⚠ \(risk.reason) — \(risk.evidence)")
                             .font(.system(size: hintSize))
                             .foregroundStyle(theme.danger.color)

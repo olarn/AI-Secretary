@@ -1,8 +1,6 @@
 import XCTest
 @testable import SecretaryCore
 
-/// A reply arrives token by token, and every token rebuilds the whole list of
-/// messages. Only the one still growing can have changed.
 final class MessagePartsCacheTests: XCTestCase {
     func testTheSameMessageIsParsedOnce() {
         let cache = MessagePartsCache()
@@ -27,7 +25,6 @@ final class MessagePartsCacheTests: XCTestCase {
         XCTAssertEqual(cache.hits, 0)
     }
 
-    /// The whole point: the messages above the one arriving cost nothing.
     func testOnlyTheGrowingMessageIsReparsedAcrossTokens() {
         let cache = MessagePartsCache()
         let settled = (0..<5).map { _ in UUID() }
@@ -68,8 +65,6 @@ final class MessagePartsCacheTests: XCTestCase {
         XCTAssertEqual(cache.misses, 3)
     }
 
-    /// The markers meant for the app never reach the screen, whichever route
-    /// the text took to get here.
     func testTheChoicesBlockIsNotShown() {
         let text = "Which one?\n\n```choices\nA. left\nB. right\n```"
         XCTAssertFalse(displayBody(of: text).contains("```choices"))

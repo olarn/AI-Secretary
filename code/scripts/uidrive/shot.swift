@@ -8,7 +8,8 @@ var best: [String: CGFloat]? = nil
 for w in list {
     guard (w[kCGWindowOwnerPID as String] as? Int) == pid,
           let b = w[kCGWindowBounds as String] as? [String: CGFloat] else { continue }
-    if b["Width"]! > 200 { best = b }   // the chat panel, not the character
+    let isTheChatPanelRatherThanTheCharacter = b["Width"]! > 200
+    if isTheChatPanelRatherThanTheCharacter { best = b }
 }
 guard let b = best else { print("no panel"); exit(1) }
 let rect = "\(Int(b["X"]!)),\(Int(b["Y"]!)),\(Int(b["Width"]!)),\(h)"

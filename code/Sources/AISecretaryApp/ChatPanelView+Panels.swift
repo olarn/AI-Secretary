@@ -2,9 +2,6 @@ import SwiftUI
 import ProjectRegistry
 import SecretaryCore
 
-/// The collapsible configuration sections and the footer that opens them:
-/// Settings, Projects (with the browser switch), Skills, and the height cap
-/// that makes the panel structurally incapable of overflowing.
 extension ChatPanelView {
     private var settingsSection: some View {
         VStack(alignment: .leading, spacing: appearance.settings.panelSpacing) {
@@ -49,8 +46,6 @@ extension ChatPanelView {
         .background(PanelBoxGround(palette: theme, liquidGlass: appearance.settings.liquidGlass))
     }
 
-    /// Built from `ThemeChoice.allCases`, so adding a theme adds a button
-    /// without this row being touched.
     private var themeRow: some View {
         VStack(alignment: .leading, spacing: appearance.settings.panelSpacing * 0.5) {
             choiceRow("Theme", ThemeChoice.allCases.map { choice in
@@ -63,10 +58,6 @@ extension ChatPanelView {
         }
     }
 
-    /// A checkbox rather than a fourth theme button: glass is a surface the
-    /// bubble is drawn as, and it composes with all three theme choices — the
-    /// palette still decides every colour, glass only replaces the ground it
-    /// sits on. A fourth button would have made "Dark + glass" unsayable.
     private var liquidGlassRow: some View {
         VStack(alignment: .leading, spacing: appearance.settings.panelSpacing * 0.5) {
             Toggle("Liquid Glass", isOn: Binding(
@@ -82,10 +73,6 @@ extension ChatPanelView {
         }
     }
 
-    /// Built from `FontChoice.allCases`, the same way the theme row is.
-    ///
-    /// Sits above Text size because the two are read together and the face is
-    /// the coarser choice of the pair: which font, then how big.
     private var fontRow: some View {
         VStack(alignment: .leading, spacing: appearance.settings.panelSpacing * 0.5) {
             choiceRow("Font", FontChoice.allCases.map { choice in
@@ -98,23 +85,12 @@ extension ChatPanelView {
         }
     }
 
-    /// It was called "App size" while there was one character and every setting
-    /// was the app's. It only ever scaled the character, and now that each has
-    /// her own it scales exactly one of them, so the old name described neither
-    /// what it does nor who it does it to. (It sat in Profile before that,
-    /// which was wrong for the opposite reason: with one character at a time,
-    /// switching secretary would have resized the app under you.)
     private var characterScaleRow: some View {
         choiceRow("Character size", CharacterScale.allCases.map { scale in
             (scale.label, appearance.settings.characterScale == scale, { appearance.selectCharacterScale(scale) })
         })
     }
 
-    /// Shared by Theme and App size because they are the same row, and because
-    /// they sit next to each other: App size used to mark its current value by
-    /// disabling that button, so two adjacent rows said "this is the one you're
-    /// on" in two different ways, one of them indistinguishable from "you can't
-    /// have this".
     private func choiceRow(
         _ label: String,
         _ options: [(title: String, isCurrent: Bool, choose: () -> Void)]
@@ -128,10 +104,6 @@ extension ChatPanelView {
                     .buttonStyle(.bordered)
                     .controlSize(.small)
                     .font(.system(size: appearance.settings.hintFontSize))
-                    // Drawn here rather than left to the bordered style's own
-                    // tint, for the reason in `PanelToggleStyle`: this window is
-                    // never key, and AppKit greys out a tinted control in a
-                    // window that isn't.
                     .background(
                         option.isCurrent
                             ? AnyShapeStyle(theme.accent.color)
@@ -141,15 +113,11 @@ extension ChatPanelView {
                     .foregroundStyle(
                         option.isCurrent ? theme.onAccent.color : theme.primaryText.color
                     )
-                    // See `PanelToggleStyle`: a bordered button's label follows
-                    // the tint, not the foreground style.
                     .tint(option.isCurrent ? theme.onAccent.color : theme.primaryText.color)
             }
         }
     }
 
-    /// A button that can't do anything is disabled rather than silently
-    /// ignored, so reaching a limit reads as a limit.
     private func stepperRow(
         label: String,
         value: String,
@@ -201,12 +169,6 @@ extension ChatPanelView {
                     Spacer()
                     Button {
                         addProjectNote = registry.removeReportingProblem(id: project.id)
-                        // Taking a project away is the same event as adding
-                        // one, and the half that matters more: the running
-                        // session keeps the working directory it was given
-                        // until something re-scopes it, so without this the
-                        // assistant goes on working in a folder that is no
-                        // longer approved.
                         secretary.projectsDidChange()
                     } label: {
                         Image(systemName: "minus.circle")
@@ -220,9 +182,6 @@ extension ChatPanelView {
                 addProjectNote = nil
                 guard let project = ProjectPicker.promptForProject() else { return }
                 addProjectNote = registry.addReportingProblem(project)
-                // Adding a project mid-conversation is almost always a
-                // correction to the question already asked, so the Secretary
-                // re-scopes the workspace and runs it again.
                 secretary.projectsDidChange()
             }
             .buttonStyle(.bordered)
@@ -236,9 +195,6 @@ extension ChatPanelView {
 
             Divider()
 
-            // Under Projects rather than Settings: the browser is somewhere the
-            // assistant is allowed to read, which is the same kind of thing as
-            // a project folder. Settings is what the app looks like.
             browserPicker
             Text(
                 "Reads pages in your Chrome, including sites you're signed in to. "
@@ -246,24 +202,14 @@ extension ChatPanelView {
             )
             .font(.system(size: appearance.settings.hintFontSize))
             .foregroundStyle(theme.mutedText.color)
-            // Two lines rather than one truncated one: the sentence about
-            // reading signed-in sites is the part a person needs before they
-            // switch this on, and "…" is where it was being cut.
             .fixedSize(horizontal: false, vertical: true)
         }
         .padding(appearance.settings.panelPadding)
         .background(PanelBoxGround(palette: theme, liquidGlass: appearance.settings.liquidGlass))
     }
 
-    /// A menu rather than a toggle switch, so this is a deliberate pick from a
-    /// list and not a switch brushed by accident.
     private var browserPicker: some View {
         HStack(alignment: .firstTextBaseline, spacing: 3) {
-            // Outside the menu on purpose. A menu label built from several
-            // views renders as the chevron alone here, and the one thing this
-            // row has to say is whether the browser is connected. Model and
-            // Effort, over in Profile, are drawn the same way for the same
-            // reason — see `settingControl` there.
             Text("Browser:").foregroundStyle(theme.mutedText.color)
             browserMenu
         }
@@ -289,9 +235,6 @@ extension ChatPanelView {
         .fixedSize()
     }
 
-    /// Checkboxes rather than a menu: unlike Model/Effort, this is a
-    /// multi-select, and a `Menu` closes after every tap — wrong for checking
-    /// several boxes in one visit.
     private var skillsSection: some View {
         VStack(alignment: .leading, spacing: appearance.settings.panelSpacing) {
             HStack {
@@ -331,10 +274,6 @@ extension ChatPanelView {
                 .toggleStyle(.checkbox)
             }
 
-            // Says what checking does now, which is the opposite of what it used
-            // to do: it asks for these to be preferred rather than shutting the
-            // others off. The old wording promised a limit, which was both
-            // unenforceable and not the thing anyone wanted from a checkbox.
             Text(
                 secretary.selectedSkills.isEmpty
                     ? "Nothing checked — I'll reach for whichever installed skill fits."
@@ -348,20 +287,6 @@ extension ChatPanelView {
         .background(PanelBoxGround(palette: theme, liquidGlass: appearance.settings.liquidGlass))
     }
 
-    /// Held to a share of the window and given its own scroll, which is what
-    /// makes the panel structurally incapable of overflowing.
-    /// The
-    /// surrounding `VStack` has exactly one flexible child — the transcript —
-    /// and once that has shrunk to nothing, any further content simply spills
-    /// past the bubble: the header goes off the top, the buttons off the
-    /// bottom. Adding a row used to be enough to cross that line, so the fix
-    /// cannot be a re-tuned constant. A section that can never be taller than
-    /// its share, and scrolls when it wants to be, can never cross it at all.
-    ///
-    /// The share is a fraction of the real window height rather than "window
-    /// minus the header, input and footer": those three grow with the text
-    /// size, so any subtraction of them is a constant that goes stale the next
-    /// time ⌘+ is pressed.
     @ViewBuilder
     var openPanelSection: some View {
         if let panel = openPanel {
@@ -380,50 +305,23 @@ extension ChatPanelView {
                 case .skills: skillsSection
                 }
             }
-            // A ScrollView takes every point it is offered, so a short panel —
-            // Projects with nothing registered, Settings at a small text size —
-            // claimed the whole allowance and left dead space between the box
-            // and the buttons. Asking for the content's own height first, then
-            // capping, makes the panel as tall as it needs and no taller, and
-            // it still scrolls once the content passes the cap.
             .frame(maxHeight: appearance.settings.chatHeight * Self.panelHeightShare)
             .fixedSize(horizontal: false, vertical: true)
         }
     }
 
-    /// Leaves the rest of the window — header, transcript, input row and the
-    /// section buttons — the larger share at every text size.
     private static let panelHeightShare: Double = 0.55
 
-    /// The strip along the bottom of the window that belongs to the resize
-    /// grip, on the placements where the grip is down here at all.
-    ///
-    /// The grip is 9pt of glyph inside 10pt of padding, and that padding is its
-    /// hit area, not just air: it reaches about 30pt up from the bottom edge.
-    /// The window's own 18pt sits under the row already, so this is the rest of
-    /// what holds the row above it — and the margin is only a few points, which
-    /// is why it is written down. Shrink either number and the corner of
-    /// Projects lands inside the grip, where a click resizes the window instead
-    /// of opening the pane and no screenshot shows it. Both bottom corners were
-    /// checked by clicking the outermost pixel of the button in them.
     private static let gripStrip: Double = 12
 
-    /// The section toggles grow with the text size like everything else in the
-    /// panel: left at a fixed caption size they became unreadable specks next to
-    /// 32pt replies. `controlSize` follows suit, or the button's own padding
-    /// stays mini around text that isn't.
     var footer: some View {
         HStack(spacing: 10) {
-            // The one row in the window that doesn't follow the bubble: these
-            // four stay put so they can be aimed at without looking.
             ForEach(Array(footerSlots().enumerated()), id: \.offset) { _, slot in
                 switch slot {
                 case .gap:
                     Spacer(minLength: 12)
                 case .button(let button):
                     let panel = Panel(button)
-                    // Still a toggle each, and clicking the open one still
-                    // closes it — opening one closes whichever was open.
                     Toggle(
                         button.title,
                         isOn: Binding(
@@ -434,19 +332,7 @@ extension ChatPanelView {
                 }
             }
         }
-        // Both ends of this row hold a button, so the grip can't be dodged
-        // sideways — it is given the strip underneath instead. Projects stays
-        // against the left edge and Settings against the right, which is the
-        // row as drawn; indenting whichever end the grip was in moved a button
-        // every time the bubble flipped.
-        //
-        // Only when the grip is actually down here: with it at a top corner the
-        // strip would be a gap under the row holding nothing.
         .padding(.bottom, gripCorner.isBottom ? Self.gripStrip : 0)
-        // Not `.toggleStyle(.button)`: an accent-tinted control loses its colour
-        // whenever the window isn't key, and this window is never key. See
-        // `PanelToggleStyle`, which keeps the bordered metrics and changes only
-        // how "this one is open" is drawn.
         .toggleStyle(PanelToggleStyle(
             fontSize: appearance.settings.secondaryFontSize,
             controlSize: appearance.settings.fontSize > 16 ? .regular : .small,

@@ -5,40 +5,22 @@ import ProjectRegistry
 import SecretaryCore
 import LLMProvider
 
-/// The conversation panel, rendered as a manga-style speech bubble anchored to
-/// the character. Shows the transcript, the input field, whatever decision the
-/// Secretary is waiting on, and collapsible Settings/Profile/Projects sections.
 struct ChatPanelView: View {
     let machine: AssistantStateMachine
     let secretary: Secretary
     let registry: ProjectRegistry
     let backendStatus: BackendStatus
-    /// Which maker this character works through. Only the Profile panel reads
-    /// it; it is carried here because that panel is mounted from this one.
     let vendorStatus: VendorStatus
     let appearance: Appearance
     let profiles: ProfileLibrary
-    /// Which character's window this is. Passed to the Profile panel, which
-    /// edits her and nobody else.
     let profileID: UUID
     let layout: ChatBubbleLayout
     let onClose: () -> Void
-    /// Pins one box into its own floating window. The same door the ```window
-    /// marker goes through, so a pane the user pins by hand behaves exactly
-    /// like one the assistant asked to pin.
     let onPin: (InfoWindowSpec) -> Void
 
-    /// The colours in force. Every colour in this file comes from a role on
-    /// this palette; there are no literals left, because a literal here cannot
-    /// be checked — `AISecretaryApp` is not linked into the test bundle.
     var theme: Palette { appearance.colors }
 
     @State var draft: String = ""
-    /// One selection rather than three independent flags, because three
-    /// independent flags allow all three sections open at once — which is how
-    /// the panel came to be taller than the window it lives in, pushing the
-    /// transcript off the top and the Save button off the bottom. The state
-    /// simply isn't representable now.
     enum Panel: String, Identifiable {
         case settings, profile, projects, skills
         var id: String { rawValue }
@@ -51,8 +33,6 @@ struct ChatPanelView: View {
             }
         }
 
-        /// The row's order lives in `FooterButton`, which knows nothing about
-        /// this view's state; this is the one place the two meet.
         init(_ button: FooterButton) {
             switch button {
             case .settings: self = .settings
@@ -68,48 +48,16 @@ struct ChatPanelView: View {
     @State var settingsNote: String?
     @State var scrollPin = TranscriptScrollPin()
     @State private var dragOrigin: ChatResizeDrag?
-    /// How tall the message being typed actually is, reported by the field
-    /// itself. The box is sized from this and capped at five lines.
     @State var draftHeight: Double = 0
-    /// How far back through sent messages the box is currently showing.
-    /// `nil` means it's showing what you were actually typing.
     @State var recallIndex: Int?
-    /// What you were typing before you started looking back, so walking
-    /// forward past the newest message returns it rather than losing it.
     @State var stashedDraft = ""
     @FocusState var messageBoxFocused: Bool
-    /// Watches for the arrow keys before the text field sees them.
     @State var arrowKeyMonitor: Any?
-    /// Watches for the reader scrolling the transcript themselves.
     @State var scrollMonitor: Any?
-    /// How each message was last broken into boxes. A reference type on
-    /// purpose: it is a memo of a pure function, not state the view renders,
-    /// and writing to it must not invalidate anything.
     @State var partsCache = MessagePartsCache()
-    /// Whether the pointer is over the transcript. A local monitor sees every
-    /// scroll in the app — the history window, the settings panel, a pinned
-    /// message — and only the ones aimed at the transcript say anything about
-    /// where the reader wants the transcript to be.
     @State var pointerOverTranscript = false
-    /// Which option is highlighted in the choice list, when one is showing.
     @State var choiceIndex = 0
-    /// Which box the pointer is over and which was last copied.
-    ///
-    /// An object rather than two `@State` values, and this is a performance
-    /// decision with a rule attached: **nothing in `ChatPanelView.body` may
-    /// read `hover.pointingAt` or `hover.copied`.** Reading an `@Observable`
-    /// property is what subscribes a view to it, so a single read here puts the
-    /// whole transcript back on the hot path — and the symptom is invisible
-    /// until someone scrolls a long thread.
-    ///
-    /// When they were `@State`, every box passing under the pointer during a
-    /// scroll rebuilt the entire panel: 19 rebuilds over a 120-tick scroll,
-    /// each one re-measuring all 60 messages through TextKit at ~0.2ms each.
-    /// That is the stutter. The reads now happen only inside `WhenPointingAt`,
-    /// which is a leaf, so a hover change repaints two buttons and nothing else.
     @State var hover = BoxHover()
-    /// Whether a file is being dragged over the composer, so there is an
-    /// outline to let go inside rather than a guess.
     @State var droppingFile = false
 
     var body: some View {
@@ -124,10 +72,6 @@ struct ChatPanelView: View {
             footer
         }
         .padding(18)
-        // The default for anything that doesn't name a colour, so a `Text` added
-        // later inherits the palette instead of the system label colour — which
-        // is decided by the system's light/dark setting, not by ours, and would
-        // be black text on a dark panel the moment the theme is overridden.
         .foregroundStyle(theme.primaryText.color)
         .tint(theme.accent.color)
         .environment(\.palette, theme)
@@ -139,60 +83,28 @@ struct ChatPanelView: View {
             stopWatchingArrowKeys()
             stopWatchingScroll()
         }
-        // Not `onAppear`: this view is built once and then shown and hidden by
-        // the window's alpha, so appearing happens exactly one time.
-        //
-        // Only into an empty box. Taking focus selects whatever is already
-        // there, so re-opening on a half-written message armed the next
-        // keystroke to wipe it — the box is where their words live, and this
-        // was meant to save a click, not cost a sentence.
         .onChange(of: layout.focusRequests) {
             if draft.isEmpty { messageBoxFocused = true }
         }
         .frame(width: appearance.settings.chatWidth)
         .frame(maxHeight: .infinity, alignment: .top)
         .background(bubbleSurface)
-        // The whole bubble takes the file, not the composer alone. A drop two
-        // points outside a small target is a file the person believes they
-        // handed over, and the composer is a strip at the bottom of a window
-        // that is mostly conversation. Attached after the background so the
-        // filled shape is the region, rather than only where content happens
-        // to be; `dropArea` in the composer is what says so on screen.
         .dropDestination(for: URL.self) { urls, _ in
             for url in urls { secretary.attach(url) }
             return !urls.isEmpty
         } isTargeted: { droppingFile = $0 }
         .overlay {
-            // Glass draws its own rim; a painted border on top of it reads as
-            // a sticker stuck to the pane, so the stroke is solid-mode only.
             if !appearance.settings.liquidGlass {
                 SpeechBubbleShape(isMirrored: layout.isMirrored, isFlippedVertically: layout.isFlippedVertically)
                     .stroke(theme.panelBorder.color, lineWidth: theme.panelBorderWidth)
             }
         }
-        // The button row stays on the tail's side of the top edge; the grip goes
-        // to the corner the bubble actually grows out of, which is not always a
-        // top corner. Both follow the bubble as it mirrors and flips, and they
-        // can never land in the same place.
-        //
-        // Attached inside the body rather than to the outer frame: the outer
-        // frame includes the strip reserved for the tail, and anything aligned
-        // to the bottom of it would sit in the tail, outside the bubble.
         .overlay(alignment: buttonsOnLeading ? .topLeading : .topTrailing) { windowButtons }
         .overlay(alignment: gripAlignment) { resizeGrip }
         .padding(layout.isFlippedVertically ? .top : .bottom, SpeechBubbleShape.defaultTailLength)
         .frame(width: appearance.settings.chatWidth, height: appearance.settings.chatHeight)
     }
 
-    /// The bubble's ground: Liquid Glass when the user has switched it on,
-    /// otherwise the palette's solid ground. Glass here is safe on this
-    /// never-key panel — checked by eye on 2026-08-20, frontmost and not,
-    /// before the sprint was allowed to start: unlike the accent tint that
-    /// `PanelToggleStyle` exists to work around, `glassEffect` does not go
-    /// dead when the window isn't key.
-    ///
-    /// Content drawn on top keeps its solid palette fills either way — glass
-    /// is only ever the chrome underneath, never a wash over text.
     @ViewBuilder
     private var bubbleSurface: some View {
         let shape = SpeechBubbleShape(
@@ -200,17 +112,6 @@ struct ChatPanelView: View {
         )
         if appearance.settings.liquidGlass {
             ZStack {
-                // Not decoration — this is what makes the bubble clickable.
-                // A borderless window lets clicks fall through wherever its
-                // pixels are fully transparent, and `Color.clear` under a
-                // `glassEffect` IS transparent to that test even though the
-                // eye sees frosted glass: with glass on, the resize grip and
-                // every empty stretch of the bubble went dead (drag measured
-                // 2026-08-20 — five steps, window never moved). The faint
-                // ground fill puts real pixels under the whole shape; 0.15 is
-                // comfortably above the window server's ~5% click-through
-                // threshold and invisible under the frosting. Do not "clean
-                // this up" into Color.clear again.
                 shape.fill(theme.ground.color(opacity: 0.15))
                 Color.clear.glassEffect(.regular, in: shape)
             }
@@ -219,12 +120,6 @@ struct ChatPanelView: View {
         }
     }
 
-    /// Widen, restore, close — reversed when the row moves to the other corner,
-    /// so close stays on the outside and the two width buttons stay next to the
-    /// middle of the bubble. The width buttons are drawn smaller than the close
-    /// button (closing is the one people reach for) and are disabled rather than
-    /// hidden when they'd do nothing, so the row never changes shape and a greyed
-    /// button reads as "already there".
     private var windowButtons: some View {
         HStack(spacing: 8) {
             if buttonsOnLeading {
@@ -243,24 +138,8 @@ struct ChatPanelView: View {
         .padding(buttonsOnLeading ? .leading : .trailing, 10)
     }
 
-    /// Which top corner the button row gets: the tail's side, so it follows the
-    /// bubble when it mirrors. The grip's corner is `gripCorner`, which is kept
-    /// clear of this one.
-    ///
-    /// This only moves them. What the buttons *do* is decided elsewhere and
-    /// doesn't depend on where they are: widening still steps, restoring still
-    /// goes straight to the default, and the drag still follows the direction
-    /// the bubble grows rather than the grip's own corner.
     private var buttonsOnLeading: Bool { !layout.isMirrored }
 
-    /// Which corner the grip gets, and which way its glyph points there.
-    ///
-    /// Horizontally it stays opposite the button row, on the side the bubble
-    /// grows into. Vertically it follows the edge that actually moves: the top
-    /// normally, the bottom once the bubble has been flipped below the character,
-    /// where the tail pins the top edge instead. Left at the top through a flip,
-    /// the grip asked you to drag downward — into the character — while the empty
-    /// half of the screen it was growing into lay past the other end of the box.
     var gripCorner: GripCorner {
         GripCorner.forBubble(isMirrored: layout.isMirrored, isFlippedVertically: layout.isFlippedVertically)
     }
@@ -300,31 +179,13 @@ struct ChatPanelView: View {
         .help("Close")
     }
 
-    /// The filled circle behind the ✕ makes it read larger than its point size,
-    /// so it's set 10% down from the 18pt the other controls were measured
-    /// against.
     private static let closeButtonSize: Double = 18 * 0.9
-    /// 30% smaller again than the close button's original 18pt.
     private static let widthButtonSize: Double = 18 * 0.7
 
-    /// Free resize in both axes at once, for when neither the widen button nor
-    /// the height steppers give the size the user wants.
-    ///
-    /// Measured against the pointer's position on screen rather than the
-    /// gesture's own translation: the bubble is re-anchored to the character on
-    /// every size change, so it moves under the pointer mid-drag and a
-    /// translation reported in the window's own coordinates would drift.
     private var resizeGrip: some View {
-        // The glyph flips with the corner, so the arrows always point out of it:
-        // ↖↘ at top-leading and bottom-trailing, ↗↙ at the other two.
         Image(systemName: gripCorner.glyphName)
             .font(.system(size: 9, weight: .bold))
             .foregroundStyle(theme.mutedText.color)
-            // Enough to sit clear of the bubble's rounded corner rather than
-            // tucked into it. This is also the grip's hit area, and at a bottom
-            // corner it is what the footer row has to stay above — so it is as
-            // small as a corner target can be and no smaller, rather than sized
-            // for looks alone.
             .padding(10)
             .contentShape(Rectangle())
             .help("Drag to resize")
@@ -335,18 +196,6 @@ struct ChatPanelView: View {
             )
     }
 
-    /// Drag the grip the way you want the bubble to extend, on both axes at once.
-    ///
-    /// The rule — which edges grow, why the directions are captured once at the
-    /// start of the drag, and the oscillation that reading them fresh caused —
-    /// is `ChatResizeDrag` in SecretaryCore, where it has tests. This only
-    /// feeds it the current layout and applies the answer.
-    ///
-    /// Note the drag is keyed to the layout, not to the corner the grip happens
-    /// to be in — only the layout says which edges are free to move. The two
-    /// agree on all four axes now that `GripCorner` puts the grip on the
-    /// growing corner, so the drag reads both ways at once: "the way you want
-    /// the box to extend" and the usual corner-handle "away from the box".
     private func resize(to pointer: CGPoint) {
         let settings = appearance.settings
         let origin = dragOrigin ?? ChatResizeDrag(
@@ -362,11 +211,6 @@ struct ChatPanelView: View {
         appearance.resizeChat(width: size.width, height: size.height)
     }
 
-    // MARK: - Sections
-
-    /// Shown only once detection has finished and found nothing. The two steps
-    /// are both required: a user can have the binary installed but not signed
-    /// in, and that failure would otherwise only surface on the first turn.
     private var onboardingCard: some View {
         VStack(alignment: .leading, spacing: appearance.settings.panelSpacing) {
             Label("Claude Code isn't set up", systemImage: "exclamationmark.triangle")
@@ -385,16 +229,6 @@ struct ChatPanelView: View {
         .background(theme.warningFill.color, in: RoundedRectangle(cornerRadius: 8))
     }
 
-    /// The answers, drawn in the order the rule hands them back.
-    ///
-    /// Built from `secretary.offeredApprovalAnswers` rather than written out
-    /// here: which buttons exist is a decision — Always is off the card for a
-    /// folder outside the projects, for a tool outside the allowlist, and for
-    /// every class that must be asked about each time — and a decision in this
-    /// target is one no test can see.
-    ///
-    /// Deny is the plain button at the end. It is the answer that costs
-    /// nothing, so it should not be the one the eye lands on.
     private var approvalButtons: some View {
         HStack(spacing: appearance.settings.panelSpacing * 1.3) {
             ForEach(secretary.offeredApprovalAnswers, id: \.rawValue) { answer in
@@ -410,13 +244,7 @@ struct ChatPanelView: View {
     private var pendingDecisionView: some View {
         switch secretary.awaitingDecision {
         case .approval(let request, _):
-            // Anything that isn't read-only leaves a mark somewhere — currently
-            // that means sending a file off this Mac. Give it a louder colour so
-            // it never looks like the routine local approval.
             let leavesTheMachine = request.actionClass != .readOnly
-            // "Send to Claude?" is right for a file leaving the Mac and wrong
-            // for a click inside the user's own browser — nothing is being
-            // sent, something is being done, as them.
             let inBrowser = request.actionClass == .browserAction
             VStack(alignment: .leading, spacing: appearance.settings.panelSpacing) {
                 Label(
@@ -434,9 +262,6 @@ struct ChatPanelView: View {
                     .font(.system(size: appearance.settings.footnoteFontSize))
                     .foregroundStyle(theme.mutedText.color)
                 approvalButtons
-                // Says what Always costs before it is pressed. The button is
-                // only on the card when a grant can actually be kept, so this
-                // line appears with it and never on its own.
                 if secretary.offeredApprovalAnswers.contains(.always) {
                     Text("Always keeps this for \(request.project.name) after you quit. Nothing else is remembered.")
                         .font(.system(size: appearance.settings.hintFontSize))
@@ -462,37 +287,12 @@ struct ChatPanelView: View {
                 HStack(spacing: appearance.settings.panelSpacing * 1.3) {
                     Button(CardChoice.waitItsTurn) { secretary.resolveInterruption(.wait) }
                         .buttonStyle(.borderedProminent)
-                    // Says what it costs. The running turn is a CLI invocation
-                    // that can't be paused or resumed, so replacing it throws
-                    // away whatever it had done.
                     Button(CardChoice.replaceRunning) {
                         secretary.resolveInterruption(.replace)
                     }
                     .buttonStyle(.bordered)
                 }
                 .font(.system(size: appearance.settings.footnoteFontSize))
-                // One per character who was free when this was drawn, and none
-                // at all when nobody was — the empty list is the rule, so there
-                // is no "is anyone free?" branch here to disagree with it.
-                //
-                // Their own row rather than alongside the two above: those
-                // answers are about this character's queue, these hand the work
-                // somewhere else entirely, and a row of four buttons reads as
-                // four shades of the same choice.
-                //
-                // One menu, not one button each. Buttons were the first shape
-                // and they cannot survive a roster: four characters already put
-                // three rows under the two answers above, and the card would
-                // grow a row per character with nothing to stop it — which is
-                // the unbounded growth the charter forbids in the panels, for
-                // the same reason. This is the same height whether two are free
-                // or twenty, and a long list scrolls inside the menu, which is
-                // AppKit's problem rather than this card's.
-                //
-                // A plain string label, deliberately: a `Menu` whose label is
-                // built from several views renders as a bare chevron in this
-                // window — the bug that Model and Effort in Profile were fixed
-                // for, and it would leave this control with no words at all.
                 if !freeCharacters.isEmpty {
                     Menu(CardChoice.giveItToSomeone) {
                         ForEach(freeCharacters) { who in
@@ -502,8 +302,6 @@ struct ChatPanelView: View {
                         }
                     }
                     .menuStyle(.borderlessButton)
-                    // Without this the menu takes the whole width of the card
-                    // and reads as a banner rather than as the third answer.
                     .fixedSize()
                     .font(.system(size: appearance.settings.footnoteFontSize))
                 }
@@ -535,9 +333,6 @@ struct ChatPanelView: View {
                     .font(.system(size: appearance.settings.footnoteFontSize, design: .monospaced))
                     .lineLimit(2)
                     .truncationMode(.middle)
-                // Says what the grant covers and how long it lasts. "This site"
-                // is the unit that was approved, not this one page, and the
-                // person should read that here rather than discover it later.
                 Text(
                     request.connectsBrowser
                         ? "Connects Chrome, then acts as you on \(request.host) for this conversation"
@@ -569,8 +364,6 @@ struct ChatPanelView: View {
                 start: { secretary.startPlannedInstructions() },
                 cancel: { secretary.cancelPendingDecision() }
             )
-            // A new plan is a new decision: the acknowledgement inside must not
-            // carry over from the last one the user waved through.
             .id(plan.fingerprint)
 
         case nil:

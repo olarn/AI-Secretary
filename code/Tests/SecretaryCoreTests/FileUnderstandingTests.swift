@@ -7,8 +7,6 @@ import ToolAdapters
 import LLMProvider
 @testable import SecretaryCore
 
-/// Returns canned file contents without touching the disk, and records what was
-/// asked for.
 final class SpyFileAdapter: FileToolAdapter {
     var toolID: String { FileReadOnlyAdapter.toolIdentifier }
     private(set) var runCalls: [FileOperation] = []
@@ -17,8 +15,6 @@ final class SpyFileAdapter: FileToolAdapter {
 
     func summary(for operation: FileOperation) -> String { operation.humanDescription }
 
-    /// The real adapter refuses anything outside the project; the spy answers
-    /// with the naive join so a test can watch a path without a real one.
     func resolve(_ relativePath: String, in project: Project) -> Either<ToolError, URL> {
         .right(project.url.appendingPathComponent(relativePath))
     }
@@ -39,8 +35,6 @@ final class SpyFileAdapter: FileToolAdapter {
         )
     }
 }
-
-// MARK: - Intent parsing
 
 final class FileUnderstandingIntentTests: XCTestCase {
     private let classifier = RuleBasedIntentClassifier()
@@ -95,8 +89,6 @@ final class FileUnderstandingIntentTests: XCTestCase {
         XCTAssertEqual(request.relativePath, "Package.swift")
     }
 
-    /// The regression that matters: these verbs are ordinary conversation far
-    /// more often than they are file commands.
     func testProseWithTheSameVerbsStaysChat() {
         let prose = [
             "explain how actors work",
@@ -114,8 +106,6 @@ final class FileUnderstandingIntentTests: XCTestCase {
         }
     }
 
-    /// A project scope is not enough on its own — the argument must look like a
-    /// path, unlike the weaker rule the read/list verbs use.
     func testProjectScopeAloneDoesNotMakeItAFileOperation() {
         guard case .unknown = classifier.classify("explain the architecture in AI-Secretary") else {
             return XCTFail("Expected conversation")
@@ -123,13 +113,9 @@ final class FileUnderstandingIntentTests: XCTestCase {
     }
 
     func testUnderstandingWinsOverPlainRead() {
-        // "summarize the log file x.txt" must not be captured by the Git "log" rule
-        // or degraded into a plain read.
         XCTAssertEqual(understanding("summarize the-log-file.txt")?.task, .summarize)
     }
 }
-
-// MARK: - Policy
 
 final class FileUnderstandingPolicyTests: XCTestCase {
     func testUnderstandingIsExternalNetworkNotReadOnly() {
@@ -138,7 +124,6 @@ final class FileUnderstandingPolicyTests: XCTestCase {
         XCTAssertFalse(mayBeRemembered(request.actionClass))
     }
 
-    /// Approving "read files here" must never become permission to upload them.
     func testApprovingReadOnlyDoesNotAuthoriseSending() {
         let project = Project(
             name: "Fixture",
@@ -168,8 +153,6 @@ final class FileUnderstandingPolicyTests: XCTestCase {
         )
     }
 }
-
-// MARK: - Orchestration
 
 @MainActor
 final class FileUnderstandingSecretaryTests: XCTestCase {
@@ -258,7 +241,6 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
         XCTAssertEqual(secretary.transcript.last?.text, "It defines a marker struct.")
     }
 
-    /// The file bytes are sent once; later turns must not re-send them.
     func testFileContentsAreNotRetainedInTheConversation() async {
         fileAdapter.stubbedContents = "secret marker XYZZY-42"
         let chat = reply("done")
@@ -279,7 +261,6 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
                       "A short marker should remain so the model keeps the thread")
     }
 
-    /// `.externalNetwork` can never be remembered: every send asks again.
     func testSecondRequestAsksAgain() async {
         let chat = reply("ok")
         let secretary = makeSecretary(chat: chat)
@@ -295,9 +276,6 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
         XCTAssertEqual(chat.callCount, 1, "The second file must not be sent yet")
     }
 
-    /// The mirror of `testApprovingReadOnlyDoesNotAuthoriseSending`: approving a
-    /// send must not quietly grant unattended local reads either. The two share a
-    /// tool ID, so this only holds because the grant is not recorded.
     func testApprovingASendDoesNotAuthoriseUnattendedReads() async {
         let chat = reply("ok")
         let secretary = makeSecretary(chat: chat)
@@ -313,8 +291,6 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
         XCTAssertEqual(fileAdapter.runCalls.count, 1, "Only the approved read has run")
     }
 
-    /// The exact reported sequence: list a directory, then ask a follow-up about
-    /// it. The model must be able to see the listing rather than asking again.
     func testFollowUpQuestionSeesTheEarlierListing() async {
         fileAdapter.stubbedContents = "notes.md\nplan.md\nbudget.xlsx\n"
         let chat = reply("Two.")
@@ -335,11 +311,6 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
         XCTAssertTrue(sent.contains("มี .md file กี่ file?"), "…along with the follow-up")
     }
 
-    /// Contents of a file the user read stay in context, so "what does this
-    /// mean?" works without reading it again. Requested explicitly by the user,
-    /// replacing the earlier marker-only behaviour — the trade-off is that a
-    /// read file travels with every later message this session, which is why the
-    /// approval prompt now says so (see the next test).
     func testFileContentsFromAReadStayInTheConversation() async {
         fileAdapter.stubbedContents = "port = 8080 # XYZZY-42"
         let chat = reply("ok")
@@ -383,8 +354,6 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
 
         secretary.submit("git status in Fixture")
         secretary.resolvePendingApproval(granted: true)
-        // Deliberately not a Git keyword — "which branch…" would route back to
-        // the adapter instead of the model.
         secretary.submit("สรุปสั้นๆ ให้หน่อย")
         await waitUntilIdle()
 
@@ -406,11 +375,6 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
         XCTAssertFalse(sent.contains("<tool-output>"), "A failed run has no output worth remembering")
     }
 
-    // MARK: - Knowing which projects exist
-
-    /// The model denied knowing about a project the user could see listed in the
-    /// UI, because nothing ever told it. Names go in the system prompt; paths
-    /// deliberately do not.
     func testRegisteredProjectNamesReachTheModelButPathsDoNot() async {
         let chat = reply("ok")
         let secretary = Secretary(
@@ -451,8 +415,6 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
         XCTAssertTrue(chat.lastSystem?.contains("not registered any projects") == true)
     }
 
-    // MARK: - Sticky project
-
     func testFollowUpCommandReusesTheLastProject() async {
         let second = Project(
             name: "Other",
@@ -474,8 +436,6 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
         secretary.resolvePendingApproval(granted: true)
         await waitUntilIdle()
 
-        // No "in <project>" this time — with two registered, this used to stop
-        // and ask which one.
         secretary.submit("read notes.md")
 
         if case .projectChoice = secretary.pendingDecision.toOptional() {
@@ -485,7 +445,6 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
         XCTAssertEqual(fileAdapter.runCalls.last, .readFile(relativePath: "notes.md"))
     }
 
-    /// Remembering must never redirect an explicit name to somewhere else.
     func testAnUnknownProjectNameIsStillNotFound() async {
         let chat = reply("ok")
         let secretary = makeSecretary(chat: chat)
@@ -542,9 +501,6 @@ final class FileUnderstandingSecretaryTests: XCTestCase {
         XCTAssertEqual(machine.state, .idle)
     }
 
-    /// The situation the user is in today: no credit. The read succeeds, the send
-    /// fails, and the assistant must land in ERROR with a readable message rather
-    /// than sticking in WORKING.
     func testChatFailureAfterReadSurfacesTheErrorAndReturnsToIdle() async {
         let chat = FakeChatProvider(.failure(ChatError.http(status: 400, message: "credit balance is too low")))
         let secretary = makeSecretary(chat: chat)

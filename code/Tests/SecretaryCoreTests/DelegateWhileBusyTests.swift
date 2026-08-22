@@ -5,10 +5,6 @@ import LLMProvider
 import ProjectRegistry
 @testable import SecretaryCore
 
-/// The third answer to "I'm still on the last one": give it to someone free.
-///
-/// Before this the card offered only queue-it or kill-what's-running, even with
-/// a colleague sitting idle next to her.
 @MainActor
 final class DelegateWhileBusyTests: XCTestCase {
     private let machine = AssistantStateMachine()
@@ -39,15 +35,11 @@ final class DelegateWhileBusyTests: XCTestCase {
         secretary.transcript.contains { $0.text.contains(needle) }
     }
 
-    // MARK: - Who gets offered
-
     func testOnlyTheFreeOnesAreOffered() {
         let directory = [card(anya, "อาเนีย", busy: false), card(ditto, "Ditto", busy: true)]
         XCTAssertEqual(delegationCandidates(directory).map(\.name), ["อาเนีย"])
     }
 
-    /// The requirement "nobody free, no delegate choice" is this empty list, and
-    /// nothing else — the card draws one button per candidate.
     func testNobodyFreeMeansNoChoice() {
         XCTAssertTrue(delegationCandidates([card(ditto, "Ditto", busy: true)]).isEmpty)
         XCTAssertTrue(delegationCandidates([]).isEmpty)
@@ -63,8 +55,6 @@ final class DelegateWhileBusyTests: XCTestCase {
         }
         XCTAssertEqual(candidates.map(\.name), ["อาเนีย"])
     }
-
-    // MARK: - Pressing it
 
     func testDelegatingSendsTheWorkAndSaysSo() {
         let free = card(anya, "อาเนีย", busy: false)
@@ -82,9 +72,6 @@ final class DelegateWhileBusyTests: XCTestCase {
         XCTAssertTrue(said(secretary, chosenLine("Give it to อาเนีย")))
     }
 
-    /// The card is a snapshot; the person may sit with it. Freeness is therefore
-    /// re-read when the button is pressed, and the promise the button made —
-    /// "she is free" — is kept or the work is not handed over.
     func testSheMayHaveStartedSomethingSinceTheCardWasDrawn() {
         let free = card(anya, "อาเนีย", busy: false)
         var busyNow = false
@@ -94,15 +81,14 @@ final class DelegateWhileBusyTests: XCTestCase {
 
         makeBusy()
         secretary.submit("what is 2+2?")
-        busyNow = true                        // she starts something while we decide
+        let sheStartsSomethingWhileWeDecide = true
+        busyNow = sheStartsSomethingWhileWeDecide
         secretary.resolveInterruption(.delegate(to: free))
 
         XCTAssertTrue(sent.isEmpty, "Nothing may be handed to someone who is no longer free")
         XCTAssertTrue(said(secretary, "started something else just now"))
     }
 
-    /// And the message is not lost: the card comes back, so the person answers
-    /// again rather than discovering later that nothing happened.
     func testARefusedHandOverAsksAgainRatherThanDroppingIt() {
         let free = card(anya, "อาเนีย", busy: false)
         var busyNow = false
@@ -120,10 +106,6 @@ final class DelegateWhileBusyTests: XCTestCase {
         XCTAssertTrue(candidates.isEmpty, "She is busy now, so she is no longer offered")
     }
 
-    /// The card must be the same height whether two characters are free or
-    /// twenty, so the control is one menu rather than a button each. This pins
-    /// the half that can be tested from here: the words on it say nothing about
-    /// how many there are, so nothing in them can grow with the roster.
     func testTheControlDoesNotNameAnybodyUntilItIsOpened() {
         XCTAssertEqual(CardChoice.giveItToSomeone, "Give it to…")
         for name in ["อาเนีย", "Ditto", "Miku (2nd Brain)"] {
@@ -134,10 +116,6 @@ final class DelegateWhileBusyTests: XCTestCase {
         }
     }
 
-    // MARK: - What must not change
-
-    /// Sprint 14 decided a busy recipient *takes* a prose errand and queues it.
-    /// The delegate button must not reverse that for the prose path.
     func testTheProsePathStillAcceptsABusyRecipient() {
         let busy = card(ditto, "Ditto", busy: true)
         let message = CharacterMessage(

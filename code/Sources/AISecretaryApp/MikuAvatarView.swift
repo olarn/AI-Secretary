@@ -1,11 +1,6 @@
 import SwiftUI
 import AssistantState
 
-/// Original placeholder character: a friendly chibi avatar with teal
-/// twin-tails, big eyes, and a hint of a sailor-style collar — evoking a
-/// generic anime-companion look. This is original vector art, not licensed
-/// character art (e.g. not Hatsune Miku) — swap in a real/licensed asset
-/// later behind the same `CharacterView` seam.
 private let avatarTeal = Color(red: 0.16, green: 0.74, blue: 0.72)
 private let avatarTealLight = Color(red: 0.55, green: 0.90, blue: 0.88)
 private let avatarSkin = Color(red: 1.0, green: 0.90, blue: 0.82)
@@ -13,12 +8,10 @@ private let avatarSkin = Color(red: 1.0, green: 0.90, blue: 0.82)
 struct MikuAvatarView: View {
     var body: some View {
         ZStack {
-            // Twin tails, behind the head, with a lighter inner highlight.
             twinTail.rotationEffect(.degrees(-16)).offset(x: -32, y: 12)
             twinTail.rotationEffect(.degrees(16)).offset(x: 32, y: 12)
                 .scaleEffect(x: -1, y: 1)
 
-            // Collar hint at the base of the neck.
             RoundedRectangle(cornerRadius: 6)
                 .fill(Color.white.opacity(0.9))
                 .frame(width: 34, height: 16)
@@ -28,29 +21,24 @@ struct MikuAvatarView: View {
                 .frame(width: 10, height: 12)
                 .offset(y: 32)
 
-            // Head.
             Circle()
                 .fill(avatarSkin)
                 .frame(width: 58, height: 58)
 
-            // Side hair tufts framing the face.
             Circle().fill(avatarTeal).frame(width: 22, height: 24).offset(x: -27, y: -4)
             Circle().fill(avatarTeal).frame(width: 22, height: 24).offset(x: 27, y: -4)
 
-            // Full bangs with a center part.
             BangsShape()
                 .fill(avatarTeal)
                 .frame(width: 60, height: 30)
                 .offset(y: -20)
 
-            // Eyes: large, expressive, with lashes and double highlight.
             HStack(spacing: 15) {
                 EyeView()
                 EyeView()
             }
             .offset(y: 3)
 
-            // Open, smiling mouth.
             SmileShape()
                 .fill(Color(red: 0.55, green: 0.2, blue: 0.2))
                 .frame(width: 12, height: 7)
@@ -135,24 +123,14 @@ private struct Triangle: Shape {
     }
 }
 
-/// Small state badge overlaid on the avatar so the assistant lifecycle
-/// stays legible regardless of character art.
 struct StatusBadge: View {
     let state: AssistantState
 
     var body: some View {
         let pulse = statusPulse(for: state)
-        // Read off the clock rather than animated from a stored flag. See
-        // `pulseProgress` for why: the flag version kept breathing after the
-        // work was finished, and `paused:` here is also what stops the redraw
-        // dead when there is nothing to show.
         TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !pulse.isAnimated)) { context in
             let progress = pulseProgress(pulse, at: context.date.timeIntervalSinceReferenceDate)
             Circle()
-                // Grey at rest, the state's own colour at full stretch. While
-                // she is still, `progress` is 0 for ever and the base colour
-                // is the state's — so success stays green and error stays red
-                // rather than everything settling to grey.
                 .fill(pulse.isAnimated ? Color.gray : color)
                 .overlay(Circle().fill(color.opacity(progress)))
                 .frame(width: 22, height: 22)
@@ -161,9 +139,6 @@ struct StatusBadge: View {
                         .font(.system(size: 10, weight: .bold))
                         .foregroundStyle(.white)
                 )
-                // The ring and the glyph keep their full strength: they are the
-                // badge's outline against the character art, and fading them
-                // read as the badge switching off rather than breathing.
                 .overlay(Circle().stroke(.white, lineWidth: 2))
                 .scaleEffect(pulseScale(pulse, at: context.date.timeIntervalSinceReferenceDate))
         }

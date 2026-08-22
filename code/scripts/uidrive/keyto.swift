@@ -2,11 +2,6 @@ import AppKit
 import CoreGraphics
 import Foundation
 
-// Sends one keystroke, but only if the app that is about to receive it is the
-// one named on the command line. Testing a system-wide hot key means firing
-// keys while some *other* app is frontmost, so the usual "is our app in front?"
-// guard is inverted here — the risk is the same either way, which is a key
-// landing somewhere nobody expected.
 let expected = CommandLine.arguments[1]
 let code = CGKeyCode(UInt16(CommandLine.arguments[2])!)
 let cmd = CommandLine.arguments.count > 3 && CommandLine.arguments[3] == "cmd"

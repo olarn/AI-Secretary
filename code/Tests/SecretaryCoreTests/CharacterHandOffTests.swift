@@ -5,11 +5,6 @@ import ProjectRegistry
 import LLMProvider
 @testable import SecretaryCore
 
-/// Two characters on one desktop, passing something between them.
-///
-/// The pure rules are covered next door in `CharacterRelayTests`; what is
-/// checked here is the wiring — that a hand-off leaves one conversation, lands
-/// in the other, and that the answer comes back to the conversation that asked.
 @MainActor
 final class CharacterHandOffTests: XCTestCase {
     private let mikuID = UUID()
@@ -28,8 +23,6 @@ final class CharacterHandOffTests: XCTestCase {
         anyaMachine = AssistantStateMachine()
         mikuProvider = SpyWorkspaceProvider()
         anyaProvider = SpyWorkspaceProvider()
-        // No workspace tools: these turns are conversation, so nothing stops
-        // for a project approval and the relay is what is left in view.
         mikuProvider.hasWorkspaceTools = false
         anyaProvider.hasWorkspaceTools = false
 
@@ -52,8 +45,6 @@ final class CharacterHandOffTests: XCTestCase {
         )
     }
 
-    /// The whole of `CharacterBus`, in four lines — which is the point of
-    /// keeping every decision out of it.
     private func connect() {
         let cards = [self.card(mikuID, "Miku", miku), self.card(anyaID, "Anya", anya)]
         miku.directorySnapshot = { cards.filter { $0.id != self.mikuID } }
@@ -81,9 +72,6 @@ final class CharacterHandOffTests: XCTestCase {
         said(secretary).contains { $0.contains(needle) }
     }
 
-    /// Waits for something to become true rather than for a guessed number of
-    /// milliseconds. A relayed answer takes as long as the other character's
-    /// whole turn, which is not a duration a test should be predicting.
     private func waitUntil(
         _ timeout: TimeInterval = 3,
         _ condition: @MainActor () -> Bool
@@ -94,13 +82,6 @@ final class CharacterHandOffTests: XCTestCase {
         }
     }
 
-    // MARK: - The model's own block, which is where plurals live now
-
-    /// Sprint 17 left the several-recipients case to the model, so the block
-    /// has to carry it: named twice, delivered twice, and a name that is not on
-    /// the desktop is said out loud rather than matched to the nearest
-    /// spelling. Guessing there would send the person's work to whoever
-    /// happened to sort first.
     func testABlockNamingSomebodyWhoIsNotHereStillDeliversToTheOneWhoIs() async {
         mikuProvider.replyForNextTurn = """
             I'll ask them both.
@@ -125,11 +106,6 @@ final class CharacterHandOffTests: XCTestCase {
         XCTAssertTrue(saidAnything(miku, containing: "420,000"))
     }
 
-    // MARK: - The scenario from the backlog
-
-    /// Miku is asked to have Anya do something. Miku says she passed it on;
-    /// Anya shows it arriving and works; Anya's answer comes back into Miku's
-    /// conversation. This is the owner's own worked example, end to end.
     func testTheHandOffGoesOutComesBackAndBothConversationsShowIt() async {
         anyaProvider.replyForNextTurn = "About 420,000 baht."
 
@@ -149,8 +125,6 @@ final class CharacterHandOffTests: XCTestCase {
         XCTAssertEqual(mikuProvider.callCount, 0, "Forwarding costs the sender no turn")
     }
 
-    /// Anya works in her own session under her own approvals. The errand is
-    /// data: it arrives as words to weigh, not as a widened permission.
     func testTheErrandReachesAnyaFramedAsSomethingToWeigh() async {
         anyaProvider.replyForNextTurn = "ok"
         miku.submit("ขอให้ Anya ช่วยดูหน่อย")
@@ -162,8 +136,6 @@ final class CharacterHandOffTests: XCTestCase {
         XCTAssertTrue(sent.contains("ช่วยดูหน่อย"))
     }
 
-    /// Once answered, the errand is closed — a second answer on the same
-    /// correlation is not read out into a conversation no longer waiting.
     func testAnAnswerIsOnlyReadOutOnce() async {
         anyaProvider.replyForNextTurn = "first answer"
         miku.submit("ขอให้ Anya ช่วยดูหน่อย")
@@ -178,13 +150,6 @@ final class CharacterHandOffTests: XCTestCase {
         XCTAssertGreaterThan(miku.transcript.count, before, "…but it is said out loud that it was dropped")
     }
 
-    /// The answer has to reach *her*, not just the screen.
-    ///
-    /// Claude Code is sent only the newest user message — it keeps the thread
-    /// itself — so an answer appended to the conversation array goes somewhere
-    /// nobody reads. Driven on 2026-08-14: two characters answered, both
-    /// answers were on screen, and asked to summarise them Miku said there was
-    /// nothing to summarise. She was right about what she had been told.
     func testAnAnswerIsCarriedIntoTheNextThingSheIsAsked() async {
         anyaProvider.replyForNextTurn = "Vios is 190,000"
         miku.submit("ขอให้ Anya หาราคาให้หน่อย")
@@ -199,8 +164,6 @@ final class CharacterHandOffTests: XCTestCase {
         XCTAssertTrue(sent.contains("สรุปให้หน่อย"), "and what she was actually asked")
     }
 
-    /// Carried once. A second question must not be handed the same answer
-    /// again, or she reports it twice.
     func testAnAnswerIsOnlyCarriedOnce() async {
         anyaProvider.replyForNextTurn = "Vios is 190,000"
         miku.submit("ขอให้ Anya หาราคาให้หน่อย")
@@ -216,11 +179,6 @@ final class CharacterHandOffTests: XCTestCase {
         XCTAssertFalse((mikuProvider.lastMessages.last?.content ?? "").contains("Vios is 190,000"))
     }
 
-    // MARK: - Asking when unsure
-
-    /// The owner's own scenario writes "อาเนีย" for a character named "Anya".
-    /// Nothing may be sent on that guess — and nothing may be silently
-    /// answered as if the request had been meant for Miku either.
     func testAnUnrecognisedNameAsksWhoRatherThanSendingOrAnswering() {
         miku.submit("ช่วยขอให้อาเนีย หาราคา honda ให้หน่อย")
 
@@ -241,9 +199,6 @@ final class CharacterHandOffTests: XCTestCase {
         XCTAssertTrue(sent.contains("หาราคา honda"), "The whole request travels, not the name picked")
     }
 
-    /// The way out of a false positive. `ขอให้` turns up in sentences that have
-    /// nothing to do with anyone else, so there has to be a way to say no — and
-    /// saying no must run what was originally asked.
     func testAnsweringItYourselfRunsTheOriginalRequestHere() async {
         mikuProvider.replyForNextTurn = "ok"
         miku.submit("ช่วยขอให้อาเนีย หาราคา honda ให้หน่อย")
@@ -256,9 +211,6 @@ final class CharacterHandOffTests: XCTestCase {
         XCTAssertTrue(sent.contains("หาราคา honda"))
     }
 
-    /// Typing something else instead of picking drops the hand-off — but says
-    /// so, because a request that quietly evaporates is indistinguishable from
-    /// one that was carried out.
     func testTypingSomethingElseDropsTheHandOffOutLoud() async {
         mikuProvider.replyForNextTurn = "ok"
         miku.submit("ช่วยขอให้อาเนีย หาราคา honda ให้หน่อย")
@@ -269,10 +221,6 @@ final class CharacterHandOffTests: XCTestCase {
         XCTAssertEqual(anyaProvider.callCount, 0)
     }
 
-    // MARK: - Not trampling the person's own turn
-
-    /// An errand arriving while Anya is mid-conversation waits its turn. The
-    /// person talking to her did not ask to be pushed aside.
     func testAnErrandArrivingMidTurnWaitsRatherThanInterrupting() async {
         anyaProvider.replyForNextTurn = "answering the person"
         anya.submit("hello, are you there?")
@@ -286,10 +234,6 @@ final class CharacterHandOffTests: XCTestCase {
         XCTAssertTrue(saidAnything(anya, containing: "Miku passed this on"))
     }
 
-    // MARK: - One request, several people, then a step of her own
-
-    /// The owner's own two-step example: ask two characters, then merge what
-    /// they send back. Ditto is a third Secretary wired into the same bus.
     func testOneRequestGoesToTwoAndTheFollowUpRunsOnBothAnswers() async {
         let dittoID = UUID()
         let dittoMachine = AssistantStateMachine()
@@ -312,9 +256,6 @@ final class CharacterHandOffTests: XCTestCase {
         dittoProvider.replyForNextTurn = "City 195,000"
         mikuProvider.replyForNextTurn = "Merged and saved."
 
-        // Two names is a question now (Sprint 17) — and the question carries
-        // "both", so the fan-out this test is about is one tap away rather than
-        // a guess about what joined the names.
         miku.submit("""
             1. ขอให้ Anya และ Ditto ช่วยหาข้อมูลราคารถมือสอง
             2. เมื่อได้ข้อมูลทั้ง 2 ชุด ให้รวมข้อมูล แล้วบันทึกลง file ใน project
@@ -327,8 +268,6 @@ final class CharacterHandOffTests: XCTestCase {
         await waitUntilIdle(dittoMachine)
         await waitUntilIdle(mikuMachine)
 
-        // Step 2 ran on the sender, with both answers in front of it — and the
-        // characters answering step 1 were never handed step 2.
         XCTAssertEqual(mikuProvider.callCount, 1, "the follow-up is the sender's only turn")
         let followUp = mikuProvider.lastMessages.map(\.content).joined(separator: "\n")
         XCTAssertTrue(followUp.contains("Vios 190,000"), "Got: \(followUp)")
@@ -339,8 +278,6 @@ final class CharacterHandOffTests: XCTestCase {
         XCTAssertFalse(toAnya.contains("บันทึกลง file"), "step 2 is not theirs to do")
     }
 
-    /// Asked for two and only one ever answers: carry on with the one, and say
-    /// which is missing rather than passing off one answer as two.
     func testASilentCharacterDoesNotHoldUpTheFollowUpForever() async {
         miku.errandPatience = 1.5
         let goneID = UUID()
@@ -349,7 +286,6 @@ final class CharacterHandOffTests: XCTestCase {
             CharacterCard(id: goneID, name: "Ditto", model: "Opus 5", effort: "Default"),
         ]
         miku.directorySnapshot = { cards }
-        // Only Anya is actually wired up; Ditto is on the roster and nowhere else.
         miku.onSend = { [weak self] m in if m.to == self?.anyaID { self?.anya.receive(m) } }
         anya.onSend = { [weak self] in self?.miku.receive($0) }
 
@@ -358,8 +294,6 @@ final class CharacterHandOffTests: XCTestCase {
 
         miku.submit("1. ขอให้ Anya และ Ditto ช่วยหาข้อมูล\n2. รวมข้อมูล แล้วบันทึกลง file")
         miku.submit(everyoneChoice)
-        // Anya's answer, however long her turn takes — then Ditto's silence
-        // running out of patience.
         await waitUntil { self.saidAnything(self.miku, containing: "Anya answered") }
         await waitUntil { self.mikuProvider.callCount == 1 }
         await waitUntilIdle(mikuMachine)
@@ -371,8 +305,6 @@ final class CharacterHandOffTests: XCTestCase {
         XCTAssertFalse(followUp.contains("Anya did not answer"), "she did answer")
     }
 
-    /// Being busy is not being ignored — but it looks exactly like it from the
-    /// other end unless somebody says so.
     func testAnErrandThatHasToWaitIsAcknowledgedBackToTheSender() async {
         anyaProvider.replyForNextTurn = "answering the person"
         anya.submit("hello, are you there?")
@@ -390,11 +322,6 @@ final class CharacterHandOffTests: XCTestCase {
         XCTAssertEqual(anya.queuedMessages.count, 0, "and it runs when she is free")
     }
 
-    /// A character can spend a whole conversation on somebody else's errand
-    /// without the person typing a word into it — every line is hers. Filing
-    /// used to require a `.user` turn, so that entire exchange was dropped:
-    /// measured on 2026-08-14, both characters who answered a relayed request
-    /// showed it on screen and neither conversation file was touched.
     func testAConversationThatWasOnlyAnErrandIsStillFiled() async {
         let store = InMemoryConversationStore()
         let machine = AssistantStateMachine()
@@ -424,9 +351,6 @@ final class CharacterHandOffTests: XCTestCase {
         XCTAssertTrue(filed.contains("420,000 baht"))
     }
 
-    // MARK: - The assistant's own hand-off block
-
-    /// The path that did not exist when Ditto went looking for one.
     func testAssistantCanAskForSomethingToBePassedOn() async {
         mikuProvider.replyForNextTurn = "I'll ask her.\n\n```to\nAnya\nfind the price of a 2015 Civic\n```"
         anyaProvider.replyForNextTurn = "About 420,000 baht."
@@ -441,8 +365,6 @@ final class CharacterHandOffTests: XCTestCase {
         XCTAssertTrue(sent.contains("2015 Civic"))
     }
 
-    /// Whichever route it takes — the person's prose or the assistant's own
-    /// block — asking two people has to reach two people.
     func testTheAssistantsBlockCanNameSeveralAtOnce() async {
         let dittoID = UUID()
         let dittoMachine = AssistantStateMachine()
@@ -473,8 +395,6 @@ final class CharacterHandOffTests: XCTestCase {
         XCTAssertTrue(saidAnything(miku, containing: "Passed this on to Anya and Ditto"))
     }
 
-    /// One wrong name must not lose the errand for the person who was named
-    /// correctly.
     func testAWrongNameAlongsideARightOneStillSendsToTheRightOne() async {
         mikuProvider.replyForNextTurn = "```to\nAnya, Pikachu\ncheck the price\n```"
         anyaProvider.replyForNextTurn = "ok"
@@ -488,7 +408,6 @@ final class CharacterHandOffTests: XCTestCase {
         XCTAssertTrue(saidAnything(miku, containing: "Passed this on to Anya"))
     }
 
-    /// The block must not survive into the bubble as literal typing.
     func testTheBlockDoesNotAppearOnScreen() async {
         mikuProvider.replyForNextTurn = "I'll ask her.\n\n```to\nAnya\ncheck the price\n```"
         anyaProvider.replyForNextTurn = "ok"
@@ -498,9 +417,6 @@ final class CharacterHandOffTests: XCTestCase {
         XCTAssertFalse(saidAnything(miku, containing: "```to"))
     }
 
-    /// A name that is not on the desktop is answered, not guessed at — sending
-    /// to whoever sorts first would put the person's work somewhere they never
-    /// asked for.
     func testAnUnknownNameIsSaidOutLoudRatherThanGuessedAt() async {
         mikuProvider.replyForNextTurn = "```to\nPikachu\ncheck the price\n```"
         miku.submit("what's the price?")
@@ -513,8 +429,6 @@ final class CharacterHandOffTests: XCTestCase {
         XCTAssertEqual(anyaProvider.callCount, 0)
     }
 
-    /// The prompt has to say plainly that her own tools cannot reach anyone.
-    /// Without it she finds one that looks like it can and reports success.
     func testThePromptSaysHerOwnToolsCannotReachThem() async {
         mikuProvider.replyForNextTurn = "ok"
         miku.submit("hello")
@@ -526,18 +440,11 @@ final class CharacterHandOffTests: XCTestCase {
         XCTAssertTrue(system.contains("Never tell the person you have contacted"))
     }
 
-    // MARK: - The roster reaches the prompt
-
-    /// 14.1's first item, answered without a message being sent at all.
     func testWhoElseIsHereIsInThePromptWithTheirModel() async {
         mikuProvider.replyForNextTurn = "ok"
         miku.submit("who else is around?")
         await waitUntilIdle(mikuMachine)
 
-        // Who is here is in the standing prompt; what each is running rides on
-        // the turn, because a value that moves in the system prompt costs a
-        // whole `claude` restart. Both still reach the model, which is what
-        // 14.1 asked for.
         let system = mikuProvider.lastSystem ?? ""
         let sent = mikuProvider.lastMessages.map(\.content).joined(separator: "\n")
         XCTAssertTrue(system.contains("Anya"), "Got: \(system)")
@@ -554,8 +461,6 @@ final class CharacterHandOffTests: XCTestCase {
 
         XCTAssertFalse((mikuProvider.lastSystem ?? "").contains("Other characters"))
     }
-
-    // MARK: - Ending a conversation ends what was in flight
 
     func testStartingAFreshConversationDropsAnErrandNobodyCanAnswerInto() async {
         anyaProvider.replyForNextTurn = "ok"

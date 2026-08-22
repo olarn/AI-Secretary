@@ -4,7 +4,6 @@ import AssistantState
 import LLMProvider
 @testable import SecretaryCore
 
-/// The one line the header shows about a running sub-agent.
 final class SubagentBadgeTests: XCTestCase {
 
     func testWhileItIsAnsweringItJustSaysWhatItIsDoing() {
@@ -14,8 +13,6 @@ final class SubagentBadgeTests: XCTestCase {
         )
     }
 
-    /// The tool it last reached for is what makes a long silence read as a slow
-    /// command rather than a fault.
     func testTheToolItIsWaitingOnIsNamed() {
         XCTAssertEqual(
             subagentBadgeText(detail: "Counting files", lastTool: "Bash", liveness: .running),
@@ -30,9 +27,6 @@ final class SubagentBadgeTests: XCTestCase {
         )
     }
 
-    /// **Never the word failed.** Nothing on this side can know that: a
-    /// sub-agent on one slow tool call is indistinguishable from a dead one, and
-    /// a guess here would be believed.
     func testTheLostCaseReportsSilenceAndNeverFailure() {
         let text = subagentBadgeText(detail: "Counting files", lastTool: nil, liveness: .presumedLost)
         XCTAssertEqual(text, "Counting files — nothing for a while")
@@ -44,8 +38,6 @@ final class SubagentBadgeTests: XCTestCase {
         }
     }
 
-    /// A sub-agent with no description of its own still has to be nameable, or
-    /// the badge appears as an empty capsule.
     func testWithoutADescriptionItFallsBackToTheKind() {
         let running = RunningSubagent(
             task: SubagentTask(id: "t1", kind: "general-purpose", detail: ""),
@@ -57,7 +49,6 @@ final class SubagentBadgeTests: XCTestCase {
         )
     }
 
-    /// Reads through the pair, which is the shape the header actually holds.
     func testThePairAgesFromItsOwnTimestamp() {
         let spoke = Date(timeIntervalSince1970: 1_800_000_000)
         let running = RunningSubagent(

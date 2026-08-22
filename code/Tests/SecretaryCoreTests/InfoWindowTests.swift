@@ -1,7 +1,6 @@
 import XCTest
 @testable import SecretaryCore
 
-/// Pulling a piece of the conversation out into a window that stays open.
 final class InfoWindowBlockTests: XCTestCase {
     func testAMarkedBlockOpensAWindow() {
         let parsed = InfoWindowBlock.parse("""
@@ -19,8 +18,6 @@ final class InfoWindowBlockTests: XCTestCase {
         XCTAssertEqual(parsed.body, "Here's the schedule — I've put it in its own window.")
     }
 
-    /// The reason this is marker-based. The model produces tables constantly;
-    /// none of these asked for a window.
     func testOrdinaryContentOpensNothing() {
         for message in [
             "| Time | Topic |\n| --- | --- |\n| 09:00 | Intro |",
@@ -34,8 +31,6 @@ final class InfoWindowBlockTests: XCTestCase {
         }
     }
 
-    /// Otherwise the same content shows twice — once in the chat, once in the
-    /// window — and the fence itself appears as raw text.
     func testTheBlockNeverSurvivesIntoWhatIsShown() {
         let parsed = InfoWindowBlock.parse("Done.\n\n```window\ntitle: X\nbody text\n```")
         XCTAssertFalse(parsed.body.contains("```"), parsed.body)
@@ -43,8 +38,6 @@ final class InfoWindowBlockTests: XCTestCase {
         XCTAssertEqual(parsed.body, "Done.")
     }
 
-    /// Reported from real use: "pin two windows" produced one, because every
-    /// block was folded into a single pane and the second title was thrown away.
     func testTwoBlocksInOneReplyOpenTwoWindows() {
         let parsed = InfoWindowBlock.parse("""
         Pinning two windows now.
@@ -68,7 +61,6 @@ final class InfoWindowBlockTests: XCTestCase {
         XCTAssertFalse(parsed.requests[0].body.contains("a short note"), "The panes must not be merged")
     }
 
-    /// A reply cut off mid-block still pins what arrived, rather than dropping it.
     func testAnUnterminatedBlockStillCounts() {
         let parsed = InfoWindowBlock.parse("ok\n```window\ntitle: Half\nsome content")
         XCTAssertEqual(parsed.requests.map(\.title), ["Half"])
@@ -80,7 +72,6 @@ final class InfoWindowBlockTests: XCTestCase {
         XCTAssertEqual(parsed.requests.first?.body, "just the content")
     }
 
-    /// A "title:" further down is content, not a second title.
     func testOnlyTheFirstTitleLineNamesTheWindow() {
         let parsed = InfoWindowBlock.parse("""
         ok
@@ -101,7 +92,6 @@ final class InfoWindowBlockTests: XCTestCase {
     }
 }
 
-/// Keeping track of what is open.
 final class InfoWindowSetTests: XCTestCase {
     private func spec(_ title: String) -> InfoWindowSpec {
         InfoWindowSpec(title: title, body: "b")
@@ -127,12 +117,6 @@ final class InfoWindowSetTests: XCTestCase {
         XCTAssertTrue(InfoWindowSet.empty.adding(spec("one")).cleared.isEmpty)
     }
 
-    /// A model that keeps emitting window blocks must not be able to bury the
-    /// screen. The oldest goes rather than the newest being refused, since the
-    /// newest is the one just asked for.
-    ///
-    /// Ten, set by the owner. Pinned here so the number is a decision rather
-    /// than whatever the code happens to say.
     func testTheOldestGoesOnceTheLimitIsReached() {
         var set = InfoWindowSet.empty
         for index in 1...(InfoWindowSet.limit + 3) {

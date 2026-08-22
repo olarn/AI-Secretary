@@ -2,8 +2,6 @@ import AppKit
 import CoreGraphics
 import Foundation
 
-// Drags the chat's resize grip outward in steps, printing both window frames at
-// each step so a character that moves during a resize is visible as numbers.
 let pid = Int(CommandLine.arguments[1])!
 let steps = Int(CommandLine.arguments[2]) ?? 10
 let dx = CGFloat(Double(CommandLine.arguments[3]) ?? 30)
@@ -30,8 +28,6 @@ guard Int(NSWorkspace.shared.frontmostApplication?.processIdentifier ?? -1) == p
     print("NOT FRONTMOST — refusing to drag"); exit(2)
 }
 
-// The grip is in whichever top corner the button row isn't. Both are probed by
-// starting the drag where the grip's glyph is drawn: 14pt padding from the edge.
 let gripOnRight = CommandLine.arguments.count > 5 && CommandLine.arguments[5] == "right"
 var p = CGPoint(
     x: gripOnRight ? b["X"]! + b["Width"]! - 24 : b["X"]! + 24,

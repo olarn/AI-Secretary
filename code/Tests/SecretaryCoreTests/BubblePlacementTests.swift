@@ -2,15 +2,7 @@ import CoreGraphics
 import XCTest
 @testable import SecretaryCore
 
-/// Where the speech bubble lands.
-///
-/// The case that matters is a bubble too tall for the space above the
-/// character. Flipping it below looks like the obvious answer and is wrong when
-/// there is even less room down there: the flipped origin gets clamped back
-/// onto the screen and the bubble ends up covering the character.
 final class BubblePlacementTests: XCTestCase {
-    /// A 1920×1080 display with the menu bar and Dock taken out, matching the
-    /// screen these were measured on.
     private let screen = CGRect(x: 0, y: 54, width: 1920, height: 996)
 
     private func place(
@@ -28,8 +20,6 @@ final class BubblePlacementTests: XCTestCase {
         )
     }
 
-    /// The character standing at the bottom of the screen, over the Dock,
-    /// where the app puts it by default.
     private let standing = CGRect(x: 1744, y: 30, width: 128, height: 149)
 
     func testTheBubbleSitsAboveTheCharacterWhenItFits() {
@@ -38,8 +28,6 @@ final class BubblePlacementTests: XCTestCase {
         XCTAssertEqual(placement.origin.y, 165, accuracy: 0.5)
     }
 
-    /// The reported bug, at the size it was measured: 883pt of bubble over a
-    /// character standing on the Dock flipped below and swallowed it whole.
     func testATallBubbleDoesNotFlipOntoACharacterStandingLow() {
         let bubble = CGSize(width: 484, height: 883)
         let placement = place(character: standing, bubble: bubble)
@@ -59,8 +47,6 @@ final class BubblePlacementTests: XCTestCase {
         )
     }
 
-    /// The flip still has to work — it is why the code exists. A character up
-    /// near the menu bar has no room above it and plenty below.
     func testTheBubbleFlipsBelowACharacterNearTheTop() {
         let high = CGRect(x: 1744, y: 880, width: 128, height: 149)
         let bubble = CGSize(width: 484, height: 500)
@@ -70,7 +56,6 @@ final class BubblePlacementTests: XCTestCase {
         XCTAssertEqual(placement.origin.y, 880 - 500 + 14, accuracy: 0.5)
     }
 
-    /// Neither side fits: take the roomier one rather than always flipping.
     func testWithNoRoomEitherSideTheRoomierSideWins() {
         let bubble = CGSize(width: 484, height: 940)
         XCTAssertTrue(
@@ -86,7 +71,6 @@ final class BubblePlacementTests: XCTestCase {
         )
     }
 
-    /// Whatever it decides, the bubble stays on screen.
     func testTheBubbleIsAlwaysOnScreen() {
         for y in stride(from: CGFloat(30), through: 950, by: 40) {
             for height in [CGFloat(320), 640, 883, 980] {
@@ -106,8 +90,6 @@ final class BubblePlacementTests: XCTestCase {
         }
     }
 
-    /// Horizontal behaviour is unchanged: the tail mirrors near the right edge
-    /// and the bubble grows leftward instead of off the screen.
     func testTheBubbleMirrorsNearTheRightEdge() {
         let placement = place(character: standing, bubble: CGSize(width: 484, height: 400))
         XCTAssertTrue(placement.isMirrored)
@@ -122,10 +104,6 @@ final class BubblePlacementTests: XCTestCase {
         XCTAssertFalse(placement.isMirrored)
     }
 
-    /// A bubble of exactly the usable width lands unclamped at the left margin;
-    /// one point wider and there is no origin that keeps both margins. Pins the
-    /// max-width rule to the clamp it is derived from, so the two cannot drift
-    /// apart again — they were two unrelated constants (8 and 16) until now.
     func testUsableWidthIsTheWidestPlaceBubbleLeavesUnclamped() {
         let widest = usableBubbleWidth(screen.width)
         XCTAssertEqual(widest, screen.width - 16)

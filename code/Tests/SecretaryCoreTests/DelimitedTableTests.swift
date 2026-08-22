@@ -2,12 +2,6 @@ import FunctionalCore
 import XCTest
 @testable import SecretaryCore
 
-/// Pasted rows, read as a grid.
-///
-/// Both directions matter and the wrong one is worse: failing to lay out a CSV
-/// costs a wall of commas, while laying out an ordinary paragraph as a grid
-/// makes the person's own words unreadable. So the tests below spend more of
-/// their weight on what must *not* become a table.
 final class DelimitedTableTests: XCTestCase {
 
     private func tables(_ text: String) -> [MarkdownTable] {
@@ -32,7 +26,6 @@ final class DelimitedTableTests: XCTestCase {
         XCTAssertEqual(table.first?.rows.first, ["Ada", "ada@example.com"])
     }
 
-    /// A copied spreadsheet selection arrives tab-separated, not comma'd.
     func testCopiedSpreadsheetRowsCountToo() {
         XCTAssertEqual(tables("name\tqty\nbolts\t40").first?.header, ["name", "qty"])
     }
@@ -41,9 +34,6 @@ final class DelimitedTableTests: XCTestCase {
         XCTAssertEqual(tables("name;qty\nbolts;40").first?.rows.first, ["bolts", "40"])
     }
 
-    /// The one that makes a CSV correct rather than merely displayed: a value
-    /// with a comma inside it is quoted, and splitting through the quotes would
-    /// shift every column after it by one.
     func testAQuotedCommaStaysInsideItsField() {
         let table = tables("name,city\n\"Smith, J.\",Bangkok\nLee,Chiang Mai")
         XCTAssertEqual(table.first?.rows.first, ["Smith, J.", "Bangkok"])
@@ -57,14 +47,10 @@ final class DelimitedTableTests: XCTestCase {
         )
     }
 
-    // MARK: - What must stay prose
-
     func testOneLineOfCommasIsASentence() {
         XCTAssertTrue(tables("get milk, bread, and eggs").isEmpty)
     }
 
-    /// Two prose lines almost never carry an identical number of commas — but
-    /// when they do, the run still has to look like data rather than words.
     func testAParagraphIsNotAGrid() {
         let text = """
         I went to the shop, and then home.
@@ -82,9 +68,6 @@ final class DelimitedTableTests: XCTestCase {
         XCTAssertTrue(tables(",,\n,,").isEmpty)
     }
 
-    /// The pipe parser goes first: a markdown separator row (`---|---`) is
-    /// consistent enough to look delimited, and the two parsers fighting over
-    /// one table would give the person two half-tables.
     func testAMarkdownTableIsStillAMarkdownTable() {
         let text = """
         | name | qty |
@@ -97,8 +80,6 @@ final class DelimitedTableTests: XCTestCase {
         XCTAssertEqual(found.first?.rows, [["bolts", "40"]])
     }
 
-    /// Prose above and below the rows survives as prose, in order — a message
-    /// is usually "here are the rows:" and then the rows.
     func testTheWordsAroundTheRowsStay() {
         let segments = DelimitedTableParser.segments(of: """
         Here are the rows:
@@ -113,15 +94,12 @@ final class DelimitedTableTests: XCTestCase {
     }
 }
 
-/// The two signals that separate rows from writing, pinned on their own.
 extension DelimitedTableTests {
     func testASentenceEndingIsNotACell() {
         XCTAssertFalse(DelimitedTableParser.looksLikeData(["I went to the shop", "and then home."]))
         XCTAssertTrue(DelimitedTableParser.looksLikeData(["bolts", "40"]))
     }
 
-    /// A long cell is a clause. The cost is stated where the rule lives: a
-    /// column of long notes stays prose, which is the safe way round.
     func testACellIsShort() {
         XCTAssertFalse(DelimitedTableParser.looksLikeData([
             "this is a rather long run of words that reads as a clause", "x"
@@ -129,11 +107,7 @@ extension DelimitedTableTests {
     }
 }
 
-/// The false table that turned up in the running app.
 extension DelimitedTableTests {
-    /// "total 1,250 THB" over two lines was drawn as a two-column grid with the
-    /// thousands cut off in the first column. A comma between digits is part of
-    /// a number; a CSV that means a separator there quotes the field.
     func testAThousandsSeparatorIsNotAColumnBreak() {
         let text = """
         sample.pdf: Invoice 42 for Olarn — total 1,250 THB
@@ -149,8 +123,6 @@ extension DelimitedTableTests {
         )
     }
 
-    /// …and a real column of numbers still splits, because the separator there
-    /// is a comma between a digit and a space or a letter, not between digits.
     func testAColumnOfMoneyStillSplits() {
         XCTAssertEqual(
             tables("item,amount\nlunch,1250\ntaxi,300").first?.rows,

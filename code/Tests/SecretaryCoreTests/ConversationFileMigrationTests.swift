@@ -1,11 +1,6 @@
 import XCTest
 @testable import SecretaryCore
 
-/// Handing the pre-Sprint-13 history file to a character.
-///
-/// Only ever runs on a machine that has the old file, so it cannot be checked
-/// by launching a fresh build — and getting it wrong costs the person every
-/// conversation they have had.
 final class ConversationFileMigrationTests: XCTestCase {
     private let legacy = URL(fileURLWithPath: "/tmp/AISecretary/conversations.json")
     private let mine = URL(fileURLWithPath: "/tmp/AISecretary/conversations-ABC.json")
@@ -22,8 +17,6 @@ final class ConversationFileMigrationTests: XCTestCase {
         )
     }
 
-    /// The one that would hurt: adopting on top of a file she already has would
-    /// replace everything she has said since with what everybody shared before.
     func testAdoptionNeverOverwritesAHistorySheAlreadyHas() {
         XCTAssertEqual(
             conversationFileMigration(
@@ -60,9 +53,6 @@ final class ConversationFileMigrationTests: XCTestCase {
         )
     }
 
-    /// Two characters must not share a file: a single one holding everybody's
-    /// conversations would have to carry an owner on every row and be rewritten
-    /// by whichever character saved last.
     func testEachCharacterGetsHerOwnPath() {
         let one = UUID()
         let two = UUID()
@@ -74,8 +64,6 @@ final class ConversationFileMigrationTests: XCTestCase {
         XCTAssertNotEqual(FileConversationStore.url(forCharacter: one), FileConversationStore.defaultURL)
     }
 
-    /// End to end against a real temporary directory, because the decision
-    /// being right does not mean the move is.
     func testTheFileIsActuallyMovedOnDisk() throws {
         let directory = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("migration-\(UUID().uuidString)", isDirectory: true)

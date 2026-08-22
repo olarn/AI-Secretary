@@ -7,9 +7,6 @@ import ToolAdapters
 import LLMProvider
 @testable import SecretaryCore
 
-/// Reading web pages through the user's own browser: what it takes to turn on,
-/// what it lets the assistant do unasked, and what it is told to say when it is
-/// off.
 @MainActor
 final class BrowserAccessTests: XCTestCase {
     private var machine: AssistantStateMachine!
@@ -51,19 +48,14 @@ final class BrowserAccessTests: XCTestCase {
         }
     }
 
-    /// The tools handed to the backend on the last turn.
     private func lastAllowedTools() -> [String] {
         provider.preparedTools.compactMap { $0 }.last ?? []
     }
-
-    // MARK: - Turning it on
 
     func testTheBrowserStartsDisconnected() {
         XCTAssertFalse(makeSecretary().browserEnabled)
     }
 
-    /// A permission that survives quitting has to survive relaunching, so the
-    /// backend is told at startup rather than only when the switch is flipped.
     func testARememberedChoiceIsAppliedWhenTheAppStarts() {
         preference.browserEnabled = true
         let secretary = makeSecretary()
@@ -78,9 +70,6 @@ final class BrowserAccessTests: XCTestCase {
         XCTAssertEqual(provider.browserEnabledCalls.last, true)
     }
 
-    /// The change decides what the assistant can answer, so it is announced
-    /// where the answers are — and it says whose session is being used, since
-    /// that is the part a person would reasonably worry about.
     func testConnectingIsAnnouncedInTheChat() {
         let secretary = makeSecretary()
         secretary.setBrowserEnabled(true)
@@ -96,8 +85,6 @@ final class BrowserAccessTests: XCTestCase {
         XCTAssertFalse(preference.browserEnabled)
         XCTAssertTrue((secretary.transcript.last?.text ?? "").contains("disconnected"))
     }
-
-    // MARK: - What may run without asking
 
     func testReadingToolsAreOfferedOnlyWhileTheBrowserIsConnected() async {
         let secretary = makeSecretary()
@@ -115,9 +102,6 @@ final class BrowserAccessTests: XCTestCase {
         XCTAssertTrue(lastAllowedTools().contains(BrowserTools.rule(for: "get_page_text")))
     }
 
-    /// Clicking and typing inside a signed-in browser never ride along with
-    /// permission to read. They take the same refuse-then-ask path as every
-    /// other action with a side effect.
     func testActingOnAPageIsNeverPreApproved() async {
         let secretary = makeSecretary()
         secretary.setBrowserEnabled(true)
@@ -133,7 +117,6 @@ final class BrowserAccessTests: XCTestCase {
         }
     }
 
-    /// Ordinary file and git access must not be lost when the browser joins.
     func testConnectingTheBrowserKeepsTheExistingTools() async {
         let secretary = makeSecretary()
         secretary.setBrowserEnabled(true)
@@ -143,12 +126,6 @@ final class BrowserAccessTests: XCTestCase {
         XCTAssertTrue(lastAllowedTools().contains("Grep"))
     }
 
-    // MARK: - Being asked for the browser
-
-    /// The offer to allow is the only way permissions widen here, and it used
-    /// to require a registered project. Browser work belongs to no project and
-    /// often runs with none registered at all, so the offer never appeared and
-    /// the action stayed permanently out of reach.
     func testABlockedBrowserActionIsOfferedEvenWithNoProjectRegistered() async {
         let secretary = makeSecretary(projects: [])
         secretary.setBrowserEnabled(true)
@@ -169,9 +146,6 @@ final class BrowserAccessTests: XCTestCase {
         XCTAssertFalse(mayBeRemembered(request.actionClass))
     }
 
-    /// Nobody can weigh `mcp__claude-in-chrome__computer`. The card has to say
-    /// what will happen — including the parts they didn't ask for, since one
-    /// rule covers scrolling, clicking and typing together.
     func testTheCardSaysWhatItWillDoRatherThanTheRuleName() async {
         let secretary = makeSecretary(projects: [])
         secretary.setBrowserEnabled(true)
@@ -191,17 +165,11 @@ final class BrowserAccessTests: XCTestCase {
         XCTAssertFalse(request.commandSummary.contains("mcp__"), "Got: \(request.commandSummary)")
         XCTAssertTrue(request.commandSummary.contains("click"), "Got: \(request.commandSummary)")
 
-        // And the chat message has to say whose browser it is.
         let said = secretary.transcript.last?.text ?? ""
         XCTAssertTrue(said.contains("your own Chrome"), "Got: \(said)")
         XCTAssertFalse(said.contains("session.Shall"), "Missing gap between sentences: \(said)")
     }
 
-    // MARK: - What the model is told
-
-    /// The failure this exists to prevent: a fetch of a login-walled page
-    /// succeeds and returns the sign-in form, and the model reports that as the
-    /// page's content. It has to know the difference, and know what to offer.
     func testWhileDisconnectedTheModelIsToldToOfferTheChromeExtension() async {
         let secretary = makeSecretary()
         secretary.submit("summarise the page I'm looking at")
@@ -213,8 +181,6 @@ final class BrowserAccessTests: XCTestCase {
         XCTAssertTrue(system.contains("Settings"), "Should say where to switch it on. Got: \(system)")
     }
 
-    /// And once it is on, the model must know it — and be told that page text
-    /// is something to report, not instructions to obey.
     func testWhileConnectedTheModelIsToldItCanReadTheBrowserAndToDistrustIt() async {
         let secretary = makeSecretary()
         secretary.setBrowserEnabled(true)

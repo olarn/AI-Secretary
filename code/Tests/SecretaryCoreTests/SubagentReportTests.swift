@@ -5,11 +5,6 @@ import LLMProvider
 import ProjectRegistry
 @testable import SecretaryCore
 
-/// What the character says while a sub-agent works, and when it ends.
-///
-/// The complaint these were written for: she went silent for the whole of a
-/// sub-agent's run, and said nothing when it finished — you had to ask again to
-/// find out anything had happened.
 @MainActor
 final class SubagentReportTests: XCTestCase {
     private func makeSecretary(_ events: [ChatStreamEvent]) -> Secretary {
@@ -36,9 +31,6 @@ final class SubagentReportTests: XCTestCase {
 
     private var done: ChatStreamEvent { .completed(stopReason: .none(), usage: .none()) }
 
-    /// Said in the conversation, not only in the activity box — that box is off
-    /// by default, and someone who never turned it on is exactly the person who
-    /// cannot tell working from dead.
     func testStartingASubagentIsAnnouncedInTheConversation() async {
         let secretary = makeSecretary([.subagentStarted(counting), done])
         secretary.submit("count the files")
@@ -48,7 +40,6 @@ final class SubagentReportTests: XCTestCase {
         XCTAssertTrue(said(secretary, "Count files in cwd"))
     }
 
-    /// The heart of it: the answer arrives without being asked for.
     func testTheAnswerIsReportedWithoutBeingAskedFor() async {
         let secretary = makeSecretary([.subagentStarted(counting), finished("3"), done])
         secretary.submit("count the files")
@@ -58,8 +49,6 @@ final class SubagentReportTests: XCTestCase {
         XCTAssertTrue(said(secretary, "3"), "The sub-agent's own summary is the answer")
     }
 
-    /// A sub-agent that says nothing still has to be reported. Silence here is
-    /// indistinguishable from the session having died, which is the bug.
     func testAFinishWithNoSummaryStillSpeaks() async {
         let secretary = makeSecretary([.subagentStarted(counting), finished(""), done])
         secretary.submit("count the files")
@@ -67,8 +56,6 @@ final class SubagentReportTests: XCTestCase {
 
         XCTAssertTrue(said(secretary, "finished without a summary"))
     }
-
-    // MARK: - What the header reads
 
     func testWhileItRunsSheKnowsWhatIsRunning() async {
         let secretary = makeSecretary([.subagentStarted(counting), done])
@@ -80,8 +67,6 @@ final class SubagentReportTests: XCTestCase {
         XCTAssertEqual(running?.task.detail, "Count files in cwd")
     }
 
-    /// Progress moves the description without adding a line per step — the CLI
-    /// sends one per step, and a paragraph each would bury the answer.
     func testProgressUpdatesTheHeaderRatherThanTheConversation() async {
         let stepping = SubagentTask(
             id: "t1",
@@ -102,7 +87,6 @@ final class SubagentReportTests: XCTestCase {
         )
     }
 
-    /// The badge must not outlive the work it describes.
     func testTheBadgeClearsWhenItEnds() async {
         let secretary = makeSecretary([.subagentStarted(counting), finished("3"), done])
         secretary.submit("count the files")

@@ -6,9 +6,6 @@ import ProjectRegistry
 import ToolAdapters
 @testable import SecretaryCore
 
-/// What the card is asked to draw. The buttons themselves live in a target no
-/// test is linked into, so this is the half that can be checked: which answers
-/// exist for the request actually waiting.
 @MainActor
 final class OfferedAnswersTests: XCTestCase {
     private let project = Project(
@@ -32,8 +29,6 @@ final class OfferedAnswersTests: XCTestCase {
         XCTAssertEqual(makeSecretary(registered: [project]).offeredApprovalAnswers, [])
     }
 
-    /// The card that reappears every session: reading in a project the person
-    /// registered. This is where Always belongs.
     func testReadingARegisteredProjectOffersAllThree() async {
         let secretary = makeSecretary(registered: [project])
         secretary.submit("git status in Fixture")
@@ -42,10 +37,6 @@ final class OfferedAnswersTests: XCTestCase {
         XCTAssertEqual(secretary.offeredApprovalAnswers, [.once, .always, .deny])
     }
 
-    /// A folder that is not one of the person's projects — the sprint item's
-    /// "drag a file in from outside" case. Watching one builds a throwaway
-    /// project with a new identity every time, so a remembered grant could
-    /// never match again, and the card says so by not offering it.
     func testAFolderOutsideAnyProjectOffersOnlyOnceAndDeny() async throws {
         let outside = FileManager.default.temporaryDirectory
             .appendingPathComponent("outside-\(UUID().uuidString)")

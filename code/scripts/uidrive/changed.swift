@@ -1,19 +1,5 @@
 import AppKit
 
-// Where do two captures differ, and by how much?
-//
-// Usage: swift changed.swift a.png b.png
-//
-// Written for the thinking animation in 0.14.259-260, where neither question a
-// still can answer was the question that mattered. "Is it animating?" is two
-// frames apart in time differing *only* in the region that should move — this
-// prints that region's bounding box, so the claim names the pixels instead of
-// asserting from a screenshot. "Has it stopped?" is the same two frames coming
-// back `identical`, which is how the 259 bug was caught: three captures a
-// second apart with the app idle, and the badge differed in every pair.
-//
-// `diff.swift` is the neighbour that greyscale-diffs a numbered f0/f1/f2 series
-// at once. This one takes two named files and tells you *where*.
 func bitmap(_ path: String) -> NSBitmapImageRep? {
     guard let image = NSImage(contentsOfFile: path),
           let tiff = image.tiffRepresentation else { return nil }
@@ -33,8 +19,6 @@ var worst = 0.0
 for y in 0..<min(a.pixelsHigh, b.pixelsHigh) {
     for x in 0..<min(a.pixelsWide, b.pixelsWide) {
         guard let p = a.colorAt(x: x, y: y), let q = b.colorAt(x: x, y: y) else { continue }
-        // Sum of channel differences. 0.06 is above capture noise and well
-        // below anything a person would call a visible change.
         let d = abs(p.redComponent - q.redComponent)
             + abs(p.greenComponent - q.greenComponent)
             + abs(p.blueComponent - q.blueComponent)

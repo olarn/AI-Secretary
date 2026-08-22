@@ -2,27 +2,10 @@ import AppKit
 import Observation
 import SecretaryCore
 
-/// One character's look: her text size, her window height, how big she is
-/// drawn, and her theme. Shared by the panel that changes it and the window
-/// that has to resize.
-///
-/// One of these per character since 13-1. The app-wide windows — Token Usage,
-/// About — have no character of their own, so they follow whichever character
-/// was used last; see `AppDelegate.focused`.
-///
-/// The rules live in `AppearanceSettings`; this holds the current value,
-/// persists every change, and tells the window when to resize. `onChange` is a
-/// callback rather than the delegate observing the object, because resizing an
-/// `NSPanel` is imperative work that has to happen once per change, not
-/// re-derived during a view update.
 @MainActor
 @Observable
 final class Appearance {
     private(set) var settings: AppearanceSettings
-    /// Whether macOS is currently in dark mode. Stored and observed rather than
-    /// read where it's needed: the `System` theme has to repaint when the user
-    /// flips the system setting, and a value read inside a `body` is not
-    /// something SwiftUI knows to re-read.
     private(set) var systemIsDark: Bool
     @ObservationIgnored private let store: AppearanceStoring
     @ObservationIgnored var onChange: (() -> Void)?
@@ -36,9 +19,6 @@ final class Appearance {
         self.store = store
         self.systemIsDark = Self.readSystemIsDark()
         let saved = store.load()
-        // No screen to measure means no limit to apply, so the saved size stands
-        // as its own ceiling. Falling back to the default here would shrink a
-        // window the user had deliberately grown.
         let screen = NSScreen.main?.visibleFrame
         self.settings = AppearanceSettings(
             fontSize: saved.fontSize,
@@ -54,10 +34,6 @@ final class Appearance {
         watchSystemTheme()
     }
 
-    /// The colours everything is painted with right now.
-    ///
-    /// Module-qualified because the property and the function that computes it
-    /// share a name, which is the right name for both.
     var colors: Palette {
         SecretaryCore.palette(for: settings.theme, systemIsDark: systemIsDark)
     }
@@ -67,10 +43,6 @@ final class Appearance {
             .bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
     }
 
-    /// AppKit posts this on the distributed centre when the user changes the
-    /// system's light/dark setting. Without it, `System` would only be re-read
-    /// at launch — the app would keep its old palette until relaunched, which
-    /// looks exactly like the setting not working.
     private func watchSystemTheme() {
         systemThemeObserver = DistributedNotificationCenter.default().addObserver(
             forName: Notification.Name("AppleInterfaceThemeChangedNotification"),
@@ -82,8 +54,6 @@ final class Appearance {
                 let nowDark = Self.readSystemIsDark()
                 guard nowDark != self.systemIsDark else { return }
                 self.systemIsDark = nowDark
-                // Only `System` is following it; the other two are the user
-                // saying the system setting is not what they want.
                 if self.settings.theme == .system { self.onChange?() }
             }
         }
@@ -93,13 +63,6 @@ final class Appearance {
         Double(usableBubbleWidth(visibleFrame.width))
     }
 
-    /// Re-applies the limits of the screen the character is actually on. Worth
-    /// doing when the panel is about to be shown, since the display may have
-    /// changed since launch.
-    ///
-    /// A `nil` frame leaves the limits alone: an unknown screen is not the same
-    /// as a tiny one, and treating it as tiny would collapse the window and
-    /// leave the widen button dead with no way to explain why.
     func applyScreenLimits(_ visibleFrame: CGRect?) {
         guard let visibleFrame else { return }
         var updated = settings
@@ -130,19 +93,10 @@ final class Appearance {
 
     private func apply(_ updated: AppearanceSettings) {
         guard updated != settings else { return }
-        // The character window is resized imperatively too, so a scale change
-        // has to reach the delegate the same way a height change does.
-        // A theme change is imperative work on the window too: the control
-        // appearance is an AppKit property, not something a SwiftUI body can
-        // return, so it goes through the same callback as a resize.
         let needsRelayout = updated.chatHeight != settings.chatHeight
             || updated.chatWidth != settings.chatWidth
             || updated.characterScale != settings.characterScale
             || updated.theme != settings.theme
-            // Glass flips an NSWindow property too — the shadow, which hides
-            // behind the solid bubble and hangs as a dark blot behind the
-            // glass one. Same reasoning as theme: not something a SwiftUI
-            // body can return.
             || updated.liquidGlass != settings.liquidGlass
         settings = updated
         store.save(

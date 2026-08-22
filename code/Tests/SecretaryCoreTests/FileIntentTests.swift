@@ -42,7 +42,6 @@ final class FileIntentTests: XCTestCase {
     }
 
     func testReadWithoutAPathIsNotAFileOp() {
-        // "read" alone shouldn't become a file op with an empty path.
         if case .fileTool = classifier.classify("read") {
             XCTFail("bare 'read' should not classify as a file op")
         }
@@ -56,8 +55,6 @@ final class FileIntentTests: XCTestCase {
     }
 
     func testWeakVerbWithProseIsChatNotAFileOp() {
-        // "read"/"list" are common chat openers; without a project scope or a
-        // path-like argument they must not hijack the conversation.
         for prose in ["read me a poem", "list your capabilities", "cat got my tongue"] {
             if case .fileTool = classifier.classify(prose) {
                 XCTFail("\"\(prose)\" should stay a conversation, not a file op")
@@ -80,7 +77,6 @@ final class FileIntentTests: XCTestCase {
     }
 
     func testReadTheLogFileIsAFileOpNotGitLog() {
-        // The word "log" must not hijack a file read.
         XCTAssertEqual(
             classifier.classify("read the-log-file.txt in Demo"),
             .fileTool(operation: .readFile(relativePath: "the-log-file.txt"), projectQuery: .some("Demo"))
@@ -88,12 +84,6 @@ final class FileIntentTests: XCTestCase {
     }
 }
 
-// MARK: - Non-ASCII input
-
-/// The app crashed on a real message: "หาราคาเฉลี่ย รองเท้า On Cloud ในไทย".
-/// `splitProject` searched a lowercased copy and sliced the original, which is
-/// undefined — the indices only lined up because every message so far had been
-/// ASCII. Thai text made them diverge and the slice trapped.
 final class NonASCIIIntentTests: XCTestCase {
     private let classifier = RuleBasedIntentClassifier()
 
@@ -116,11 +106,11 @@ final class NonASCIIIntentTests: XCTestCase {
             "on"
         ]
         for message in messages {
-            _ = classifier.classify(message)  // must not trap
+            let mustNotTrap = classifier.classify(message)
+            _ = mustNotTrap
         }
     }
 
-    /// Case-insensitive matching still has to work after the fix.
     func testUppercaseMarkerStillSelectsTheProject() {
         guard case .fileTool(_, let query) = classifier.classify("read notes.md IN Fixture") else {
             return XCTFail("Expected a file operation")

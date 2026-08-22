@@ -3381,3 +3381,15 @@ default) ซึ่งทำให้ cache หายไปด้วย — ค�
     ใน `offerToWiden` — กำแพงสองแบบของ Claude Code แยกกันชัดในโค้ดแล้ว
   - comment ทั้ง 1,486 บรรทัดย้ายเข้า `docs/design-notes/secretary-orchestrator.md` ครบ
   - 1438 tests ผ่านหมด — ทั้ง target `SecretaryCore` ไม่เหลือ comment แล้ว
+- [x] `AISecretaryApp` (41 ไฟล์), test ทั้ง 112 ไฟล์, และ script ใน `scripts/` — ไม่เหลือ comment
+  - `AISecretaryApp` ไม่มี test คุมเลย (coverage report ไม่มีไฟล์ของมันสักไฟล์) จึง
+    **ถอด comment อย่างเดียว ไม่ restructure** — ความรู้เรื่อง AppKit/SwiftUI ที่ได้มาจาก
+    การ drive จริง (NSHostingView ย่อ window กลับ, `.onKeyPress` ไม่เห็นลูกศร, cursor
+    เปลี่ยนไม่ได้ตอนแอปไม่ frontmost) ย้ายเข้า `docs/design-notes/ai-secretary-app.md` ครบ
+  - ไฟล์ test: ชื่อ test คือบันทึกบั๊กอยู่แล้ว ส่วนเรื่องเล่าที่อยู่เหนือ test (บทสนทนาจริง,
+    รายงานของเจ้าของ) ย้ายเข้า `docs/design-notes/tests.md`
+  - trailing comment 9 จุดสุดท้ายกลายเป็นชื่อ: `kVK_ANSI_H`, `kVK_Escape`,
+    `runStayingInThinkingUntilTheFirstToken`, `lastModelWhereNilAlsoMeansInherit`,
+    `the31stOfJuly2026InUTC` ฯลฯ
+  - **ยืนยันแล้ว: `grep` หา comment ในไฟล์ `.swift` ทั้ง repo ได้ 0 บรรทัด** และ 1438
+    tests ผ่านหมดตลอดทุก commit โดยไม่แตะ assertion สักบรรทัด

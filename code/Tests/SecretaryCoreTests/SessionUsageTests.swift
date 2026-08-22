@@ -1,11 +1,7 @@
 import XCTest
 @testable import SecretaryCore
 
-/// Counting what a conversation spends.
 final class SessionUsageTests: XCTestCase {
-    /// The real numbers from one measured turn, which is the whole reason the
-    /// cache fields exist: reported as 2 in / 5 out, it actually moved 36,204
-    /// tokens. Anything that folds the cache away is wrong by that much.
     private let measuredTurn = SessionUsage.empty.adding(
         inputTokens: 2,
         outputTokens: 5,
@@ -32,9 +28,6 @@ final class SessionUsageTests: XCTestCase {
         XCTAssertEqual(two.costUSD, 0.0980198, accuracy: 0.000001)
     }
 
-    /// Context is "how full is the window right now", so it is the last turn's
-    /// reading, not a sum. Summing it would cross 100% after a few turns of a
-    /// conversation that is nowhere near full.
     func testContextIsTheLastTurnNotTheSum() {
         let two = measuredTurn.adding(
             inputTokens: 3, outputTokens: 4,
@@ -54,8 +47,6 @@ final class SessionUsageTests: XCTestCase {
         XCTAssertNil(noWindow.contextFraction)
     }
 
-    /// A turn that omits the window must not erase one an earlier turn reported,
-    /// or the bar would blink out mid-conversation.
     func testAKnownWindowSurvivesATurnThatOmitsIt() {
         let next = measuredTurn.adding(
             inputTokens: 1, outputTokens: 1,
@@ -78,8 +69,6 @@ final class SessionUsageTests: XCTestCase {
         XCTAssertTrue(UsageFormat.summary(.empty).contains("No tokens used yet"))
     }
 
-    /// A dollar figure with no explanation reads as a bill. On a subscription
-    /// nothing is charged per token, so the caveat travels with the number.
     func testTheSummaryAlwaysExplainsTheDollarFigure() {
         let text = UsageFormat.summary(measuredTurn)
         XCTAssertTrue(text.contains("$0.0780"), text)

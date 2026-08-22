@@ -2,12 +2,6 @@ import FunctionalCore
 import XCTest
 @testable import SecretaryCore
 
-/// The prompt assembly rules, now that they are functions of plain values.
-///
-/// The full texts are pinned indirectly by the turn-level tests that assert
-/// what a `Secretary` actually sends; these check the *decisions* — which
-/// pieces appear under which inputs — with exact equality where the whole
-/// text is short enough to pin.
 final class SecretaryPromptsTests: XCTestCase {
     private func agentPrompt(
         projectName: Option<String> = .some("Alpha"),
@@ -26,10 +20,6 @@ final class SecretaryPromptsTests: XCTestCase {
         )
     }
 
-    // MARK: - The permission note
-
-    /// Exact, both branches: this is the sentence that stops the model
-    /// retrying what was just approved — or claiming powers it lost.
     func testReadOnlyPermissionNoteIsExact() {
         XCTAssertEqual(
             agentPermissionNote(sessionTools: []),
@@ -54,9 +44,6 @@ final class SecretaryPromptsTests: XCTestCase {
         )
     }
 
-    /// The owner's deadlock in one assertion: a project instruction saying
-    /// "ask for write permission first" is obeyed by *attempting*, and the note
-    /// has to say so, or the character asks in prose and waits for ever.
     func testTheNoteSaysHowToObeyAProjectInstructionThatSaysAskFirst() {
         for tools in [Set<String>(), ["Write"]] {
             let note = agentPermissionNote(sessionTools: tools)
@@ -73,11 +60,6 @@ final class SecretaryPromptsTests: XCTestCase {
         )
     }
 
-    /// The Sprint 21.2 bug, as a test. The old note ended "writing or running
-    /// commands will be refused", and the model stopped before the tool call
-    /// and said so in prose — which raises no refusal, so no card, so nobody is
-    /// ever asked and the work stops for good. Whatever this note says, it has
-    /// to ask for the attempt.
     func testTheNoteAsksForTheAttemptRatherThanTheApology() {
         for tools in [Set<String>(), ["Write"]] {
             let note = agentPermissionNote(sessionTools: tools)
@@ -92,8 +74,6 @@ final class SecretaryPromptsTests: XCTestCase {
             )
         }
     }
-
-    // MARK: - Which pieces appear
 
     func testBrowserNoteFollowsTheSwitch() {
         XCTAssertTrue(agentPrompt(browser: false).contains("You cannot see the person's browser"))
@@ -111,9 +91,6 @@ final class SecretaryPromptsTests: XCTestCase {
         XCTAssertTrue(agentPrompt(projectName: .none()).contains("inside a scratch folder"))
     }
 
-    /// The chat-only prompt must keep saying "cannot run commands yourself" —
-    /// and the agent prompt must never contain it. Sending the wrong one is the
-    /// failure the doc comment on `agentSystemPrompt` records.
     func testOnlyTheChatOnlyPromptDisclaimsRunningCommands() {
         let chatOnly = chatOnlySystemPrompt(profileDescription: "You are Miku.", projectNames: ["Alpha"])
         XCTAssertTrue(chatOnly.contains("cannot run commands yourself"))

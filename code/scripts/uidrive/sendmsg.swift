@@ -21,7 +21,6 @@ func click(_ p: CGPoint) {
     }
 }
 guard let b = panelRect() else { print("chat panel not open"); exit(1) }
-// The input sits just above the Settings/Profile/Projects row at the bottom.
 let field = CGPoint(x: b["X"]! + b["Width"]! / 2 - 20, y: b["Y"]! + b["Height"]! - 88)
 print("panel \(b["X"]!),\(b["Y"]!) \(b["Width"]!)x\(b["Height"]!) → field \(field.x),\(field.y)")
 click(field)

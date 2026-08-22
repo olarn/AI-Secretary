@@ -7,8 +7,6 @@ import ToolAdapters
 import LLMProvider
 @testable import SecretaryCore
 
-// MARK: - Test doubles
-
 final class SpyAdapter: CodeToolAdapter {
     var toolID: String { GitReadOnlyAdapter.toolIdentifier }
     private(set) var runCalls: [(CodeToolOperation, Project)] = []
@@ -23,7 +21,6 @@ final class SpyAdapter: CodeToolAdapter {
     }
 }
 
-/// Emits canned stream events (or an error) with no network or API key.
 final class FakeChatProvider: ChatProvider, @unchecked Sendable {
     enum Script {
         case events([ChatStreamEvent])
@@ -33,7 +30,7 @@ final class FakeChatProvider: ChatProvider, @unchecked Sendable {
     private let script: Script
     private(set) var callCount = 0
     private(set) var lastMessages: [ChatMessage] = []
-    private(set) var lastModel: ChatModel?  // nil also means 'inherit'
+    private(set) var lastModelWhereNilAlsoMeansInherit: ChatModel?
     private(set) var lastEffort: Effort?
     private(set) var lastSystem: String?
 
@@ -48,7 +45,7 @@ final class FakeChatProvider: ChatProvider, @unchecked Sendable {
     ) -> ChatStream {
         callCount += 1
         lastMessages = messages
-        lastModel = model.toOptional()
+        lastModelWhereNilAlsoMeansInherit = model.toOptional()
         lastEffort = effort.toOptional()
         lastSystem = system.toOptional()
         return AsyncStream { continuation in
@@ -62,8 +59,6 @@ final class FakeChatProvider: ChatProvider, @unchecked Sendable {
         }
     }
 }
-
-// MARK: - Intent classification
 
 final class RuleBasedIntentClassifierTests: XCTestCase {
     private let classifier = RuleBasedIntentClassifier()
@@ -111,8 +106,6 @@ final class RuleBasedIntentClassifierTests: XCTestCase {
     }
 }
 
-// MARK: - Orchestration
-
 @MainActor
 final class SecretaryTests: XCTestCase {
     private var machine: AssistantStateMachine!
@@ -144,7 +137,6 @@ final class SecretaryTests: XCTestCase {
         )
     }
 
-    /// Chat replies stream on a background task; give them time to land.
     private func waitUntilIdle(timeout: TimeInterval = 2) async {
         let deadline = Date().addingTimeInterval(timeout)
         while machine.state != .idle && Date() < deadline {
@@ -232,13 +224,6 @@ final class SecretaryTests: XCTestCase {
         XCTAssertEqual(request.project, b)
     }
 
-    /// A tool the project never listed is asked about, not refused.
-    ///
-    /// This used to assert the opposite — no prompt, a red "denied by policy",
-    /// nothing the person could do from the chat. The rule now is that nothing
-    /// is blocked outright; what changes with the allowlist is how loudly the
-    /// card speaks, not whether there is one. What must stay true either way is
-    /// the second assertion: nothing ran on the way to asking.
     func testToolNotAllowlistedOnProjectAsksInsteadOfRefusing() {
         let locked = Project(name: "Locked", path: "/tmp/locked", allowedTools: [])
         let secretary = makeSecretary(projects: [locked])
@@ -253,11 +238,6 @@ final class SecretaryTests: XCTestCase {
         XCTAssertTrue(secretary.transcript.last?.text.contains("allowed-tools list") ?? false)
     }
 
-    /// A folder no project contains is a question, not a wall.
-    ///
-    /// It used to end the turn: "it isn't inside <project>". Watching is reading,
-    /// so it does need a yes — but there was no way to give one, which left a
-    /// rule where a choice belonged.
     func testWatchingAFolderOutsideEveryProjectAsksInsteadOfRefusing() throws {
         let outside = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("outside-\(UUID().uuidString)", isDirectory: true)
@@ -272,9 +252,6 @@ final class SecretaryTests: XCTestCase {
         guard case .approval(let request, _) = secretary.pendingDecision.toOptional() else {
             return XCTFail("Expected a card, not a refusal")
         }
-        // The resolved path, because `/tmp` is a link to `/private/tmp` and a
-        // card naming the one while reading the other is the failure worth
-        // guarding.
         let resolved = outside.resolvingSymlinksInPath().standardizedFileURL.path
         XCTAssertTrue(
             request.commandSummary.contains(resolved),
@@ -283,9 +260,6 @@ final class SecretaryTests: XCTestCase {
         XCTAssertTrue(secretary.activeWatches.isEmpty, "nothing is watched before the answer")
     }
 
-    /// Saying yes covers the folder, and nothing else. It is not added to the
-    /// registry, so it does not come back tomorrow as a project the assistant
-    /// may work in.
     func testApprovingAnOutsideFolderDoesNotRegisterIt() throws {
         let outside = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("outside-\(UUID().uuidString)", isDirectory: true)
@@ -320,15 +294,6 @@ final class SecretaryTests: XCTestCase {
         )
     }
 
-    /// The tick is where an approved outside folder could quietly stop working.
-    ///
-    /// The loop re-resolves through the adapter every time rather than reusing
-    /// a URL from the start, so the escape check keeps running. That is the
-    /// point — and it also means a throwaway project that resolves once at
-    /// approval but not afterwards would leave a watch that reports nothing and
-    /// says nothing, because a failed resolve is a `continue`. Silence is the
-    /// failure mode, which is why this asserts a report rather than an absence
-    /// of errors.
     func testAnApprovedOutsideFolderKeepsResolvingOnEveryLook() async throws {
         let outside = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("outside-\(UUID().uuidString)", isDirectory: true)
@@ -353,19 +318,12 @@ final class SecretaryTests: XCTestCase {
         )
     }
 
-    /// Sprint 21.2: the change has to reach the *model*, not only the
-    /// transcript. `say` writes a bubble; the conversation the assistant
-    /// answers from is a different array, and before this nothing ever put the
-    /// change into it — so a watch started with "and do what the file says"
-    /// reported the file and did nothing, every time.
     func testAWatchStartedWithAnInstructionHandsTheChangeToTheModel() async throws {
         let outside = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("outside-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: outside) }
 
-        // The assistant raising it, which is how a watch starts from a real
-        // request: the person says what they want, she asks the app to watch.
         let chat = FakeChatProvider(.events([
             .textDelta("Watching it now."),
             .textDelta("\n\n```watch\n\(outside.path)\n```"),
@@ -396,9 +354,6 @@ final class SecretaryTests: XCTestCase {
             secretary.transcript.contains { $0.text.contains("new.txt") },
             "The person is still told by the app itself."
         )
-        // The point of the whole change: the model is *sent* it. A transcript
-        // bubble is not the same thing — that is what it had before, and it is
-        // why it never acted.
         await waitUntilIdle()
         XCTAssertTrue(
             chat.lastMessages.contains { $0.content.contains("[Folder watch]") },
@@ -413,8 +368,6 @@ final class SecretaryTests: XCTestCase {
         )
     }
 
-    /// A typed `/watch` asks to be told and nothing more. It must not start
-    /// spending turns on every file that appears.
     func testATypedWatchStillOnlyReports() async throws {
         let outside = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("outside-\(UUID().uuidString)", isDirectory: true)
@@ -439,8 +392,6 @@ final class SecretaryTests: XCTestCase {
         )
     }
 
-    /// A symlink inside the approved folder still can't lead out of it. The
-    /// boundary moved to the folder that was agreed to; it did not disappear.
     func testTheEscapeCheckNowGuardsTheApprovedFolder() throws {
         let outside = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("outside-\(UUID().uuidString)", isDirectory: true)
@@ -527,8 +478,6 @@ final class SecretaryTests: XCTestCase {
 
         XCTAssertEqual(secretary.model, .some(.opus48))
         XCTAssertEqual(chat.callCount, 0)
-        // Confirmed by display name now — the settings panel and the slash
-        // command share one entry point, and a name reads better than an id.
         XCTAssertTrue(secretary.transcript.last?.text.contains("Claude Opus 4.8") ?? false,
                       "Got: \(secretary.transcript.last?.text ?? "-")")
     }
@@ -543,10 +492,6 @@ final class SecretaryTests: XCTestCase {
         XCTAssertTrue(secretary.transcript.last?.text.contains("Unknown effort") ?? false)
     }
 
-    /// Nothing chosen and nothing readable from Claude Code is not a fault, so
-    /// the row must not name it like one. It used to read "Unknown", directly
-    /// above a menu item saying "Your Claude Code default" — which was the
-    /// actual answer all along.
     func testAnUninheritedModelOrEffortReadsAsDefaultNotUnknown() {
         let secretary = makeSecretary(projects: [project])
 
@@ -556,8 +501,6 @@ final class SecretaryTests: XCTestCase {
         XCTAssertTrue(secretary.isEffortInherited)
     }
 
-    /// And a real choice still shows its own name — the fallback must not have
-    /// swallowed the case it exists to sit behind.
     func testAChosenModelStillShowsItsOwnName() {
         let secretary = makeSecretary(projects: [project])
 

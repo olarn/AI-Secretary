@@ -5,12 +5,6 @@ import LLMProvider
 import ProjectRegistry
 @testable import SecretaryCore
 
-/// Recognising a link, and what happens when one arrives.
-///
-/// The risk this guards is asymmetric. Missing a link costs a card that never
-/// appeared; seeing one that isn't there costs a card in front of an ordinary
-/// sentence, every time someone mentions a filename. So the detector is
-/// deliberately narrow, and these tests hold it there.
 final class WebTaskDetectionTests: XCTestCase {
 
     func testAPlainLinkIsFound() {
@@ -38,18 +32,12 @@ final class WebTaskDetectionTests: XCTestCase {
         )
     }
 
-    /// The reason the detector is not clever. "config.json", "node.js" and
-    /// "v2.1" all look like hosts to anything that accepts a bare domain, and
-    /// each one would raise a permission card in the middle of a conversation
-    /// about files.
     func testAnOrdinarySentenceIsNotAnAddress() {
         for text in ["open config.json", "it's about node.js", "bump to v2.1", "example.com"] {
             XCTAssertEqual(webAddress(in: text), Option.none(), "Got a link out of: \(text)")
         }
     }
 
-    /// `file:` would reach the person's own disk and a custom scheme hands the
-    /// address to whatever app claims it — neither is a web app to work in.
     func testOnlyHttpAndHttpsCount() {
         XCTAssertEqual(webAddress(in: "file:///etc/passwd"), Option.none())
         XCTAssertEqual(webAddress(in: "slack://channel?id=1"), Option.none())
@@ -67,8 +55,6 @@ final class WebTaskDetectionTests: XCTestCase {
         )
     }
 
-    // MARK: - The site a grant covers
-
     func testTheGrantIsScopedToTheSiteNotThePage() {
         let url = URL(string: "https://WWW.Example.com/board/7?x=1")!
         XCTAssertEqual(webSiteHost(of: url), Option.some("example.com"))
@@ -81,8 +67,6 @@ final class WebTaskDetectionTests: XCTestCase {
         XCTAssertFalse(grants.allows(host: "other.example.com"))
     }
 
-    /// A subdomain is a different site. Approving a public help page must not
-    /// carry over to the admin console next door.
     func testASubdomainIsNotTheSameSite() {
         let grants = WebSiteGrants().granting(host: "example.com")
         XCTAssertFalse(grants.allows(host: "admin.example.com"))
@@ -94,7 +78,6 @@ final class WebTaskDetectionTests: XCTestCase {
     }
 }
 
-/// The card, through the Secretary.
 @MainActor
 final class WebTaskFlowTests: XCTestCase {
     private let machine = AssistantStateMachine()
@@ -143,9 +126,6 @@ final class WebTaskFlowTests: XCTestCase {
         XCTAssertEqual(secretary.pendingDecision, Option.none())
     }
 
-    /// Both buttons on this card name themselves in the conversation now. The
-    /// approving one had said nothing at all, so the only trace of having agreed
-    /// to work in somebody's site as them was the work starting.
     func testEitherAnswerToTheSiteCardIsWrittenDown() async {
         let yes = SpyWorkspaceProvider()
         let approving = makeSecretary(yes)
@@ -177,8 +157,6 @@ final class WebTaskFlowTests: XCTestCase {
         )
     }
 
-    /// The second link to a site already agreed to goes straight through. Asked
-    /// again per page, the card becomes something to dismiss rather than read.
     func testTheSameSiteIsNotAskedAboutTwice() async {
         let provider = SpyWorkspaceProvider()
         let secretary = makeSecretary(provider)
@@ -209,9 +187,6 @@ final class WebTaskFlowTests: XCTestCase {
         XCTAssertEqual(request.host, "elsewhere.test")
     }
 
-    /// Working in a page as the person needs their session, which means Chrome.
-    /// Approving the card connects it — and the card says so, because two
-    /// things are being agreed to at once.
     func testApprovingConnectsTheBrowserWhenItWasOff() async {
         let provider = SpyWorkspaceProvider()
         let secretary = makeSecretary(provider)
@@ -231,9 +206,6 @@ final class WebTaskFlowTests: XCTestCase {
         XCTAssertEqual(provider.browserEnabledCalls.last, true)
     }
 
-    /// Opening the page is the first thing the approval is for. Without the
-    /// tool being granted here, answering this card leads straight into the
-    /// refuse-then-widen card for `navigate` — the same question, asked worse.
     func testApprovingAlsoAllowsOpeningThePage() async {
         let provider = SpyWorkspaceProvider()
         let secretary = makeSecretary(provider)
@@ -260,8 +232,6 @@ final class WebTaskFlowTests: XCTestCase {
         XCTAssertTrue(system.contains("untrusted"), "…and that the page can't be trusted")
     }
 
-    /// The grant is session-shaped. A new conversation asks again, or "for this
-    /// conversation" on the card is a lie.
     func testANewConversationForgetsTheSite() async {
         let provider = SpyWorkspaceProvider()
         let secretary = makeSecretary(provider)
@@ -278,8 +248,6 @@ final class WebTaskFlowTests: XCTestCase {
         }
     }
 
-    /// Typing instead of answering drops the card, and the drop is said out
-    /// loud — the model is told too, so the next reply can't claim it went.
     func testMovingOnWithoutAnsweringSaysSo() async {
         let provider = SpyWorkspaceProvider()
         let secretary = makeSecretary(provider)

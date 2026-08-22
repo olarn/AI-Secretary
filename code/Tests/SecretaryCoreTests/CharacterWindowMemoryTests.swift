@@ -17,15 +17,11 @@ final class CharacterWindowMemoryTests: XCTestCase {
         )
     }
 
-    /// The owner's rule: off the screen means the default position, not a
-    /// clamp to the nearest edge.
     func testASpotOnADisplayThatIsGoneFallsBackToTheDefault() {
         XCTAssertNil(savedCharacterOrigin(saved: "2600,120", size: size, screenFrame: screen))
         XCTAssertNil(savedCharacterOrigin(saved: "300,-400", size: size, screenFrame: screen))
     }
 
-    /// Mostly off is as unusable as fully off — a 5pt sliver cannot be
-    /// grabbed. The threshold is what the default parameter says.
     func testASliverDoesNotCountAsOnScreen() {
         XCTAssertNil(savedCharacterOrigin(saved: "1590,120", size: size, screenFrame: screen))
         XCTAssertEqual(
@@ -34,8 +30,6 @@ final class CharacterWindowMemoryTests: XCTestCase {
         )
     }
 
-    /// Standing on the Dock is normal — measured against the whole screen, so
-    /// a character at the very bottom is still "on screen".
     func testStandingOnTheDockStillCounts() {
         XCTAssertEqual(
             savedCharacterOrigin(saved: "300,0", size: size, screenFrame: screen),

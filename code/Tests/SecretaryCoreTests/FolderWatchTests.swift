@@ -22,8 +22,6 @@ final class WatchSnapshotTests: XCTestCase {
         )
     }
 
-    /// Sorted, so the same change reads the same way twice and a report isn't
-    /// reshuffled by dictionary order between two looks at the same folder.
     func testTheOrderIsStable() {
         let before = snapshot([:])
         let after = snapshot(["c": "1", "a": "1", "b": "1"])
@@ -37,9 +35,6 @@ final class WatchReportTests: XCTestCase {
         XCTAssertEqual(text, "+ new.txt\n− old.txt\n~ x.txt")
     }
 
-    /// A `git checkout` under a watched folder is hundreds of changes at once.
-    /// The list is capped so the message stays readable — but the count is not,
-    /// because a summary that understates what happened is worse than a long one.
     func testALongListIsCappedButTheCountIsExact() {
         let changes = (1...20).map { WatchChange.modified("file\($0).txt") }
         let text = WatchReport.describe(changes)
@@ -83,9 +78,6 @@ final class WatchScanTests: XCTestCase {
         XCTAssertFalse(snapshot.wasTruncated)
     }
 
-    /// Build output and dependency trees churn constantly and mean nothing to
-    /// the person watching. Descending into them would also be the difference
-    /// between watching a project and re-reading a repository every 4 seconds.
     func testItNeverDescendsIntoBuildOutput() throws {
         try write("real", to: "src.swift")
         try write("noise", to: ".build/debug/thing.o")
@@ -102,9 +94,6 @@ final class WatchScanTests: XCTestCase {
         XCTAssertEqual(Set(snapshot.stamps.keys), ["top.txt"])
     }
 
-    /// Hitting the cap has to be visible. "Watching this folder" and "watching
-    /// the first N files of it" are different promises, and the second one
-    /// silently pretending to be the first is the failure worth guarding.
     func testHittingTheCapIsReported() throws {
         for index in 1...10 { try write("x", to: "file\(index).txt") }
 
@@ -113,15 +102,11 @@ final class WatchScanTests: XCTestCase {
         XCTAssertEqual(snapshot.count, 4)
     }
 
-    /// A single watched file is watched for its *contents*: saving it again
-    /// unchanged moves its modification date, and reporting that as a change
-    /// would make the feature cry wolf on every ⌘S.
     func testAWatchedFileIsStampedByItsContents() throws {
         try write("hello", to: "notes.txt")
         let file = root.appendingPathComponent("notes.txt")
 
         let before = WatchScan.snapshot(of: file)
-        // Rewrite the same text — new mtime, same contents.
         try write("hello", to: "notes.txt")
         XCTAssertTrue(before.changes(to: WatchScan.snapshot(of: file)).isEmpty)
 
@@ -159,33 +144,24 @@ final class FolderWatchTests: XCTestCase {
         XCTAssertEqual(watch("docs").displayName, "docs")
     }
 
-    /// Counting only what was actually said tells "nothing happened" apart from
-    /// "I wasn't looking" when the watch is stopped.
     func testOnlyReportedLooksAreCounted() {
         let quiet = watch("docs").advancing(to: WatchSnapshot(stamps: [:]), reported: false)
         XCTAssertEqual(quiet.reportCount, 0)
         XCTAssertEqual(quiet.advancing(to: WatchSnapshot(stamps: ["a": "1"]), reported: true).reportCount, 1)
     }
 
-    /// Identity is the folder on disk. Two projects each with a `docs` are two
-    /// folders and so two watches; the same folder reached twice is one, however
-    /// it was named — which is what stops a folder named by full path, carried
-    /// by a throwaway project with a fresh id, from being watched twice over.
     func testAWatchIsIdentifiedByTheFolderItLandsOn() {
         let other = Project(name: "Other", path: "/tmp/other")
         XCTAssertEqual(watch("docs").id, watch("docs").id)
         XCTAssertNotEqual(watch("docs").id, watch("src").id)
         XCTAssertNotEqual(watch("docs").id, watch("docs", in: other).id)
 
-        // Same folder, two throwaway projects — one watch, not two.
         let once = watchOnlyProject(at: URL(fileURLWithPath: "/tmp/aaa"))
         let again = watchOnlyProject(at: URL(fileURLWithPath: "/tmp/aaa"))
         XCTAssertNotEqual(once.id, again.id, "a throwaway project is a new identity each time")
         XCTAssertEqual(watch("", in: once).id, watch("", in: again).id)
     }
 
-    /// `/watch stop <path>` has to answer to what the person sees in the
-    /// messages, which for the project folder is the project's name.
     func testStoppingByNameMatchesWhatTheMessagesShow() {
         XCTAssertTrue(watch("docs").matches(path: "docs"))
         XCTAssertTrue(watch("").matches(path: "."), "`.` is how the project folder was started")
@@ -199,8 +175,6 @@ final class WatchAbsoluteTargetTests: XCTestCase {
         WatchRequest(relativePath: path).absoluteTarget.toOptional()?.path
     }
 
-    /// A path inside a project is not this: it has to go through the project so
-    /// the escape check applies to it.
     func testARelativePathIsNotAnOutrightPlace() {
         XCTAssertNil(target("docs"))
         XCTAssertNil(target("."))
@@ -216,9 +190,6 @@ final class WatchAbsoluteTargetTests: XCTestCase {
         XCTAssertEqual(target(" ~/Desktop "), "\(NSHomeDirectory())/Desktop")
     }
 
-    /// The card shows this string, so it has to be where the reading will
-    /// actually happen — on macOS `/tmp` is a link to `/private/tmp`, and a card
-    /// that says the former while reading the latter is the failure mode.
     func testSymlinksAreResolvedBeforeAnyoneIsAsked() {
         XCTAssertEqual(target("/tmp/../tmp"), URL(fileURLWithPath: "/tmp").resolvingSymlinksInPath().path)
     }
@@ -233,8 +204,6 @@ final class FolderProjectTests: XCTestCase {
         XCTAssertEqual(project.name, "watch-me", "the card and the badge call it by its own name")
     }
 
-    /// Read-only and nothing else. It exists to carry one yes about one folder,
-    /// not to become a project by the back door.
     func testItCanOnlyRead() {
         let project = watchOnlyProject(at: url)
         XCTAssertEqual(project.allowedTools, [FileReadOnlyAdapter.toolIdentifier])
@@ -243,29 +212,19 @@ final class FolderProjectTests: XCTestCase {
 }
 
 final class WatchRequestTests: XCTestCase {
-    /// "." is how people say "this folder", and it reads as a filename
-    /// everywhere else, so it's normalised once at the edge.
     func testDotMeansTheProjectItself() {
         XCTAssertEqual(WatchRequest(relativePath: ".").displayPath, "")
         XCTAssertEqual(WatchRequest(relativePath: "./").displayPath, "")
         XCTAssertEqual(WatchRequest(relativePath: "docs").displayPath, "docs")
     }
 
-    /// Weaker than reading a file *to the model*: nothing leaves the machine.
     func testWatchingIsReadOnly() {
         XCTAssertEqual(WatchRequest(relativePath: "docs").actionClass, .readOnly)
     }
 }
 
-
 extension FolderWatchTests {
-    // MARK: - Acting on a change, not only announcing it
 
-    /// Sprint 21.2: told to watch a folder and follow whatever instruction
-    /// lands there, the assistant reported the new file and did nothing with
-    /// it. It had never been told — the report went into the transcript and
-    /// never into the conversation — so the standing instruction has to be
-    /// quoted back with the change.
     func testTheFollowUpQuotesTheInstructionBackWithTheChange() {
         let prompt = watchFollowUpPrompt(
             watchName: "inbox",
@@ -281,8 +240,6 @@ extension FolderWatchTests {
         )
     }
 
-    /// A typed `/watch` says only "watch this". There is nothing to carry out,
-    /// and a turn spent on it is a turn nobody asked for.
     func testASlashCommandWatchAsksForNothing() {
         XCTAssertNil(
             watchFollowUpPrompt(
@@ -305,8 +262,6 @@ extension FolderWatchTests {
         )
     }
 
-    /// It must not read as a fresh request: the assistant restarting the
-    /// original job on every file that lands is the other way this goes wrong.
     func testTheFollowUpSaysItIsNotANewRequest() {
         let prompt = watchFollowUpPrompt(
             watchName: "inbox",
@@ -316,8 +271,6 @@ extension FolderWatchTests {
         XCTAssertTrue(prompt?.contains("not a new") ?? false, "Got: \(String(describing: prompt))")
     }
 
-    /// The instruction has to survive every tick, or the second change is
-    /// reported to a model that was told nothing.
     func testAdvancingKeepsTheInstruction() {
         let watch = FolderWatch(
             relativePath: "inbox",

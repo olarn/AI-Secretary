@@ -1,7 +1,6 @@
 import AppKit
 import Foundation
 
-// The two calls `partView` makes per message on every parent body evaluation.
 func attributed(_ s: String) -> AttributedString {
     (try? AttributedString(markdown: s)) ?? AttributedString(s)
 }

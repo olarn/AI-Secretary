@@ -1,11 +1,6 @@
 import XCTest
 @testable import SecretaryCore
 
-/// Reading a loop the assistant asked for.
-///
-/// Same bargain as `MessageChoices`: only a marked block counts. Assistants say
-/// "I'll keep an eye on that" constantly, and a timer started because a sentence
-/// sounded willing is exactly the hidden autonomy this app avoids.
 final class LoopBlockTests: XCTestCase {
     func testAMarkedBlockAsksForALoop() {
         let parsed = LoopBlock.parse("""
@@ -27,7 +22,6 @@ final class LoopBlockTests: XCTestCase {
         )
     }
 
-    /// The reason this is marker-based. None of these is a request for a timer.
     func testWillingProseDoesNotStartATimer() {
         for message in [
             "จะคอยดูให้นะ ถ้ามีอะไรเปลี่ยนจะบอก",
@@ -51,9 +45,6 @@ final class LoopBlockTests: XCTestCase {
         XCTAssertEqual(LoopBlock.parse("เสร็จแล้ว\n```loop\nหยุด\n```").request, .stop)
     }
 
-    /// A rate outside the limits starts nothing, and the message is left whole
-    /// rather than half-swallowed — better a reply that mentions a timer than a
-    /// timer running at a rate nobody chose.
     func testAnOutOfBoundsIntervalStartsNothing() {
         for interval in ["5s", "9h", "soon"] {
             let message = "ok\n```loop\nevery: \(interval)\nreport\n```"
@@ -70,8 +61,6 @@ final class LoopBlockTests: XCTestCase {
         XCTAssertEqual(parsed.body, message)
     }
 
-    /// A block with no note still starts: the schedule fills in the agenda
-    /// question rather than checking back to say nothing.
     func testABlockWithNoNoteFallsBackToTheDefault() {
         guard case .start(_, let note)? = LoopBlock.parse("ok\n```loop\n10m\n```").request else {
             return XCTFail("Expected a start request")
@@ -83,8 +72,6 @@ final class LoopBlockTests: XCTestCase {
         )
     }
 
-    /// An ordinary code block must not be mistaken for the marker, and a
-    /// `choices` block must not be eaten by it.
     func testOtherFencedBlocksAreLeftAlone() {
         for message in [
             "Here:\n\n```swift\nlet x = 1\n```",

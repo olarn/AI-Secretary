@@ -1,10 +1,6 @@
 import XCTest
 @testable import SecretaryCore
 
-/// How the four panel buttons are arranged along the bottom of the chat.
-///
-/// Not one cluster: Projects sits alone against the left edge and the other
-/// three sit together against the right, with the window's width between them.
 final class FooterOrderTests: XCTestCase {
     func testProjectsSitsAloneAndTheOthersAreTogether() {
         XCTAssertEqual(
@@ -13,11 +9,6 @@ final class FooterOrderTests: XCTestCase {
         )
     }
 
-    /// The row used to reverse when the bubble mirrored, so Settings changed
-    /// ends whenever the character wandered near the right of the screen. That
-    /// the placement can't reach this function any more is now the type's job —
-    /// there is no argument to pass. What is left to guard is the order itself,
-    /// which is what a well-meaning "restore the mirroring" change would move.
     func testTheEndsAreAlwaysProjectsAndSettings() {
         XCTAssertEqual(footerSlots().first, .button(.projects))
         XCTAssertEqual(footerSlots().last, .button(.settings))

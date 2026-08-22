@@ -1,6 +1,5 @@
 import CoreGraphics
 import Foundation
-// Vertical scroll at an explicit screen point. dir > 0 scrolls back up.
 let x = Double(CommandLine.arguments[1])!, y = Double(CommandLine.arguments[2])!
 let dir = Int32(CommandLine.arguments[3])!
 let ticks = CommandLine.arguments.count > 4 ? Int(CommandLine.arguments[4])! : 10

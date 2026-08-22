@@ -1,12 +1,4 @@
 #!/usr/bin/env swift
-//
-// Renders a source PNG into a set of square, transparent icon images and builds
-// an .icns file. The source needn't be square, and needn't be cropped: its
-// transparent margin is trimmed off, then what's left is aspect-fit and
-// centered on a transparent canvas, so nothing is stretched and nothing is
-// rendered smaller than the icon slot allows.
-//
-// Usage: swift scripts/make-icon.swift <source.png> <output.icns>
 
 import AppKit
 import Foundation
@@ -24,28 +16,6 @@ guard let source = NSImage(contentsOfFile: sourcePath) else {
     exit(1)
 }
 
-/// The part of `source` that isn't fully transparent, in the image's own
-/// coordinates.
-///
-/// Icon art arrives padded: the drawing in `docs/Noti-Icon.png` covers 62% x
-/// 57% of its 1024pt canvas, and drawing that margin too meant the artwork was
-/// rendered at 62% of the size the icon slot allows — which is why it couldn't
-/// be made out in Finder's list view (owner, 2026-08-19). Trimming here rather
-/// than cropping the file keeps the source as it was delivered.
-///
-/// Returns the whole image when it is fully opaque, or when the pixels can't
-/// be read — a slightly small icon beats no icon.
-///
-/// **Do not expect this to change what Finder shows on macOS 26.** It doesn't,
-/// and that was measured, not assumed: asking `NSWorkspace.icon(forFile:)` for
-/// the bundle before and after this trim returned artwork covering 80% x 80% of
-/// the tile both times, `lsregister -f` included so it wasn't a stale cache.
-/// macOS 26 fits the icon to its own tile regardless of the padding in the
-/// `.icns`, so it is already doing this. What the trim fixes is the `.icns`
-/// itself — 62% x 57% of its canvas became 91% x 84% — which is what any
-/// surface reading the file directly gets. Making the icon read *larger* on
-/// macOS 26 means an Icon Composer `.icon` asset instead, not a bigger drawing
-/// in here.
 func contentBounds(of image: NSImage) -> NSRect {
     let whole = NSRect(origin: .zero, size: image.size)
     guard let tiff = image.tiffRepresentation,
@@ -55,8 +25,6 @@ func contentBounds(of image: NSImage) -> NSRect {
     var minX = wide, minY = high, maxX = -1, maxY = -1
     for y in 0..<high {
         for x in 0..<wide {
-            // Anything this faint reads as nothing on screen, and a stray
-            // near-zero pixel in a corner would defeat the whole trim.
             guard let colour = rep.colorAt(x: x, y: y), colour.alphaComponent > 0.05 else { continue }
             if x < minX { minX = x }
             if x > maxX { maxX = x }
@@ -66,10 +34,6 @@ func contentBounds(of image: NSImage) -> NSRect {
     }
     guard maxX >= minX, maxY >= minY else { return whole }
 
-    // colorAt(x:y:) counts y down from the top; draw(in:from:) counts it up
-    // from the bottom. Drop this flip and the art sits off-centre vertically by
-    // however much the margins differ — which looks nearly right, so it is not
-    // caught by glancing at it.
     let perPixelX = image.size.width / CGFloat(wide)
     let perPixelY = image.size.height / CGFloat(high)
     return NSRect(
@@ -80,23 +44,10 @@ func contentBounds(of image: NSImage) -> NSRect {
     )
 }
 
-// Scanned once, not once per variant: it is a read of every pixel in the
-// source, and there are ten variants.
 let content = contentBounds(of: source)
 
-/// How much of the icon's square the trimmed artwork is scaled to fill.
-///
-/// Not 1.0, because macOS masks app icons to a rounded square: art that reaches
-/// the edge loses its corners. Measured against that mask at a 22.4%-of-side
-/// corner radius, this drawing loses nothing even at 1.0 — its corners are
-/// empty, being an atom rather than a square — so the 8% here is not paying for
-/// clipping. It is margin against the mask being slightly tighter than that
-/// measurement assumes, and it keeps the outer planets off the very edge of the
-/// tile, where they would sit closer to it than any neighbouring app's icon.
 let contentFill: CGFloat = 0.92
 
-/// Draws the opaque part of `source` aspect-fit and centered on a transparent
-/// square of `pixels`.
 func square(_ pixels: Int) -> Data? {
     guard let rep = NSBitmapImageRep(
         bitmapDataPlanes: nil,
@@ -125,7 +76,6 @@ func square(_ pixels: Int) -> Data? {
 let iconsetDir = NSTemporaryDirectory() + "AppIcon-\(UUID().uuidString).iconset"
 try? FileManager.default.createDirectory(atPath: iconsetDir, withIntermediateDirectories: true)
 
-// (filename, pixel size) pairs required by iconutil.
 let variants: [(String, Int)] = [
     ("icon_16x16.png", 16), ("icon_16x16@2x.png", 32),
     ("icon_32x32.png", 32), ("icon_32x32@2x.png", 64),
@@ -142,7 +92,6 @@ for (name, pixels) in variants {
     try data.write(to: URL(fileURLWithPath: iconsetDir + "/" + name))
 }
 
-// Hand off to iconutil to produce the .icns.
 let proc = Process()
 proc.executableURL = URL(fileURLWithPath: "/usr/bin/iconutil")
 proc.arguments = ["-c", "icns", iconsetDir, "-o", outputPath]

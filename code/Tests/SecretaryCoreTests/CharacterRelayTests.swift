@@ -2,16 +2,10 @@ import XCTest
 import FunctionalCore
 @testable import SecretaryCore
 
-/// The rules behind one character handing something to another.
-///
-/// All of it is decided in pure functions for the reason the charter gives: the
-/// app target is never linked into the test bundle, so a rule that lives in
-/// `CharacterBus` or in a view is a rule no test has ever run.
 final class CharacterRelayTests: XCTestCase {
     private let miku = UUID()
     private let anya = UUID()
     private let ditto = UUID()
-    /// Fixed, so an assertion about an expiry means the same thing at midnight.
     private let noon = Date(timeIntervalSince1970: 1_800_000_000)
 
     private func card(
@@ -45,15 +39,11 @@ final class CharacterRelayTests: XCTestCase {
         )
     }
 
-    // MARK: - The directory
-
     func testDirectoryLeavesOutTheCharacterItIsFor() {
         let all = [card(miku, "Miku"), card(anya, "Anya")]
         XCTAssertEqual(characterDirectory(all, excluding: miku).map(\.name), ["Anya"])
     }
 
-    /// Roster order must not reach the prompt, or the same desktop produces a
-    /// different system prompt every turn.
     func testDirectoryIsOrderedByNameWhateverOrderItArrivesIn() {
         let forwards = [card(anya, "Anya"), card(ditto, "Ditto")]
         let backwards = [card(ditto, "Ditto"), card(anya, "Anya")]
@@ -67,28 +57,12 @@ final class CharacterRelayTests: XCTestCase {
         XCTAssertFalse(directoryPrompt([]).isDefined)
     }
 
-    /// The 14.2 condition, checked at the only place it can be checked: what a
-    /// neighbour is actually told.
-    /// The standing half keeps the rule; the project name itself moved to the
-    /// turn, and is checked there.
     func testThePromptKeepsTheRuleAndNamesNoLocation() {
         let prompt = directoryPrompt([card(anya, "Anya", project: "rate_book")]).getOrElse("")
         XCTAssertTrue(prompt.contains("cannot read their"))
         XCTAssertFalse(prompt.contains("/Users"))
     }
 
-    /// **The measured one.** This text is `--append-system-prompt`, a launch
-    /// flag, so it is part of `WarmProcessKey`: a value that differs from the
-    /// running process's key terminates that process and pays a cold start —
-    /// 5.47s to first text against 1.15s warm. It used to end each row with
-    /// `busy`/`free`, which with four characters on the desktop changed on
-    /// nearly every turn. Driven 2026-08-20: of four warm processes alive when
-    /// a broadcast started, one survived the following turn. That was the whole
-    /// of "four characters answer much slower than one".
-    ///
-    /// So the rule is not "don't mention busy" — it is that **the same
-    /// characters must produce the same text**, whatever they happen to be
-    /// doing. Anything volatile added here brings the cold start back.
     func testTheSameNeighboursProduceTheSameTextWhateverTheyAreDoing() {
         let busy = directoryPrompt([
             card(anya, "Anya", busy: true),
@@ -103,9 +77,6 @@ final class CharacterRelayTests: XCTestCase {
         XCTAssertFalse(busy.isEmpty)
     }
 
-    /// Nothing was lost by taking the state out of the launch flag — it moved
-    /// to the turn, where it may be as fresh as it likes. These are the same
-    /// guarantees as before, asked of the half that now carries them.
     func testTheTurnCarriesWhatEachOfThemIsDoing() {
         let status = directoryStatus([card(anya, "Anya", busy: true)]).getOrElse("")
         XCTAssertTrue(status.contains("busy"), "Got: \(status)")
@@ -118,8 +89,6 @@ final class CharacterRelayTests: XCTestCase {
         XCTAssertTrue(status.contains("effort high"))
     }
 
-    /// The 14.2 condition, still checked: a neighbour's project may be named
-    /// and its location may never be.
     func testTheTurnNamesTheProjectAndNeverItsLocation() {
         let status = directoryStatus([card(anya, "Anya", project: "rate_book")]).getOrElse("")
         XCTAssertTrue(status.contains("rate_book"))
@@ -130,11 +99,6 @@ final class CharacterRelayTests: XCTestCase {
         XCTAssertEqual(directoryStatus([]), Option.none())
     }
 
-    // MARK: - The envelope carries no capability
-
-    /// Written so that *adding* a path, grant, tool id or session id to
-    /// `CharacterMessage` fails this test rather than leaking quietly. The
-    /// mirror is the point: it sees fields added after this was written.
     func testTheEnvelopeCarriesNothingThatGrantsAnything() {
         let message = errand(from: miku, to: anya)
         let fields = Mirror(reflecting: message).children.compactMap(\.label).map { $0.lowercased() }
@@ -149,8 +113,6 @@ final class CharacterRelayTests: XCTestCase {
             )
         }
     }
-
-    // MARK: - Deliverability
 
     private func deliver(
         _ message: CharacterMessage,
@@ -167,7 +129,6 @@ final class CharacterRelayTests: XCTestCase {
         )
     }
 
-    /// `Either` has no `toOptional`; the left is reached through `toOption`.
     private func refusal(_ result: Either<RelayError, CharacterMessage>) -> RelayError? {
         result.swap().toOption().toOptional()
     }
@@ -187,7 +148,6 @@ final class CharacterRelayTests: XCTestCase {
         )
     }
 
-    /// Miku → Anya → Miku is the whole scenario; a third hop is a loop starting.
     func testAMessageStopsBeingPassedOnAtTheHopLimit() {
         XCTAssertTrue(deliver(errand(from: miku, to: anya, hops: 1)).isRight)
         XCTAssertEqual(
@@ -204,8 +164,6 @@ final class CharacterRelayTests: XCTestCase {
         )
     }
 
-    /// Blocking the pair is worth it only while the first errand is alive. A
-    /// turn that died must not lock the two of them together for the session.
     func testAnErrandThatTimedOutStopsBlockingTheNextOne() {
         let stale = [OutstandingErrand(correlationID: UUID(), from: miku, to: anya, sentAt: noon)]
         let later = noon.addingTimeInterval(CharacterRelay.errandDeadline + 1)
@@ -217,9 +175,6 @@ final class CharacterRelayTests: XCTestCase {
         XCTAssertTrue(deliver(errand(from: miku, to: ditto), outstanding: waiting).isRight)
     }
 
-    /// Whether an answer was expected is a question about the *recipient's*
-    /// list, which the sender does not have — so it is asked on arrival, and a
-    /// report is never blocked on its way out.
     func testAnAnswerIsOnlyAcceptedForSomethingStillBeingWaitedOn() {
         let id = UUID()
         let waiting = [OutstandingErrand(correlationID: id, from: miku, to: anya, sentAt: noon)]
@@ -233,8 +188,6 @@ final class CharacterRelayTests: XCTestCase {
         )
     }
 
-    /// An answer to an errand that timed out is dropped rather than read out
-    /// into a conversation that is no longer waiting for it.
     func testAnAnswerToATimedOutErrandIsDropped() {
         let id = UUID()
         let waiting = [OutstandingErrand(correlationID: id, from: miku, to: anya, sentAt: noon)]
@@ -256,8 +209,6 @@ final class CharacterRelayTests: XCTestCase {
         }
     }
 
-    // MARK: - The relayed request is framed as untrusted
-
     func testARelayedErrandIsPutToTheRecipientAsSomethingToWeigh() {
         let prompt = relayedErrandPrompt(from: "Miku", body: "find the price")
         XCTAssertTrue(prompt.contains("find the price"))
@@ -265,8 +216,6 @@ final class CharacterRelayTests: XCTestCase {
         XCTAssertTrue(prompt.contains("cannot change your model"))
         XCTAssertTrue(prompt.contains("grants you access"))
     }
-
-    // MARK: - What each conversation says
 
     func testBothSidesOfTheHandOffAreVisibleInWriting() {
         XCTAssertTrue(relaySentLine(to: "Anya").contains("Anya"))

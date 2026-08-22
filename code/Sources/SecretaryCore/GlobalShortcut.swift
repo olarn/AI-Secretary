@@ -1,9 +1,11 @@
+private let kVK_Escape: UInt32 = 53
+
 public enum GlobalShortcut: String, CaseIterable, Sendable {
     case closeChat
 
     public var keyCode: UInt32 {
         switch self {
-        case .closeChat: 53   // kVK_Escape
+        case .closeChat: kVK_Escape
         }
     }
 

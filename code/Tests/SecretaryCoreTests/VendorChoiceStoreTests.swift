@@ -3,11 +3,8 @@ import FunctionalCore
 import LLMProvider
 @testable import SecretaryCore
 
-/// Remembering which maker a character works through.
 final class VendorChoiceStoreTests: XCTestCase {
     private func store(_ character: UUID = UUID()) -> (UserDefaultsVendorChoiceStore, UserDefaults) {
-        // A suite of its own, so a test can never write into the person's real
-        // preferences — the same reason the in-memory store is the default.
         let name = "VendorChoiceStoreTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: name)!
         return (UserDefaultsVendorChoiceStore(character: character, defaults: defaults), defaults)
@@ -28,8 +25,6 @@ final class VendorChoiceStoreTests: XCTestCase {
     }
 
     func testTwoCharactersDoNotShareAMaker() {
-        // The whole reason this is keyed by profile: one on the subscription,
-        // one on a local model, on the same desktop.
         let name = "VendorChoiceStoreTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: name)!
         let miku = UserDefaultsVendorChoiceStore(character: UUID(), defaults: defaults)
@@ -42,8 +37,6 @@ final class VendorChoiceStoreTests: XCTestCase {
     }
 
     func testClearingThePathRemovesItRatherThanStoringABlank() {
-        // "Look in the usual places" is a choice. An empty string stored here
-        // would later read as a path that happens to be blank.
         let (subject, defaults) = store()
         subject.save(VendorChoice(vendorID: "opencode", cliPath: .some("/tmp/opencode")))
         subject.save(VendorChoice(vendorID: "opencode", cliPath: .none()))
@@ -53,15 +46,12 @@ final class VendorChoiceStoreTests: XCTestCase {
     }
 
     func testAWhitespacePathIsTheSameAsNoPath() {
-        // A field the user cleared, not a path made of spaces.
         let (subject, _) = store()
         subject.save(VendorChoice(vendorID: "opencode", cliPath: .some("   ")))
         XCTAssertEqual(subject.load().cliPath, Option.none())
     }
 
     func testAMakerThisBuildHasNeverHeardOfReadsAsTheDefault() {
-        // A settings file written by a later build must not leave a character
-        // unable to work at all.
         let (subject, _) = store()
         subject.save(VendorChoice(vendorID: "gemini-cli"))
         XCTAssertEqual(subject.load().vendorID, AIVendor.claudeCode.id)

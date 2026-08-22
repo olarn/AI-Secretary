@@ -5,13 +5,6 @@ import LLMProvider
 import ProjectRegistry
 @testable import SecretaryCore
 
-/// Answering "wait its turn" after the turn has already ended.
-///
-/// The card waits as long as the person does, so the turn finishing underneath
-/// it is ordinary rather than exotic. The queue is pumped when a turn ends —
-/// and that moment had already passed, so the message sat there for ever under
-/// a badge reading 1, after she had said out loud that she would come to it.
-/// Found by driving 0.18.282.
 @MainActor
 final class QueuedAfterTurnEndsTests: XCTestCase {
     private let machine = AssistantStateMachine()
@@ -24,8 +17,6 @@ final class QueuedAfterTurnEndsTests: XCTestCase {
         )
     }
 
-    /// Drives the machine the way a real turn does, so `routeToTurn` sees a busy
-    /// character and raises the card rather than starting the message.
     private func makeBusy() {
         machine.send(.userBeganInput, reason: "test")
         machine.send(.beginInterpreting, reason: "test")
@@ -50,9 +41,6 @@ final class QueuedAfterTurnEndsTests: XCTestCase {
         }
     }
 
-    /// The bug. Answer the card after the work it was interrupting has already
-    /// finished, and the queued message has to start — not wait for a turn
-    /// boundary that has been and gone.
     func testAnsweringAfterTheTurnEndedStillStartsTheMessage() async {
         let secretary = makeSecretary()
         makeBusy()
@@ -69,8 +57,6 @@ final class QueuedAfterTurnEndsTests: XCTestCase {
         XCTAssertTrue(secretary.queuedMessages.isEmpty, "Nothing should still be waiting")
     }
 
-    /// The other half, unchanged: while she is genuinely still busy, it waits.
-    /// Dispatching here would start two turns at once.
     func testWhileSheIsStillBusyItReallyDoesWait() {
         let secretary = makeSecretary()
         makeBusy()

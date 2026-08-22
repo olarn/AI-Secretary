@@ -1,6 +1,5 @@
 import CoreGraphics
 import Foundation
-// Horizontal scroll at an explicit screen point.
 let x = Double(CommandLine.arguments[1])!, y = Double(CommandLine.arguments[2])!
 let dir = Int32(CommandLine.arguments[3])!
 let p = CGPoint(x: x, y: y)

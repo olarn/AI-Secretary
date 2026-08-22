@@ -1,24 +1,12 @@
 import SwiftUI
 import SecretaryCore
 
-/// Renders a markdown body the way the chat does: prose, real tables, and code
-/// blocks that scroll sideways instead of wrapping.
-///
-/// Extracted so an info window shows exactly what the chat showed. A second
-/// renderer would drift — the first thing to go would be the rule that a table
-/// scrolls inside its own box rather than widening the window.
 struct MarkdownBodyView: View {
-    /// The colours in force, set by whichever window this view is inside.
     @Environment(\.palette) private var theme
 
     let text: String
     let fontSize: Double
-    /// Which face the prose and the table cells are set in. Code blocks ignore
-    /// it — a fenced block is monospaced because its alignment carries meaning,
-    /// whatever the conversation around it is set in.
     let font: FontChoice
-    /// For the language label above a code block, which is a caption rather than
-    /// part of the content.
     let secondaryFontSize: Double
 
     var body: some View {
@@ -29,9 +17,6 @@ struct MarkdownBodyView: View {
             ) { _, segment in
                 switch segment {
                 case .text(let body):
-                    // AppKit-backed: SwiftUI's Text draws links but doesn't open
-                    // them from a non-activating panel, and can't show a pointer
-                    // or a hover underline over them.
                     MessageTextView(
                         text: MessageMarkdown.attributed(body),
                         fontSize: fontSize,
@@ -68,7 +53,6 @@ struct MarkdownBodyView: View {
                     }
                 }
             }
-            // Cells size to their content; the scroll view provides the room.
             .fixedSize(horizontal: true, vertical: false)
             .padding(8)
             .textSelection(.enabled)
@@ -91,8 +75,6 @@ struct MarkdownBodyView: View {
                     .padding(.top, 5)
             }
             ScrollView(.horizontal, showsIndicators: true) {
-                // Plain text, not markdown: inside a code block an asterisk is
-                // an asterisk, and a backtick is a backtick.
                 Text(block.code)
                     .font(.system(size: fontSize, design: .monospaced))
                     .textSelection(.enabled)

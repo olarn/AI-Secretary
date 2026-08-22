@@ -83,8 +83,6 @@ final class SkillDiscoveryTests: XCTestCase {
         XCTAssertEqual(found, [])
     }
 
-    // MARK: - Plugin skills
-
     private func writeSettings(enabledPlugins: [String: Bool], under claudeHome: URL) {
         try? FileManager.default.createDirectory(at: claudeHome, withIntermediateDirectories: true)
         let pairs = enabledPlugins.map { "\"\($0.key)\": \($0.value)" }.joined(separator: ", ")
@@ -131,8 +129,6 @@ final class SkillDiscoveryTests: XCTestCase {
         let home = tempRoot.appendingPathComponent("home")
         let claudeHome = home.appendingPathComponent(".claude")
         writeSettings(enabledPlugins: ["fable@fable-method": true], under: claudeHome)
-        // No plugins/cache entry at all — only the marketplace clone itself,
-        // the layout a single-plugin marketplace actually uses.
         writeSkill(
             named: "fable-loop",
             under: claudeHome.appendingPathComponent("plugins/marketplaces/fable-method/skills"),
@@ -160,9 +156,6 @@ final class SkillDiscoveryTests: XCTestCase {
             under: claudeHome.appendingPathComponent("plugins/marketplaces/fable-method/skills"),
             frontmatter: "name: fable-loop\ndescription: Orchestrated workflow."
         )
-        // A second, unrelated plugin hosted by the same marketplace, not
-        // itself enabled — must not show up just because the marketplace
-        // root was scanned as a fallback for "fable".
         writeSkill(
             named: "other-thing",
             under: claudeHome.appendingPathComponent("plugins/marketplaces/fable-method/plugins/unrelated-plugin/skills"),
@@ -194,14 +187,12 @@ final class SkillDiscoveryTests: XCTestCase {
         let home = tempRoot.appendingPathComponent("home")
         writeSkill(named: "grilling", under: home.appendingPathComponent(".claude/skills"), frontmatter: nil)
 
-        // No .claude/settings.json written at all.
         let found = SkillDiscovery.discover(projectPaths: [], homeDirectory: home)
 
         XCTAssertEqual(found.map(\.id), ["grilling"])
     }
 }
 
-/// What the checked skills turn into in the prompt.
 final class SkillsPromptTests: XCTestCase {
     private func skill(_ name: String, _ summary: String = "") -> SkillInfo {
         SkillInfo(id: name, name: name, summary: summary, scope: .user)
@@ -211,17 +202,12 @@ final class SkillsPromptTests: XCTestCase {
         XCTAssertEqual(skillsPrompt(for: []), "")
     }
 
-    /// The description is the part the model can match a request against. The
-    /// panel shows it; not passing it on left a bare name to guess from, which
-    /// is why a checked skill could never come up.
     func testTheDescriptionTravelsWithTheName() {
         let prompt = skillsPrompt(for: [skill("grilling", "Use when cooking over fire")])
         XCTAssertTrue(prompt.contains("grilling"), prompt)
         XCTAssertTrue(prompt.contains("Use when cooking over fire"), prompt)
     }
 
-    /// Checking asks for something, it does not forbid the rest — the opposite
-    /// operation, and the one that made the checkbox feel broken.
     func testItAsksRatherThanForbids() {
         let prompt = skillsPrompt(for: [skill("grilling")])
         XCTAssertTrue(prompt.contains("Prefer them"), prompt)
@@ -235,7 +221,6 @@ final class SkillsPromptTests: XCTestCase {
         XCTAssertFalse(prompt.contains("bare —"), "no dangling dash where a description isn't")
     }
 
-    /// Twenty checked skills must not become the largest thing in the request.
     func testALongDescriptionIsCutShort() {
         let long = String(repeating: "x", count: 400)
         let prompt = skillsPrompt(for: [skill("verbose", long)])
@@ -243,8 +228,6 @@ final class SkillsPromptTests: XCTestCase {
         XCTAssertFalse(prompt.contains(String(repeating: "x", count: maxSkillSummaryLength + 1)))
     }
 
-    /// A description written over several lines would otherwise break the list
-    /// into items that aren't skills.
     func testAMultiLineDescriptionStaysOnOneLine() {
         let prompt = skillsPrompt(for: [skill("wrapped", "first line\n  second line")])
         XCTAssertTrue(prompt.contains("first line second line"), prompt)

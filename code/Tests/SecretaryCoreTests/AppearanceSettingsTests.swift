@@ -3,8 +3,6 @@ import XCTest
 
 final class AppearanceSettingsTests: XCTestCase {
 
-    // MARK: - Text size
-
     func testStartsAtTheDefault() {
         let settings = AppearanceSettings()
         XCTAssertEqual(settings.fontSize, AppearanceSettings.defaultFontSize)
@@ -19,7 +17,6 @@ final class AppearanceSettingsTests: XCTestCase {
         XCTAssertEqual(settings.fontSize, 12)
     }
 
-    /// The specified cap.
     func testTextSizeStopsAt32() {
         var settings = AppearanceSettings(fontSize: 30)
         settings.increaseFontSize()
@@ -37,15 +34,11 @@ final class AppearanceSettingsTests: XCTestCase {
         XCTAssertFalse(settings.canDecreaseFontSize)
     }
 
-    /// A value stored by a build with different limits must not survive as-is.
     func testAnOutOfRangeStoredTextSizeIsPulledBack() {
         XCTAssertEqual(AppearanceSettings(fontSize: 200).fontSize, 32)
         XCTAssertEqual(AppearanceSettings(fontSize: 1).fontSize, AppearanceSettings.minFontSize)
     }
 
-    // MARK: - Window height
-
-    /// Asked for: the default is also the smallest it goes.
     func testHeightCannotGoBelowTheDefault() {
         var settings = AppearanceSettings(maxHeight: 1000)
         XCTAssertEqual(settings.chatHeight, AppearanceSettings.defaultHeight)
@@ -55,7 +48,6 @@ final class AppearanceSettingsTests: XCTestCase {
         XCTAssertEqual(settings.chatHeight, AppearanceSettings.defaultHeight)
     }
 
-    /// Asked for: no taller than the screen.
     func testHeightCannotGrowPastTheScreen() {
         var settings = AppearanceSettings(chatHeight: 520, maxHeight: 620)
         settings.increaseHeight()
@@ -78,8 +70,6 @@ final class AppearanceSettingsTests: XCTestCase {
         XCTAssertEqual(settings.chatHeight, AppearanceSettings.defaultHeight)
     }
 
-    /// Moving to a smaller display has to pull an over-tall window back in,
-    /// otherwise part of the conversation is off-screen with no way to reach it.
     func testMovingToASmallerScreenShrinksTheWindow() {
         var settings = AppearanceSettings(chatHeight: 900, maxHeight: 1000)
         XCTAssertEqual(settings.chatHeight, 900)
@@ -90,8 +80,6 @@ final class AppearanceSettingsTests: XCTestCase {
         XCTAssertEqual(settings.maxHeight, 700)
     }
 
-    /// A screen shorter than the minimum window is still bounded by the
-    /// minimum — better to overflow slightly than to collapse the panel.
     func testATinyScreenDoesNotCollapseTheWindow() {
         var settings = AppearanceSettings()
         settings.setMaxHeight(200)
@@ -104,10 +92,6 @@ final class AppearanceSettingsTests: XCTestCase {
         XCTAssertEqual(settings.chatHeight, 800)
     }
 
-    // MARK: - Derived sizes
-
-    /// Captions have to grow with the body text, or 32pt replies sit beside
-    /// unreadable labels.
     func testSecondaryTextGrowsWithTheBodyText() {
         let small = AppearanceSettings(fontSize: 12)
         let large = AppearanceSettings(fontSize: 32)
@@ -115,10 +99,6 @@ final class AppearanceSettingsTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(small.footnoteFontSize, 8, "Never illegible")
     }
 
-    // MARK: - App size
-
-    /// Asked for: three steps, S and L being ±30% — both measured from M, so
-    /// they can't compound into a runaway size.
     func testTheThreeAppSizesAreRelativeToMedium() {
         XCTAssertEqual(CharacterScale.medium.factor, 1.0)
         XCTAssertEqual(CharacterScale.small.factor, 0.7, accuracy: 0.0001)
@@ -136,7 +116,6 @@ final class AppearanceSettingsTests: XCTestCase {
         XCTAssertEqual(store.load().characterScale, .large)
     }
 
-    /// A scale written by a build with different steps must not break loading.
     func testAnUnknownStoredScaleFallsBackToMedium() {
         let defaults = UserDefaults(suiteName: "AppearanceScaleFallbackTests")!
         defaults.removePersistentDomain(forName: "AppearanceScaleFallbackTests")
@@ -155,10 +134,6 @@ final class AppearanceSettingsTests: XCTestCase {
         XCTAssertEqual(store.load().theme, .light)
     }
 
-    /// `contrast` was offered in 0.10.197 and removed in 0.10.198. Anyone who
-    /// had it selected has that word on disk, and the app must open on the
-    /// default rather than refuse to read its own settings — the same handling
-    /// a scale from a future build gets.
     func testAThemeThatNoLongerExistsFallsBackToSystem() {
         let defaults = UserDefaults(suiteName: "AppearanceThemeFallbackTests")!
         defaults.removePersistentDomain(forName: "AppearanceThemeFallbackTests")
@@ -167,10 +142,6 @@ final class AppearanceSettingsTests: XCTestCase {
         XCTAssertEqual(UserDefaultsAppearanceStore(defaults: defaults).load().theme, .system)
     }
 
-    // MARK: - Liquid Glass
-
-    /// Off by default: the solid look is the one whose readability never
-    /// depends on the wallpaper, so glass is something the user walks into.
     func testLiquidGlassIsOffByDefault() {
         XCTAssertFalse(AppearanceSettings().liquidGlass)
         XCTAssertFalse(StoredAppearance().liquidGlass)
@@ -187,8 +158,6 @@ final class AppearanceSettingsTests: XCTestCase {
         XCTAssertTrue(store.load().liquidGlass)
     }
 
-    /// Nobody upgrading has this key, and absent must read as off, not as
-    /// whatever `bool(forKey:)` would invent.
     func testAMissingStoredLiquidGlassFallsBackToOff() {
         let name = "AppearanceLiquidGlassFallbackTests"
         let defaults = UserDefaults(suiteName: name)!
@@ -197,8 +166,6 @@ final class AppearanceSettingsTests: XCTestCase {
 
         XCTAssertFalse(UserDefaultsAppearanceStore(defaults: defaults).load().liquidGlass)
     }
-
-    // MARK: - Persistence
 
     func testTheChoiceIsSavedAndReloaded() {
         let store = InMemoryAppearanceStore()
@@ -221,7 +188,6 @@ final class AppearanceSettingsTests: XCTestCase {
         XCTAssertEqual(reloaded.chatHeight, AppearanceSettings.defaultHeight + 60)
     }
 
-    /// The screen limit is deliberately not persisted — the display can change.
     func testAFreshStoreReturnsTheDefaults() {
         let reloaded = InMemoryAppearanceStore().load()
         XCTAssertEqual(reloaded.fontSize, AppearanceSettings.defaultFontSize)
@@ -229,8 +195,6 @@ final class AppearanceSettingsTests: XCTestCase {
         XCTAssertEqual(reloaded.chatHeight, AppearanceSettings.defaultHeight)
     }
 
-    /// Width was added after the other two, so anyone upgrading has no value
-    /// stored. Falling back to zero would collapse the bubble.
     func testAMissingStoredWidthFallsBackToTheDefault() {
         let name = "AppearanceWidthFallbackTests"
         let defaults = UserDefaults(suiteName: name)!
@@ -242,12 +206,6 @@ final class AppearanceSettingsTests: XCTestCase {
         XCTAssertEqual(reloaded.chatWidth, AppearanceSettings.defaultWidth)
     }
 
-    // MARK: - Which face the conversation is set in
-
-    /// The default that fixed the reported bug. The chat used to be drawn with
-    /// `monospacedSystemFont`, which has no Thai glyphs, so Thai fell through to
-    /// Ayuthaya — wide and heavy enough to be reported as the chat being bold,
-    /// while nothing in the app had ever asked for bold.
     func testTheConversationIsSetInTheSystemFaceByDefault() {
         XCTAssertEqual(AppearanceSettings().font, .system)
         XCTAssertEqual(StoredAppearance().font, .system)
@@ -264,10 +222,6 @@ final class AppearanceSettingsTests: XCTestCase {
         XCTAssertEqual(store.load().font, .serif)
     }
 
-    /// Nobody upgrading has this key, and the face they had was monospaced.
-    /// Falling back to what they were looking at would keep the bug they
-    /// reported, so the fallback is deliberately the new default rather than
-    /// the old behaviour.
     func testAMissingStoredFaceFallsBackToTheSystemFace() {
         let name = "AppearanceFontFallbackTests"
         let defaults = UserDefaults(suiteName: name)!
@@ -277,8 +231,6 @@ final class AppearanceSettingsTests: XCTestCase {
         XCTAssertEqual(UserDefaultsAppearanceStore(defaults: defaults).load().font, .system)
     }
 
-    /// A face written by a build with different choices must not throw away the
-    /// rest of the look on the way past.
     func testAnUnrecognisedFaceFallsBackWithoutLosingTheOtherSettings() {
         let name = "AppearanceFontUnknownTests"
         let defaults = UserDefaults(suiteName: name)!
@@ -291,8 +243,6 @@ final class AppearanceSettingsTests: XCTestCase {
         XCTAssertEqual(reloaded.fontSize, 18)
     }
 
-    /// Every choice offered has to be one the settings row can round-trip, or a
-    /// button in it silently does nothing.
     func testEveryOfferedFaceHasALabelAnExplanationAndSurvives() {
         let name = "AppearanceFontAllCasesTests"
         let defaults = UserDefaults(suiteName: name)!
@@ -306,8 +256,6 @@ final class AppearanceSettingsTests: XCTestCase {
         }
     }
 
-    /// The face is a per-character setting like every other, and reads the
-    /// shared value until she has one of her own.
     func testACharacterReadsTheSharedFaceUntilSheIsGivenOne() {
         let name = "AppearanceFontPerCharacterTests"
         let defaults = UserDefaults(suiteName: name)!
@@ -326,8 +274,6 @@ final class AppearanceSettingsTests: XCTestCase {
         )
     }
 
-    // MARK: - Window width
-
     func testWidthStartsAtTheDefaultAndIsItsFloor() {
         var settings = AppearanceSettings(maxWidth: 2000)
         XCTAssertEqual(settings.chatWidth, AppearanceSettings.defaultWidth)
@@ -336,7 +282,6 @@ final class AppearanceSettingsTests: XCTestCase {
         XCTAssertEqual(settings.chatWidth, AppearanceSettings.defaultWidth)
     }
 
-    /// Free resize, as asked — but still inside the screen.
     func testDraggingSetsBothAxesAndClampsToTheScreen() {
         var settings = AppearanceSettings(maxWidth: 1000, maxHeight: 800)
         settings.setChatSize(width: 640, height: 700)
@@ -348,8 +293,6 @@ final class AppearanceSettingsTests: XCTestCase {
         XCTAssertEqual(settings.chatHeight, 800)
     }
 
-    /// Asked for: one press is one step — ×1 → ×2 → ×3 — and then the button is
-    /// dead rather than jumping straight to the widest.
     func testWideningStepsThroughOneTwoAndThreeTimes() {
         let base = AppearanceSettings.defaultWidth
         var settings = AppearanceSettings(maxWidth: 2000)
@@ -366,8 +309,6 @@ final class AppearanceSettingsTests: XCTestCase {
         XCTAssertEqual(settings.chatWidth, base * 3, "A dead button changes nothing")
     }
 
-    /// Asked for: coming back is *not* stepped — one press is the default width,
-    /// from however wide the bubble happens to be.
     func testRestoringGoesStraightToTheDefaultWidth() {
         let base = AppearanceSettings.defaultWidth
         var settings = AppearanceSettings(chatWidth: base * 3, maxWidth: 2000)
@@ -378,7 +319,6 @@ final class AppearanceSettingsTests: XCTestCase {
         XCTAssertFalse(settings.canRestoreWidth, "Nothing narrower than the default")
     }
 
-    /// Including from a width that isn't one of the stops at all.
     func testRestoringFromAHandDraggedWidthAlsoGoesToTheDefault() {
         var settings = AppearanceSettings(maxWidth: 2000)
         settings.setChatSize(width: 940, height: settings.chatHeight)
@@ -394,8 +334,6 @@ final class AppearanceSettingsTests: XCTestCase {
         XCTAssertTrue(settings.canRestoreWidth)
     }
 
-    /// Three times the default doesn't fit on every display, and a stop the
-    /// screen has squeezed into another one isn't a separate press.
     func testStopsAreCappedToTheScreenAndNotRepeated() {
         var settings = AppearanceSettings(maxWidth: 800)
         XCTAssertEqual(settings.widthStops, [360, 720, 800])
@@ -407,8 +345,6 @@ final class AppearanceSettingsTests: XCTestCase {
         XCTAssertFalse(settings.canWiden)
     }
 
-    /// A screen too narrow for even two steps leaves one stop, so both buttons
-    /// are dead rather than pressable with nothing to show for it.
     func testATinyScreenLeavesASingleStop() {
         let settings = AppearanceSettings(maxWidth: 300)
         XCTAssertEqual(settings.widthStops, [AppearanceSettings.defaultWidth])
@@ -416,8 +352,6 @@ final class AppearanceSettingsTests: XCTestCase {
         XCTAssertFalse(settings.canRestoreWidth)
     }
 
-    /// A hand-dragged width sits between stops. Widening from there goes to the
-    /// next stop up — it must not snap backwards to a narrower one.
     func testWideningFromAHandDraggedWidthGoesToTheNextStopUp() {
         var settings = AppearanceSettings(maxWidth: 2000)
         settings.setChatSize(width: 500, height: settings.chatHeight)
@@ -435,15 +369,9 @@ final class AppearanceSettingsTests: XCTestCase {
 }
 
 extension AppearanceSettingsTests {
-    /// Every size in the panels is derived from the one the person set, so
-    /// nothing stays pinned while the rest of the window grows. The hint under
-    /// a control stays smaller than the control's own label, at both ends.
     func testPanelSizesFollowTheTextSizeAndKeepTheirOrder() {
         for fontSize in [10.0, 14.0, 20.0, 32.0] {
             let settings = AppearanceSettings(fontSize: fontSize, chatWidth: 400, chatHeight: 700)
-            // At the smallest setting both clamp to the 8pt floor, which is
-            // deliberate — below that nothing is readable, so the hint stops
-            // shrinking rather than becoming a smaller unreadable thing.
             XCTAssertLessThanOrEqual(settings.hintFontSize, settings.footnoteFontSize, "at \(fontSize)pt")
             XCTAssertLessThanOrEqual(settings.footnoteFontSize, settings.fontSize, "at \(fontSize)pt")
         }
@@ -456,26 +384,18 @@ extension AppearanceSettingsTests {
 }
 
 extension AppearanceSettingsTests {
-    /// Spacing grows with the text, or large type reads as a wall — which is
-    /// exactly what shipping the font change without this produced.
     func testPanelSpacingGrowsWithTheText() {
         let small = AppearanceSettings(fontSize: 10, chatWidth: 400, chatHeight: 700)
         let large = AppearanceSettings(fontSize: 32, chatWidth: 400, chatHeight: 700)
         XCTAssertGreaterThan(large.panelSpacing, small.panelSpacing)
         XCTAssertGreaterThan(large.panelPadding, small.panelPadding)
-        // The gap between rows stays smaller than the panel's own inset, so
-        // rows group inside the panel rather than floating apart in it.
         for settings in [small, large] {
             XCTAssertLessThan(settings.panelSpacing, settings.panelPadding)
         }
     }
 }
 
-
 extension AppearanceSettingsTests {
-    /// The derived sizes moved into `TextMetrics` so a window with its own text
-    /// size can have them. The chat must still read exactly the same, or the
-    /// extraction changed behaviour rather than moving it.
     func testTheChatReadsTheSameSizesThroughTheExtractedMetrics() {
         for fontSize in stride(from: 10.0, through: 32.0, by: 2.0) {
             let settings = AppearanceSettings(fontSize: fontSize, chatWidth: 400, chatHeight: 700)
@@ -489,8 +409,6 @@ extension AppearanceSettingsTests {
         }
     }
 
-    /// The command window's whole complaint: growing its box's size has to grow
-    /// everything drawn beside the box, not just the words being typed.
     func testMetricsFromABiggerSizeAreBiggerThroughout() {
         let small = TextMetrics(fontSize: 12)
         let large = TextMetrics(fontSize: 24)

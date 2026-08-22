@@ -2,12 +2,6 @@ import XCTest
 import FunctionalCore
 @testable import SecretaryCore
 
-/// Reading "have Anya do this" out of what the person typed.
-///
-/// The bar is not "gets it right". It is **never acts on a guess**: the only
-/// reading that sends anything without asking is an unambiguous hand-off phrase
-/// with exactly one name on it. Everything else that might involve someone else
-/// turns into a question, and everything that doesn't stays an ordinary turn.
 final class DelegationIntentTests: XCTestCase {
     private let anya = CharacterCard(id: UUID(), name: "Anya", model: "Opus 5", effort: "Default")
     private let ditto = CharacterCard(id: UUID(), name: "Ditto", model: "Opus 5", effort: "Default")
@@ -16,8 +10,6 @@ final class DelegationIntentTests: XCTestCase {
     private func read(_ text: String) -> DelegationReading {
         delegationIntent(in: text, directory: roster)
     }
-
-    // MARK: - Confident
 
     func testAHandOffPhraseWithOneNameIsActedOn() {
         guard case .confident(let to, let errand) = read("ช่วยขอให้ Anya หาราคา honda ปี 2020 ให้หน่อย") else {
@@ -34,9 +26,6 @@ final class DelegationIntentTests: XCTestCase {
         XCTAssertEqual(to.map(\.name), ["Anya"])
     }
 
-    /// The whole sentence travels, uncut. Cutting "ช่วยขอให้อาเนีย" off the front
-    /// is surgery on a language without spaces, and the recipient reads the
-    /// request better intact than as a stump.
     func testTheErrandIsTheWholeMessage() {
         guard case .confident(_, let errand) = read("  ขอให้ Anya เช็คราคาให้หน่อย  ") else {
             return XCTFail("expected a confident reading")
@@ -51,12 +40,6 @@ final class DelegationIntentTests: XCTestCase {
         XCTAssertEqual(to.map(\.name), ["Anya"])
     }
 
-    // MARK: - Unsure — the case the whole enum exists for
-
-    /// The owner's own scenario writes **อาเนีย** for a character whose profile
-    /// name is **Anya**. Name matching finds nothing. Reading that as "nothing
-    /// to do with anyone else" would answer it as the character it was typed at,
-    /// which the person would read as the feature being broken — so it asks.
     func testAHandOffToANameWeDoNotKnowAsksWhoRatherThanAnsweringItself() {
         guard case .unsure(let candidates, let errand) = read("ช่วยขอให้อาเนีย หาราคา honda ปี 2020 ให้หน่อย") else {
             return XCTFail("expected an unsure reading, not a silent answer")
@@ -65,14 +48,6 @@ final class DelegationIntentTests: XCTestCase {
         XCTAssertTrue(errand.contains("honda"))
     }
 
-    // MARK: - Sprint 17 — several names are a question, not a broadcast
-
-    /// **Reversed on purpose (Sprint 17).** This used to send to both, on the
-    /// strength of `contains("และ")` somewhere in the sentence — which cannot
-    /// tell "Anya และ Ditto" from "Anya และผม", and pays for being wrong by
-    /// sending the person's work to somebody who was never asked. The person
-    /// who means both is one tap away; the model, which reads the sentence
-    /// rather than scanning it, names both in its own block when it is sure.
     func testTwoNamesJoinedByAndNowAsksWhoRatherThanSendingToBoth() {
         guard case .unsure(let candidates, _) = read("ขอให้ Anya และ Ditto ช่วยดูราคารถมือสอง") else {
             return XCTFail("expected a question")
@@ -87,12 +62,6 @@ final class DelegationIntentTests: XCTestCase {
         XCTAssertEqual(candidates.map(\.name), ["Anya", "Ditto"])
     }
 
-    /// The owner's exact words from 2026-08-14, and the sentence the keyword
-    /// list was widened twice to catch. **It is now the model's to read.**
-    /// Nothing in it is a hand-off phrase: `ขอราคา` and the bare `จาก` were
-    /// keywords added in that widening, and both are gone. Driven in the app on
-    /// 2026-08-17 before this was cut — a two-name request the keywords never
-    /// matched produced a ```to block naming both, and both answered.
     func testTheOwnersPriceRequestGoesToTheModel() {
         XCTAssertEqual(
             read("ขอราคา city มือ 2 เทียบกับ civic ของปี 2020 จาก Anya และ Ditto"),
@@ -100,21 +69,11 @@ final class DelegationIntentTests: XCTestCase {
         )
     }
 
-    // MARK: - Sprint 17 — talking *about* someone is not addressing her
-
-    /// **Reversed on purpose (Sprint 17).** "อาเนียบอกว่าอะไรนะ" is a question
-    /// about her, and it used to interrupt with "Should I pass this to Anya?".
-    /// `บอก` was in the weak-verb list, and a name before a verb and a name
-    /// after it are the same string to `contains` — so the only way to stop
-    /// asking about the first was to stop asking about both.
     func testAQuestionAboutSomeoneIsNoLongerInterrupted() {
         XCTAssertEqual(read("Anya บอกว่าอะไรนะ"), .none)
         XCTAssertEqual(read("บอก Anya ว่า Ditto ทำเสร็จแล้ว"), .none)
     }
 
-    /// The whole of `addressPhrases` went with it. Every word in that list was
-    /// a verb that reads the same whether the character is doing it or having
-    /// it done to her, so each one failed the test above by the same symmetry.
     func testTheWeakVerbsNoLongerStartAConversation() {
         for text in [
             "ขอข้อมูลราคารถมือสอง จาก Anya",
@@ -127,14 +86,11 @@ final class DelegationIntentTests: XCTestCase {
         }
     }
 
-    // MARK: - None
-
     func testAnOrdinaryMessageIsAnOrdinaryTurn() {
         XCTAssertEqual(read("สรุปไฟล์นี้ให้หน่อย"), .none)
         XCTAssertEqual(read("what time is it"), .none)
     }
 
-    /// Mentioning someone is not an instruction to involve her.
     func testMerelyNamingSomeoneDoesNotSendAnything() {
         XCTAssertEqual(read("Anya"), .none)
         XCTAssertEqual(read("Anya's window is in the way"), .none)
@@ -148,18 +104,11 @@ final class DelegationIntentTests: XCTestCase {
         XCTAssertEqual(read("   \n  "), .none)
     }
 
-    /// A one-character name would match nearly every Thai sentence, since Thai
-    /// runs without spaces and matching has to be by substring.
     func testAOneLetterNameIsNeverMatchedByAccident() {
         let tiny = CharacterCard(id: UUID(), name: "A", model: "Opus 5", effort: "Default")
         XCTAssertEqual(delegationIntent(in: "สรุปให้หน่อย", directory: [tiny]), .none)
     }
 
-    // MARK: - Names as they really are on this machine
-
-    /// A profile carries what it is for as well as who it is. The one on the
-    /// owner's machine is called **Miku (Second Brain)**, and nobody types that
-    /// — so the first word has to work, or she cannot be addressed at all.
     func testACharacterWithAQualifiedNameCanBeCalledByHerFirstWord() {
         let miku = CharacterCard(
             id: UUID(), name: "Miku (Second Brain)", model: "Opus 5", effort: "Default"
@@ -172,8 +121,6 @@ final class DelegationIntentTests: XCTestCase {
         XCTAssertEqual(to.map(\.name), ["Miku (Second Brain)"])
     }
 
-    /// A Thai profile name is matched as it is written — this is the owner's
-    /// real second character, and the scenario in the backlog is about her.
     func testAThaiProfileNameIsMatchedAsWritten() {
         let anya = CharacterCard(id: UUID(), name: "อาเนีย", model: "Opus 5", effort: "Default")
         guard case .confident(let to, _) = delegationIntent(
@@ -184,27 +131,16 @@ final class DelegationIntentTests: XCTestCase {
         XCTAssertEqual(to.map(\.name), ["อาเนีย"])
     }
 
-    /// A short first word is not trusted — "The Assistant" must not make every
-    /// sentence containing "the" a hand-off.
     func testAShortFirstWordIsNotUsedAsAName() {
         let vague = CharacterCard(id: UUID(), name: "The Assistant", model: "Opus 5", effort: "Default")
         XCTAssertEqual(namesFor(vague), ["the assistant"])
     }
 
-    // MARK: - The way out
-
-    /// A false positive on `ขอให้` — which appears in sentences that have
-    /// nothing to do with anyone else — must not leave the person with no
-    /// option but to send work somewhere they never meant to.
     func testThereIsAlwaysAWayToSayNo() {
         XCTAssertEqual(delegationChoices([anya]), ["Anya", answerItYourselfChoice])
         XCTAssertEqual(delegationChoices(roster).last, answerItYourselfChoice)
     }
 
-    /// With several names the question has to be answerable the way it was
-    /// meant. Sprint 17 stopped prose deciding "both" on its own; a question
-    /// whose only answers are "Anya" and "Ditto" would make the person choose
-    /// one when they wrote both — the same wrong guess, with an extra step.
     func testSeveralNamesCanBeAnsweredWithBoth() {
         XCTAssertEqual(
             delegationChoices(roster),
@@ -212,7 +148,6 @@ final class DelegationIntentTests: XCTestCase {
         )
     }
 
-    /// One name needs no such option, and offering it would be noise.
     func testOneNameIsNotOfferedBoth() {
         XCTAssertFalse(delegationChoices([anya]).contains(everyoneChoice))
     }
@@ -222,10 +157,6 @@ final class DelegationIntentTests: XCTestCase {
         XCTAssertEqual(delegationQuestion(roster), "Who should take this?")
     }
 
-    // MARK: - Determinism
-
-    /// Same text, same roster, same answer — twice, per the skill's rule. There
-    /// is no clock and no id minted in here, and this is how that is checked.
     func testTheSameMessageReadsTheSameWayTwice() {
         let once = read("ขอให้ Anya เช็คราคาให้หน่อย")
         let twice = read("ขอให้ Anya เช็คราคาให้หน่อย")

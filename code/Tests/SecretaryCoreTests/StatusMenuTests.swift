@@ -1,12 +1,6 @@
 import XCTest
 @testable import SecretaryCore
 
-/// The menu bar, asserted row by row against `menu.pdf`.
-///
-/// This is the reason the shape was pulled out of `StatusBarController`: the
-/// app target is never linked into the test bundle, so while the menu was built
-/// out of `NSMenuItem`s in place, not one of its hundred-odd lines of structure
-/// had ever been executed by a test.
 final class StatusMenuTests: XCTestCase {
     private let miku = UUID()
     private let anya = UUID()
@@ -21,7 +15,6 @@ final class StatusMenuTests: XCTestCase {
         CharacterMenuState(id: id, name: name, isVisible: visible, history: history, pinned: pinned)
     }
 
-    /// Walks a path of submenu titles and returns what is inside.
     private func submenu(_ entries: [StatusMenuEntry], _ path: String...) -> [StatusMenuEntry] {
         path.reduce(entries) { level, title in
             for case .item(let item) in level where item.title == title {
@@ -46,11 +39,6 @@ final class StatusMenuTests: XCTestCase {
         return nil
     }
 
-    // MARK: - The shape
-
-    /// The characters sit at the root now. They used to hang under a
-    /// "Characters" row that held nothing of its own and existed to be hovered
-    /// past.
     func testTheCharactersSitAtTheRootWithTheAppRows() {
         let menu = statusBarMenu(summary: "AI Secretary 0.13.209", characters: [state(miku, "Miku")])
 
@@ -71,8 +59,6 @@ final class StatusMenuTests: XCTestCase {
         ])
     }
 
-    /// A label, not something to click: it answers "which build am I running"
-    /// without opening anything.
     func testTheVersionHeaderIsNotClickable() {
         let menu = statusBarMenu(summary: "AI Secretary 0.13.209", characters: [])
         let header = item(menu, "AI Secretary 0.13.209")
@@ -90,8 +76,6 @@ final class StatusMenuTests: XCTestCase {
         )
     }
 
-    /// Asked for between New Character and Token Usage, separated on both
-    /// sides, and worded from what is on screen — never from remembered state.
     func testTheCommandRowSitsBetweenNewCharacterAndTokenUsage() {
         let hidden = statusBarMenu(summary: "x", characters: [state(miku, "Miku")])
         let showing = statusBarMenu(
@@ -112,15 +96,12 @@ final class StatusMenuTests: XCTestCase {
         }
     }
 
-    /// With nobody on the desktop the row that makes somebody is still there.
     func testNewCharacterSurvivesAnEmptyRoster() {
         let menu = statusBarMenu(summary: "x", characters: [])
 
         XCTAssertEqual(titles(menu).dropFirst(2).first, "New Character…")
     }
 
-    /// Clicking her name shows or hides her. It used to do nothing at all,
-    /// because the row was only ever a lid on a submenu.
     func testACharacterRowBothTogglesHerAndOpensHerSubmenu() {
         let menu = statusBarMenu(summary: "x", characters: [state(miku, "Miku")])
 
@@ -139,8 +120,6 @@ final class StatusMenuTests: XCTestCase {
             "Pinned Messages",
         ])
     }
-
-    // MARK: - What the rows say
 
     func testTheVisibilityRowSaysWhatClickingItWillDo() {
         let showing = statusBarMenu(summary: "x", characters: [state(miku, "Miku", visible: true)])
@@ -182,8 +161,6 @@ final class StatusMenuTests: XCTestCase {
         )
     }
 
-    /// Which one you are already in. Without it, reopening the conversation you
-    /// are looking at is an invisible no-op that reads as the menu being broken.
     func testTheConversationYouAreInIsTicked() {
         let menu = statusBarMenu(summary: "x", characters: [
             state(miku, "Miku", history: [
@@ -212,11 +189,6 @@ final class StatusMenuTests: XCTestCase {
         )
     }
 
-    // MARK: - Which character a click is about
-
-    /// The bug this design exists to make impossible: with two characters on
-    /// screen, every row has to carry whose it is, rather than the app guessing
-    /// from whichever one is focused when the click lands.
     func testEveryActionNamesTheCharacterItBelongsTo() {
         let menu = statusBarMenu(summary: "x", characters: [state(miku, "Miku"), state(anya, "Anya")])
 
@@ -230,15 +202,6 @@ final class StatusMenuTests: XCTestCase {
         )
     }
 
-    // MARK: - Shortcuts
-
-    /// ⌘H is advertised on the row it actually acts on.
-    ///
-    /// It used to be asserted on each character's own "Hide Character" row, which
-    /// was right until Sprint 13-2 made ⌘H take the whole desktop and was never
-    /// moved afterwards — a menu promising one thing while the key did another.
-    /// Deliberately reversed here, not weakened: the assertion is as strict, and
-    /// the row that must *not* carry it is checked too.
     func testCommandHIsAdvertisedOnTheRowThatTakesEverything() {
         let menu = statusBarMenu(summary: "x", characters: [state(miku, "Miku")])
 
@@ -252,7 +215,6 @@ final class StatusMenuTests: XCTestCase {
     }
 }
 
-/// Adding up what several characters have spent, for the one usage window.
 final class TotalUsageTests: XCTestCase {
     private func usage(
         turns: Int = 0,
@@ -283,17 +245,12 @@ final class TotalUsageTests: XCTestCase {
         XCTAssertEqual(total.costUSD, 0.75, accuracy: 0.0001)
     }
 
-    /// The one that would be wrong if it summed: two 200k windows are not a
-    /// 400k window, and "how full is the context" would then be measured
-    /// against a size no character actually has.
     func testTheContextWindowIsTheLargestNotTheSum() {
         let total = totalUsage([usage(window: 200_000), usage(window: 1_000_000)])
 
         XCTAssertEqual(total.contextWindow, 1_000_000)
     }
 
-    /// Likewise: the fullest session is the one worth knowing about. Summing
-    /// would report a session nobody is in.
     func testTheLastTurnContextIsTheFullestNotTheSum() {
         let total = totalUsage([usage(lastTurn: 30_000), usage(lastTurn: 12_000)])
 

@@ -5,7 +5,6 @@ import LLMProvider
 import ProjectRegistry
 @testable import SecretaryCore
 
-/// The rules about what may be handed over, without a filesystem.
 final class AttachmentRuleTests: XCTestCase {
 
     func testTheKindComesFromTheName() {
@@ -33,8 +32,6 @@ final class AttachmentRuleTests: XCTestCase {
         }
     }
 
-    /// The name gets the first word. A `.swift` file is source however its
-    /// bytes read, so nothing sniffed can rename it.
     func testTheNameWinsOverTheBytes() {
         XCTAssertEqual(
             admitting(name: "App.swift", bytes: 10, to: [], sniffed: .some(.text)),
@@ -42,8 +39,6 @@ final class AttachmentRuleTests: XCTestCase {
         )
     }
 
-    /// The point of sniffing: an extension nobody listed still gets in, as long
-    /// as it is something the model can actually read.
     func testAnUnknownExtensionGetsInIfItsBytesAreText() {
         XCTAssertEqual(attachmentKind(for: "notes.zzz"), Option.none())
         XCTAssertEqual(
@@ -52,9 +47,6 @@ final class AttachmentRuleTests: XCTestCase {
         )
     }
 
-    /// Refused rather than sent and misread. A `.xlsx` is a zip: handed over,
-    /// it would reach the model as bytes it can't open, and the answer would be
-    /// about the failure rather than about the data.
     func testSomethingThatIsNotTextAtAllIsRefused() {
         let binary = Data([0x50, 0x4B, 0x03, 0x04, 0x00, 0x00, 0xFF, 0xFE])
         XCTAssertEqual(textIfReadable(binary), Option.none(), "A NUL byte is the giveaway")
@@ -68,8 +60,6 @@ final class AttachmentRuleTests: XCTestCase {
         XCTAssertEqual(textIfReadable(Data()), Option.none())
     }
 
-    /// Thai, and anything else outside ASCII, is text — the check is UTF-8, not
-    /// "looks English".
     func testTextIsNotOnlyEnglishText() {
         XCTAssertEqual(textIfReadable(Data("สวัสดีค่ะ".utf8)), Option.some(.text))
     }
@@ -91,8 +81,6 @@ final class AttachmentRuleTests: XCTestCase {
         )
     }
 
-    /// Every refusal has to be sayable. A file that lands nowhere and says
-    /// nothing is one the person believes they sent.
     func testEveryRefusalHasWords() {
         let failures: [AttachmentError] = [
             .unsupported(name: "book.xlsx"),
@@ -105,8 +93,6 @@ final class AttachmentRuleTests: XCTestCase {
         }
     }
 
-    /// Paths, not contents: the assistant opens the copy itself. Saying nothing
-    /// when there is nothing keeps the ordinary message unchanged.
     func testTheNoteNamesThePathsAndOnlyWhenThereAreSome() {
         XCTAssertEqual(attachmentNote([]), "")
         let note = attachmentNote([
@@ -116,25 +102,16 @@ final class AttachmentRuleTests: XCTestCase {
         XCTAssertTrue(note.contains("rows.csv (CSV)"))
     }
 
-    // MARK: - The assistant asking for one
-
     func testTheAssistantCanAskForAFile() {
         let block = AttachBlock.parse("Send me the list.\n\n```attach\nthe spreadsheet with the rows\n```")
         XCTAssertEqual(block.asking, "the spreadsheet with the rows")
         XCTAssertEqual(block.body.trimmingCharacters(in: .whitespacesAndNewlines), "Send me the list.")
     }
 
-    /// A reply that merely mentions a file must not put a file dialog in front
-    /// of anyone — the same rule every other block here follows.
     func testMentioningAFileIsNotAskingForOne() {
         XCTAssertEqual(AttachBlock.parse("You could upload the CSV if you like.").asking, nil)
     }
 
-    // MARK: - Staging
-
-    /// The copy is the point: the model is pointed at the app's own folder, not
-    /// at the folder the file came from, so dropping something off the Desktop
-    /// doesn't open the Desktop.
     func testAFileIsCopiedIntoTheAppsOwnFolder() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("attach-\(UUID().uuidString)")
@@ -160,8 +137,6 @@ final class AttachmentRuleTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: staged.stagedURL.path))
     }
 
-    /// End to end through the disk: the store is what reads the prefix, so the
-    /// rule is only real if it is applied there.
     func testAFileWithAnUnknownExtensionIsStagedWhenItIsText() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("attach-\(UUID().uuidString)")
@@ -178,7 +153,6 @@ final class AttachmentRuleTests: XCTestCase {
         XCTAssertTrue(store.stage(binary, existing: []).isLeft, "A file of NULs is not something to send")
     }
 
-    /// Two files of the same name from different folders are two files.
     func testTwoFilesWithOneNameDoNotOverwriteEachOther() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("attach-\(UUID().uuidString)")
@@ -198,7 +172,6 @@ final class AttachmentRuleTests: XCTestCase {
     }
 }
 
-/// Handing a file over, through the Secretary.
 @MainActor
 final class AttachmentFlowTests: XCTestCase {
     private let machine = AssistantStateMachine()
@@ -236,9 +209,6 @@ final class AttachmentFlowTests: XCTestCase {
         XCTAssertTrue(secretary.attachments.isEmpty, "They went with the message")
     }
 
-    /// The person sees their own filename; the model gets the path. Showing
-    /// them an Application Support path would be noise, and sending the model a
-    /// bare filename would be an address it can't open.
     func testTheScreenShowsTheNameAndTheModelGetsThePath() async {
         let provider = SpyWorkspaceProvider()
         let secretary = makeSecretary(provider, store: InMemoryAttachmentStore())
@@ -255,7 +225,6 @@ final class AttachmentFlowTests: XCTestCase {
         XCTAssertTrue(sent.contains("/staged/rows.csv"), "Got: \(sent)")
     }
 
-    /// The staging folder is opened to the backend, and nothing else new is.
     func testTheBackendIsOpenedOntoTheStagingFolderOnly() async {
         let provider = SpyWorkspaceProvider()
         let store = FileAttachmentStore(
@@ -312,8 +281,6 @@ final class AttachmentFlowTests: XCTestCase {
         XCTAssertEqual(secretary.attachments.map(\.name), ["b.csv"])
     }
 
-    /// The copies were taken for this conversation. Keeping them past it leaves
-    /// someone's spreadsheet in Application Support indefinitely.
     func testANewConversationThrowsTheCopiesAway() {
         let store = InMemoryAttachmentStore()
         let secretary = makeSecretary(SpyWorkspaceProvider(), store: store)
@@ -325,7 +292,6 @@ final class AttachmentFlowTests: XCTestCase {
         XCTAssertEqual(store.cleared, 1)
     }
 
-    /// The button the assistant asks for, and the block never reaching the eye.
     func testAskingForAFilePutsAButtonUpAndNotRawText() async {
         let provider = SpyWorkspaceProvider()
         provider.replyForNextTurn = "I'll need the list.\n\n```attach\nthe spreadsheet with the rows\n```"
@@ -366,8 +332,6 @@ final class AttachmentFlowTests: XCTestCase {
         XCTAssertEqual(secretary.fileRequest, Option.none())
     }
 
-    // MARK: - What the drop area says
-
     func testTheDropAreaInvitesAFileWhenNothingIsAttached() {
         XCTAssertEqual(
             attachmentDropPrompt(attached: 0),
@@ -375,16 +339,11 @@ final class AttachmentFlowTests: XCTestCase {
         )
     }
 
-    /// The count is the useful part once there is a list: it says how much room
-    /// is left without the person counting chips.
     func testTheDropAreaSaysHowMuchRoomIsLeft() {
         XCTAssertEqual(attachmentDropPrompt(attached: 1), "Drop to add — room for 4 more")
         XCTAssertEqual(attachmentDropPrompt(attached: 4), "Drop to add — room for 1 more")
     }
 
-    /// The one that matters: the window takes a drop anywhere, so somebody can
-    /// be holding a sixth file over a full list. Saying no before they let go
-    /// is the only place it helps — afterwards it is a refusal.
     func testTheDropAreaRefusesBeforeTheDropWhenTheListIsFull() {
         let full = attachmentDropPrompt(attached: attachmentLimit)
         XCTAssertEqual(full, "Already holding 5 — send these before adding more")
@@ -392,9 +351,6 @@ final class AttachmentFlowTests: XCTestCase {
                        "over the limit reads the same as at it")
     }
 
-    /// It never promises room that `admitting` would refuse — the two agree on
-    /// the same limit at every count, which is what stops the area from
-    /// inviting a drop that bounces.
     func testTheDropAreaAndTheAdmissionRuleAgree() {
         for attached in 0...(attachmentLimit + 1) {
             let existing = [Attachment](repeating: sampleAttachment, count: attached)

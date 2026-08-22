@@ -27,7 +27,6 @@ click(CGPoint(x: b["X"]! + b["Width"]! / 2 - 20, y: b["Y"]! + b["Height"]! - 88)
 usleep(400_000)
 let front = NSWorkspace.shared.frontmostApplication?.processIdentifier ?? -1
 guard Int(front) == pid else { print("NOT FRONTMOST (\(front))"); exit(2) }
-// Paste only — deliberately no Return, so nothing is sent.
 for down in [true, false] {
     let e = CGEvent(keyboardEventSource: nil, virtualKey: 9, keyDown: down)
     e?.flags = .maskCommand

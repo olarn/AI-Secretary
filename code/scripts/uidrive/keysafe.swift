@@ -2,8 +2,6 @@ import AppKit
 import CoreGraphics
 import Foundation
 
-// Never post keys unless the intended app is frontmost — synthetic keys have
-// leaked into a terminal before.
 let pid = Int(CommandLine.arguments[1])!
 let code = CGKeyCode(UInt16(CommandLine.arguments[2])!)
 let times = Int(CommandLine.arguments[3])!

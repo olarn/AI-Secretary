@@ -2,14 +2,8 @@ import FunctionalCore
 import XCTest
 @testable import SecretaryCore
 
-/// Where a project's memory lives, what goes in it, and how it is asked for.
 final class ProjectMemoryTests: XCTestCase {
 
-    // MARK: - The directory name
-
-    /// Every one of these was read off disk on 2026-08-14, not derived. The
-    /// rule they agree on — every character outside `[A-Za-z0-9-]` becomes a
-    /// dash — is not guessable from any one of them alone.
     func testTheSlugMatchesWhatClaudeCodeActuallyWrote() {
         let observed: [(String, String)] = [
             ("/Users/Olarn/Desktop/AI-Secretary", "-Users-Olarn-Desktop-AI-Secretary"),
@@ -22,9 +16,6 @@ final class ProjectMemoryTests: XCTestCase {
         }
     }
 
-    /// A dot is not dropped, it becomes a dash — which is why a worktree path
-    /// containing `/.claude/` produces a *double* dash, and why "replace the
-    /// slashes" would have written to the wrong directory for every worktree.
     func testADotBecomesADashAndNotNothing() {
         XCTAssertEqual(
             claudeProjectSlug(forPath: "/Users/Olarn/Desktop/AI-Secretary/.claude/worktrees/phase-14-3"),
@@ -32,20 +23,11 @@ final class ProjectMemoryTests: XCTestCase {
         )
     }
 
-    /// Three Thai scalars, three dashes. `ก่` is a single grapheme cluster, so
-    /// a per-`Character` walk would have produced two and written elsewhere.
-    ///
-    /// Made on disk rather than written as a literal: the path has to exist for
-    /// it to be resolved, and a resolved path is what the directory is named
-    /// after.
     func testThaiCountsPerScalarNotPerGrapheme() throws {
         XCTAssertTrue(try slug(ofDirectoryNamed: "ก่ะ").hasSuffix("----"),
                       "one dash for the separator, three for the scalars")
     }
 
-    /// One emoji, *two* dashes — it is outside the BMP and takes two UTF-16
-    /// code units. This is the case that rules out `unicodeScalars`, and it was
-    /// measured against Claude Code rather than reasoned about.
     func testAnEmojiCountsAsTwo() throws {
         XCTAssertTrue(try slug(ofDirectoryNamed: "em🎨x").hasSuffix("-em--x"))
     }
@@ -59,8 +41,6 @@ final class ProjectMemoryTests: XCTestCase {
         return claudeProjectSlug(forPath: url.path)
     }
 
-    /// `/tmp` is a symlink to `/private/tmp`, and the directory on disk is named
-    /// after the resolved path. Standardising alone would not have done it.
     func testSymlinksAreResolvedBeforeNaming() {
         XCTAssertEqual(claudeProjectSlug(forPath: "/tmp"), "-private-tmp")
     }
@@ -73,8 +53,6 @@ final class ProjectMemoryTests: XCTestCase {
         )
     }
 
-    // MARK: - One note
-
     func testANoteIsFiledUnderItsTitle() {
         let note = MemoryNote(title: "Build runs from code/", body: "Not from the repo root.")
         XCTAssertEqual(note.fileName, "build-runs-from-code.md")
@@ -83,17 +61,12 @@ final class ProjectMemoryTests: XCTestCase {
         XCTAssertTrue(note.markdown.hasSuffix("Not from the repo root."))
     }
 
-    /// With nothing under the title, the title is the fact — a file holding
-    /// only frontmatter would be a pointer to nothing.
     func testATitleOnlyNoteKeepsTheTitleAsItsBody() {
         let note = MemoryNote(title: "The owner prefers Thai", body: "")
         XCTAssertTrue(note.markdown.hasSuffix("The owner prefers Thai"))
         XCTAssertTrue(note.indexLine.contains("The owner prefers Thai"))
     }
 
-    /// The stem is ASCII, so a Thai title has nothing to make a name from. A
-    /// fallback rather than a file called `.md`, which would be invisible and
-    /// would collide with itself.
     func testANonAsciiTitleStillGetsAUsableFileName() {
         let note = MemoryNote(title: "เจ้าของชอบภาษาไทย", body: "x")
         XCTAssertTrue(note.fileName.hasPrefix("note-"), "Got: \(note.fileName)")
@@ -101,18 +74,12 @@ final class ProjectMemoryTests: XCTestCase {
         XCTAssertTrue(note.indexLine.contains("เจ้าของชอบภาษาไทย"), "The title still carries the meaning")
     }
 
-    /// The hole the first drive found. A fixed fallback word filed every
-    /// all-Thai fact as the same file, so the second silently replaced the
-    /// first — and because the index line was replaced with it, nothing looked
-    /// broken. The owner writes in Thai, so this was not a corner.
     func testTwoDifferentNonAsciiTitlesDoNotOverwriteEachOther() {
         let first = MemoryNote(title: "เจ้าของชอบภาษาไทย", body: "a")
         let second = MemoryNote(title: "ห้ามคอมมิตรูป", body: "b")
         XCTAssertNotEqual(first.fileName, second.fileName)
     }
 
-    /// …while the same title recorded twice still lands on one file, which is
-    /// what makes `memoryIndex` able to replace rather than accumulate.
     func testTheSameNonAsciiTitleAlwaysGetsTheSameFile() {
         XCTAssertEqual(
             MemoryNote(title: "เจ้าของชอบภาษาไทย", body: "a").fileName,
@@ -126,8 +93,6 @@ final class ProjectMemoryTests: XCTestCase {
         XCTAssertLessThan(note.indexLine.count, 130)
     }
 
-    // MARK: - The index
-
     func testANewNoteIsAppendedToWhatIsThere() {
         let index = memoryIndex(
             existing: "- [Old](old.md) — something\n",
@@ -136,9 +101,6 @@ final class ProjectMemoryTests: XCTestCase {
         XCTAssertEqual(index, "- [Old](old.md) — something\n- [New](new.md) — n\n")
     }
 
-    /// The note file is overwritten by name, so without this the index would
-    /// grow a second line pointing at the same file — two pointers, one target,
-    /// and one of them describing a fact that no longer exists.
     func testRecordingTheSameThingTwiceReplacesItsLineRatherThanAddingOne() {
         let first = memoryIndex(existing: "", adding: MemoryNote(title: "Build", body: "old fact"))
         let second = memoryIndex(existing: first, adding: MemoryNote(title: "Build", body: "new fact"))
@@ -151,8 +113,6 @@ final class ProjectMemoryTests: XCTestCase {
             "- [A](a.md) — b\n"
         )
     }
-
-    // MARK: - The block
 
     func testTheFirstLineIsTheTitleAndTheRestIsTheFact() {
         let parsed = RememberBlock.parse("""
@@ -172,9 +132,6 @@ final class ProjectMemoryTests: XCTestCase {
         )
     }
 
-    /// The overwhelmingly common case, and the one that decides whether this
-    /// feature is safe: a reply that talks about remembering must not file
-    /// anything.
     func testProseAboutRememberingIsNotABlock() {
         let said = "I'll remember that the build runs from code/, no problem."
         let parsed = RememberBlock.parse(said)
@@ -187,19 +144,12 @@ final class ProjectMemoryTests: XCTestCase {
         XCTAssertNil(RememberBlock.parse(said).note)
     }
 
-    // MARK: - What is said
-
-    /// The person has to be able to tell, from the line alone, that this
-    /// reaches beyond the app.
     func testTheSavedLineSaysTheTerminalWillReadItToo() {
         let line = memorySavedLine(MemoryNote(title: "T", body: "b"), project: "AI-Secretary")
         XCTAssertTrue(line.contains("AI-Secretary"))
         XCTAssertTrue(line.contains("claude"), "Got: \(line)")
     }
 
-    /// The question it lands in already ends with "in <project>". Naming the
-    /// project here too produced "…for my-mcp-server, in your Claude Code
-    /// memory in my-mcp-server?" on the first drive.
     func testTheCardSummaryDoesNotNameTheProjectItselfSaysWhere() {
         let summary = memoryApprovalSummary(MemoryNote(title: "T", body: "b"))
         XCTAssertTrue(summary.contains("Claude Code memory"))
@@ -223,8 +173,6 @@ final class ProjectMemoryTests: XCTestCase {
         XCTAssertTrue(prompt.contains("The app writes the file"), "Got: \(prompt)")
     }
 
-    // MARK: - The disk
-
     func testSavingWritesTheNoteAndItsPointerUnderTheGivenHome() throws {
         let home = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
             .appendingPathComponent("memtest-\(UUID().uuidString)", isDirectory: true)
@@ -242,9 +190,6 @@ final class ProjectMemoryTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: index, encoding: .utf8), "- [Build](build.md) — runs from code/\n")
     }
 
-    /// Saved twice, one file and one line — the property the index depends on,
-    /// asserted against the real filesystem rather than only against the pure
-    /// function.
     func testSavingTheSameTitleTwiceLeavesOneLine() throws {
         let home = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
             .appendingPathComponent("memtest-\(UUID().uuidString)", isDirectory: true)

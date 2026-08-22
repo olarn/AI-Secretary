@@ -1,10 +1,7 @@
 import XCTest
 @testable import SecretaryCore
 
-/// A numbered request split into what goes out now and what happens when the
-/// answers are in.
 final class ErrandPlanTests: XCTestCase {
-    /// The owner's own example, verbatim.
     func testANumberedRequestSendsStepOneAndKeepsTheRest() {
         let parsed = stepwise("""
             1. ขอข้อมูล เปรียบเทียบราคารถมือ 2 ระหว่าง city กับ vios ปี 2020 จาก Pikachu และ Ditto
@@ -25,8 +22,6 @@ final class ErrandPlanTests: XCTestCase {
         XCTAssertNotNil(stepwise("1: ask them\n2: save it"))
     }
 
-    /// Inferring a plan from prose would turn every message containing a year
-    /// into a hand-off with a follow-up nobody asked for.
     func testAYearIsNotAStepNumber() {
         XCTAssertNil(stepwise("ขอข้อมูลรถ city 2015 เทียบกับ vios 2015 จาก Pikachu"))
     }
@@ -39,13 +34,9 @@ final class ErrandPlanTests: XCTestCase {
         XCTAssertNil(stepwise("ขอราคารถหน่อย"))
     }
 
-    /// The numbering has to start the message. A "1." buried in the middle is
-    /// part of what someone is saying, not the shape of the request.
     func testNumberingMustStartTheMessage() {
         XCTAssertNil(stepwise("here's what I want:\n1. ask them\n2. save it"))
     }
-
-    // MARK: - What the sender is asked afterwards
 
     func testTheFollowUpQuotesEveryAnswerAndRepeatsTheInstruction() {
         let prompt = followUpPrompt(
@@ -59,8 +50,6 @@ final class ErrandPlanTests: XCTestCase {
         XCTAssertTrue(prompt.contains("รวมข้อมูล แล้วบันทึกลง file"))
     }
 
-    /// Working from one answer when two were asked for, without saying so,
-    /// produces a comparison of one thing presented as a comparison of two.
     func testAMissingAnswerIsNamedAndMustBeAdmittedInTheReply() {
         let prompt = followUpPrompt(
             answers: [RelayAnswer(name: "Pikachu", body: "Vios 190,000")],
@@ -78,8 +67,6 @@ final class ErrandPlanTests: XCTestCase {
         )
         XCTAssertFalse(prompt.contains("did not answer"))
     }
-
-    // MARK: - The lines
 
     func testTheSentLineNamesEveryoneItWentTo() {
         XCTAssertEqual(

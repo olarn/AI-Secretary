@@ -2,26 +2,11 @@ import AppKit
 import Carbon.HIToolbox
 import SecretaryCore
 
-/// Claims a key from the whole system, so it reaches this app even when another
-/// one is frontmost.
-///
-/// Carbon's `RegisterEventHotKey` is the only way to do this without the
-/// Accessibility permission a `CGEventTap` demands, and it is the only one that
-/// *consumes* the keystroke: `NSEvent.addGlobalMonitorForEvents` can watch but
-/// not swallow, so the frontmost app would act on the key too.
-///
-/// Why any of this is needed: a local monitor and a menu key equivalent both
-/// only ever see events the system already decided to deliver here. With the
-/// chat bubble floating above another app, Esc went to that app and the bubble
-/// stayed — the handler was correct and the key never arrived.
 @MainActor
 final class GlobalHotKeys {
-    /// Actions by shortcut, set once by the delegate.
     private let actions: [GlobalShortcut: () -> Void]
     private var registered: [GlobalShortcut: EventHotKeyRef] = [:]
 
-    /// Carbon calls back into a C function that cannot capture context, so the
-    /// live instance is reached through this.
     private static weak var current: GlobalHotKeys?
     private static var eventHandler: EventHandlerRef?
 
@@ -31,8 +16,6 @@ final class GlobalHotKeys {
         Self.installDispatcher()
     }
 
-    /// Brings the claimed set in line with `claimedShortcuts`. Safe to call on
-    /// every visibility change: already-claimed keys are left alone.
     func apply(hasDismissableWindow: Bool) {
         let wanted = claimedShortcuts(hasDismissableWindow: hasDismissableWindow)
         for shortcut in registered.keys where !wanted.contains(shortcut) {
@@ -47,15 +30,6 @@ final class GlobalHotKeys {
         for shortcut in registered.keys { release(shortcut) }
     }
 
-    /// Runs `body` with every claimed key handed back, then claims the same set
-    /// again.
-    ///
-    /// For modal panels. A Carbon hot key fires no matter what is on screen, so
-    /// with the chat open behind an open panel, Esc closed the chat and left the
-    /// dialog sitting there — the one key everybody presses to cancel a dialog,
-    /// swallowed by a window in the background. Suspending rather than ignoring
-    /// the key matters: an ignored hot key is still consumed, so Esc would do
-    /// nothing at all.
     static func whileSuspended<T>(_ body: () -> T) -> T {
         guard let keys = current else { return body() }
         let held = Set(keys.registered.keys)
@@ -75,8 +49,6 @@ final class GlobalHotKeys {
             0,
             &ref
         )
-        // A refusal is not fatal: another app may already hold the combination,
-        // in which case this one simply keeps working from its own windows.
         guard status == noErr, let ref else { return }
         registered[shortcut] = ref
     }
@@ -86,9 +58,6 @@ final class GlobalHotKeys {
         UnregisterEventHotKey(ref)
     }
 
-    // MARK: - Carbon plumbing
-
-    /// `'AISC'`, so our hot key ids can't be confused with another app's.
     private static let signature: OSType = 0x41495343
 
     fileprivate static func fire(id: UInt32) {
@@ -117,8 +86,6 @@ final class GlobalHotKeys {
                 )
                 guard status == noErr, id.signature == GlobalHotKeys.signature else { return noErr }
                 let hotKeyID = id.id
-                // Carbon delivers on the main thread, but the callback itself is
-                // outside the actor, so hop rather than assert.
                 DispatchQueue.main.async {
                     MainActor.assumeIsolated { GlobalHotKeys.fire(id: hotKeyID) }
                 }
@@ -133,7 +100,6 @@ final class GlobalHotKeys {
 }
 
 private extension GlobalShortcut {
-    /// Stable per-case id for Carbon, which identifies hot keys by number.
     var hotKeyID: UInt32 {
         switch self {
         case .closeChat: 2

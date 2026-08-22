@@ -1,7 +1,6 @@
 import XCTest
 @testable import SecretaryCore
 
-/// Reading the steps back out of a reply.
 final class PlanBlockTests: XCTestCase {
     func testAMessageWithNoBlockComesBackUntouched() {
         let text = "Here's what I'd do: pull, then test."
@@ -24,9 +23,6 @@ final class PlanBlockTests: XCTestCase {
         XCTAssertFalse(parsed.body.contains("```"), "The raw block must never reach the eye")
     }
 
-    /// Steps are the natural thing to number, and the model does it about half
-    /// the time however it is asked. A step called "1. Pull" would be sent to
-    /// the next turn with the numbering baked in twice.
     func testNumberingAndBulletsAreStripped() {
         let parsed = PlanBlock.parse("""
         ```plan
@@ -42,7 +38,6 @@ final class PlanBlockTests: XCTestCase {
         )
     }
 
-    /// A digit inside a step is not a bullet. "3 files" must survive.
     func testTextThatMerelyStartsWithProseIsLeftAlone() {
         let parsed = PlanBlock.parse("""
         ```plan
@@ -52,8 +47,6 @@ final class PlanBlockTests: XCTestCase {
         XCTAssertEqual(parsed.steps, ["Check that 3 files exist"])
     }
 
-    /// An empty block asks for nothing, so it must not produce a plan with no
-    /// steps that the card would then offer to run.
     func testAnEmptyBlockYieldsNoPlanAndKeepsTheMessageWhole() {
         let text = "```plan\n\n```"
         let parsed = PlanBlock.parse(text)
@@ -86,8 +79,6 @@ final class InstructionRunTests: XCTestCase {
         XCTAssertEqual(finished.currentStep, .none(), "A finished run has nothing to send")
     }
 
-    /// Nothing runs after a halt, however many times the caller advances — the
-    /// stop has to be the last word or a queued turn could restart it.
     func testAHaltedRunStaysHalted() {
         let halted = run(steps: ["one", "two"]).halting(reason: "the file changed").advancing()
         XCTAssertEqual(halted.status, .halted(reason: "the file changed"))
@@ -111,7 +102,6 @@ final class InstructionFingerprintTests: XCTestCase {
         XCTAssertEqual(InstructionFingerprint.of("do the thing"), InstructionFingerprint.of("do the thing"))
     }
 
-    /// One character is a different instruction.
     func testADifferentTextGivesADifferentFingerprint() {
         XCTAssertNotEqual(
             InstructionFingerprint.of("deploy to staging"),
@@ -121,8 +111,6 @@ final class InstructionFingerprintTests: XCTestCase {
 }
 
 final class InstructionMemoryTests: XCTestCase {
-    /// A file never run here has nothing to have changed from. Saying "the
-    /// steps changed" on a first run would train the person to click past it.
     func testAFirstRunHasNotChanged() {
         let memory = InstructionMemory()
         XCTAssertFalse(memory.hasChanged(path: "deploy.md", fingerprint: "abc"))
@@ -138,8 +126,6 @@ final class InstructionMemoryTests: XCTestCase {
         XCTAssertTrue(memory.hasChanged(path: "deploy.md", fingerprint: "def"))
     }
 
-    /// Files are remembered separately — editing one must not make another
-    /// look edited.
     func testFilesAreRememberedApart() {
         let memory = InstructionMemory()
             .recording(path: "deploy.md", fingerprint: "abc")

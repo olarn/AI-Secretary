@@ -5,13 +5,6 @@ import LLMProvider
 import ProjectRegistry
 @testable import SecretaryCore
 
-/// The history menu, end to end through the Secretary.
-///
-/// The thing these guard is the one that can't be seen in a screenshot: a
-/// reopened conversation puts the whole thread back on screen, so if the
-/// model's side of it didn't come back too, every answer after that is written
-/// by someone who can't see what the person is looking at. Content and context
-/// are two claims, and only one of them is visible.
 @MainActor
 final class ChatHistoryTests: XCTestCase {
     private let machine = AssistantStateMachine()
@@ -36,13 +29,10 @@ final class ChatHistoryTests: XCTestCase {
         }
     }
 
-    /// One complete turn, so the transcript holds a real exchange.
     private func exchange(_ secretary: Secretary, _ text: String) async {
         secretary.submit(text)
         await waitUntilSettled()
     }
-
-    // MARK: - Putting one away
 
     func testNewConversationFilesTheOldOneAndClearsTheScreen() async {
         let provider = SpyWorkspaceProvider()
@@ -57,13 +47,10 @@ final class ChatHistoryTests: XCTestCase {
             secretary.history.first?.entries.contains { $0.text == "summarise my notes" } == true,
             "The archived copy has to hold the words, not just a name"
         )
-        // The screen is the new conversation's, not the old one's.
         XCTAssertFalse(secretary.transcript.contains { $0.text == "summarise my notes" })
         XCTAssertEqual(secretary.transcript.filter { $0.kind == .divider }.count, 1)
     }
 
-    /// The whole feature rests on this: what the model remembers lives on
-    /// Claude Code's side and can only be recovered by name.
     func testTheSessionIsArchivedWithTheWords() async {
         let provider = SpyWorkspaceProvider()
         let secretary = makeSecretary(provider: provider)
@@ -75,7 +62,6 @@ final class ChatHistoryTests: XCTestCase {
         XCTAssertEqual(secretary.history.first?.sessionID, Option.some("session-abc"))
     }
 
-    /// Pressing New Conversation on a fresh app must not leave a row behind.
     func testAnEmptyConversationIsNotArchived() {
         let secretary = makeSecretary(provider: SpyWorkspaceProvider())
         secretary.newConversation()
@@ -94,8 +80,6 @@ final class ChatHistoryTests: XCTestCase {
         XCTAssertEqual(secretary.history.first?.title, "chat number 12")
         XCTAssertFalse(secretary.history.contains { $0.title == "chat number 1" })
     }
-
-    // MARK: - Reopening one
 
     func testReopeningRestoresTheWordsAndTheSession() async {
         let provider = SpyWorkspaceProvider()
@@ -122,7 +106,6 @@ final class ChatHistoryTests: XCTestCase {
         )
     }
 
-    /// Reopening is not a way to lose the conversation you were in.
     func testReopeningFilesTheConversationItReplaces() async {
         let provider = SpyWorkspaceProvider()
         let secretary = makeSecretary(provider: provider)
@@ -137,8 +120,6 @@ final class ChatHistoryTests: XCTestCase {
         XCTAssertTrue(secretary.history.contains { $0.title == "second thread" })
     }
 
-    /// Reopen, talk, put away again — one row, not two. Otherwise the menu
-    /// fills with copies of the conversation you keep coming back to.
     func testAReopenedConversationKeepsItsPlaceRatherThanForking() async {
         let provider = SpyWorkspaceProvider()
         let secretary = makeSecretary(provider: provider)
@@ -159,8 +140,6 @@ final class ChatHistoryTests: XCTestCase {
         )
     }
 
-    /// A conversation that never reached the model must not claim it can carry
-    /// on — and must not ask Claude Code to resume a session that never existed.
     func testReopeningSaysSoWhenThereIsNothingToCarryOnFrom() async {
         let provider = SpyWorkspaceProvider()
         let secretary = makeSecretary(provider: provider)
@@ -177,8 +156,6 @@ final class ChatHistoryTests: XCTestCase {
         )
     }
 
-    /// Reopening the conversation already on screen must not wipe it and file a
-    /// second copy of itself.
     func testReopeningTheOneYouAreAlreadyInDoesNothing() async {
         let provider = SpyWorkspaceProvider()
         let secretary = makeSecretary(provider: provider)
@@ -199,7 +176,6 @@ final class ChatHistoryTests: XCTestCase {
         await exchange(secretary, "hello")
         let before = secretary.transcript.map(\.text)
 
-        // Not empty any more: the conversation being had is filed as it goes.
         let historyBefore = secretary.history.map(\.id)
 
         secretary.resumeConversation(UUID())
@@ -208,11 +184,6 @@ final class ChatHistoryTests: XCTestCase {
         XCTAssertEqual(secretary.history.map(\.id), historyBefore)
     }
 
-    // MARK: - The turn after reopening
-
-    /// The proof that context came back: after reopening, the next turn resumes
-    /// rather than starting over. `resetConversation` is what would throw the
-    /// thread away, and it must not be called on this path.
     func testTheTurnAfterReopeningContinuesTheOldSession() async {
         let provider = SpyWorkspaceProvider()
         let secretary = makeSecretary(provider: provider)
@@ -221,8 +192,6 @@ final class ChatHistoryTests: XCTestCase {
         secretary.newConversation()
 
         secretary.resumeConversation(try! XCTUnwrap(secretary.history.first).id)
-        // Counted from *after* the adopt: clearing the slate on the way in is
-        // the point, throwing the thread away on the way out is the bug.
         let resets = provider.resetCount
         await exchange(secretary, "and now?")
 
@@ -230,9 +199,6 @@ final class ChatHistoryTests: XCTestCase {
         XCTAssertEqual(provider.resetCount, resets, "Nothing may drop the session after it was adopted")
     }
 
-    /// The dangerous case, and the reason `sessionLost` exists: the thread is on
-    /// screen but Claude Code no longer has it. Saying nothing would leave every
-    /// following answer looking like the app ignoring what is plainly visible.
     func testALostSessionIsAnnouncedInTheTranscript() async {
         let provider = SpyWorkspaceProvider()
         let secretary = makeSecretary(provider: provider)
@@ -254,21 +220,6 @@ final class ChatHistoryTests: XCTestCase {
         )
     }
 
-    /// Losing the backend's memory does **not** split the conversation in two.
-    ///
-    /// This asserted the opposite until 0.13.210, and the old reasoning was
-    /// sound at the time: the live chat was no longer the archived thread, so
-    /// filing it under that row would overwrite the original with a thread the
-    /// model never continued. It only held because filing happened once, on the
-    /// way out.
-    ///
-    /// Filing now happens every turn, and under the old rule this case produced
-    /// two rows for one conversation on screen — one holding a prefix of the
-    /// other — which is worse than what it was protecting against. What is
-    /// given up: the archived row is no longer frozen at the moment the session
-    /// died. It grows with the continuation and records the new session id,
-    /// which is the honest description of what is on screen; the old id pointed
-    /// at a thread that had already gone.
     func testALostSessionKeepsOneRowForOneConversation() async {
         let provider = SpyWorkspaceProvider()
         let secretary = makeSecretary(provider: provider)
@@ -292,12 +243,6 @@ final class ChatHistoryTests: XCTestCase {
         )
     }
 
-
-    // MARK: - Filed while it is still being had
-
-    /// The history menu used to show nothing until you had started a *second*
-    /// conversation: the one you were having — the only one you might want back
-    /// after a crash — was the one that wasn't there.
     func testTheConversationBeingHadIsInTheHistoryFromItsFirstTurn() async {
         let secretary = makeSecretary(provider: SpyWorkspaceProvider())
 
@@ -307,8 +252,6 @@ final class ChatHistoryTests: XCTestCase {
         XCTAssertEqual(secretary.history.first?.title, "what is the plan")
     }
 
-    /// And it is marked as the one you are in, so reopening it from the menu is
-    /// visibly a no-op rather than an invisible one.
     func testTheLiveConversationIsTickedInTheMenu() async {
         let secretary = makeSecretary(provider: SpyWorkspaceProvider())
 
@@ -317,8 +260,6 @@ final class ChatHistoryTests: XCTestCase {
         XCTAssertEqual(secretary.historyRows().map(\.isCurrent), [true])
     }
 
-    /// A conversation updates its own row. Filing every turn under a fresh id
-    /// would grow the menu by one row per exchange.
     func testFurtherTurnsUpdateTheSameRowRatherThanAddingOne() async {
         let secretary = makeSecretary(provider: SpyWorkspaceProvider())
 
@@ -331,8 +272,6 @@ final class ChatHistoryTests: XCTestCase {
         XCTAssertTrue(secretary.history[0].entries.contains { $0.text == "second" })
     }
 
-    /// Starting a new one leaves the old row alone and takes the tick with it —
-    /// the new conversation has said nothing, so it has no row yet.
     func testANewConversationLeavesTheFiledOneBehind() async {
         let secretary = makeSecretary(provider: SpyWorkspaceProvider())
         await exchange(secretary, "first")
@@ -343,8 +282,6 @@ final class ChatHistoryTests: XCTestCase {
         XCTAssertEqual(secretary.historyRows().map(\.isCurrent), [false])
     }
 
-    /// Still nothing filed for a conversation nobody has spoken in, so opening
-    /// the app and pressing New Conversation twice pushes no blank rows.
     func testAnEmptyConversationIsNotFiled() {
         let secretary = makeSecretary(provider: SpyWorkspaceProvider())
 
@@ -353,8 +290,6 @@ final class ChatHistoryTests: XCTestCase {
 
         XCTAssertTrue(secretary.history.isEmpty)
     }
-
-    // MARK: - Clearing
 
     func testClearAllEmptiesTheMenuButLeavesTheChatOnScreen() async {
         let secretary = makeSecretary(provider: SpyWorkspaceProvider())
@@ -368,9 +303,6 @@ final class ChatHistoryTests: XCTestCase {
         XCTAssertTrue(secretary.transcript.contains { $0.text == "two" }, "The live chat is not history")
     }
 
-    /// Losing the conversation and losing the warning about it is the worst of
-    /// both. The notice used to be written just before `newConversation`
-    /// cleared the transcript, which deleted it two lines later.
     func testAFailedSaveIsStillOnScreenAfterTheClear() async {
         let secretary = makeSecretary(provider: SpyWorkspaceProvider(), store: FailingConversationStore())
         await exchange(secretary, "a conversation worth keeping")
@@ -383,10 +315,6 @@ final class ChatHistoryTests: XCTestCase {
         )
     }
 
-    // MARK: - Across launches
-
-    /// A history that emptied itself on relaunch would be a list of things you
-    /// could already scroll to.
     func testHistorySurvivesARestart() async {
         let store = InMemoryConversationStore()
         let first = makeSecretary(provider: SpyWorkspaceProvider(), store: store)
@@ -399,14 +327,6 @@ final class ChatHistoryTests: XCTestCase {
         XCTAssertTrue(relaunched.historyRows().first?.label.hasPrefix("yesterday's question") == true)
     }
 
-    /// A Secretary built without being told where to keep history must not
-    /// reach the person's own file.
-    ///
-    /// It did, and the first full run of this suite wrote nine test
-    /// conversations into it. The tests that caused it were about queues and
-    /// interruptions and had no idea a history existed — which is the point: a
-    /// default that reaches real data is one every future test has to remember
-    /// to override.
     func testTheDefaultStoreIsNotTheOwnersOwnFile() async {
         let before = try? Data(contentsOf: FileConversationStore.defaultURL)
 
@@ -426,8 +346,6 @@ final class ChatHistoryTests: XCTestCase {
         )
     }
 
-    // MARK: - /history
-
     func testTheSlashCommandListsAndReopens() async {
         let provider = SpyWorkspaceProvider()
         let secretary = makeSecretary(provider: provider)
@@ -444,9 +362,6 @@ final class ChatHistoryTests: XCTestCase {
         XCTAssertTrue(secretary.transcript.contains { $0.text == "the first one" })
     }
 
-    /// Driving the app produced a history row titled "/history 1": reopening a
-    /// conversation archived the command that reopened it, and every reopen
-    /// would have added another.
     func testReopeningDoesNotArchiveTheCommandThatReopened() async {
         let secretary = makeSecretary(provider: SpyWorkspaceProvider())
         await exchange(secretary, "a real conversation")
@@ -462,7 +377,6 @@ final class ChatHistoryTests: XCTestCase {
         )
     }
 
-    /// `/new` itself must not ride along inside the conversation it closed.
     func testTheClosingCommandIsNotPartOfTheArchivedConversation() async {
         let secretary = makeSecretary(provider: SpyWorkspaceProvider())
         await exchange(secretary, "a real conversation")
@@ -498,7 +412,6 @@ final class ChatHistoryTests: XCTestCase {
     }
 }
 
-/// A store that always refuses, for checking that a refusal is reported.
 final class FailingConversationStore: ConversationStoring, @unchecked Sendable {
     func load() -> Either<ConversationStoreError, [ArchivedConversation]> { .right([]) }
 

@@ -1,14 +1,7 @@
 import XCTest
 @testable import SecretaryCore
 
-/// Reading the plan limits out of `claude -p -- /usage`.
-///
-/// It is text meant for a terminal, owned by another program, so the parser is
-/// held to one rule above all: recognise it or say nothing. A percentage that is
-/// wrong — or right but stale — is worse than a blank, because this is the
-/// number people use to decide whether to keep working.
 final class PlanUsageTests: XCTestCase {
-    /// Captured verbatim from a real run.
     private let real = """
     You are currently using your subscription to power your Claude Code usage
 
@@ -35,7 +28,6 @@ final class PlanUsageTests: XCTestCase {
         XCTAssertEqual(usage.activity[0].period, "Last 24h")
         XCTAssertEqual(usage.activity[0].requests, 510)
         XCTAssertEqual(usage.activity[0].sessions, 11)
-        // Thousands separators appear once the counts get large.
         XCTAssertEqual(usage.activity[1].requests, 3_428)
         XCTAssertEqual(usage.activity[1].sessions, 105)
     }
@@ -47,8 +39,6 @@ final class PlanUsageTests: XCTestCase {
         XCTAssertTrue(usage.activity[1].notes[1].contains("8+ hours"))
     }
 
-    /// The skill and plugin lines name what the user has been working on. A
-    /// usage gauge does not need to put that on screen.
     func testSkillAndPluginNamesAreDropped() throws {
         let usage = try XCTUnwrap(PlanUsageParser.parse(real))
         let notes = usage.activity.flatMap(\.notes).joined(separator: " ")
@@ -56,7 +46,6 @@ final class PlanUsageTests: XCTestCase {
         XCTAssertFalse(notes.contains("superpowers"), notes)
     }
 
-    /// Output with no activity block still yields the bars.
     func testTheLimitsSurviveWithoutAnActivityBlock() throws {
         let usage = try XCTUnwrap(PlanUsageParser.parse("Current session: 4% used"))
         XCTAssertEqual(usage.limits.count, 1)
@@ -76,18 +65,15 @@ final class PlanUsageTests: XCTestCase {
         XCTAssertNil(usage.limits[2].resetsText, "That line carries no reset time")
     }
 
-    /// The Claude app groups these; the CLI does not, so the split has to be
-    /// derived from the wording and is worth pinning.
     func testTheSessionAndWeeklyWindowsAreSeparated() throws {
         let usage = try XCTUnwrap(PlanUsageParser.parse(real))
         XCTAssertEqual(usage.session.map(\.name), ["Current session"])
         XCTAssertEqual(usage.weekly.map(\.name), ["All models", "Fable"])
     }
 
-    /// The CLI writes the reset without a year, so it has to be inferred. Taking
-    /// the current year blindly reads a January reset as eleven months past.
     func testTheResetTimeIsReadAndTheYearInferred() throws {
-        let now = Date(timeIntervalSince1970: 1_785_500_000) // 2026-07-31 in UTC
+        let the31stOfJuly2026InUTC = Date(timeIntervalSince1970: 1_785_500_000)
+        let now = the31stOfJuly2026InUTC
         let usage = try XCTUnwrap(PlanUsageParser.parse(real, now: now))
         let session = try XCTUnwrap(usage.session.first)
         let resetsAt = try XCTUnwrap(session.resetsAt)
@@ -95,8 +81,6 @@ final class PlanUsageTests: XCTestCase {
         XCTAssertLessThan(resetsAt.timeIntervalSince(now), 86_400 * 2)
     }
 
-    /// "Resets in 18 min" near the boundary, the CLI's own words further out —
-    /// "in 6 days" is less useful than a date with a timezone on it.
     func testResetsReadRelativeOnlyWithinADay() {
         let now = Date(timeIntervalSince1970: 1_785_500_000)
         let soon = PlanUsage.Limit(
@@ -112,9 +96,6 @@ final class PlanUsageTests: XCTestCase {
         XCTAssertEqual(farOff.resetDescription(now: now), "Resets Aug 7 at 9am (Asia/Bangkok)")
     }
 
-    /// Only the tier is taken out of `claude auth status`. That reply also
-    /// carries the account's email and organisation id, which this app has no
-    /// reason to hold.
     func testThePlanNameComesFromAuthStatus() {
         let json = """
         {"loggedIn":true,"authMethod":"claude.ai","email":"someone@example.com","subscriptionType":"max"}
@@ -124,9 +105,6 @@ final class PlanUsageTests: XCTestCase {
         XCTAssertNil(PlanIdentityParser.planName(fromAuthStatus: "not json"))
     }
 
-    /// The prose around the numbers is not a limit and must not become a row —
-    /// especially the "83% of your usage was at >150k context" line, which is a
-    /// percentage of something else entirely.
     func testProseIsNotMistakenForALimit() throws {
         let usage = try XCTUnwrap(PlanUsageParser.parse(real))
         XCTAssertFalse(
@@ -135,15 +113,12 @@ final class PlanUsageTests: XCTestCase {
         )
     }
 
-    /// If Claude Code rewords this, the answer is nothing rather than a guess.
     func testUnrecognisedOutputYieldsNothing() {
         XCTAssertNil(PlanUsageParser.parse(""))
         XCTAssertNil(PlanUsageParser.parse("Not logged in."))
         XCTAssertNil(PlanUsageParser.parse("Session usage is at three quarters."))
     }
 
-    /// An account over its allowance reports more than 100; a bar drawn past its
-    /// own end reads as a rendering bug rather than as bad news.
     func testOverHundredIsClamped() throws {
         let usage = try XCTUnwrap(PlanUsageParser.parse("Current session: 140% used"))
         XCTAssertEqual(usage.limits[0].fraction, 1)

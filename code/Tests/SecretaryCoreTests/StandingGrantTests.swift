@@ -6,8 +6,6 @@ import ProjectRegistry
 import ToolAdapters
 @testable import SecretaryCore
 
-/// The half of Sprint 15 that survives quitting: what reaches the file, what is
-/// read back, and what a new session does with it.
 @MainActor
 final class StandingGrantTests: XCTestCase {
     private let project = Project(
@@ -28,8 +26,6 @@ final class StandingGrantTests: XCTestCase {
         )
     }
 
-    /// A new conversation in the same project does not ask again — the sentence
-    /// the sprint item opens with.
     func testWhatWasRememberedIsInForceOnTheNextLaunch() {
         let store = InMemoryStandingGrantStore(grants: [
             StandingGrant(
@@ -49,21 +45,15 @@ final class StandingGrantTests: XCTestCase {
         )
     }
 
-    /// Starting with nothing on file is the ordinary case and must not look
-    /// like a grant.
     func testAnEmptyStoreGrantsNothing() {
         let secretary = makeSecretary(store: InMemoryStandingGrantStore())
         XCTAssertTrue(secretary.grants.remembered.isEmpty)
     }
 
-    /// A file that cannot be read starts the app with nothing remembered rather
-    /// than refusing to start — and, more importantly, rather than guessing.
     func testAnUnreadableStoreIsTreatedAsNothingRemembered() {
         let secretary = makeSecretary(store: FailingGrantStore())
         XCTAssertTrue(secretary.grants.remembered.isEmpty)
     }
-
-    // MARK: - The file itself
 
     func testTheFileRoundTripsAGrant() throws {
         let url = FileManager.default.temporaryDirectory
@@ -79,15 +69,12 @@ final class StandingGrantTests: XCTestCase {
         XCTAssertEqual(store.load().getOrElse([]), written)
     }
 
-    /// No file yet is not a failure — it is the first launch.
     func testAMissingFileLoadsAsEmpty() {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("absent-\(UUID().uuidString).json")
         XCTAssertEqual(FileStandingGrantStore(fileURL: url).load().getOrElse([.init(projectID: UUID(), toolID: "x", actionClass: .readOnly)]), [])
     }
 
-    /// One file per character, so approving something for one is not approving
-    /// it for everyone.
     func testEachCharacterHasHerOwnFile() {
         let one = FileStandingGrantStore.url(forCharacter: UUID())
         let other = FileStandingGrantStore.url(forCharacter: UUID())
@@ -96,7 +83,6 @@ final class StandingGrantTests: XCTestCase {
     }
 }
 
-/// A store that cannot be read, for the launch path that has to survive it.
 private final class FailingGrantStore: StandingGrantStoring, @unchecked Sendable {
     func load() -> Either<GrantStoreError, [StandingGrant]> {
         .left(.readFailed(path: "/nowhere", message: "no"))

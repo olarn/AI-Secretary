@@ -7,17 +7,12 @@ import ProjectRegistry
 import ToolAdapters
 @testable import SecretaryCore
 
-/// The wording of a record, on its own.
 final class CardChoiceTests: XCTestCase {
 
     func testAChoiceIsNamedInTheChoosersOwnWords() {
         XCTAssertEqual(chosenLine("Always"), "You chose “Always”")
     }
 
-    /// The whole point of `CardChoice` existing in a library target. If a button
-    /// title is ever retyped in the view instead of read from here, the record
-    /// and the button drift apart and no test in `AISecretaryApp` can see it —
-    /// that target is never linked into the test bundle.
     func testEveryCardTitleIsSomethingATestCanRead() {
         let titles = [
             CardChoice.waitItsTurn, CardChoice.replaceRunning,
@@ -30,7 +25,6 @@ final class CardChoiceTests: XCTestCase {
     }
 }
 
-/// The badge beside her name.
 final class ModelBadgeTests: XCTestCase {
 
     func testTheMakersNameIsDropped() {
@@ -38,8 +32,6 @@ final class ModelBadgeTests: XCTestCase {
         XCTAssertEqual(shortModelName("Claude Sonnet 5"), "Sonnet 5")
     }
 
-    /// Not every name starts that way — `inheritedSettingName` doesn't — and
-    /// chopping seven characters off one that doesn't would produce "ult".
     func testANameWithoutThePrefixIsLeftAlone() {
         XCTAssertEqual(shortModelName("Default"), "Default")
         XCTAssertEqual(shortModelName("Opus 5"), "Opus 5")
@@ -49,8 +41,6 @@ final class ModelBadgeTests: XCTestCase {
         XCTAssertEqual(modelBadge(model: "Claude Opus 5", effort: "medium"), "Opus 5 | medium")
     }
 
-    /// The case the collapse exists for: "Default | Default" reads as two
-    /// settings that happen to agree, when it means the app was told neither.
     func testKnowingNeitherIsOneWordNotTwo() {
         XCTAssertEqual(modelBadge(model: "Default", effort: "Default"), "Default")
     }
@@ -61,12 +51,6 @@ final class ModelBadgeTests: XCTestCase {
     }
 }
 
-/// Answering a card leaves a record of the answer.
-///
-/// The bug these pin: a card vanishes the instant it is answered, and for
-/// approving, for picking a project and for replacing a running turn nothing
-/// was said afterwards that named the answer — so scrolling back showed a
-/// question, then whatever happened next, with no sign that anyone had replied.
 @MainActor
 final class AnsweredCardsTests: XCTestCase {
     private var machine = AssistantStateMachine()
@@ -99,8 +83,6 @@ final class AnsweredCardsTests: XCTestCase {
         secretary.transcript.contains { $0.text.contains(needle) }
     }
 
-    // MARK: - Approval
-
     func testApprovingOnceIsWrittenDown() {
         let secretary = makeSecretary(projects: [project])
         secretary.submit("git status")
@@ -110,9 +92,6 @@ final class AnsweredCardsTests: XCTestCase {
         XCTAssertTrue(said(secretary, "just this time"))
     }
 
-    /// The line has to say the grant was kept, because that is the half of the
-    /// answer the person cannot see anywhere else — nothing on screen afterwards
-    /// distinguishes a session grant from a standing one.
     func testApprovingAlwaysSaysItWasKept() {
         let secretary = makeSecretary(projects: [project])
         secretary.submit("git status")
@@ -131,9 +110,6 @@ final class AnsweredCardsTests: XCTestCase {
         XCTAssertTrue(adapter.runCalls.isEmpty)
     }
 
-    /// The record goes in front of the work, not behind it. An answer reported
-    /// underneath its own consequences reads as the app narrating itself after
-    /// the fact rather than as the person having replied.
     func testTheAnswerIsRecordedBeforeTheResult() {
         let secretary = makeSecretary(projects: [project])
         secretary.submit("git status")
@@ -145,8 +121,6 @@ final class AnsweredCardsTests: XCTestCase {
         XCTAssertNotNil(resultAt)
         XCTAssertLessThan(answerAt ?? 0, resultAt ?? 0)
     }
-
-    // MARK: - Choosing a project
 
     func testChoosingAProjectIsWrittenDown() {
         let other = Project(
@@ -163,8 +137,6 @@ final class AnsweredCardsTests: XCTestCase {
         secretary.choose(project: other)
         XCTAssertTrue(said(secretary, chosenLine("Second")), "No record of which project was picked")
     }
-
-    // MARK: - Cancelling
 
     func testCancellingNamesTheButtonThatWasPressed() {
         let secretary = makeSecretary(projects: [project])

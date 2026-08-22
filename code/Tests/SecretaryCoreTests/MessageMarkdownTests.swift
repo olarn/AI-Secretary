@@ -11,9 +11,6 @@ final class MessageMarkdownTests: XCTestCase {
         String(MessageMarkdown.attributed(text).characters)
     }
 
-    // MARK: - Bare URLs
-
-    /// The common case: the model just writes the address out.
     func testABareURLBecomesALink() {
         XCTAssertEqual(
             links(in: "See https://example.com/docs for the details."),
@@ -30,8 +27,6 @@ final class MessageMarkdownTests: XCTestCase {
         XCTAssertEqual(links(in: "a https://one.example b https://two.example").count, 2)
     }
 
-    /// Thai text has no spaces around punctuation in places; the URL must still
-    /// come out whole.
     func testAURLInThaiTextIsLinked() {
         XCTAssertEqual(
             links(in: "ดูรายละเอียดที่ https://example.com/ราคา นะครับ").first?.host,
@@ -39,24 +34,17 @@ final class MessageMarkdownTests: XCTestCase {
         )
     }
 
-    // MARK: - Markdown links
-
     func testAMarkdownLinkKeepsItsLabelAndTarget() {
         let attributed = MessageMarkdown.attributed("Read [the docs](https://example.com/docs).")
         XCTAssertEqual(String(attributed.characters), "Read the docs.")
         XCTAssertEqual(attributed.runs.compactMap(\.link), [URL(string: "https://example.com/docs")!])
     }
 
-    /// The detector must not re-point a link at something inside its own label.
     func testALabelThatLooksLikeAURLKeepsTheMarkdownTarget() {
         let links = links(in: "[https://decoy.example](https://real.example/page)")
         XCTAssertEqual(links, [URL(string: "https://real.example/page")!])
     }
 
-    // MARK: - Untrusted input
-
-    /// Replies quote pages and tool output, so a link can be anything. Only
-    /// schemes that are safe to hand to the browser are clickable.
     func testUnsafeSchemesAreNotClickable() {
         for source in [
             "[open me](file:///etc/passwd)",
@@ -67,7 +55,6 @@ final class MessageMarkdownTests: XCTestCase {
         }
     }
 
-    /// …but the text itself is still readable, not swallowed.
     func testTheLabelOfAStrippedLinkIsStillShown() {
         XCTAssertEqual(plainText(of: "[open me](file:///etc/passwd)"), "open me")
     }
@@ -79,15 +66,12 @@ final class MessageMarkdownTests: XCTestCase {
         )
     }
 
-    // MARK: - Plain text
-
     func testTextWithoutLinksIsUnchanged() {
         let source = "No links here — just a sentence with 2 * 3 in it."
         XCTAssertEqual(plainText(of: source), source)
         XCTAssertTrue(links(in: source).isEmpty)
     }
 
-    /// Replies are multi-line and the layout has to survive the round trip.
     func testNewlinesSurvive() {
         XCTAssertEqual(plainText(of: "line one\nline two"), "line one\nline two")
     }

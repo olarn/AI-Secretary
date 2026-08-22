@@ -1,7 +1,6 @@
 import XCTest
 @testable import SecretaryCore
 
-/// Remembering a request the assistant could not finish.
 final class BlockedBlockTests: XCTestCase {
     func testAMarkedBlockRecordsWhatWasMissing() {
         let parsed = BlockedBlock.parse("""
@@ -15,16 +14,12 @@ final class BlockedBlockTests: XCTestCase {
         XCTAssertEqual(parsed.body, "The folder is empty — I can't see any ratebook here.")
     }
 
-    /// The marker must never reach the eye; it is a message to the app.
     func testTheMarkerIsStrippedFromWhatIsShown() {
         let parsed = BlockedBlock.parse("Nope.\n```blocked\na path\n```")
         XCTAssertFalse(parsed.body.contains("```"), parsed.body)
         XCTAssertFalse(parsed.body.contains("a path"), parsed.body)
     }
 
-    /// "I couldn't find that" turns up in ordinary answers all the time.
-    /// Inferring from prose would leave a stale reminder in front of the model
-    /// for the rest of the conversation.
     func testProseIsNotTreatedAsBlocked() {
         for message in [
             "I couldn't find a ratebook in that folder, but here's what is there.",
@@ -44,8 +39,6 @@ final class BlockedBlockTests: XCTestCase {
         XCTAssertEqual(parsed.body, message)
     }
 
-    /// The reminder has to name the request and the gap, or it is just the
-    /// general rule again — which is the thing that already failed.
     func testTheReminderNamesBothTheRequestAndTheGap() {
         let outstanding = OutstandingRequest(
             request: "ratebook for Vios and City, 2022, and pin it",

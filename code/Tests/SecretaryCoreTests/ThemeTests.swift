@@ -1,17 +1,8 @@
 import XCTest
 @testable import SecretaryCore
 
-/// The panel used to be translucent, so how readable it was depended on the
-/// user's wallpaper. These are the checks that say it no longer can.
 final class ThemeTests: XCTestCase {
 
-    /// The one that matters. Every text colour, on every ground it can be drawn
-    /// on, in every palette — 126 pairs today, and more the moment a role or a
-    /// palette is added, without this test being touched.
-    ///
-    /// Written as a sweep rather than a handful of chosen pairs because the
-    /// pair that broke in the shipped app was not one anybody would have
-    /// chosen: muted text on the panel ground.
     func testEveryTextColourStandsOffEveryGround() {
         var checked = 0
         for (paletteName, palette) in Palette.all {
@@ -34,29 +25,12 @@ final class ThemeTests: XCTestCase {
         )
     }
 
-    /// An edge is allowed to be quieter than text, but it still has to be
-    /// visible — a hairline the same colour as what it separates is not a
-    /// hairline.
-    ///
-    /// Against *every* ground, not just the window, and that is the
-    /// load-bearing part: a code block inside a bubble is nearly the same fill
-    /// as the bubble (one neutral cannot stand off both a blue tint and a grey
-    /// one), so the edge is the only thing separating them. If the hairline
-    /// fades into any surface, some nested box has no visible boundary at all.
     func testEveryEdgeIsVisibleAgainstEveryGround() {
         for (name, palette) in Palette.all {
-            // The window's own surface, which is where most separators are
-            // drawn, keeps the original floor.
             XCTAssertGreaterThanOrEqual(
                 contrastRatio(palette.hairline, palette.ground), 1.6,
                 "\(name): the hairline disappears into the window"
             )
-            // The tinted surfaces get a lower one, and the reason is a
-            // constraint rather than a concession: one hairline has to work on
-            // a blue bubble, a grey bubble, an orange card and a teal card at
-            // once, and those sit at different luminances. 1.3 is what a single
-            // colour can reach against all of them; anything higher here can
-            // only be met by giving up having one hairline.
             for (groundName, ground) in Palette.groundRoles {
                 XCTAssertGreaterThanOrEqual(
                     contrastRatio(palette.hairline, palette[keyPath: ground]), 1.3,
@@ -70,9 +44,6 @@ final class ThemeTests: XCTestCase {
         }
     }
 
-    /// The selected footer button is the one place a role is drawn on another
-    /// role rather than on a ground, so it is the one pair the sweep above
-    /// cannot see.
     func testTheSelectedButtonsLabelStandsOffItsFill() {
         for (name, palette) in Palette.all {
             XCTAssertGreaterThanOrEqual(
@@ -90,9 +61,6 @@ final class ThemeTests: XCTestCase {
         XCTAssertEqual(palette(for: .light, systemIsDark: true), .light)
     }
 
-    /// The window asks AppKit for a matching control appearance, so the caret,
-    /// the scroller and the selection tint don't come from the system setting
-    /// while everything around them comes from the palette.
     func testTheControlAppearanceMatchesTheGround() {
         for (name, palette) in Palette.all {
             let groundIsDark = palette.ground.relativeLuminance < 0.5
@@ -103,8 +71,6 @@ final class ThemeTests: XCTestCase {
         }
     }
 
-    /// Known values, so a typo in a component is a failing test rather than a
-    /// slightly different grey.
     func testLuminanceAndRatioAreTheStandardOnes() {
         XCTAssertEqual(ThemeColor(1, 1, 1).relativeLuminance, 1, accuracy: 0.0001)
         XCTAssertEqual(ThemeColor(0, 0, 0).relativeLuminance, 0, accuracy: 0.0001)

@@ -1,10 +1,6 @@
 import AppKit
 import CoreGraphics
 
-// Presses a Command-shortcut N times, but only while the named process is
-// frontmost — checked in the same run, immediately before each press.
-// Synthetic keys have leaked into a terminal twice by trusting a check made
-// earlier in a different command.
 let pid = Int(CommandLine.arguments[1])!
 let code = CGKeyCode(UInt16(CommandLine.arguments[2])!)
 let times = Int(CommandLine.arguments[3]) ?? 1

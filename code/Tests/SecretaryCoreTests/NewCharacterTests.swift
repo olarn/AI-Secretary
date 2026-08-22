@@ -1,20 +1,15 @@
 import XCTest
 @testable import SecretaryCore
 
-/// What `New Character…` produces, and where she stands.
 final class NewCharacterTests: XCTestCase {
     private func profile(_ name: String) -> SecretaryProfile {
         SecretaryProfile(name: name)
     }
 
-    // MARK: - Naming
-
     func testAFreeNameIsUsedAsItIs() {
         XCTAssertEqual(unusedCharacterName(basedOn: "Anya", existing: [profile("Miku")]), "Anya")
     }
 
-    /// Two characters called the same thing is not cosmetic: the menu shows two
-    /// identical rows and neither says which is which.
     func testATakenNameGetsTheFirstFreeNumber() {
         XCTAssertEqual(unusedCharacterName(basedOn: "Miku", existing: [profile("Miku")]), "Miku 2")
     }
@@ -24,7 +19,6 @@ final class NewCharacterTests: XCTestCase {
         XCTAssertEqual(unusedCharacterName(basedOn: "Miku", existing: existing), "Miku 4")
     }
 
-    /// Cloning a clone must not stack suffixes.
     func testCloningACopyCountsFromTheOriginalName() {
         let existing = [profile("Miku"), profile("Miku 2")]
         XCTAssertEqual(unusedCharacterName(basedOn: "Miku 2", existing: existing), "Miku 3")
@@ -35,15 +29,12 @@ final class NewCharacterTests: XCTestCase {
         XCTAssertEqual(unusedCharacterName(basedOn: "Miku", existing: existing), "Miku 2")
     }
 
-    /// A name that merely ends in a word, not a number, is left whole.
     func testANameEndingInAWordIsNotTreatedAsACopy() {
         XCTAssertEqual(
             unusedCharacterName(basedOn: "Miku Hatsune", existing: [profile("Miku Hatsune")]),
             "Miku Hatsune 2"
         )
     }
-
-    // MARK: - What she inherits
 
     func testSheInheritsWhoTheTemplateIsButNotItsIdentity() {
         let template = SecretaryProfile(
@@ -62,8 +53,6 @@ final class NewCharacterTests: XCTestCase {
         XCTAssertEqual(fresh.name, "Miku 2")
     }
 
-    // MARK: - Where she stands
-
     private let screen = CGRect(x: 0, y: 0, width: 1728, height: 1117)
     private let visible = CGRect(x: 0, y: 54, width: 1728, height: 1030)
     private let size = CGSize(width: 128, height: 149)
@@ -75,8 +64,6 @@ final class NewCharacterTests: XCTestCase {
         )
     }
 
-    /// Landing a new character exactly on top of an existing one looks like
-    /// nothing happened, which is the worst possible answer to "New Character…".
     func testEachFurtherCharacterStandsClearOfTheOneBefore() {
         let first = CharacterLaunch.origin(ordinal: 0, characterSize: size, visibleFrame: visible, screenFrame: screen)
         let second = CharacterLaunch.origin(ordinal: 1, characterSize: size, visibleFrame: visible, screenFrame: screen)
@@ -88,8 +75,6 @@ final class NewCharacterTests: XCTestCase {
         XCTAssertEqual(second.y, first.y)
     }
 
-    /// The row runs out before the desktop does. Stacking at the edge is worse
-    /// than a tidy row and much better than a character that cannot be clicked.
     func testTheRowStopsAtTheLeftEdgeRatherThanWalkingOffIt() {
         let far = CharacterLaunch.origin(
             ordinal: 50,
@@ -101,8 +86,6 @@ final class NewCharacterTests: XCTestCase {
         XCTAssertEqual(far.x, screen.minX)
     }
 
-        /// 20.1: New Character starts from the default profile; the stem the
-    /// numbering counts from is written down where a test can see it.
     func testTheDefaultCharacterNameIsANonEmptyStem() {
         XCTAssertEqual(defaultNewCharacterName, "Secretary")
     }

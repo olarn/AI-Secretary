@@ -2,46 +2,21 @@ import SwiftUI
 import Permissions
 import SecretaryCore
 
-/// The command window: tick who should listen, type once, everyone ticked
-/// gets it. Spotlight-shaped — one borderless rounded slab — with the
-/// character list above the box, the same growing message box the chat uses,
-/// the red line under it when nothing can go, and a foldable strip of what
-/// the commanded characters have answered.
 struct CommandWindowView: View {
     @Bindable var model: CommandCenter
     let appearance: Appearance
-    /// Starts the native window drag. The *detection* lives here as a gesture
-    /// because neither AppKit route sees the click on this window —
-    /// `isMovableByWindowBackground` never fires (the hosting view answers the
-    /// background hit-test for every point) and the window's own `mouseDown`
-    /// never runs (SwiftUI consumes the click first); both driven 2026-08-19.
-    /// The *movement* is `performDrag`, not per-event `setFrameOrigin`: moving
-    /// the window from gesture callbacks stuttered visibly — the owner called
-    /// it out the moment they tried it — while the native drag loop is the
-    /// same one every title bar uses.
     let beginWindowDrag: () -> Void
-    /// Hides the window — the ✕, same meaning as Esc: sessions keep running.
     let hideWindow: () -> Void
-    /// Told the slab's rendered height, so the window can follow it. Sizing
-    /// the hosting view by `preferredContentSize` instead left every
-    /// `DragGesture` in the window dead — driven 2026-08-19: chips clicked
-    /// fine, the drag never fired once, and the chat panel's grip (a plain
-    /// framed hosting view) dragged fine under the same synthetic events.
     let contentHeightChanged: (Double) -> Void
 
     @State private var draftHeight: Double = 0
     @State private var resultsHeight: Double = 0
     @State private var droppingFile = false
-    /// Whether Copy has just run, so the glyph can say so.
     @State private var copied = false
     @State private var approvalsHeight: Double = 0
     @FocusState private var boxFocused: Bool
 
     private var theme: Palette { appearance.colors }
-    /// Every size on the slab, from *this box's* text size rather than the
-    /// chat's. They came off `appearance.settings` before, so ⌘+ grew the words
-    /// being typed and left the chips, the results and the rhythm where they
-    /// were — the owner's report opening Sprint 21.2.
     private var metrics: TextMetrics { TextMetrics(fontSize: model.fontSize) }
 
     var body: some View {
@@ -63,18 +38,12 @@ struct CommandWindowView: View {
         .padding(metrics.panelPadding * 1.5)
         .frame(width: model.slabWidth, alignment: .leading)
         .background {
-            // The gesture rides on the fill itself, the way the resize grip
-            // rides on its glyph: hit-testing reaches the background exactly
-            // where no control in front claims the point, which is what "drag
-            // by the background" means.
             RoundedRectangle(cornerRadius: 14)
                 .fill(theme.ground.color)
                 .gesture(windowDrag)
         }
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(theme.panelBorder.color, lineWidth: theme.panelBorderWidth))
         .overlay(alignment: .topTrailing) { closeButton.padding(6) }
-        // The whole slab takes the drop, same as the chat bubble — naming one
-        // rectangle as the target is the belief the chat's drop area undid.
         .dropDestination(for: URL.self) { urls, _ in
             urls.forEach { model.attach($0) }
             return !urls.isEmpty
@@ -92,8 +61,6 @@ struct CommandWindowView: View {
         .tint(theme.accent.color)
     }
 
-    /// Who is listening. Every character on the desktop, tick by click; a
-    /// command only ever reaches the ticked.
     private var characterRow: some View {
         HStack(spacing: metrics.panelSpacing) {
             ForEach(model.roster(), id: \.id) { card in
@@ -142,8 +109,6 @@ struct CommandWindowView: View {
         .allowsHitTesting(false)
     }
 
-    /// Everything waiting to go with the next send: instruction files in
-    /// merge order, then the attachments.
     private var fileRow: some View {
         ScrollView(.horizontal) {
             HStack(spacing: metrics.panelSpacing) {
@@ -185,9 +150,6 @@ struct CommandWindowView: View {
         .padding(.vertical, 4)
         .background(RoundedRectangle(cornerRadius: 6).fill(theme.chipFill.color))
         .overlay(RoundedRectangle(cornerRadius: 6).stroke(theme.hairline.color, lineWidth: 1))
-        // The controls live *in* the box since 20.1 — the owner asked for
-        // Clear at its bottom-left corner drawn like the send affordance, and
-        // the paperclip beside ↵ rather than out in the footer.
         .overlay(alignment: .bottomTrailing) {
             HStack(spacing: 12) {
                 paperclipGlyph
@@ -202,8 +164,6 @@ struct CommandWindowView: View {
             TextField("", text: $model.draft, prompt: Text("Command everyone ticked…"), axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(.system(size: model.fontSize))
-                // Return sends, Shift/Option-Return breaks the line — the same
-                // contract as the chat box, for the same `onSubmit` reason.
                 .onKeyPress(.return, phases: .down) { press in
                     let newlineKeys: EventModifiers = [.shift, .option]
                     guard press.modifiers.isDisjoint(with: newlineKeys) else {
@@ -215,55 +175,26 @@ struct CommandWindowView: View {
                 }
                 .focused($boxFocused)
                 .padding(.trailing, sendGlyphLane)
-                // The control row's strip: text scrolls above Clear/📎/↵
-                // instead of running underneath them.
                 .padding(.bottom, sendGlyphSize + 12)
                 .background(
                     GeometryReader { proxy in
                         Color.clear.preference(key: MessageBoxHeightKey.self, value: proxy.size.height)
                     }
                 )
-                // Below the measurement, so the box's own height keeps coming
-                // from the text: in a stretched box the caret belongs at the
-                // top, not floating at the bottom of the granted space.
                 .frame(
                     minHeight: max(0, boxHeight + model.extraBoxHeight - 8),
                     alignment: .topLeading
                 )
         }
         .onPreferenceChange(MessageBoxHeightKey.self) { draftHeight = $0 }
-        // The granted extra rides on top of the draft-driven height, so a
-        // taller window is a taller writing area and nothing else moves.
         .frame(height: boxHeight + model.extraBoxHeight)
-        // The field is top-aligned and only as tall as its text, so in a
-        // stretched box most of the writing area is empty scroll space — a
-        // click there must still land the caret, or the box reads as dead
-        // (driven 2026-08-19: a click mid-box typed nowhere).
         .contentShape(Rectangle())
         .onTapGesture { boxFocused = true }
         .scrollDisabled(draftHeight <= maxBoxHeight + model.extraBoxHeight)
         .defaultScrollAnchor(.bottom)
     }
 
-    // MARK: - Permission cards
-
-    /// What a commanded character is blocked on, asked here.
-    ///
-    /// Never foldable, unlike the results: this is the one thing on the slab
-    /// that is waiting on the person, and a question tucked behind a chevron is
-    /// the bug this was written to fix.
     private var approvalsSection: some View {
-        // Capped and scrolling inside itself, exactly like the results strip
-        // and for a stronger reason. Four characters commanded at once raise
-        // four cards, and uncapped they grew the window to 921pt on a 1030pt
-        // screen — driven 2026-08-21 — which pushed the later cards and the
-        // whole results strip off the bottom of the display. **A card nobody
-        // can reach is the bug this section was written to fix**, so it must
-        // not be able to come back by the window simply getting too tall.
-        //
-        // Measured-then-capped rather than a bare `maxHeight`: a `ScrollView`
-        // with an unbounded max collapses to nothing, which is how the results
-        // strip once showed its header and not one row.
         ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: metrics.panelSpacing) {
                 ForEach(model.approvals) { approval in
@@ -277,8 +208,6 @@ struct CommandWindowView: View {
             )
         }
         .onPreferenceChange(ApprovalsHeightKey.self) { approvalsHeight = $0 }
-        // Room for two cards at a comfortable size; the rest scroll. Questions
-        // outrank answers, so this is given more of the slab than the results.
         .frame(height: min(320, approvalsHeight))
         .padding(metrics.panelSpacing)
         .background(theme.warningFill.color, in: RoundedRectangle(cornerRadius: 8))
@@ -300,9 +229,6 @@ struct CommandWindowView: View {
                 .font(.system(size: metrics.footnoteFontSize))
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
-            // The card's own answers, so the buttons here and the buttons in
-            // her chat can never come apart — `offeredApprovalAnswers` decides
-            // whether Always is on offer at all.
             HStack(spacing: 6) {
                 ForEach(approval.answers, id: \.self) { permission in
                     Button(permission.title) {
@@ -331,10 +257,6 @@ struct CommandWindowView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // MARK: - Results
-
-    /// What has come back, foldable like the usage window's sections — the
-    /// whole header row is the target, not a 10pt chevron.
     private var resultsSection: some View {
         VStack(alignment: .leading, spacing: metrics.panelSpacing) {
             HStack(spacing: 6) {
@@ -357,7 +279,6 @@ struct CommandWindowView: View {
                 }
                 .buttonStyle(.plain)
                 if model.showResults {
-                    // copy, Save, clear — the owner's order (2026-08-20).
                     copyResultsButton
                     saveResultsButton
                     Button("clear") { model.clearResults() }
@@ -382,11 +303,6 @@ struct CommandWindowView: View {
                     )
                 }
                 .onPreferenceChange(ResultsHeightKey.self) { resultsHeight = $0 }
-                // Sized from the measured rows, capped: a bare `maxHeight`
-                // lets a ScrollView collapse to nothing — driven 2026-08-19,
-                // where the strip showed its header and not one row. A strip,
-                // not a transcript: a few answers, its own scroll for the
-                // rest, so results can never crowd out the box.
                 .frame(height: min(220, resultsHeight))
             }
         }
@@ -394,8 +310,6 @@ struct CommandWindowView: View {
         .background(theme.infoFill.color(opacity: 0.5), in: RoundedRectangle(cornerRadius: 8))
     }
 
-    /// Writes the strip to a file the person names. Markdown by default —
-    /// the answers are Markdown, and the owner named the extension.
     private var saveResultsButton: some View {
         Button("Save") {
             SavePanel.saveText(model.resultsMarkdown, named: commandResultsFileName)
@@ -406,9 +320,6 @@ struct CommandWindowView: View {
         .help("Save the results to a file")
     }
 
-    /// The same document, on the clipboard. The glyph turns into a tick for a
-    /// moment: a copy that changes nothing on screen is indistinguishable from
-    /// a button that did nothing.
     private var copyResultsButton: some View {
         Button {
             NSPasteboard.general.clearContents()
@@ -436,8 +347,6 @@ struct CommandWindowView: View {
                     .frame(width: 6, height: 6)
                 Text(result.name)
                     .font(.system(size: metrics.footnoteFontSize, weight: .semibold))
-                // Same words the chat puts beside a name, so the two windows
-                // never disagree about what time something happened.
                 Text(MessageTime.label(for: result.receivedAt))
                     .font(.system(size: metrics.hintFontSize))
                     .foregroundStyle(theme.mutedText.color)
@@ -448,9 +357,6 @@ struct CommandWindowView: View {
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
             if !result.choices.isEmpty {
-                // The reply asked something. Answering sends the option's own
-                // words to that character — the chat picker's rule, because a
-                // bare letter is ambiguous for the next turn.
                 WrappingChoices(
                     options: result.choices,
                     fontSize: metrics.footnoteFontSize,
@@ -479,11 +385,8 @@ struct CommandWindowView: View {
     }
 
     private var sendGlyphSize: Double { model.fontSize * 1.1 * 0.9 }
-    /// Two glyphs share the lane now — ↵ and the paperclip beside it.
     private var sendGlyphLane: Double { sendGlyphSize * 2 + 32 }
 
-    /// "Clear", drawn exactly like the send affordance — a word, not a border
-    /// — at the box's bottom-left, per the 20.1 spec.
     private var clearGlyph: some View {
         Button("Clear") { model.clearComposition() }
             .buttonStyle(.plain)
@@ -529,14 +432,10 @@ struct CommandWindowView: View {
         .padding(.bottom, 5)
     }
 
-    /// Hands the drag to the native loop the moment it starts. `performDrag`
-    /// blocks until the mouse goes up, so this fires effectively once.
     private var windowDrag: some Gesture {
         DragGesture(minimumDistance: 2).onChanged { _ in beginWindowDrag() }
     }
 
-    /// The ✕. Hiding, not closing: the hint beside จบการทำงาน says so, and
-    /// Esc does the same thing.
     private var closeButton: some View {
         Button(action: hideWindow) {
             Image(systemName: "xmark.circle.fill")
@@ -547,7 +446,6 @@ struct CommandWindowView: View {
         .help("Hide — sessions keep running")
     }
 
-    /// A dropped file on its own is a command, same as an attachment in chat.
     private var canSend: Bool {
         !model.draft.trimmingCharacters(in: .whitespaces).isEmpty
             || !model.droppedFiles.isEmpty
@@ -559,9 +457,6 @@ struct CommandWindowView: View {
         _ = model.send()
     }
 
-    /// Shift/Option-Return breaks the line where the caret is, through the
-    /// field editor — the append-at-the-end version already shipped as a bug
-    /// in the chat box (2026-08-17), and this box must not re-ship it.
     private func breakLineAtCaret() {
         guard let editor = NSApp.windows
             .compactMap({ $0.firstResponder as? NSTextView })
@@ -579,8 +474,6 @@ struct CommandWindowView: View {
 
     private var maxBoxHeight: Double { lineHeight * Double(ChatPanelView.inputLineLimit) }
 
-    /// Never shorter than 2.5 lines — the owner's number (20.1), room for the
-    /// control row without the box reading as a single cramped line.
     private var boxHeight: Double {
         max(
             SecretaryCore.messageBoxHeight(
@@ -593,8 +486,6 @@ struct CommandWindowView: View {
     }
 }
 
-/// Choice buttons that wrap to the strip's width instead of forcing it wider —
-/// the same must-not-decide-the-window-size rule every panel here lives by.
 private struct WrappingChoices: View {
     let options: [String]
     let fontSize: Double
@@ -621,9 +512,6 @@ private struct WrappingChoices: View {
     }
 }
 
-/// Rows of subviews, wrapping when the line is full. A `Layout` because
-/// HStacks cannot wrap and a `Grid` would make every column as wide as the
-/// longest option.
 private struct FlowLayout: Layout {
     let spacing: Double
 
@@ -659,8 +547,6 @@ private struct FlowLayout: Layout {
     }
 }
 
-/// Carries the waiting cards' height out to the strip that has to cap it, so
-/// four of them cannot push the window past the bottom of the screen.
 private struct ApprovalsHeightKey: PreferenceKey {
     static let defaultValue: Double = 0
     static func reduce(value: inout Double, nextValue: () -> Double) {
@@ -668,7 +554,6 @@ private struct ApprovalsHeightKey: PreferenceKey {
     }
 }
 
-/// Carries the result rows' height out to the strip that has to cap it.
 private struct ResultsHeightKey: PreferenceKey {
     static let defaultValue: Double = 0
     static func reduce(value: inout Double, nextValue: () -> Double) {
@@ -676,7 +561,6 @@ private struct ResultsHeightKey: PreferenceKey {
     }
 }
 
-/// Carries the slab's rendered height out to the window that has to match it.
 struct SlabHeightKey: PreferenceKey {
     static let defaultValue: Double = 0
     static func reduce(value: inout Double, nextValue: () -> Double) {

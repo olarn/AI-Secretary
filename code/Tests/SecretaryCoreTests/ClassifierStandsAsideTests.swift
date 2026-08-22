@@ -6,14 +6,6 @@ import ProjectRegistry
 import ToolAdapters
 @testable import SecretaryCore
 
-/// A backend that can open the folder itself is not routed through the keyword
-/// classifier.
-///
-/// The rules were written for a bare API with no hands. Against Claude Code
-/// they cost correctness (the adapter's answer never enters the model's
-/// session, so a follow-up question has nothing to refer to) and consistency
-/// (the keywords are English-only, so the same request took different paths
-/// depending on which language it was typed in).
 @MainActor
 final class ClassifierStandsAsideTests: XCTestCase {
     private var machine = AssistantStateMachine()
@@ -26,9 +18,6 @@ final class ClassifierStandsAsideTests: XCTestCase {
         freshCollaborators()
     }
 
-    /// Each message in a loop needs its own spies, or the counts from the
-    /// previous one are still on them and every assertion after the first is
-    /// comparing against a running total.
     private func freshCollaborators() {
         machine = AssistantStateMachine()
         provider = SpyWorkspaceProvider()
@@ -65,8 +54,6 @@ final class ClassifierStandsAsideTests: XCTestCase {
         }
     }
 
-    /// The messages that used to be intercepted. Every one of them is now the
-    /// model's to answer, and no adapter is touched.
     private let wouldHaveBeenCommands = [
         "read README.md in AI-Secretary",
         "status in AI-Secretary",
@@ -92,13 +79,9 @@ final class ClassifierStandsAsideTests: XCTestCase {
         }
     }
 
-    /// Sprint 15.2's paragraph, on the agent path. It reached the model before
-    /// this sprint only because the guards sent it there; now nothing else
-    /// could have happened to it.
     func testProseReachesTheModelTooAndAsksForNoProject() async {
         provider.hasWorkspaceTools = true
         let secretary = makeSecretary()
-        // swiftlint:disable:next line_length
         secretary.submit("Alpha Capital Group is a company specializing in non-performing asset management through its operating subsidiaries, Alpha Capital Asset Management Co., Ltd. (Alpha) and Wireless Asset Management Co., Ltd. (WAMC). The group manages non-performing loan (NPL) portfolios and non-performing assets (NPA), including property sales, borrower follow-up, collection, legal status, collateral management, customer enquiries, and related service processes")
         await waitUntilIdle()
 
@@ -106,13 +89,6 @@ final class ClassifierStandsAsideTests: XCTestCase {
         XCTAssertEqual(secretary.pendingDecision, .none(), "nothing to approve, nothing to choose")
     }
 
-    /// The fallback is untouched. A bare chat model genuinely cannot look, so
-    /// the classifier and the adapters are the only way those requests get
-    /// answered at all.
-    ///
-    /// The card is the evidence: the tool path stops there before the adapter
-    /// is ever asked to run, so a card at all means the words were read as a
-    /// command rather than as chat.
     func testWithoutWorkspaceToolsTheClassifierStillRuns() async {
         provider.hasWorkspaceTools = false
         let secretary = makeSecretary()
@@ -126,9 +102,6 @@ final class ClassifierStandsAsideTests: XCTestCase {
         XCTAssertEqual(provider.callCount, 0, "and does not spend a model turn on it")
     }
 
-    /// Detection has usually not finished when the app opens, so the first
-    /// message can take the fallback path and a later one cannot. Deliberate,
-    /// and pinned here so it reads as a decision rather than a flake.
     func testTheAnswerFollowsTheBackendWhenDetectionFinishesMidSession() async {
         provider.hasWorkspaceTools = false
         let secretary = makeSecretary()
@@ -139,8 +112,6 @@ final class ClassifierStandsAsideTests: XCTestCase {
         }
         XCTAssertEqual(provider.callCount, 0)
 
-        // Deny, so the pending card is cleared and the next message is free to
-        // take its own path.
         secretary.resolvePendingApproval(answer: .deny)
         await waitUntilIdle()
 
@@ -152,8 +123,6 @@ final class ClassifierStandsAsideTests: XCTestCase {
         XCTAssertEqual(provider.callCount, 1, "it went to the model instead")
     }
 
-    /// `help` is answered by the app itself, before any of this. It is local,
-    /// so which backend is attached changes what it *says* but not who answers.
     func testHelpIsStillAnsweredLocally() async {
         provider.hasWorkspaceTools = true
         let secretary = makeSecretary()
@@ -166,8 +135,6 @@ final class ClassifierStandsAsideTests: XCTestCase {
             "and still lists the slash commands"
         )
     }
-
-    // MARK: - What help promises
 
     func testHelpDoesNotTeachTypedCommandsOnTheAgentPath() {
         let agent = SecretaryPrompt.helpText(workspaceTools: true)

@@ -6,12 +6,6 @@ import ToolAdapters
 import LLMProvider
 @testable import SecretaryCore
 
-/// What the timer does to the conversation.
-///
-/// `tickLoop(now:)` takes the date rather than reading the clock, so a whole
-/// afternoon of checks can be driven in a millisecond — and, more to the point,
-/// so the awkward cases (a check falling due mid-reply, a loop left running for
-/// hours) are tested rather than hoped about.
 @MainActor
 final class LoopBehaviourTests: XCTestCase {
     private let machine = AssistantStateMachine()
@@ -36,11 +30,6 @@ final class LoopBehaviourTests: XCTestCase {
         }
     }
 
-    // MARK: - Starting and stopping
-
-    /// A timer that speaks on its own must say so when it is armed, and say how
-    /// to disarm it. Anything else leaves a message arriving out of nowhere with
-    /// no explanation.
     func testStartingALoopAnnouncesItselfAndHowToStop() {
         let secretary = makeSecretary()
         secretary.startLoop(interval: 600, note: "where are we", now: Date())
@@ -63,16 +52,12 @@ final class LoopBehaviourTests: XCTestCase {
                       "Got: \(secretary.transcript.last?.text ?? "")")
     }
 
-    /// The view wires a button straight to this, so it must not need asking
-    /// first.
     func testStoppingWhenNothingRunsSaysSoRatherThanCrashing() {
         let secretary = makeSecretary()
         secretary.stopLoop()
         XCTAssertEqual(secretary.activeLoop, .none())
         XCTAssertTrue(secretary.transcript.last?.text.contains("No loop") == true)
     }
-
-    // MARK: - The slash command
 
     func testTheSlashCommandStartsStopsAndReports() {
         let secretary = makeSecretary()
@@ -90,8 +75,6 @@ final class LoopBehaviourTests: XCTestCase {
         XCTAssertEqual(secretary.activeLoop, .none())
     }
 
-    /// A refused interval must leave nothing running — the failure mode to avoid
-    /// is a loop at a rate nobody chose.
     func testARefusedIntervalStartsNothing() {
         let secretary = makeSecretary()
         secretary.submit("/loop 5s")
@@ -100,8 +83,6 @@ final class LoopBehaviourTests: XCTestCase {
                       "Got: \(secretary.transcript.last?.text ?? "")")
     }
 
-    /// `/loop` was advertised to the user before it existed, and the reply was
-    /// "Unknown command". Whatever else changes, it must stay a real command.
     func testLoopIsAKnownCommand() {
         let secretary = makeSecretary()
         secretary.submit("/loop")
@@ -110,8 +91,6 @@ final class LoopBehaviourTests: XCTestCase {
             "/loop must be a real command"
         )
     }
-
-    // MARK: - Firing
 
     func testACheckIsNotSentBeforeItIsDue() {
         let chat = FakeChatProvider(.events([.completed(stopReason: .none(), usage: .none())]))
@@ -138,11 +117,9 @@ final class LoopBehaviourTests: XCTestCase {
 
         XCTAssertEqual(chat.callCount, 1, "The check must reach the model")
         XCTAssertEqual(secretary.activeLoop.toOptional()?.firedCount, 1)
-        // The prompt has to carry the clock: the model has none of its own.
         let sent = chat.lastMessages.last?.content ?? ""
         XCTAssertTrue(sent.contains("Loop check"), "Got: \(sent)")
         XCTAssertTrue(sent.contains("ถึงหัวข้อไหนแล้ว"), "Got: \(sent)")
-        // And the transcript has to explain the message nobody asked for.
         XCTAssertTrue(
             secretary.transcript.contains { $0.kind == .activity && $0.text.contains("Loop check") },
             "A reply out of nowhere needs a visible cause"
@@ -150,8 +127,6 @@ final class LoopBehaviourTests: XCTestCase {
         XCTAssertTrue(secretary.transcript.last?.text.contains("WIP Limit") == true)
     }
 
-    /// The single-flight streaming task means a check landing mid-reply would
-    /// cancel the answer the user is reading. It waits instead.
     func testACheckDueMidReplyWaitsInsteadOfInterrupting() async {
         let chat = FakeChatProvider(.events([.completed(stopReason: .none(), usage: .none())]))
         let secretary = makeSecretary(chat: chat)
@@ -167,8 +142,6 @@ final class LoopBehaviourTests: XCTestCase {
         XCTAssertTrue(secretary.activeLoop.isDefined, "Being busy must not cancel the loop")
     }
 
-    /// A loop nobody stopped must not still be running tomorrow, spending the
-    /// user's subscription on an agenda that finished.
     func testALoopLeftRunningForHoursStopsItself() {
         let chat = FakeChatProvider(.events([.completed(stopReason: .none(), usage: .none())]))
         let secretary = makeSecretary(chat: chat)
@@ -182,10 +155,6 @@ final class LoopBehaviourTests: XCTestCase {
         XCTAssertTrue(secretary.transcript.last?.text.contains("Loop stopped") == true)
     }
 
-    // MARK: - The assistant setting one up itself
-
-    /// The "ทำได้เองตามบริบท" path: the user asks to be kept up to date in
-    /// their own words and the reply carries the block.
     func testALoopTheAssistantAsksForStartsAndIsNotShownAsText() async {
         let chat = FakeChatProvider(.events([
             .textDelta("ได้เลย จะบอกทุก 10 นาที\n\n```loop\nevery: 10m\nถึงหัวข้อไหนแล้ว\n```"),
