@@ -15,7 +15,7 @@ final class PermissionRecoveryTests: XCTestCase {
 
     private var approved: PermissionGrants {
         PermissionGrants().granting(
-            projectID: vault.id,
+            project: vault,
             toolID: agentToolID,
             actionClass: .localWrite,
             lasting: .always
@@ -185,7 +185,7 @@ final class PermissionRecoveryTests: XCTestCase {
     func testNoProjectOpenIsNeverAnsweredByAGrant() {
         let placeholder = Project(name: "no project", path: "/tmp/scratch", allowedTools: [agentToolID])
         let grantsForThePlaceholder = PermissionGrants().granting(
-            projectID: placeholder.id,
+            project: placeholder,
             toolID: agentToolID,
             actionClass: .localWrite,
             lasting: .always
@@ -247,6 +247,42 @@ final class PermissionRecoveryTests: XCTestCase {
     func testTheStrictestClassInTheBatchDecides() {
         XCTAssertEqual(strictestClass(of: ["Write", "Bash(rm *)"]), .destructive)
         XCTAssertEqual(strictestClass(of: ["Write", "Bash(mkdir *)"]), .localWrite)
+    }
+
+    func testRemovingAndReAddingTheProjectKeepsTheAlways() {
+        let reAdded = Project(name: vault.name, path: vault.path, allowedTools: vault.allowedTools)
+        XCTAssertNotEqual(reAdded.id, vault.id, "a re-added folder is a new registry entry")
+        XCTAssertEqual(
+            recover(denied: [write()], subject: .registered(reAdded), grants: approved),
+            .widenSilently(rules: ["Write"]),
+            "the key is the folder, so re-adding it does not throw the answer away"
+        )
+    }
+
+    func testTwoSpellingsOfOneFolderAreOneKey() {
+        let spelledWithADot = Project(
+            name: vault.name,
+            path: "/Users/someone/./Second-Brain/",
+            allowedTools: vault.allowedTools
+        )
+        XCTAssertEqual(
+            recover(denied: [write()], subject: .registered(spelledWithADot), grants: approved),
+            .widenSilently(rules: ["Write"])
+        )
+    }
+
+    func testOneYesCoversEveryToolAndBothRememberableClassesInThatProject() {
+        for klass in ActionClass.allCases where mayBeRemembered(klass) {
+            XCTAssertTrue(
+                approved.has(project: vault, toolID: "any.tool", actionClass: klass),
+                "one key per project, so \(klass) is covered too"
+            )
+        }
+    }
+
+    func testOneYesStillCoversNothingInAnotherProject() {
+        let elsewhere = Project(name: "Other", path: "/Users/someone/Other", allowedTools: [agentToolID])
+        XCTAssertFalse(approved.has(project: elsewhere, toolID: agentToolID, actionClass: .localWrite))
     }
 
     func testAnApprovedProjectOffersTheWriteToolsUpFront() {

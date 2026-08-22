@@ -132,7 +132,7 @@ final class FileUnderstandingPolicyTests: XCTestCase {
         )
         let grants = PermissionGrants()
             |> PermissionGrants.granting(
-                projectID: project.id,
+                project: project,
                 toolID: FileReadOnlyAdapter.toolIdentifier,
                 actionClass: .readOnly
             )

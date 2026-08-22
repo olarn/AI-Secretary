@@ -1,6 +1,7 @@
 import FunctionalCore
 import Foundation
 import Permissions
+import ProjectRegistry
 
 public enum GrantStoreError: Error, Equatable, Sendable {
     case readFailed(path: String, message: String)
@@ -49,9 +50,39 @@ public final class FileStandingGrantStore: StandingGrantStoring, @unchecked Send
     }
 
     private func decode(_ data: Data) -> Either<GrantStoreError, [StandingGrant]> {
-        attempt { try JSONDecoder().decode([StandingGrantDTO].self, from: data) }
+        let current = attempt { try JSONDecoder().decode([StandingGrantDTO].self, from: data) }
             .mapLeft { GrantStoreError.decodeFailed(path: fileURL.path, message: $0.localizedDescription) }^
             .map { $0.map(StandingGrant.init) }^
+        return current.fold({ _ in self.adoptTheIdKeyedFile(data) }, { .right($0) })
+    }
+
+    private func adoptTheIdKeyedFile(_ data: Data) -> Either<GrantStoreError, [StandingGrant]> {
+        attempt { try JSONDecoder().decode([IdKeyedGrantDTO].self, from: data) }
+            .mapLeft { GrantStoreError.decodeFailed(path: fileURL.path, message: $0.localizedDescription) }^
+            .map { old in
+                let paths = self.projectPaths()
+                let survivors = old.compactMap { paths[$0.projectID] }
+                return Array(Set(survivors.map { StandingGrant(projectPath: $0) })).sorted()
+            }^
+            .map { migrated in
+                _ = self.save(migrated)
+                return migrated
+            }^
+    }
+
+    private func projectPaths() -> [UUID: CanonicalPath] {
+        let projects = fileURL.deletingLastPathComponent()
+            .appendingPathComponent(
+                fileURL.lastPathComponent
+                    .replacingOccurrences(of: "permissions-", with: "projects-")
+            )
+        guard let data = try? Data(contentsOf: projects),
+              let decoded = try? JSONDecoder().decode([ProjectPathDTO].self, from: data)
+        else { return [:] }
+        return Dictionary(
+            decoded.map { ($0.id, CanonicalPath($0.path)) },
+            uniquingKeysWith: { first, _ in first }
+        )
     }
 
     public func save(_ grants: [StandingGrant]) -> Either<GrantStoreError, Void> {
@@ -89,17 +120,26 @@ public final class InMemoryStandingGrantStore: StandingGrantStoring, @unchecked 
 }
 
 struct StandingGrantDTO: Codable, Equatable, Sendable {
+    var projectPath: CanonicalPath
+}
+
+struct IdKeyedGrantDTO: Codable, Equatable, Sendable {
     var projectID: UUID
     var toolID: String
     var actionClass: ActionClass
 }
 
+struct ProjectPathDTO: Codable, Equatable, Sendable {
+    var id: UUID
+    var path: String
+}
+
 extension StandingGrant {
     init(_ dto: StandingGrantDTO) {
-        self.init(projectID: dto.projectID, toolID: dto.toolID, actionClass: dto.actionClass)
+        self.init(projectPath: dto.projectPath)
     }
 
     var dto: StandingGrantDTO {
-        StandingGrantDTO(projectID: projectID, toolID: toolID, actionClass: actionClass)
+        StandingGrantDTO(projectPath: projectPath)
     }
 }

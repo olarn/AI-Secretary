@@ -43,7 +43,11 @@ public func mayBeRemembered(_ actionClass: ActionClass) -> Bool {
 
 public func permissionScopeSentence(_ answers: [PermissionAnswer]) -> String {
     answers.contains(.always)
-        ? "Once covers this conversation; Always means you won't be asked for this project again."
+        ? """
+          Once covers this conversation; Always covers reading and writing anywhere in \
+          this project, and I'll still ask before deleting, installing, or anything that \
+          leaves this Mac.
+          """
         : "This allows it for the rest of this session only."
 }
 

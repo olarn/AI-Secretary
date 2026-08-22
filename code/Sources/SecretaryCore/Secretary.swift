@@ -1022,7 +1022,7 @@ public final class Secretary {
         else { return }
 
         grants = grants |> PermissionGrants.granting(
-            projectID: request.project.id,
+            project: request.project,
             toolID: request.toolID,
             actionClass: request.actionClass,
             lasting: duration

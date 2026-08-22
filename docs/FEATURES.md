@@ -1,6 +1,6 @@
 # What the app does today
 
-**State of the product at v0.23.365** (`code/Sources/SecretaryCore/AppVersion.swift`),
+**State of the product at v0.23.366** (`code/Sources/SecretaryCore/AppVersion.swift`),
 2026-08-22, on `main` at `e1d4c95`.
 
 This is the standing answer to "what can it do, and what happens when I use it" —
@@ -154,6 +154,12 @@ on, and when policy would honour it. Those three conditions are a tested functio
 not an `if` in a view. Only `Always` reaches disk, in
 `AISecretary/permissions-<profileID>.json`, one file per character; session grants
 cannot leak into it by construction.
+
+**`Always` is one row per project, keyed by the folder** (0.23.366). It survives
+removing and re-adding the project, which the old UUID key did not — the owner's file
+held six rows of which one still named a project that existed. Migration on first
+launch maps the old rows through the project list and drops those whose folder is
+unknowable.
 
 **`Always` covers the project, not a folder** (0.23.365). One yes on `Second-Brain`
 covers writing to the vault root and every folder under it, for ever — a refused

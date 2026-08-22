@@ -127,15 +127,11 @@ public func agentToolSurface(
 }
 
 public func isInside(_ path: String, _ project: Project) -> Bool {
-    let folder = URL(fileURLWithPath: path).standardizedFileURL.path
-    let root = project.url.standardizedFileURL.path
-    return folder == root || folder.hasPrefix(root.hasSuffix("/") ? root : root + "/")
+    CanonicalPath(project.path).contains(CanonicalPath(path))
 }
 
 private func mayWriteHere(_ subject: GrantSubject, _ grants: PermissionGrants) -> Bool {
     subject.grantable
-        .map { project in
-            grants.has(projectID: project.id, toolID: agentToolID, actionClass: .localWrite)
-        }^
+        .map { project in grants.has(project: project, toolID: agentToolID, actionClass: .localWrite) }^
         .getOrElse(false)
 }

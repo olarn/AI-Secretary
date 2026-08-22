@@ -603,11 +603,7 @@ final class AgentSessionTests: XCTestCase {
         let secretary = makeSecretary(
             projects: [allowed],
             grantStore: InMemoryStandingGrantStore(grants: [
-                StandingGrant(
-                    projectID: allowed.id,
-                    toolID: Secretary.claudeCodeToolID,
-                    actionClass: .localWrite
-                )
+                StandingGrant(project: allowed)
             ])
         )
         var asked: [ApprovalAsked] = []
@@ -642,11 +638,7 @@ final class AgentSessionTests: XCTestCase {
         let secretary = makeSecretary(
             projects: [allowed],
             grantStore: InMemoryStandingGrantStore(grants: [
-                StandingGrant(
-                    projectID: allowed.id,
-                    toolID: Secretary.claudeCodeToolID,
-                    actionClass: .localWrite
-                )
+                StandingGrant(project: allowed)
             ])
         )
         secretary.submit("hello")
@@ -671,11 +663,7 @@ final class AgentSessionTests: XCTestCase {
         let secretary = makeSecretary(
             projects: [allowed],
             grantStore: InMemoryStandingGrantStore(grants: [
-                StandingGrant(
-                    projectID: allowed.id,
-                    toolID: Secretary.claudeCodeToolID,
-                    actionClass: .localWrite
-                )
+                StandingGrant(project: allowed)
             ])
         )
         provider.denialsForNextTurn = [denyWrite()]
@@ -702,11 +690,7 @@ final class AgentSessionTests: XCTestCase {
         let secretary = makeSecretary(
             projects: [allowed],
             grantStore: InMemoryStandingGrantStore(grants: [
-                StandingGrant(
-                    projectID: allowed.id,
-                    toolID: Secretary.claudeCodeToolID,
-                    actionClass: .localWrite
-                )
+                StandingGrant(project: allowed)
             ])
         )
         provider.denialsForEveryTurn = [denyWrite()]
@@ -735,11 +719,7 @@ final class AgentSessionTests: XCTestCase {
         let secretary = makeSecretary(
             projects: [allowed],
             grantStore: InMemoryStandingGrantStore(grants: [
-                StandingGrant(
-                    projectID: allowed.id,
-                    toolID: Secretary.claudeCodeToolID,
-                    actionClass: .localWrite
-                )
+                StandingGrant(project: allowed)
             ])
         )
         secretary.submit("hello")
@@ -772,11 +752,7 @@ final class AgentSessionTests: XCTestCase {
         let secretary = makeSecretary(
             projects: [allowed],
             grantStore: InMemoryStandingGrantStore(grants: [
-                StandingGrant(
-                    projectID: allowed.id,
-                    toolID: Secretary.claudeCodeToolID,
-                    actionClass: .localWrite
-                )
+                StandingGrant(project: allowed)
             ])
         )
         provider.denialsForNextTurn = [denyWrite()]
@@ -835,11 +811,7 @@ final class AgentSessionTests: XCTestCase {
 
         XCTAssertEqual(
             grantStore.load().getOrElse([]),
-            [StandingGrant(
-                projectID: allowed.id,
-                toolID: Secretary.claudeCodeToolID,
-                actionClass: .localWrite
-            )],
+            [StandingGrant(project: allowed)],
             "Exactly the one grant, and nothing about which rules were refused"
         )
         XCTAssertTrue(

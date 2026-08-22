@@ -57,30 +57,30 @@ private func request(
 
 final class PermissionGrantsTests: XCTestCase {
     func testGrantingReturnsANewValueAndLeavesTheOriginalAlone() {
-        let projectID = UUID()
+        let subject = Project(name: "P", path: "/tmp/p", allowedTools: ["git.readOnly", "other.tool"])
         let before = PermissionGrants()
-        let after = before.granting(projectID: projectID, toolID: "git.readOnly", actionClass: .readOnly)
+        let after = before.granting(project: subject, toolID: "git.readOnly", actionClass: .readOnly)
 
-        XCTAssertFalse(before.has(projectID: projectID, toolID: "git.readOnly", actionClass: .readOnly))
-        XCTAssertTrue(after.has(projectID: projectID, toolID: "git.readOnly", actionClass: .readOnly))
+        XCTAssertFalse(before.has(project: subject, toolID: "git.readOnly", actionClass: .readOnly))
+        XCTAssertTrue(after.has(project: subject, toolID: "git.readOnly", actionClass: .readOnly))
         XCTAssertNotEqual(before, after)
     }
 
     func testGrantingTheSamePairTwiceIsTheSameValue() {
-        let projectID = UUID()
-        let once = PermissionGrants().granting(projectID: projectID, toolID: "git.readOnly", actionClass: .readOnly)
-        let twice = once.granting(projectID: projectID, toolID: "git.readOnly", actionClass: .readOnly)
+        let subject = Project(name: "P", path: "/tmp/p", allowedTools: ["git.readOnly", "other.tool"])
+        let once = PermissionGrants().granting(project: subject, toolID: "git.readOnly", actionClass: .readOnly)
+        let twice = once.granting(project: subject, toolID: "git.readOnly", actionClass: .readOnly)
         XCTAssertEqual(once, twice)
     }
 
     func testCurriedGrantingComposesInAPipeline() {
-        let projectID = UUID()
+        let subject = Project(name: "P", path: "/tmp/p", allowedTools: ["git.readOnly", "other.tool"])
         let grants = PermissionGrants()
-            |> PermissionGrants.granting(projectID: projectID, toolID: "git.readOnly", actionClass: .readOnly)
-            |> PermissionGrants.granting(projectID: projectID, toolID: "other.tool", actionClass: .readOnly)
+            |> PermissionGrants.granting(project: subject, toolID: "git.readOnly", actionClass: .readOnly)
+            |> PermissionGrants.granting(project: subject, toolID: "other.tool", actionClass: .readOnly)
 
-        XCTAssertTrue(grants.has(projectID: projectID, toolID: "git.readOnly", actionClass: .readOnly))
-        XCTAssertTrue(grants.has(projectID: projectID, toolID: "other.tool", actionClass: .readOnly))
+        XCTAssertTrue(grants.has(project: subject, toolID: "git.readOnly", actionClass: .readOnly))
+        XCTAssertTrue(grants.has(project: subject, toolID: "other.tool", actionClass: .readOnly))
     }
 }
 
@@ -104,14 +104,14 @@ final class PermissionRailTests: XCTestCase {
 
     func testApprovalRailAllowsOnceGranted() {
         let req = request(project: allowed)
-        let grants = PermissionGrants().granting(projectID: allowed.id, toolID: "git.readOnly", actionClass: .readOnly)
+        let grants = PermissionGrants().granting(project: allowed, toolID: "git.readOnly", actionClass: .readOnly)
         XCTAssertEqual(requireApproval(grants)(req), .right(.allowed))
     }
 
     func testAGrantCannotStandInForTheAllowlist() {
         let req = request(project: notAllowed).steppingOutsideAllowlist()
         XCTAssertEqual(req.actionClass, .readOnly, "the risky combination is the unattended one")
-        let grants = PermissionGrants().granting(projectID: notAllowed.id, toolID: "git.readOnly", actionClass: .readOnly)
+        let grants = PermissionGrants().granting(project: notAllowed, toolID: "git.readOnly", actionClass: .readOnly)
         XCTAssertEqual(requireApproval(grants)(req), .right(.needsApproval(req)))
     }
 }
@@ -134,7 +134,7 @@ final class PermissionDecisionTests: XCTestCase {
     }
 
     func testSayingYesOnceDoesNotSettleIt() {
-        let grants = PermissionGrants().granting(projectID: notAllowed.id, toolID: "git.readOnly", actionClass: .readOnly)
+        let grants = PermissionGrants().granting(project: notAllowed, toolID: "git.readOnly", actionClass: .readOnly)
         XCTAssertEqual(
             decision(request(project: notAllowed), grants: grants),
             .right(.needsApproval(request(project: notAllowed).steppingOutsideAllowlist()))
@@ -147,13 +147,13 @@ final class PermissionDecisionTests: XCTestCase {
     }
 
     func testReadOnlyIsAllowedOnceTheProjectToolPairIsApproved() {
-        let grants = PermissionGrants().granting(projectID: allowed.id, toolID: "git.readOnly", actionClass: .readOnly)
+        let grants = PermissionGrants().granting(project: allowed, toolID: "git.readOnly", actionClass: .readOnly)
         XCTAssertEqual(decision(request(project: allowed), grants: grants), .right(.allowed))
     }
 
     func testApprovalIsScopedToTheProjectThatWasApproved() {
         let other = Project(name: "Other", path: "/tmp/c", allowedTools: ["git.readOnly"])
-        let grants = PermissionGrants().granting(projectID: allowed.id, toolID: "git.readOnly", actionClass: .readOnly)
+        let grants = PermissionGrants().granting(project: allowed, toolID: "git.readOnly", actionClass: .readOnly)
         let req = request(project: other)
 
         XCTAssertEqual(decision(req, grants: grants), .right(.needsApproval(req)))
@@ -161,14 +161,14 @@ final class PermissionDecisionTests: XCTestCase {
 
     func testApprovalIsScopedToTheToolThatWasApproved() {
         let multiTool = Project(name: "Multi", path: "/tmp/d", allowedTools: ["git.readOnly", "other.tool"])
-        let grants = PermissionGrants().granting(projectID: multiTool.id, toolID: "git.readOnly", actionClass: .readOnly)
+        let grants = PermissionGrants().granting(project: multiTool, toolID: "git.readOnly", actionClass: .readOnly)
         let req = request(project: multiTool, tool: "other.tool")
 
         XCTAssertEqual(decision(req, grants: grants), .right(.needsApproval(req)))
     }
 
     func testAGrantForOneClassDoesNotCoverAnother() {
-        let grants = PermissionGrants().granting(projectID: allowed.id, toolID: "git.readOnly", actionClass: .readOnly)
+        let grants = PermissionGrants().granting(project: allowed, toolID: "git.readOnly", actionClass: .readOnly)
 
         for klass in ActionClass.allCases where klass != .readOnly {
             let req = request(project: allowed, actionClass: klass)
@@ -183,7 +183,7 @@ final class PermissionDecisionTests: XCTestCase {
     func testWhatMayNotBeRememberedAsksEvenWithItsOwnGrant() {
         for klass in ActionClass.allCases where !mayBeRemembered(klass) {
             let grants = PermissionGrants()
-                .granting(projectID: allowed.id, toolID: "git.readOnly", actionClass: klass)
+                .granting(project: allowed, toolID: "git.readOnly", actionClass: klass)
             let req = request(project: allowed, actionClass: klass)
             XCTAssertEqual(
                 decision(req, grants: grants),
@@ -195,7 +195,7 @@ final class PermissionDecisionTests: XCTestCase {
 
     func testReadingInTheProjectStopsAskingOnceAgreed() {
         let grants = PermissionGrants()
-            .granting(projectID: allowed.id, toolID: "git.readOnly", actionClass: .readOnly)
+            .granting(project: allowed, toolID: "git.readOnly", actionClass: .readOnly)
         XCTAssertEqual(
             decision(request(project: allowed, actionClass: .readOnly), grants: grants),
             .right(.allowed)
@@ -203,7 +203,7 @@ final class PermissionDecisionTests: XCTestCase {
     }
 
     func testDecideIsPureSoTheSameInputsGiveTheSameAnswer() {
-        let grants = PermissionGrants().granting(projectID: allowed.id, toolID: "git.readOnly", actionClass: .readOnly)
+        let grants = PermissionGrants().granting(project: allowed, toolID: "git.readOnly", actionClass: .readOnly)
         let evaluate = decidePermission(grants)
         let req = request(project: allowed)
 

@@ -358,10 +358,10 @@ curried static twin below composes in a pipeline.
 
 ```swift
 public func granting(
-    projectID: UUID, toolID: String, actionClass: ActionClass, lasting: GrantDuration = .session
+    project: Project, toolID: String, actionClass: ActionClass, lasting: GrantDuration = .session
 ) -> PermissionGrants
 
-grants = grants |> PermissionGrants.granting(projectID: id, toolID: tool, actionClass: .readOnly)
+grants = grants |> PermissionGrants.granting(project: p, toolID: tool, actionClass: .readOnly)
 ```
 
 Behaviour that is currently a protocol + class purely to be swapped in tests is usually better as a pure function taking its dependency as a parameter — the test passes a value instead of building a fake.

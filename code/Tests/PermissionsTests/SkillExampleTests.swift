@@ -214,10 +214,10 @@ final class SkillExampleTests: XCTestCase {
     }
 
     func testCurriedStaticComposesInAPipeline() {
-        let projectID = UUID()
+        let project = Project(name: "P", path: "/tmp/skill", allowedTools: ["git.readOnly"])
         let grants = PermissionGrants()
-            |> PermissionGrants.granting(projectID: projectID, toolID: "git.readOnly", actionClass: .readOnly)
+            |> PermissionGrants.granting(project: project, toolID: "git.readOnly", actionClass: .readOnly)
 
-        XCTAssertTrue(grants.has(projectID: projectID, toolID: "git.readOnly", actionClass: .readOnly))
+        XCTAssertTrue(grants.has(project: project, toolID: "git.readOnly", actionClass: .readOnly))
     }
 }

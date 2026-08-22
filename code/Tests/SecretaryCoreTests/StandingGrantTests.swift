@@ -28,17 +28,13 @@ final class StandingGrantTests: XCTestCase {
 
     func testWhatWasRememberedIsInForceOnTheNextLaunch() {
         let store = InMemoryStandingGrantStore(grants: [
-            StandingGrant(
-                projectID: project.id,
-                toolID: GitReadOnlyAdapter.toolIdentifier,
-                actionClass: .readOnly
-            )
+            StandingGrant(project: project)
         ])
         let secretary = makeSecretary(store: store)
 
         XCTAssertTrue(
             secretary.grants.has(
-                projectID: project.id,
+                project: project,
                 toolID: GitReadOnlyAdapter.toolIdentifier,
                 actionClass: .readOnly
             )
@@ -62,7 +58,7 @@ final class StandingGrantTests: XCTestCase {
 
         let store = FileStandingGrantStore(fileURL: url)
         let written = [
-            StandingGrant(projectID: project.id, toolID: "git.readOnly", actionClass: .localWrite)
+            StandingGrant(project: project)
         ]
 
         XCTAssertTrue(store.save(written).isRight)
@@ -72,7 +68,12 @@ final class StandingGrantTests: XCTestCase {
     func testAMissingFileLoadsAsEmpty() {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("absent-\(UUID().uuidString).json")
-        XCTAssertEqual(FileStandingGrantStore(fileURL: url).load().getOrElse([.init(projectID: UUID(), toolID: "x", actionClass: .readOnly)]), [])
+        XCTAssertEqual(
+            FileStandingGrantStore(fileURL: url)
+                .load()
+                .getOrElse([StandingGrant(projectPath: CanonicalPath("/x"))]),
+            []
+        )
     }
 
     func testEachCharacterHasHerOwnFile() {

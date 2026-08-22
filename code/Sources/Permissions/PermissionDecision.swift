@@ -27,7 +27,7 @@ public func requireApproval(
         }
         return .right(
             grants.has(
-                projectID: request.project.id,
+                project: request.project,
                 toolID: request.toolID,
                 actionClass: request.actionClass
             )

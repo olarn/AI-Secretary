@@ -158,3 +158,53 @@ could never be found again. It now carries a constant id, and — more to the po
 — `GrantSubject` makes "no project open" a case of its own, so no grant is looked
 up against it and Always is not offered. The card says so rather than naming a
 project called "no project".
+
+## One key per project, and the key is the folder
+
+A grant used to be `(projectID, toolID, actionClass)`, and `project.id` is a UUID
+minted fresh by `Project.init` each time a folder is added. Remove a folder and add
+it back and every Always given for it was orphaned silently. The owner's file held
+**six** rows on 2026-08-22 of which **one** named a project that still existed;
+another character's project list was empty while two grants sat beside it. That is
+not an edge case — his Second-Brain Always was granted on 2026-08-20, lost when the
+registry was rewritten on 08-21, and granted again on 08-22.
+
+So a remembered grant is now one row, `StandingGrant(projectPath:)`, and the key is
+the folder. `CanonicalPath` is the single place a path becomes a key —
+`standardizedFileURL`, no trailing slash — so two spellings of one folder cannot
+become two grants. The owner chose this shape explicitly (2026-08-22) over keeping
+the id and merely cleaning up orphans.
+
+**One yes covers the project, not a folder inside it.** Asked directly which he
+wanted, the answer was: writing to the vault root or any sub-folder must never ask
+again. So the standing half carries no tool and no class — it means "approved to
+work in this project" — and the folder card is skipped for anything under it.
+
+**What it still does not cover** is unchanged, and is the other half of the same
+answer: reading and writing only. `noGrantMaySkipThis` is still consulted *before*
+the grants, so `.destructive`, `.gitHistoryChanging`, `.dependencyInstalling`,
+`.projectMemoryWrite`, `.externalNetwork`, `.browserAction` and `.directoryAccess`
+can never be answered by the key, and a tool outside the project's own
+`allowedTools` still asks. `permissionScopeSentence` had to change with it — it
+promised "you won't be asked for this project again", which under this shape is
+exactly the kind of overpromise `requestAgentAccess` was criticised for.
+
+**The session half keeps its tool and its class.** "Once" must still mean only what
+was asked, so `SessionGrant` stays `(path, toolID, actionClass)`. That asymmetry is
+deliberate: only the remembered half is one-per-project.
+
+### The migration reads the project list, and prunes only here
+
+`FileStandingGrantStore.load` tries the new shape, and on failure decodes the old
+one and maps each `projectID` through that character's `projects-<id>.json` to a
+path. A row whose project no longer exists is **dropped** — its path is unknowable,
+and inventing one would grant a folder nobody named. The result is written back
+once, so this is a migration rather than something redone on every launch.
+
+Pruning happens **only** during this migration, never on an ordinary load: an
+external drive that is not mounted must not silently revoke anything.
+
+Driven on the owner's own files, 2026-08-22: six rows became one for
+`/Users/Olarn/AllWorks/Second-Brain`, and the four dead ids are gone. Two other
+characters kept nothing, correctly — one had an empty project list, the other's
+grant named an id its registry no longer had.
