@@ -3505,3 +3505,36 @@ identifier ในไดอะแกรมกับ `code/Sources` ทีละ�
 
 **ข้าม step 6 (package-app.sh) โดยตั้งใจ**: ไม่มีอะไรที่เข้าไปอยู่ใน bundle เปลี่ยน —
 diagram เป็นเอกสารล้วน `.app` เดิมจึงยังเป็น build ที่ถูกต้องของโค้ดที่ ship อยู่
+
+### One document for what the app does, and two READMEs brought up to date (docs only, no version bump)
+
+เจ้าของขอสรุป feature/scenario ทั้งหมดที่ up-to-date ไว้ใน `docs/` แล้วสั่งเพิ่มระหว่างทาง
+ให้ update README ด้วย
+
+- [x] `docs/FEATURES.md` — สถานะของผลิตภัณฑ์ที่ v0.23.364 เขียนจาก **โค้ดเป็นแกน**
+  แล้วใช้ backlog เป็นเหตุผลประกอบ ไม่ใช่ไล่ sprint ตามลำดับ เพราะ backlog เป็น
+  changelog ที่มีของที่ถูกแทนที่ไปแล้วปนอยู่ — มีหัวข้อ **Superseded** ปิดท้ายไว้ 12 แถว
+  บอกว่าอ่าน backlog ตรงไหนแล้วจะเข้าใจผิด (classifier ที่ถูกถอด, `addressPhrases`
+  ที่ถูกลบทั้ง list, กติกา comment ของ v0.14.262 ที่ถูกแทนด้วย 0.23.354–360,
+  ⌘H ที่เปลี่ยนความหมาย ฯลฯ)
+- [x] ทุกข้อที่เขียนถูก verify กับ `code/Sources` ก่อน ไม่ได้ลอกจาก backlog:
+  `AIVendor.known` (2 ค่าย), `ActionClass` (9 คลาส), fence ทั้ง 12 ตัว, slash command
+  ทั้ง 8 ตัวจาก `handleSlashCommand`, แถวของทั้งสี่แผง, และชื่อไฟล์ใน Application Support
+- [x] `README.md` — ที่ค้างอยู่คือ "Sprints 1–15 done", "1,261 tests",
+  build stamp ที่บอกว่าโชว์ในเมนูแถบสถานะ (ถูกเอาออกตั้งแต่ 0.13.209), ไม่มี OpenCode
+  สักบรรทัด และไม่มี command window / loop / watch / run / memory / notification เลย
+  แก้ครบ พร้อมเพิ่มลิงก์ไป `docs/FEATURES.md`, `docs/design-notes/`, `docs/diagrams/`
+- [x] `code/README.md` — ค้างหนักที่สุด ยังเขียนว่า "Suggested next step: finish Sprint 4",
+  "No Claude Code adapter, web search, voice, or MCP integrations yet", มีแผง Debug
+  ที่ถอดไปแล้ว, มีทางเลือก API key ที่ไม่มีอยู่แล้ว และบอกว่า approval จำข้ามการเปิดแอป
+  ไม่ได้ เขียนใหม่เป็นคู่มือฝั่ง developer (build/test/drive, module layout, สไตล์,
+  ที่เก็บข้อมูล, versioning) แล้วชี้เรื่อง feature ไปที่ `docs/FEATURES.md` แทน
+- [x] **หมายเหตุที่แก้ไปด้วย**: README เขียนว่าไอคอนแอปสร้างจากรูปใน Application Support
+  ซึ่งจริงถึงแค่ v0.19.291 — ตั้งแต่ 292 `ICON_SRC` ชี้ไปที่ `docs/Noti-Icon.png`
+  ที่คอมมิตไว้ ส่วนรูปตัวละครยังอยู่ใน Application Support ตามเดิม (คนละเรื่องกัน)
+- 1438 tests ผ่านหมด, `swift build` สะอาด — `VersionInSyncTests` อ่าน README จึงต้องรัน
+  ซ้ำหลังแก้ (บรรทัด `Version 0.23.364.` ยังอยู่)
+
+**ไม่ bump version และข้าม step 6 โดยตั้งใจ**: เอกสารล้วน ไม่มีอะไรที่เข้าไปอยู่ใน bundle
+เปลี่ยน `.app` เดิมจึงยังเป็น build ที่ถูกต้องของโค้ดที่ ship อยู่ — เกณฑ์เดียวกับรอบ
+ตรวจ diagram ข้างบน
