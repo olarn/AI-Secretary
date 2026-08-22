@@ -51,15 +51,35 @@ Sprints 1–15 of the charter are done. Voice is not started.
 
 ## Getting started
 
+**Before you start** you need macOS 26 or later, the Xcode 26 command line
+tools (Swift 6.3), and [Claude Code](https://claude.com/claude-code) installed
+and signed in with `/login`. There is no API key to set up and nothing to
+configure: the app drives the `claude` binary on your own machine under your
+own account. It looks for it on launch and says so in the chat if it can't find
+it — no Claude Code, no reply.
+
 ```bash
-cd code
-swift build            # or: swift test   (1,261 tests)
+git clone https://github.com/olarn/AI-Secretary.git
+cd AI-Secretary/code
+swift build            # or: swift test   (1,438 tests)
 ./scripts/package-app.sh
 open AISecretary.app
 ```
 
-You need Claude Code installed and signed in via `/login`. The app looks for it
-on launch and says so in the chat if it can't find it.
+That builds the bundle and opens it. A character appears near the bottom-right
+of your screen and a ✨ item appears in the menu bar; click the character to
+open the chat, and quit from the ✨ menu. Nothing else is registered — no Dock
+icon, no login item.
+
+While you are changing code, `swift run AISecretaryApp` runs the checkout
+directly and skips the packaging step. It holds a Terminal window open, and
+four things only exist in a real bundle — the About window's build stamp, the
+icon, the version in `Info.plist`, and reopening by double-click — so check
+those against a packaged build rather than a `swift run`.
+
+[`code/README.md`](code/README.md) is the detailed guide from here: every
+module, the approval flow, registering a project, MCP servers and the debug
+panel.
 
 **One `.app`, always.** The packaging script deletes every other
 `AISecretary.app` in the repository and stamps the bundle with the commit and

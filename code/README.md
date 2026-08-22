@@ -138,8 +138,9 @@ nothing is still an error, never silently redirected to the remembered project.
 
 ## Requirements
 
-- macOS 14 (Sonoma) or later
-- Swift 5.9+ / Xcode 15+ command line tools
+- macOS 26 or later (`Package.swift` declares `.macOS("26.0")`)
+- Swift 6.3 / Xcode 26 command line tools
+- Claude Code, installed and signed in with `/login`
 
 ## Build
 
