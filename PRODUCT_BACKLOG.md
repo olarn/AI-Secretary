@@ -3438,3 +3438,50 @@ build ที่ไม่ได้ compile อะไรจริง — full buil
 `VendorRuntime.swift:55`, `OpenCodeVendor.swift:85-87` และ `withLock` ใน
 `ClaudeCodeProvider.swift:438`) ตรวจกับ `pre-clean-code-sweep` แล้ว**มีมาก่อน sweep
 ทั้งหมด** ไม่ได้เกิดจากงาน clean code
+
+## v0.23.363 — ไอคอนสถานะในแถว AI อยู่กึ่งกลางกับปุ่ม Check
+
+เจ้าของส่งภาพมาอีกครั้ง: ไอคอนติ๊กเขียวห้อยต่ำกว่าคำว่า Check เห็นชัด สาเหตุคือ
+`connectionMarker` ทั้งสามสถานะ (spinner / ✓ / ✗) เขียน
+`.alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] }` ไว้เอง ซึ่ง
+บังคับให้ **จุดกึ่งกลางของไอคอนไปทับ baseline ของข้อความ** ไอคอนจึงคร่อม baseline
+คือครึ่งล่างจมใต้ตัวอักษร ไม่ใช่กึ่งกลางกับปุ่ม Check อย่างที่เจ้าของสั่งไว้รอบก่อน
+
+- [x] ห่อปุ่ม Check กับไอคอนไว้ใน `HStack(alignment: .center)` ชั้นใน แล้วลบ
+  alignment guide ที่เขียนมือทั้งสามจุดทิ้ง — กึ่งกลางไอคอนตรงกับกึ่งกลางปุ่มโดย
+  ตัวระบบเอง ไม่ใช่ตัวเลขที่ต้องจูน (หน้านี้ย่อขยายตาม `hintFontSize` เลขที่จูนไว้
+  จะพังอีกเมื่อเปลี่ยนขนาดตัวอักษร ซึ่ง charter บันทึกความพลาดแบบนี้ไว้สองครั้งแล้ว)
+- [x] แถวนอกยังเป็น `.firstTextBaseline` เหมือนเดิม HStack ชั้นในส่ง baseline ของปุ่ม
+  Check ต่อขึ้นไป แนวของ dropdown กับ caption ที่แก้ไปรอบก่อนจึงไม่ขยับ
+- [x] Drive ครบสามสถานะในแอปจริง (`swift run AISecretaryApp`): OpenCode ✓ กึ่งกลาง
+  ปุ่มแล้ว, กด Check เห็น spinner อยู่ตำแหน่งเดียวกันไม่กระโดด, สลับไป Claude Code
+  ✓ กึ่งกลางเช่นกัน แล้วสลับกลับ OpenCode ตามเดิม
+- 1438 tests ผ่านหมด (fix อยู่ใน `AISecretaryApp` ที่ test มองไม่เห็น หลักฐานคือการ drive)
+
+## v0.23.364 — คอลัมน์ซ้ายของหน้า Profile ตรงเป็นแนวเดียว วัดจากตัวหนังสือ
+
+เจ้าของส่งภาพที่ลากเส้นตั้งไว้ที่คอลัมน์ซ้าย: dropdown ทุกตัว (Male, Exact, Chosen,
+Claude Code, Default, medium) เยื้องขวาออกจากขอบกล่องข้อความเล็กน้อย แล้วสั่งเพิ่มว่า
+**แนวที่ต้องตรงกันคือตัวหนังสือ ไม่ใช่ขอบกล่อง** — ข้อความใน Name / Age / Personality /
+CLI Path ต้องอยู่คอลัมน์เดียวกับ dropdown และ caption ส่วนขอบกล่องยื่นออกซ้ายได้
+
+วัดด้วย Accessibility: **frame ของทุกตัวอยู่ที่ x เดียวกันหมด (1243.5)** ความเยื้องไม่ได้
+มาจาก layout แต่มาจากส่วนที่แต่ละ control วาดเข้ามาในกรอบของตัวเอง — `.borderlessButton`
+วาด label เข้ามา ~4pt ส่วน `.roundedBorder` วาดข้อความเข้ามา ~6pt caption ไม่วาดเข้ามาเลย
+คอลัมน์ที่ตาเห็นจึงเป็นสามคอลัมน์ ไม่ใช่หนึ่ง
+
+- [x] ตั้งชื่อค่าที่วัดได้สองตัว (`borderlessMenuLabelInset`, `roundedFieldTextInset`) แล้วเลื่อน
+  ทุกอย่างที่ไม่ใช่กล่องข้อความไปให้ตรงกับข้อความในกล่อง: เมนูเลื่อนขวา
+  `roundedFieldTextInset - borderlessMenuLabelInset` caption เลื่อนขวา
+  `roundedFieldTextInset` ส่วนกล่องข้อความไม่ขยับ
+- [x] **ทำไมไม่ดึงกล่องมาซ้ายแทน** ซึ่งสั้นกว่า: ช่องว่างระหว่าง label กับกล่องคือ
+  `panelSpacing` (~6pt ที่ขนาดตัวอักษรปกติ) ดึงกล่องซ้าย 6pt แล้วกล่องจะชนคำว่า
+  "Personality" พอดี — charter บันทึกไว้แล้วว่าหน้านี้ต้อง "ล้นไม่ได้โดยโครงสร้าง"
+- [x] วัดซ้ำจากภาพจริง: ก่อนแก้ caption/ขอบกล่องอยู่ที่ 187-188px เมนู 194-195px ข้อความ
+  ในกล่อง 200px — หลังแก้ทุกอย่างอยู่ที่ 198-201px (ต่างกันไม่เกิน 1px ซึ่งคือ side bearing
+  ของตัวอักษรแต่ละตัว)
+- [x] วงแหวนประ (inherited marker) ข้างแถว Model / Effort ห้อยต่ำแบบเดียวกับติ๊กเขียว
+  ในแถว AI — แก้ด้วยวิธีเดียวกัน (`HStack(alignment: .center)` แทน alignment guide
+  ที่เขียนมือ)
+- [x] Drive แล้วทั้งสองตัวละคร: OpenCode (แถว Model/Effort ซ่อน) และ Claude Code
+  (เห็นครบ Model/Effort พร้อมวงแหวนประ) แล้วสลับกลับ OpenCode ตามเดิม

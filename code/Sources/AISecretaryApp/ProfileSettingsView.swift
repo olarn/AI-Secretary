@@ -4,6 +4,9 @@ import AssistantState
 import LLMProvider
 import SecretaryCore
 
+private let borderlessMenuLabelInset: CGFloat = 4
+private let roundedFieldTextInset: CGFloat = 6
+
 struct ProfileSettingsView: View {
     @Environment(\.palette) private var theme
 
@@ -107,6 +110,7 @@ struct ProfileSettingsView: View {
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
+            .padding(.leading, roundedFieldTextInset - borderlessMenuLabelInset)
             if draft.genderChoice == .other {
                 TextField("e.g. non-binary", text: $draft.genderText)
                     .textFieldStyle(.roundedBorder)
@@ -132,6 +136,7 @@ struct ProfileSettingsView: View {
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
+            .padding(.leading, roundedFieldTextInset - borderlessMenuLabelInset)
             if draft.ageChoice == .exact {
                 TextField("17", text: $draft.ageText)
                     .textFieldStyle(.roundedBorder)
@@ -154,6 +159,7 @@ struct ProfileSettingsView: View {
                 Text("Free text — who she is, in your words. Blank means \(SecretaryProfile.defaultPersonality).")
                     .font(.system(size: appearance.settings.hintFontSize))
                     .foregroundStyle(theme.mutedText.color)
+                    .padding(.leading, roundedFieldTextInset)
             }
         }
     }
@@ -185,12 +191,14 @@ struct ProfileSettingsView: View {
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
                 .fixedSize()
+                .padding(.leading, roundedFieldTextInset - borderlessMenuLabelInset)
                 .id("picture-\(profiles.artworkRevision)-\(id)")
                 Spacer(minLength: 0)
                 }
                 Text("Shown in every state — the colour and badge say what she's doing.")
                     .font(.system(size: appearance.settings.hintFontSize))
                     .foregroundStyle(theme.mutedText.color)
+                    .padding(.leading, roundedFieldTextInset)
             }
         }
     }
@@ -215,11 +223,14 @@ struct ProfileSettingsView: View {
                     .menuStyle(.borderlessButton)
                     .font(.system(size: appearance.settings.footnoteFontSize))
                     .fixedSize()
-                    Button("Check") { vendorStatus.refresh() }
-                        .buttonStyle(.plain)
-                        .font(.system(size: appearance.settings.hintFontSize))
-                        .foregroundStyle(theme.mutedText.color)
-                    connectionMarker
+                    .padding(.leading, roundedFieldTextInset - borderlessMenuLabelInset)
+                    HStack(alignment: .center, spacing: appearance.settings.panelSpacing * 0.4) {
+                        Button("Check") { vendorStatus.refresh() }
+                            .buttonStyle(.plain)
+                            .font(.system(size: appearance.settings.hintFontSize))
+                            .foregroundStyle(theme.mutedText.color)
+                        connectionMarker
+                    }
                 }
                 if let message = vendorStatus.connection.message {
                     Text(message)
@@ -230,12 +241,14 @@ struct ProfileSettingsView: View {
                                 : theme.mutedText.color
                         )
                         .fixedSize(horizontal: false, vertical: true)
+                        .padding(.leading, roundedFieldTextInset)
                 }
                 if let caution = vendorStatus.vendor.caution {
                     Label(caution, systemImage: "exclamationmark.triangle")
                         .font(.system(size: appearance.settings.hintFontSize))
                         .foregroundStyle(theme.warning.color)
                         .fixedSize(horizontal: false, vertical: true)
+                        .padding(.leading, roundedFieldTextInset)
                 }
             }
         }
@@ -259,6 +272,7 @@ struct ProfileSettingsView: View {
                     .font(.system(size: appearance.settings.hintFontSize))
                     .foregroundStyle(theme.mutedText.color)
                     .fixedSize(horizontal: false, vertical: true)
+                    .padding(.leading, roundedFieldTextInset)
             }
         }
         .onChange(of: vendorStatus.cliPath) { _, path in cliPathDraft = path }
@@ -269,17 +283,14 @@ struct ProfileSettingsView: View {
         if vendorStatus.connection.isChecking {
             ProgressView()
                 .controlSize(.small)
-                .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] }
         } else if vendorStatus.connection.isConnected {
             Image(systemName: "checkmark.circle.fill")
                 .foregroundStyle(theme.success.color)
                 .font(.system(size: appearance.settings.hintFontSize))
-                .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] }
         } else if vendorStatus.connection.isFailed {
             Image(systemName: "xmark.circle.fill")
                 .foregroundStyle(theme.danger.color)
                 .font(.system(size: appearance.settings.hintFontSize))
-                .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] }
         }
     }
 
@@ -345,6 +356,7 @@ struct ProfileSettingsView: View {
                     .font(.system(size: appearance.settings.hintFontSize))
                     .foregroundStyle(theme.mutedText.color)
                     .fixedSize(horizontal: false, vertical: true)
+                    .padding(.leading, roundedFieldTextInset)
             }
         }
     }
@@ -354,17 +366,17 @@ struct ProfileSettingsView: View {
         inherited: Bool,
         @ViewBuilder choices: () -> Choices
     ) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: appearance.settings.panelSpacing * 0.5) {
+        HStack(alignment: .center, spacing: appearance.settings.panelSpacing * 0.5) {
             Menu(content: choices) {
                 Text(value)
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
+            .padding(.leading, roundedFieldTextInset - borderlessMenuLabelInset)
             if inherited {
                 Image(systemName: "circle.dashed")
                     .font(.system(size: appearance.settings.hintFontSize * 0.8))
                     .foregroundStyle(theme.mutedText.color)
-                    .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] }
             }
             Spacer(minLength: 0)
         }

@@ -2561,6 +2561,23 @@ show their title and no value at all. The value is the one thing the row
 exists to say, so it is the only thing in the label.
 The grid gives the column the width of the widest label; this
 only says the label itself must not be the thing that wraps.
+
+Two measured insets, because the panel's left column is drawn by three
+different controls and each one indents its own text by a different amount.
+`.borderlessButton` draws a menu label about 4pt inside its own frame,
+`.roundedBorder` draws a field's text about 6pt inside, and a caption draws at
+its frame edge — so with every frame at the same x (confirmed through
+Accessibility: all of them report 1243.5), the text still reads as three ragged
+columns. `borderlessMenuLabelInset` and `roundedFieldTextInset` name those two
+amounts, and everything that is not a bordered field is shifted right to meet
+the field's text, which is the column the owner asked for: text against text,
+the box edges allowed to hang left of it.
+
+The shift goes that way round, and not the shorter way of pulling the boxes
+left, because the gap between the label column and the content column is
+`panelSpacing` — about 6pt at the default size — and pulling a box 6pt left sets
+it against "Personality". Neither number is font-derived: both are properties of
+the control style, so they stay constant while the panel scales.
 A rule across both columns. `Divider()` on its own would sit inside the
 label column and draw a stub.
 MARK: - Actions
