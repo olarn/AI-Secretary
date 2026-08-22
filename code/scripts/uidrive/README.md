@@ -156,6 +156,17 @@ whoever is using the machine. It is not a substitute for the picture: it
 measures AppKit's cells, and SwiftUI's styles resolve to different absolute
 numbers even where they scale the same way.
 
+`rowbaseline.swift` is the third of these and the one that found something. It
+rebuilds the Profile panel's Model row as SwiftUI, renders it with and without
+the dashed inherited ring at four times scale, and prints how far the row's
+label moved between the two — for the row as it is built now and for two
+candidate fixes. It reports in points at every app font size, deriving the
+control's font and the ring's font from that size the way the view does; a
+harness that feeds one font to both measures a configuration the app never
+produces, which is the mistake that made its first run's numbers worthless.
+What it says is in the `ai-secretary-app` design note, with the three reasons
+its magnitudes are indicative rather than final.
+
 ## Key codes
 
 The ones that come up: Return 36, Tab 48, Escape 53, Down 125, Up 126, Left

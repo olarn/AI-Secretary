@@ -2559,24 +2559,42 @@ The centre-aligned stack this marker sits in has a cost that was found by review
 and then measured, and it is not fixed yet. The enclosing `Grid` aligns on
 `leadingFirstTextBaseline`, so it asks the stack where its first baseline is;
 a centre-aligned stack answers from all of its children, and this marker is a
-child that comes and goes. Rendered off-screen at four times scale, the row's
-label moves when the ring appears: 2.75pt at font 7, 2.25pt at font 9, nothing
-at 19, 2.00pt at 29 — so the label's position depends on whether the app picked
-the model, which is not a thing the label should know about. The same shape
-applies to the Check button's stack in the AI row, whose height changes between
-the spinner and the tick.
+child that comes and goes. So the row's label moves when the ring appears —
+which means the label's position depends on whether the app picked the model,
+something the label has no business knowing. Rendered off-screen at four times
+scale, by app font size, with the stack at `footnoteFontSize` and the ring at
+`hintFontSize` × 0.8 the way the view builds them:
+
+| app font size | 10 | 12 | 14 | 16 | 18 | 20–26 | 28 | 30 | 32 |
+|---|---|---|---|---|---|---|---|---|---|
+| label drift | 2.75 | 2.75 | 2.25 | 1.75 | 0.25 | 0 | 0.50 | 0.25 | 1.25 |
+
+The worst of it is at the small end, and 12 is the default — this is the
+shipping configuration, not a corner. The same shape applies to the Check
+button's stack in the AI row, whose height changes between the spinner and the
+tick.
+
+Three things that table is not, before anyone builds on it. It comes from
+`ImageRenderer`, whose fidelity for a `.borderlessButton` `Menu` is unverified —
+the drift is measured off the label in the other column, which renders as plain
+text, but the stack driving it is the part in doubt. It renders a single-row
+`Grid` in a fixed frame rather than this file's multi-row grid inside a scroll
+view. And the series is not smooth: it goes to exactly zero across 20 to 26 and
+comes back, which is as consistent with pixel snapping at scale 4 as with a
+layout mechanism. Treat the mechanism as established and the magnitudes as
+indicative.
 
 Do not fix it by putting the stack back to `firstTextBaseline`. That measures
-clean — 0.00pt at all four sizes — but it is the alignment this row had before
+clean — 0.00pt at all twelve sizes — but it is the alignment this row had before
 0.23.363, and going back changes where the ring itself draws, which is the half
 of this the owner reported twice. Pinning the ring's own baseline to its bottom
 while keeping the stack centred was measured too and only half works: it clears
-the drift at font 29 but leaves 1.50pt at 7 and 0.75pt at 9. The remaining
-candidate is to keep the ring out of the stack's layout altogether, as an
-overlay rather than a sibling, and that has not been tried. Whatever is chosen
-has to be looked at on a real screen before it lands, because both halves of
-this — where the ring draws and where the label sits — are things only the eye
-settles.
+everything from app font size 16 up but leaves 1.25pt at 10 and 12. The
+remaining candidate is to keep the ring out of the stack's layout altogether, as
+an overlay rather than a sibling, and that has not been tried. Whatever is
+chosen has to be looked at on a real screen before it lands, because both halves
+of this — where the ring draws and where the label sits — are things only the
+eye settles.
 
 The inherited marker sits beside the menu, not inside it, on purpose: a `Menu` label built from several views
 renders as the chevron alone here, which is why these two rows used to
@@ -2607,11 +2625,13 @@ the ends of the font range, which runs 10 to 32 — a reasonable worry, since a
 rounded bezel's end caps are drawn at half its height, so an inset that tracked
 height would go ragged in the opposite direction at both extremes. It does not.
 `scripts/uidrive/insets.swift` measures the two AppKit cells under the styles
-these controls resolve to, at every font size the app offers: the field's text
-starts 8.00pt from its frame at every one of the twelve sizes while the field's
-own height grows from 18 to 42pt, and the borderless menu's label starts 8.00pt
-from its frame at all twelve as well. The height moves 24pt and neither inset
-moves at all, which is the mechanism refuted rather than merely doubted.
+these controls resolve to, at all twelve app font sizes — which is 10 to 32 in
+steps of 2, each control drawn at the `footnoteFontSize` this panel gives it, so
+8 to 29. The field's text starts 8.00pt from its frame at every one of the
+twelve while the field's own height grows from 18 to 42pt, and the borderless
+menu's label starts 8.00pt from its frame at all twelve as well. The height
+moves 24pt and neither inset moves at all, which is the mechanism refuted rather
+than merely doubted.
 
 Two things that measurement does not cover, so do not read it as more than it
 is. The absolute numbers there are 8 and 8 where this file's constants are 6 and
