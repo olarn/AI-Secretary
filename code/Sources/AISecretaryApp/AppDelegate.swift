@@ -594,7 +594,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
             }
         }
         let detector = self.detector
-        Task.detached(priority: .utility) { detector.resolve() }
+        Task.detached(priority: .utility) { detector.resolveOffTheMainThread() }
     }
 
     /// Re-lights every window, each character from her own theme.

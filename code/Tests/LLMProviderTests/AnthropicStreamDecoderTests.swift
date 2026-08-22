@@ -11,7 +11,6 @@ final class AnthropicStreamDecoderTests: XCTestCase {
             decoder.handle(dataLine: #"{"type":"content_block_start","index":0,"content_block":{"type":"thinking"}}"#),
             .some(.thinking)
         )
-        // A thinking delta produces nothing visible.
         XCTAssertEqual(decoder.handle(dataLine: #"{"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"…"}}"#), Option.none())
         XCTAssertEqual(decoder.handle(dataLine: #"{"type":"content_block_start","index":1,"content_block":{"type":"text","text":""}}"#), Option.none())
         XCTAssertEqual(
@@ -66,10 +65,6 @@ final class ChatTypeValidationTests: XCTestCase {
     }
 }
 
-/// The two providers share one error-normalising helper but must not share one
-/// fallback. Nothing else in the suite reaches this: the fakes yield scripted
-/// events and never throw a `URLError`, so a wrong fallback here reaches users
-/// as a wrong message with every test still green.
 final class ChatErrorMappingTests: XCTestCase {
     private let offline = URLError(.notConnectedToInternet)
 
@@ -88,7 +83,6 @@ final class ChatErrorMappingTests: XCTestCase {
         )
     }
 
-    /// An error that is already typed keeps its own case whichever caller maps it.
     func testAnExistingChatErrorPassesThrough() {
         XCTAssertEqual(asChatError(ChatError.claudeCodeNotFound, otherwise: ChatError.network), .claudeCodeNotFound)
     }

@@ -3337,3 +3337,20 @@ default) ซึ่งทำให้ cache หายไปด้วย — ค�
     → `docs/design-notes/permissions.md` พร้อมบันทึกบั๊ก 2026-08-17 ที่ vault ถามซ้ำทุกคำสั่ง
   - `SkillExampleTests.swift` ถอด comment แล้ว ชื่อ test รับข้อเท็จจริงเรื่อง Bow ไปแทน
     (เช่น `zip` บน `Option` ใช้ไม่ได้ใน 0.8.0) — SKILL.md ต้องแก้ให้ตรงกันในรอบเดียวกัน
+- [x] `LLMProvider` (26 ไฟล์) — ไม่เหลือ comment
+  - คำเตือน "อย่าเรียกบน main thread" กลายเป็น **ชื่อเมธอด** —
+    `ClaudeCodeDetector.resolveOffTheMainThread()`, `ClaudeCodeLocator.locateEvenIfItCostsALoginShell()`
+    และ `locateInKnownPathsWithoutLaunchingAnything()` ตอนนี้คำเตือนอยู่ที่ทุก call site
+    ไม่ใช่ที่ declaration ที่ไม่มีใครเปิดอ่าน
+  - string ที่เป็นสัญญากับ CLI ตั้งชื่อหมด: `phrasesClaudeCodeUsesWhenItRefusesATool`,
+    `phraseTheBrowserToolsUseWhichIsTooBroadForAnyOtherTool`,
+    `phraseClaudeCodeUsesWhenTheResumedSessionIsGone`,
+    `phraseClaudeCodeUsesForTheWorkingDirectoryWall`
+  - `deniedTools` → `toolsThatWouldLetHerMessageOtherClaudeCodeSessionsInsteadOfTheCharacters`
+  - `ANTHROPIC_API_KEY` → `keyThatWouldBillTheirAPICreditInsteadOfTheirSubscription`
+  - `["--", prompt]` → `messageLastAndBehindADoubleDash` (กฎเดียวกับที่ CLAUDE.md ย้ำ)
+  - `prepare` ของ OpenCode ที่ทิ้ง `additionalDirectories`/`allowedTools` ทิ้งอย่างเปิดเผยแล้ว
+    ผ่านฟังก์ชันชื่อ `openCodeHasNoFlagForTheseSoAcceptingThemAndDoingNothingIsTheHonestReading`
+  - ตัวเลขที่วัดมาทั้งหมด (5.47s→1.15s warm process, ตาราง prefill ของ opencode,
+    2.1.220 ที่พิสูจน์ว่า session ไม่ผูกกับ directory) → `docs/design-notes/llm-provider.md`
+  - 1438 tests ผ่านหมด

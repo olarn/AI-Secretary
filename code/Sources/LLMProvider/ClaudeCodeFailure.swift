@@ -1,24 +1,11 @@
 import Foundation
 
-/// Why a Claude Code turn failed, read out of what the process said before it
-/// exited.
-///
-/// The raw text was being shown as-is, which meant the difference between "you
-/// are not signed in", "you are out of usage" and "your Wi-Fi is off" was left
-/// for the reader to work out of a stack trace. Each of those has a different
-/// thing to do about it, and the answer is always in the same place, so it is
-/// read here once.
-///
-/// Matching is on substrings of the CLI's own messages and deliberately
-/// forgiving: anything unrecognised stays `.unknown` and the original text is
-/// still shown. A wrong guess would be worse than no guess.
+private let markerClaudeCodeProviderWritesWhenTheProcessSaidNothing = "exited with code "
+
 public enum ClaudeCodeFailure: Equatable, Sendable {
-    /// Installed, but nobody is logged in — or the login expired.
     case notSignedIn
     case usageLimitReached
-    /// Ran, but couldn't reach Anthropic — as opposed to `couldNotStart`.
     case offline
-    /// Missing, not executable, or killed by the OS.
     case couldNotStart
     case silentExit(code: Int)
     case unknown
@@ -51,19 +38,12 @@ public enum ClaudeCodeFailure: Equatable, Sendable {
         return .unknown
     }
 
-    /// `ClaudeCodeProvider` writes exactly this when the process said nothing.
     private static func exitCode(in detail: String) -> Int? {
-        let marker = "exited with code "
+        let marker = markerClaudeCodeProviderWritesWhenTheProcessSaidNothing
         guard let range = detail.range(of: marker) else { return nil }
         return Int(detail[range.upperBound...].prefix(while: \.isNumber))
     }
 
-    /// What the user is told: what went wrong, and what to do about it.
-    ///
-    /// The first line names the failure in plain words — every one of them says
-    /// Claude Code, because "which of my things is broken" is the first
-    /// question. The original text follows when it adds anything, so a report
-    /// can still be pasted somewhere useful.
     public func message(detail: String) -> String {
         let raw = detail.trimmingCharacters(in: .whitespacesAndNewlines)
         switch self {
@@ -99,8 +79,6 @@ public enum ClaudeCodeFailure: Equatable, Sendable {
         }
     }
 
-    /// The CLI's own words, kept under the explanation rather than instead of
-    /// it. Empty text adds nothing and is left out entirely.
     private func quoted(_ raw: String) -> String {
         guard !raw.isEmpty else { return "" }
         return "\n\nIt said:\n\n```\n\(raw)\n```"

@@ -2,7 +2,6 @@ import XCTest
 import FunctionalCore
 @testable import LLMProvider
 
-/// What a maker says it can do, and how "can we reach it" is decided.
 final class VendorTests: XCTestCase {
     private let installation = AgentInstallation(
         vendorID: AIVendor.claudeCode.id,
@@ -10,11 +9,7 @@ final class VendorTests: XCTestCase {
         version: "2.1.234"
     )
 
-    // MARK: - The descriptor
-
     func testClaudeCodeReadsItsModelsFromTheOneList() {
-        // The point of reading rather than copying: a model added to
-        // `ChatModel.known` must appear here without anyone editing the vendor.
         XCTAssertEqual(AIVendor.claudeCode.models, ChatModel.known)
         XCTAssertTrue(AIVendor.claudeCode.offers(model: ChatModel.opus5))
     }
@@ -55,8 +50,6 @@ final class VendorTests: XCTestCase {
         XCTAssertEqual(claude.agent.version, "2.1.234")
     }
 
-    // MARK: - The decision
-
     func testStillSearchingIsCheckingAndNotAFailure() {
         XCTAssertEqual(
             vendorConnection(vendor: .claudeCode, executable: .searching, probe: .notRun),
@@ -65,8 +58,6 @@ final class VendorTests: XCTestCase {
     }
 
     func testAMissingToolOutranksAnyProbeResult() {
-        // The order matters: saying "not signed in" about a tool that isn't
-        // installed sends the user to fix the wrong thing.
         let answer = vendorConnection(
             vendor: .claudeCode,
             executable: .missing(searched: ["/usr/local/bin/claude"]),
@@ -97,9 +88,6 @@ final class VendorTests: XCTestCase {
     }
 
     func testFoundButUnaskedIsNeverATick() {
-        // The whole reason this type exists: presence on disk is not proof the
-        // tool can be reached, and a tick that means "found" is the false
-        // "Ready" this replaces.
         XCTAssertEqual(
             vendorConnection(vendor: .claudeCode, executable: .found(installation), probe: .notRun),
             .checking
@@ -107,9 +95,6 @@ final class VendorTests: XCTestCase {
     }
 
     func testTheVersionIsTheNumberAndNotTheProductNameAgain() {
-        // `claude --version` answers "2.1.238 (Claude Code)", and the maker's
-        // name is already the first thing on the line — printed whole it read
-        // "Claude Code · 2.1.238 (Claude Code) · Max".
         XCTAssertEqual(versionNumber("2.1.238 (Claude Code)"), "2.1.238")
         XCTAssertEqual(versionNumber("2.1.238"), "2.1.238")
         XCTAssertEqual(versionNumber(""), "")
@@ -164,8 +149,6 @@ final class VendorTests: XCTestCase {
         )
     }
 
-    // MARK: - What the view is allowed to ask
-
     func testTheViewGetsOneAnswerPerState() {
         XCTAssertNil(VendorConnection.unchecked.message)
         XCTAssertEqual(VendorConnection.checking.message, "Checking…")
@@ -179,11 +162,6 @@ final class VendorTests: XCTestCase {
         XCTAssertFalse(VendorConnection.unchecked.isChecking)
     }
 
-    // MARK: - Reading `claude auth status`
-
-    /// Real output, captured from `claude auth status` on 2026-08-21. The email
-    /// and organisation are in it and must never come back out — the assertion
-    /// below is what keeps that true.
     private let signedInReply = """
     {
       "loggedIn": true,
@@ -222,8 +200,6 @@ final class VendorTests: XCTestCase {
     }
 
     func testUnreadableIsNotReportedAsSignedOut() {
-        // Two different repairs. Telling someone to sign in when they already
-        // are sends them somewhere that cannot fix it.
         XCTAssertEqual(
             claudeCodeAuthProbe("command not found"),
             .refused("Couldn't read the sign-in status from Claude Code.")

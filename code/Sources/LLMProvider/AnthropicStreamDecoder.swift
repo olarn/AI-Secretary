@@ -1,9 +1,6 @@
 import FunctionalCore
 import Foundation
 
-/// Turns Anthropic SSE `data:` payloads into `ChatStreamEvent`s. Deliberately
-/// free of any networking so it can be unit-tested with canned bytes. Unknown
-/// or future event types are ignored rather than treated as errors.
 public struct AnthropicStreamDecoder {
     private var inputTokens = 0
     private var outputTokens = 0
@@ -13,10 +10,8 @@ public struct AnthropicStreamDecoder {
 
     public init() {}
 
-    /// Feed one `data:` JSON payload (already stripped of the `data:` prefix).
-    /// Absent for events that only update state, or that we don't consume.
-    public mutating func handle(dataLine json: String) -> Option<ChatStreamEvent> {
-        guard let data = json.data(using: .utf8) else { return .none() }
+    public mutating func handle(dataLine jsonWithoutTheDataPrefix: String) -> Option<ChatStreamEvent> {
+        guard let data = jsonWithoutTheDataPrefix.data(using: .utf8) else { return .none() }
         let decoder = JSONDecoder()
         guard let envelope = try? decoder.decode(Envelope.self, from: data) else { return .none() }
 
@@ -68,8 +63,6 @@ public struct AnthropicStreamDecoder {
             return .none()
         }
     }
-
-    // MARK: - Wire shapes (only the fields we consume)
 
     private struct Envelope: Decodable { let type: String }
 

@@ -2,8 +2,6 @@ import FunctionalCore
 import XCTest
 @testable import LLMProvider
 
-// MARK: - Finding the CLI
-
 final class ClaudeCodeLocatorTests: XCTestCase {
     private var home: String { NSHomeDirectory() }
 
@@ -14,15 +12,13 @@ final class ClaudeCodeLocatorTests: XCTestCase {
             probe: { _ in "2.1.220 (Claude Code)" }
         )
 
-        guard case .available(let installation) = locator.locate() else {
+        guard case .available(let installation) = locator.locateEvenIfItCostsALoginShell() else {
             return XCTFail("Expected to find the CLI")
         }
         XCTAssertEqual(installation.executableURL.path, expected)
         XCTAssertEqual(installation.version, "2.1.220 (Claude Code)")
     }
 
-    /// The order matters: a Homebrew copy shouldn't win over the standard
-    /// installer's location.
     func testPrefersTheStandardInstallLocationOverHomebrew() {
         let locator = ClaudeCodeLocator(
             isExecutable: { $0 == "\(self.home)/.local/bin/claude" || $0 == "/opt/homebrew/bin/claude" },
@@ -30,7 +26,7 @@ final class ClaudeCodeLocatorTests: XCTestCase {
         )
 
         XCTAssertEqual(
-            locator.locate().installation?.executableURL.path,
+            locator.locateEvenIfItCostsALoginShell().installation?.executableURL.path,
             "\(home)/.local/bin/claude"
         )
     }
@@ -42,20 +38,18 @@ final class ClaudeCodeLocatorTests: XCTestCase {
         )
 
         XCTAssertEqual(
-            locator.locate().installation?.executableURL.path,
+            locator.locateEvenIfItCostsALoginShell().installation?.executableURL.path,
             "/opt/homebrew/bin/claude"
         )
     }
 
-    /// A missing version string must not disqualify an otherwise working CLI —
-    /// it is only used for display.
-    func testAnUnreadableVersionStillCountsAsInstalled() {
+    func testAnUnreadableVersionStillCountsAsInstalledBecauseTheVersionIsOnlyEverDisplayed() {
         let locator = ClaudeCodeLocator(
             isExecutable: { $0 == "/usr/local/bin/claude" },
             probe: { _ in nil }
         )
 
-        guard case .available(let installation) = locator.locate() else {
+        guard case .available(let installation) = locator.locateEvenIfItCostsALoginShell() else {
             return XCTFail("Expected to find the CLI")
         }
         XCTAssertNil(installation.version)
@@ -64,7 +58,7 @@ final class ClaudeCodeLocatorTests: XCTestCase {
     func testReportsWhereItLookedWhenNothingIsInstalled() {
         let locator = ClaudeCodeLocator(isExecutable: { _ in false }, probe: { _ in nil })
 
-        guard case .notFound(let searched) = locator.locate() else {
+        guard case .notFound(let searched) = locator.locateEvenIfItCostsALoginShell() else {
             return XCTFail("Expected notFound")
         }
         XCTAssertEqual(searched.count, ClaudeCodeLocator.knownPaths.count)
@@ -72,8 +66,6 @@ final class ClaudeCodeLocatorTests: XCTestCase {
                       "The tilde in the known paths must be expanded: \(searched)")
     }
 }
-
-// MARK: - Launching it
 
 final class ClaudeCodeProviderLaunchTests: XCTestCase {
     private let installation = ClaudeCodeInstallation(
@@ -97,10 +89,7 @@ final class ClaudeCodeProviderLaunchTests: XCTestCase {
         )
     }
 
-    /// The app is a face over the user's own Claude Code. If they haven't
-    /// picked a model or effort here, theirs must stand — overriding it hands
-    /// them a different assistant than the one they configured.
-    func testLeavesTheModelAndEffortAloneWhenTheUserHasNotChosen() {
+    func testLeavesTheModelAndEffortAloneWhenTheUserHasNotChosenSoTheirOwnConfiguredAssistantStands() {
         let args = arguments(model: nil, effort: nil)
         XCTAssertFalse(args.contains("--model"))
         XCTAssertFalse(args.contains("--effort"))
@@ -112,7 +101,6 @@ final class ClaudeCodeProviderLaunchTests: XCTestCase {
         XCTAssertEqual(args[index + 1], "claude-opus-5")
     }
 
-    /// Previously dropped on the floor: the setting existed but was never sent.
     func testPassesTheChosenEffort() {
         let args = arguments(effort: .xhigh)
         guard let index = args.firstIndex(of: "--effort") else { return XCTFail("Expected --effort") }
@@ -127,9 +115,7 @@ final class ClaudeCodeProviderLaunchTests: XCTestCase {
                       "Without this there are no token-by-token deltas")
     }
 
-    /// `--bare` skips OAuth and keychain reads, which is the authentication the
-    /// whole approach depends on. It must never be added as an optimisation.
-    func testNeverPassesBareMode() {
+    func testNeverPassesBareModeBecauseItSkipsTheOAuthAndKeychainReadsTheWholeApproachDependsOn() {
         XCTAssertFalse(arguments().contains("--bare"))
     }
 
@@ -145,8 +131,6 @@ final class ClaudeCodeProviderLaunchTests: XCTestCase {
         XCTAssertEqual(args[index + 1], "abc-123")
     }
 
-    /// Every approved project is opened for the turn, so a question spanning
-    /// two of them can be answered without the user switching.
     func testOpensTheOtherApprovedFoldersWithAddDir() {
         let config = ClaudeCodeProvider.Configuration(
             additionalDirectories: [
@@ -172,7 +156,6 @@ final class ClaudeCodeProviderLaunchTests: XCTestCase {
         XCTAssertEqual(args[index + 1], "Read,Bash(git log *)")
     }
 
-    /// The default must not let Claude Code modify anything.
     func testDefaultToolsAreReadOnly() {
         let defaults = ClaudeCodeProvider.Configuration().allowedTools
         for forbidden in ["Write", "Edit", "NotebookEdit"] {
@@ -197,9 +180,7 @@ final class ClaudeCodeProviderLaunchTests: XCTestCase {
         XCTAssertFalse(arguments(system: "").contains("--append-system-prompt"))
     }
 
-    // MARK: Environment
-
-    func testStripsTheAPIKeySoTheSubscriptionIsUsed() {
+    func testStripsTheAPIKeySoAnExportedOneCannotBillTheirAPICreditForASubscriptionTurn() {
         let environment = ClaudeCodeProvider.childEnvironment(for: installation)
         XCTAssertNil(environment["ANTHROPIC_API_KEY"],
                      "An inherited key would silently bill API credit for a subscription session")
@@ -216,8 +197,6 @@ final class ClaudeCodeProviderLaunchTests: XCTestCase {
                       "Got: \(environment["PATH"] ?? "-")")
     }
 }
-
-// MARK: - Reading its output
 
 final class ClaudeCodeProviderStreamTests: XCTestCase {
     private func makeProvider() -> ClaudeCodeProvider {
@@ -262,9 +241,7 @@ final class ClaudeCodeProviderStreamTests: XCTestCase {
         )
     }
 
-    /// The stream carries event kinds we don't model, and Claude Code adds more
-    /// between releases. An unrecognised line must be skipped, never fatal.
-    func testSkipsUnknownAndMalformedLines() {
+    func testSkipsUnknownAndMalformedLinesBecauseClaudeCodeAddsEventKindsBetweenReleases() {
         let provider = makeProvider()
         let lines = [
             #"{"type":"rate_limit_event","rate_limit_info":{"status":"allowed"}}"#,
@@ -278,19 +255,7 @@ final class ClaudeCodeProviderStreamTests: XCTestCase {
         }
     }
 
-    /// Moving keeps the session, and this test used to assert the opposite.
-    ///
-    /// The belief was that Claude Code scoped session lookup to the working
-    /// directory. Measured against 2.1.220 on 2026-08-06 it does not: a session
-    /// created in one directory resumes from another and still remembers.
-    /// Dropping it pre-emptively cost the first message's context every time a
-    /// project was approved, and silently beat Chat History — a reopened
-    /// conversation lost its thread on the first turn, before the resume was
-    /// ever tried.
-    ///
-    /// Trying and failing is the better failure: a session that really is gone
-    /// comes back as `.staleSession`, which starts a fresh one and says so.
-    func testMovingToAnotherDirectoryKeepsTheSession() {
+    func testMovingToAnotherDirectoryKeepsTheSessionBecauseResumingIsNotScopedToTheDirectory() {
         let provider = makeProvider()
         provider.prepare(workingDirectory: URL(fileURLWithPath: "/tmp/scratch"), additionalDirectories: [], allowedTools: nil)
         _ = provider.handle(line: #"{"type":"system","subtype":"init","session_id":"scratch-session"}"#)
@@ -301,9 +266,6 @@ final class ClaudeCodeProviderStreamTests: XCTestCase {
         XCTAssertEqual(provider.sessionID, "scratch-session", "the thread survives the move")
     }
 
-    /// The safety net that makes the above safe to rely on: a session that has
-    /// genuinely gone is recognised, so the turn starts over and reports it
-    /// instead of failing.
     func testAGoneSessionIsRecognisedFromWhatClaudeCodePrints() {
         XCTAssertTrue(ClaudeCodeProvider.isMissingSession(
             "No conversation found with session ID: 00000000-0000-0000-0000-000000000000"
@@ -317,14 +279,11 @@ final class ClaudeCodeProviderStreamTests: XCTestCase {
         provider.prepare(workingDirectory: directory, additionalDirectories: [], allowedTools: nil)
         _ = provider.handle(line: #"{"type":"system","subtype":"init","session_id":"keep-me"}"#)
 
-        // Same directory, different allowlist — continuity must survive.
         provider.prepare(workingDirectory: directory, additionalDirectories: [], allowedTools: ["Read", "Write"])
 
         XCTAssertEqual(provider.sessionID, "keep-me")
     }
 
-    /// Trailing-slash and `..` spellings of the same directory are the same
-    /// directory; they must not look like a move.
     func testEquivalentPathSpellingsAreNotTreatedAsAMove() {
         let provider = makeProvider()
         provider.prepare(workingDirectory: URL(fileURLWithPath: "/tmp/project"), additionalDirectories: [], allowedTools: nil)
@@ -353,8 +312,6 @@ final class ClaudeCodeProviderStreamTests: XCTestCase {
     }
 }
 
-// MARK: - Refusals
-
 final class ClaudeCodeRefusalTests: XCTestCase {
     private func makeProvider() -> ClaudeCodeProvider {
         ClaudeCodeProvider(
@@ -362,8 +319,6 @@ final class ClaudeCodeRefusalTests: XCTestCase {
         )
     }
 
-    /// The refusal only carries the tool_use id, so the earlier assistant turn
-    /// has to be remembered to say what was actually blocked.
     func testPairsARefusalWithTheCallItRefused() {
         let provider = makeProvider()
         _ = provider.handle(line: #"""
@@ -377,8 +332,6 @@ final class ClaudeCodeRefusalTests: XCTestCase {
         XCTAssertEqual(events, [.toolDenied(DeniedTool(name: "Write", target: .some("/tmp/p/out.txt"), rules: ["Write"]))])
     }
 
-    /// An ordinary tool failure is not a permission problem — offering to widen
-    /// permissions for a missing file would be nonsense.
     func testAnOrdinaryToolErrorIsNotTreatedAsARefusal() {
         let provider = makeProvider()
         _ = provider.handle(line: #"""
@@ -403,7 +356,6 @@ final class ClaudeCodeRefusalTests: XCTestCase {
         XCTAssertTrue(events.isEmpty)
     }
 
-    /// Approving one command must not hand over the whole shell.
     func testABashRefusalNarrowsToTheCommandThatWasTried() {
         let denied = ClaudeCodeProvider.describe(tool: "Bash", input: ["command": "npm test --watch=false"])
         XCTAssertEqual(denied.rules, ["Bash(npm test *)"])
@@ -427,22 +379,13 @@ final class ClaudeCodeRefusalTests: XCTestCase {
         XCTAssertFalse(ClaudeCodeProvider.isPermissionRefusal("File does not exist."))
     }
 
-    /// A command with more than one operation is refused in the plural, which
-    /// is not a substring of the singular. Missing it meant the app read the
-    /// refusal as an ordinary failure and offered nothing — the owner's
-    /// `cd … && python3 …` had no way forward at all.
-    ///
-    /// Copied from Claude Code 2.1.229 rather than paraphrased.
-    func testTheRefusalForACommandWithSeveralOperationsIsRecognised() {
+    func testTheRefusalForACommandWithSeveralOperationsIsRecognisedThoughThePluralIsNoSubstringOfTheSingular() {
         XCTAssertTrue(ClaudeCodeProvider.isPermissionRefusal(
             "This Bash command contains multiple operations. The following parts "
             + "require approval: cd \"/Users/o/TISCO - AI Sharing\", python3 -c \"import pptx\""
         ))
     }
 
-    /// Being sent outside the working directory is refused too, but no rule
-    /// widens it — it needs a different directory, not a permission. Reading it
-    /// as widenable would offer a grant that changes nothing.
     func testBeingBlockedFromLeavingTheWorkingDirectoryIsNotAPermissionToWiden() {
         XCTAssertFalse(ClaudeCodeProvider.isPermissionRefusal(
             "cd in '/Users/o/elsewhere' was blocked. For security, Claude Code may "
@@ -451,17 +394,12 @@ final class ClaudeCodeRefusalTests: XCTestCase {
     }
 }
 
-// MARK: - Choosing a model
-
 final class ChatModelChoiceTests: XCTestCase {
-    /// Claude Opus 5 is the current flagship and a common Claude Code default;
-    /// it was missing from the allowlist, so `/model claude-opus-5` was refused.
     func testOpus5IsSelectable() {
         XCTAssertEqual(ChatModel.named("claude-opus-5"), .some(.opus5))
         XCTAssertTrue(ChatModel.known.contains(.opus5))
     }
 
-    /// The short names Claude Code accepts should work here too.
     func testShortNamesResolveToTheCurrentModelOfThatFamily() {
         XCTAssertEqual(ChatModel.named("opus"), .some(.opus5))
         XCTAssertEqual(ChatModel.named("sonnet"), .some(.sonnet5))
@@ -483,15 +421,11 @@ final class ChatModelChoiceTests: XCTestCase {
     }
 }
 
-// MARK: - Reading the user's own configuration
-
 final class ClaudeCodeDefaultsTests: XCTestCase {
     private func parse(_ json: String) -> ClaudeCodeDefaults {
         ClaudeCodeDefaults.parse(Data(json.utf8))
     }
 
-    /// The settings panel names a real model rather than "your default", so the
-    /// alias Claude Code stores has to resolve.
     func testResolvesTheAliasClaudeCodeStores() {
         let defaults = parse(#"{"model":"opus","effortLevel":"medium"}"#)
         XCTAssertEqual(defaults.model, .some(.opus5))
@@ -502,7 +436,6 @@ final class ClaudeCodeDefaultsTests: XCTestCase {
         XCTAssertEqual(parse(#"{"model":"claude-sonnet-5"}"#).model, .some(.sonnet5))
     }
 
-    /// Not knowing is fine — it just means we can't name it yet.
     func testMissingOrUnreadableSettingsAreNotAnError() {
         XCTAssertEqual(parse(#"{"hooks":{}}"#), .unknown)
         XCTAssertEqual(parse("not json"), .unknown)
@@ -513,7 +446,6 @@ final class ClaudeCodeDefaultsTests: XCTestCase {
         XCTAssertEqual(parse(#"{"model":"some-future-model"}"#).model, Option.none())
     }
 
-    /// The live session is authoritative — it reports what actually ran.
     func testASessionReportsTheModelItResolvedTo() {
         let provider = ClaudeCodeProvider(
             installation: ClaudeCodeInstallation(executableURL: URL(fileURLWithPath: "/bin/echo"))
@@ -524,8 +456,6 @@ final class ClaudeCodeDefaultsTests: XCTestCase {
     }
 }
 
-// MARK: - Showing what it's doing
-
 final class AgentActivityTests: XCTestCase {
     private func makeProvider() -> ClaudeCodeProvider {
         ClaudeCodeProvider(
@@ -533,8 +463,6 @@ final class AgentActivityTests: XCTestCase {
         )
     }
 
-    /// A thinking block opening is the only usable signal that reasoning is
-    /// happening — its deltas carry no text on this model family.
     func testAThinkingBlockOpeningIsReportedAsActivity() {
         let events = makeProvider().handle(
             line: #"{"type":"stream_event","event":{"type":"content_block_start","content_block":{"type":"thinking","thinking":""}}}"#
@@ -570,12 +498,6 @@ final class AgentActivityTests: XCTestCase {
     }
 }
 
-// MARK: - The PATH handed to Claude Code
-
-/// A Finder-launched app inherits launchd's environment, where PATH is unset.
-/// Claude Code itself is found by absolute path, but the programs *it* launches
-/// are not: a stdio MCP server configured as `node …/index.js` reported
-/// `status: "failed"` from the packaged app and `connected` from a terminal.
 final class LoginShellPathTests: XCTestCase {
     private let binary = "/Users/someone/.local/bin"
 
@@ -604,7 +526,6 @@ final class LoginShellPathTests: XCTestCase {
         }
     }
 
-    /// A shell that won't answer must not leave the child with nothing usable.
     func testAnUnavailableLoginShellStillLeavesAWorkingPath() {
         let merged = LoginShellPath.merged(
             binaryDirectory: binary, loginPath: Option.none(), inherited: .some("/usr/bin:/bin")

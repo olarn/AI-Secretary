@@ -1,9 +1,7 @@
 import Foundation
 
-/// A Claude Code CLI found on this Mac.
 public struct ClaudeCodeInstallation: Equatable, Sendable {
     public let executableURL: URL
-    /// Version string reported by `claude --version`, when it could be read.
     public let version: String?
 
     public init(executableURL: URL, version: String? = nil) {
@@ -14,7 +12,6 @@ public struct ClaudeCodeInstallation: Equatable, Sendable {
 
 public enum ClaudeCodeAvailability: Equatable, Sendable {
     case available(ClaudeCodeInstallation)
-    /// Not installed, or installed somewhere we didn't look.
     case notFound(searched: [String])
 
     public var installation: ClaudeCodeInstallation? {
@@ -23,21 +20,7 @@ public enum ClaudeCodeAvailability: Equatable, Sendable {
     }
 }
 
-/// Finds the user's own Claude Code CLI.
-///
-/// This exists because `PATH` is not usable from a bundled app. An app launched
-/// from Finder inherits launchd's environment, which on a default macOS install
-/// has no `PATH` set at all — the process gets `/usr/bin:/bin:/usr/sbin:/sbin`.
-/// The standard Claude Code install lives in `~/.local/bin`, which is not on
-/// that list, so `PATH` lookup finds nothing even when the CLI is installed and
-/// working in the user's terminal.
-///
-/// So we look in the known install locations directly, and fall back to asking
-/// the user's login shell where `claude` is — that picks up Homebrew, npm, nvm,
-/// mise, and anything else their dotfiles put on `PATH`.
 public struct ClaudeCodeLocator: Sendable {
-    /// Locations checked before falling back to the login shell, in order.
-    /// Paths are relative to the home directory when they start with `~`.
     static let knownPaths = [
         "~/.local/bin/claude",
         "~/.claude/local/claude",
@@ -46,8 +29,6 @@ public struct ClaudeCodeLocator: Sendable {
         "/usr/bin/claude"
     ]
 
-    /// Both injected so tests can exercise the search order without a real
-    /// filesystem and without launching anything.
     private let isExecutable: @Sendable (String) -> Bool
     private let probe: @Sendable (URL) -> String?
 
@@ -59,10 +40,7 @@ public struct ClaudeCodeLocator: Sendable {
         self.probe = probe ?? { url in ClaudeCodeLocator.readVersion(of: url) }
     }
 
-    /// Checks only the known locations. Pure `stat` calls — microseconds — so
-    /// this is safe to call on the main thread during launch. On a normal
-    /// install it already finds the CLI and the slow path never runs.
-    public func locateInKnownPaths() -> ClaudeCodeAvailability {
+    public func locateInKnownPathsWithoutLaunchingAnything() -> ClaudeCodeAvailability {
         var searched: [String] = []
         for path in Self.knownPaths {
             let expanded = (path as NSString).expandingTildeInPath
@@ -74,14 +52,8 @@ public struct ClaudeCodeLocator: Sendable {
         return .notFound(searched: searched)
     }
 
-    /// Known locations, then the user's login shell.
-    ///
-    /// **Not for the main thread.** The shell fallback sources the user's
-    /// profile (nvm, mise, rbenv…), which routinely takes hundreds of
-    /// milliseconds and occasionally seconds. Blocking launch on it would keep
-    /// the character window off screen.
-    public func locate() -> ClaudeCodeAvailability {
-        let fast = locateInKnownPaths()
+    public func locateEvenIfItCostsALoginShell() -> ClaudeCodeAvailability {
+        let fast = locateInKnownPathsWithoutLaunchingAnything()
         if case .available = fast { return fast }
         guard case .notFound(var searched) = fast else { return fast }
 
@@ -94,9 +66,6 @@ public struct ClaudeCodeLocator: Sendable {
         return .notFound(searched: searched)
     }
 
-    /// `$SHELL -l -c 'command -v claude'`. A login shell is required: a
-    /// non-interactive shell skips the profile that sets up most version
-    /// managers. Capped so a wedged dotfile can't hang us forever.
     private func loginShellLookup() -> URL? {
         let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
         guard isExecutable(shell) else { return nil }
@@ -114,7 +83,7 @@ public struct ClaudeCodeLocator: Sendable {
             return nil
         }
 
-        let deadline = Date().addingTimeInterval(Self.shellProbeTimeout)
+        let deadline = Date().addingTimeInterval(Self.shellProbeTimeoutSoAWedgedDotfileCannotHangUs)
         while process.isRunning && Date() < deadline {
             Thread.sleep(forTimeInterval: 0.02)
         }
@@ -130,11 +99,8 @@ public struct ClaudeCodeLocator: Sendable {
         return URL(fileURLWithPath: path)
     }
 
-    static let shellProbeTimeout: TimeInterval = 5
+    static let shellProbeTimeoutSoAWedgedDotfileCannotHangUs: TimeInterval = 5
 
-    /// Runs `claude --version` and returns the reported version. A failure here
-    /// is not fatal — an executable that won't report its version is still worth
-    /// trying, and the caller only uses this for display.
     private static func readVersion(of url: URL) -> String? {
         let process = Process()
         process.executableURL = url
