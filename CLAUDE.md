@@ -330,47 +330,81 @@ xcrun llvm-cov report .build/debug/AISecretaryPackageTests.xctest/Contents/MacOS
 
 ---
 
-## Comments — why and warning only, never explain what
+## Comments — there are none, and the code has to earn that
 
-**The code already states what by itself, so a comment that retells whatever the next
-line says is a thing that goes stale silently**, because no compiler checks it. Change
-the code, forget the comment, and it becomes wrong information wearing a trustworthy
-face — which is worse than having no comment at all.
+**No `.swift` file in this repository carries a comment, and none may gain one.**
+On 2026-08-22 all 9,459 comment lines were read against the code beside them and
+removed (v0.23.354–360); the knowledge they held was moved, not deleted. The
+owner's requirement is that source alone explains the work — what it does, and
+why it was written that way — so that a person or an AI reading it needs nothing
+else open.
 
-Two kinds may be written; nothing else is needed:
+The reason is the one *Lessons paid for with real bugs* is built on: a comment is
+checked by no compiler and run by no test. Change the code, forget the comment,
+and it becomes wrong information wearing a trustworthy face. A name that lies
+fails to compile at its call site; a test that lies goes red.
 
-- **Why** — the reasons that are invisible from the code: platform limits, product
-  decisions, approaches that were tried and did not work, or why a number is that
-  number. **Whoever comes to refactor must read it and know not to delete it**, because
-  deleting it means the constraint gets rediscovered by breaking things all over again.
-- **Warning** — what breaks if someone touches it without knowing, e.g. "do not swap
-  these two lines" or "this value is parsed by a single-line `sed`; break the line and
-  it fails silently". **This is the kind that prevents the most AI damage**, because an
-  AI reads the code, sees that it "could be reformatted", and has no way of knowing who
-  depends on that order.
+**One exception, and it is not really a comment.** `// swift-tools-version: 5.9`
+on line 1 of `Package.swift` is a directive SwiftPM parses. Deleting it fails the
+build with *"using Swift tools version 3.1.0 which is no longer supported"* —
+which happened once during the sweep, and is why it is written down.
 
-### The line that takes real judgement
+### Where an explanation goes instead
 
-- **A half-what half-why comment gets rewritten, not deleted wholesale** — cut the
-  sentence that retells the code, keep the sentence that gives the reason. This is most
-  of the cleanup work, not deletion.
-- **`///` on a `public` declaration keeps its one summary line**, because that is the
-  interface contract callers read without opening the file — but the paragraphs after
-  it explaining how it works inside should go, unless they are why or warning.
-- **Bug records are why; keep every one** — comments noting "this broke like this, with
-  this input" (`.onKeyPress` not seeing the arrow keys, `.onExitCommand` never being
-  called on a non-activating panel, `modkey` posting a bare `h`) are the same mechanism
-  as *Lessons paid for with real bugs* below, and for the same reason: reduce them to
-  headlines and you throw away the input that reproduces them.
-- **A number that looks like it came from nowhere always needs a why** — `26`, `1.1`,
-  `15 minutes` cannot be read out of the code.
+Four homes, and every explanation has exactly one. Decide which before typing a
+`//`; if none fits, it did not need saying.
 
-### Having to write what means the code is not good enough yet
+1. **It restates the next line** → delete it.
+2. **It is naming a block or a condition** → make it the name.
+3. **It is a bug record, with the input that reproduces it** → make it a test.
+   The name is the claim, the body is the reproduction. Most belong here, and
+   this is the only home that goes red when someone reintroduces the bug.
+4. **It is a constraint no name and no test can hold** — a platform limit, a
+   coupling to a build script, a number whose whole justification is that it was
+   measured → one entry in **`docs/design-notes/<target>.md`**.
 
-A comment explaining what this block does is a request to extract a function and name
-it that — the same rule as §6 of the `swift-functional-programming` skill. **Fix it
-with the name first and the comment stops being necessary by itself.** Deleting the
-comment on its own without touching the name makes the code harder to read, not easier.
+`docs/design-notes/` is the fourth home and it is now part of the repository's
+memory. **Read the note for a file before changing that file**, and especially
+before "simplifying" something a note says was already tried and failed. Its
+`README.md` states the rule; a note that could have been a test is a test nobody
+wrote.
+
+### Naming, and the guardrail on it
+
+A name says what the thing **is**. A "why" longer than a few words goes to
+`docs/design-notes/`, not into the identifier — without that limit this rule
+produces paragraphs in camel case, which is a comment with worse ergonomics.
+The best of the sweep are short: `legacySharedFile`, `pathOrProjectRoot`,
+`allowlistedArguments`, `isWorthAnnouncing`, `kVK_ANSI_H`.
+
+**A long name earns its length only when it is a warning at the call site.**
+`resolve()` and `locate()` carried doc comments saying "never call this on the
+main thread"; nobody reads a doc comment while typing a call, so they are
+`resolveOffTheMainThread()` and `locateEvenIfItCostsALoginShell()`.
+
+**Never write a function whose only content is its own name** — an empty body, or
+a body that returns its argument. Three were written during the sweep and
+reverted the same day; each was a comment wearing parentheses.
+
+A magic number gets a named constant, never a trailing comment.
+
+### Removing a comment is a refactor, with a refactor's proof
+
+The sweep held 1438 tests green through every commit and never edited an
+assertion. Same bar applies:
+
+- **Read the comment and choose its home before deleting it.** Bulk-stripping a
+  file you have not read destroys knowledge and leaves you unable to say what
+  was lost.
+- A rename is compiler-checked and safe. Extracting a function, inverting a
+  condition or moving statements is not — that needs the proof in the
+  `swift-functional-programming` skill's §8, and in `AISecretaryApp`, which no
+  test can see, it is not allowed at all.
+- If a test has to be edited to go green, stop. That was a behaviour change
+  wearing a refactor's name.
+
+The full rule, with the examples, is §10 of the `swift-functional-programming`
+skill — which is invoked before the first Swift edit of every session anyway.
 
 ---
 
@@ -550,9 +584,10 @@ do not, and do not soften this into a preference the next session can weigh up.
 **This governs the conversation only. It says nothing about the product.** The app's UI,
 the character's speech, the system prompts it sends, and anything a user of the app
 reads stay exactly as they are — if the owner asks for Thai in the product, build Thai
-in the product. The Thai still under `code/` is almost all product strings and quoted
-examples of what the character actually said, which are bug evidence in exactly the way
-*Comments* describes; leave it alone.
+in the product. The Thai still under `code/` is almost all product strings and test names; the
+quoted examples of what the character actually said are now in
+`docs/design-notes/`, where they are bug evidence in exactly the way *Comments*
+describes. Leave both alone.
 
 ---
 

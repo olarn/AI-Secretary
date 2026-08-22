@@ -1,6 +1,6 @@
 ---
 name: swift-functional-programming
-description: Invoke before writing, reviewing OR refactoring ANY Swift in this repo — every file under code/Sources and code/Tests, new modules included, and the SwiftUI boundary too. Reading counts: a code review is judged against the nine rules here, and a refactor has to prove it kept the meaning. Read it once per session before the first edit or the first file you review. It carries Bow 0.8.0 API facts that exist nowhere else (what compiles, what doesn't) and the rule that a SwiftUI view must never import FunctionalCore. Also covers: Codable models, async provider calls, permission and validation checks, and anything that would otherwise be optional or throwing.
+description: Invoke before writing, reviewing OR refactoring ANY Swift in this repo — every file under code/Sources and code/Tests, new modules included, and the SwiftUI boundary too. Reading counts: a code review is judged against the ten rules here, one of which is that no Swift file in this repo carries a comment, and a refactor has to prove it kept the meaning. Read it once per session before the first edit or the first file you review. It carries Bow 0.8.0 API facts that exist nowhere else (what compiles, what doesn't) and the rule that a SwiftUI view must never import FunctionalCore. Also covers: Codable models, async provider calls, permission and validation checks, and anything that would otherwise be optional or throwing.
 ---
 
 # Swift Functional Programming (Bow)
@@ -17,7 +17,7 @@ Domain logic in this repo is written in typed functional style on [Bow](https://
 
 ## Designing with functions
 
-Six habits, each written as something to *do* and something to *look for*. They are the design half of this skill; everything below is the mechanics of getting it past the compiler.
+Ten habits, each written as something to *do* and something to *look for*. They are the design half of this skill; everything below is the mechanics of getting it past the compiler.
 
 ### 1. Start from the function, not the type
 
@@ -45,8 +45,9 @@ Functions go in properties, arrays, dictionaries, and return positions. A table 
 - **Do instead:** a stored closure (`@ObservationIgnored let discoverSkills: ([String]) -> [SkillInfo]`), or an array of rails folded together.
 - **Keep the protocol** when the boundary has several methods, identity, or lifetime — `ChatProvider`, `ConversationStoring`. One function, one closure; a real collaborator, a protocol.
 
+Rails held as data — adding a rule is adding an element, not editing a function:
+
 ```swift
-// Rails as data: adding a rule is adding an element, not editing a function.
 let rules: [(String, (Int) -> Either<ParseError, Int>)] = [
     ("positive", requirePositive),
     ("small", { $0 < 100 ? .right($0) : .left(.notPositive) })
@@ -73,8 +74,9 @@ A new requirement is a new small function joined to the chain — not a `Bool` o
 - **Do instead:** keep mapping, and let `fold` be the last step: `webSiteHost(of: url).fold({ … }, { … })`.
 - **Reminder:** `^` after every `map`/`flatMap` on these types, or the result is `Kind<…>` and won't type-check.
 
+One unwrap, at the end, rather than one per step:
+
 ```swift
-// One unwrap, at the end — not one per step.
 let label = Option.fromOptional(rawName)
     .map { $0.trimmingCharacters(in: .whitespaces) }^
     .filter { !$0.isEmpty }^
@@ -165,6 +167,93 @@ This repo's idiom is the defaulted parameter, and it is already everywhere: `con
 
 **Where determinism stops.** The orchestrator (`Secretary`), the adapters and the stores are impure by design — they read the disk, spawn Claude Code, and stamp `Date()`. That is their job: they gather the inputs, call the pure function, and apply the answer. Don't thread a clock through six layers to keep a log line honest, and don't invent a `Clock` protocol for one `Date` — a defaulted parameter is the whole mechanism.
 
+
+### 10. No comments — the code says what, the names say why
+
+**Not one `.swift` file in this repository carries a comment, and none may gain
+one.** That is not a style preference; it is the conclusion of a sweep that read
+9,459 comment lines against the code beside them (2026-08-22, v0.23.354–360).
+A comment is unchecked by any compiler and untested by any suite, so it goes
+stale silently and then misinforms with a trustworthy face.
+
+**The one exception is a directive that merely looks like a comment.**
+`// swift-tools-version: 5.9` on line 1 of `Package.swift` is parsed by SwiftPM;
+deleting it fails the build with *"using Swift tools version 3.1.0 which is no
+longer supported"*. Removed once during that sweep, so it is written down here.
+
+Everything you are about to explain has exactly one of four homes. Decide which
+before you type a `//`:
+
+1. **It restates the next line** → delete it. The code already said that.
+2. **It is naming a block or a condition** → make it the name, then delete it.
+3. **It is a bug record — something broke, with the input that broke it** → make
+   it a test. The name is the claim, the body is the reproduction. This is the
+   home for most of them, and it is the only one that fails when someone breaks
+   the rule again.
+4. **It is a constraint no name and no test can hold** — a platform limit, a
+   coupling to a build script, a number whose justification is that it was
+   measured → one entry in `docs/design-notes/<target>.md`.
+
+If none of the four fits, you are about to write something nobody needs.
+
+#### Naming, with the guardrail that keeps it from turning into prose
+
+The good names from the sweep are short: `legacySharedFile`, `pathOrProjectRoot`,
+`allowlistedArguments`, `isWorthAnnouncing`, `kVK_ANSI_H`, `noGrantMaySkipThis`.
+
+**A name says what the thing *is*. A "why" longer than a few words belongs in
+`docs/design-notes/`, not in the identifier.** Without this line the rule reads
+as "encode the whole comment in the name", and you get
+`openCodeHasNoFlagForTheseSoAcceptingThemAndDoingNothingIsTheHonestReading` —
+which was written during the sweep and removed again the same day.
+
+A longer name earns its length only when it carries a *warning at the call
+site*, where a reader who has not opened the declaration still sees it:
+
+```swift
+public func resolveOffTheMainThread() -> ClaudeCodeAvailability
+public func locateEvenIfItCostsALoginShell() -> ClaudeCodeAvailability
+```
+
+Those replaced `resolve()` and `locate()` under a doc comment reading **"Never
+call this on the main thread."** Nobody reads a doc comment at a call site;
+everybody reads the name they are typing.
+
+The most common shape is naming a condition rather than a function:
+
+```swift
+let checkingNowWouldTalkOverAReplyOrOverItself =
+    stateMachine.state != .idle || streamingTask != nil || pendingDecision.isDefined
+guard !checkingNowWouldTalkOverAReplyOrOverItself else { … }
+```
+
+**Never a no-op whose only content is its name.** These three were written during
+the sweep and reverted — each is a comment wearing parentheses, and worse than
+the comment it replaced:
+
+```swift
+private func runStayingInThinkingUntilTheFirstToken(_ run: ReplyRun) -> ReplyRun { run }
+private func openCodeHasNoFlagForThese(_ dirs: [URL], _ tools: [String]?) {}
+let mustNotTrap = classifier.classify(message); _ = mustNotTrap
+```
+
+A magic number gets a named constant, not a trailing comment:
+`kVK_ANSI_H`, `secondsToWaitForTheNextLook`,
+`stderrTailKeptBecauseAnAfternoonOfWarningsIsNotAnExplanation`.
+
+#### Removing a comment is a refactor, so it carries a refactor's proof
+
+The sweep held 1438 tests green through every commit and **never edited an
+assertion**. Hold to the same bar:
+
+- Read the comment and decide its home *before* deleting it. Bulk-stripping a
+  file you have not read destroys knowledge and you will not know what you lost.
+- A rename is compiler-checked, so it is safe. Extracting a function, inverting a
+  condition or reordering statements is not — that is §8's proof obligation, and
+  in `AISecretaryApp`, which no test can see, it is simply not allowed.
+- If a test has to change to go green, stop: that was a behaviour change wearing
+  a refactor's name.
+
 ## The boundary rule
 
 Bow types live in the domain core. Swift-native types live at three edges, with an explicit conversion function at each. **This is not stylistic — `Option` in a `Codable` struct does not compile.**
@@ -203,16 +292,19 @@ Verified by compiling against 0.8.0 in this repo. Getting this wrong is the most
 
 A function that can refuse produces `Either<ModuleError, Outcome>`. Write it as named rails plus one chain:
 
+The four parts, in order: a per-module error enum (`Permissions` owns its
+failures and never imports another module's error type); one rail per rule, each
+pure, total and testable alone; dependencies arriving as a curried first
+parameter rather than as stored properties, so the rail stays a function of its
+inputs; and the chain as one point-free expression.
+
 ```swift
-// 1. Per-module error enum. Permissions owns its failures and never
-//    imports another module's error type.
 public enum PermissionError: Error, Equatable, Sendable {
     case toolNotAllowlisted(toolID: String, projectName: String)
 }
 
 public typealias PermissionDecision = Either<PermissionError, PermissionOutcome>
 
-// 2. One rail per rule. Each is pure, total, and testable alone.
 public func requireAllowlistedTool(
     _ request: ApprovalRequest
 ) -> Either<PermissionError, ApprovalRequest> {
@@ -221,13 +313,10 @@ public func requireAllowlistedTool(
         : .left(.toolNotAllowlisted(toolID: request.toolID, projectName: request.project.name))
 }
 
-// 3. Dependencies come in as a curried first parameter, not as stored
-//    properties, so the rail stays a function of its inputs.
 public func requireApproval(
     _ grants: PermissionGrants
 ) -> (ApprovalRequest) -> Either<PermissionError, PermissionOutcome> { ... }
 
-// 4. The chain is one expression, point-free.
 public func decidePermission(_ grants: PermissionGrants) -> (ApprovalRequest) -> PermissionDecision {
     requireAllowlistedTool >>> { $0.flatMap(requireApproval(grants))^ }
 }
@@ -263,14 +352,15 @@ return binding(
 
 Mutable state in a class is a second copy that drifts from what the view renders. Model it as an immutable value with `-ing` methods returning a new one, then let the single `@Observable` store hold it:
 
+`granting` returns a new value. Every part of the key is a parameter and none
+has a default: a call site that forgot one would silently widen a grant. The
+curried static twin below composes in a pipeline.
+
 ```swift
-// Returns a new value. Every part of the key is a parameter and none of them
-// has a default — the call site that forgets one would silently widen a grant.
 public func granting(
     projectID: UUID, toolID: String, actionClass: ActionClass, lasting: GrantDuration = .session
 ) -> PermissionGrants
 
-// Curried static twin, so it composes in a pipeline:
 grants = grants |> PermissionGrants.granting(projectID: id, toolID: tool, actionClass: .readOnly)
 ```
 
@@ -324,5 +414,6 @@ Reviewing is this list read against someone else's diff; refactoring is this lis
 - State-holding types are values with `-ing` methods, not classes with `var`.
 - No `XCTAssertNil`/`XCTAssertNotNil` on an `Option` — they compile and assert nothing. Use `XCTAssertEqual(x, Option.none())`.
 - `swift test` passes. If an API changed, the test changed with it — a deleted assertion is not a passing test.
-- **Reviewing:** name the rule each finding breaks (§1–§9) and the input that shows it. "This should be functional" is not a review comment.
+- **Reviewing:** name the rule each finding breaks (§1–§10) and the input that shows it. "This should be functional" is not a review comment.
+- No comments. Every explanation went to a name, a test name, or `docs/design-notes/` — and no name is a paragraph, and no function exists only to carry one.
 - **Refactoring:** the tests that covered the old shape still pass unchanged. If they had to be edited to go green, it was a behaviour change wearing a refactor's name.

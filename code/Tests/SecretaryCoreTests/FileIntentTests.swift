@@ -106,8 +106,7 @@ final class NonASCIIIntentTests: XCTestCase {
             "on"
         ]
         for message in messages {
-            let mustNotTrap = classifier.classify(message)
-            _ = mustNotTrap
+            _ = classifier.classify(message)
         }
     }
 

@@ -3393,3 +3393,25 @@ default) ซึ่งทำให้ cache หายไปด้วย — ค�
     `the31stOfJuly2026InUTC` ฯลฯ
   - **ยืนยันแล้ว: `grep` หา comment ในไฟล์ `.swift` ทั้ง repo ได้ 0 บรรทัด** และ 1438
     tests ผ่านหมดตลอดทุก commit โดยไม่แตะ assertion สักบรรทัด
+- [x] เขียนข้อกำหนดลง `CLAUDE.md` และ skill `swift-functional-programming` (§10)
+  - แทนที่หัวข้อ *Comments — why and warning only* เดิมทั้งหัวข้อ (ซึ่งสั่งให้ **เก็บ**
+    comment ที่เป็น why/warning) ด้วยกฎใหม่: ไม่มี comment เลย และคำอธิบายมีบ้านสี่หลัง
+  - **guardrail สำคัญ**: ชื่อบอกว่า *สิ่งนั้นคืออะไร* ส่วน "ทำไม" ที่ยาวเกินไม่กี่คำ
+    ให้ไป `docs/design-notes/` — ไม่งั้นกฎนี้จะผลิตชื่อยาวเป็นย่อหน้า ซึ่งคือ comment
+    ที่ใช้งานยากกว่าเดิม ตัวอย่างที่เขียนแล้วถอนใน session นี้เขียนไว้เตือนแล้ว
+  - **ห้ามเขียนฟังก์ชันที่มีแต่ชื่อ** (body ว่าง หรือคืนค่า argument ตัวเอง) — เขียนไป
+    สามอันแล้วถอนออกทั้งสาม เพราะมันคือ comment ที่ใส่วงเล็บ
+  - snippet ใน `SKILL.md` ถอด comment ออกด้วย ไม่งั้น skill ที่สอนไม่ให้เขียน comment
+    จะมีตัวอย่างที่เต็มไปด้วย comment (และ `SkillExampleTests.swift` ก็ถูกถอดไปแล้ว
+    ตรวจแล้วว่า **ไม่มีอะไรบังคับให้สองไฟล์นี้ตรงกัน** — เป็นแค่ธรรมเนียม)
+- [x] **ข้อยกเว้นเดียวที่เจอตอนทำ**: `// swift-tools-version: 5.9` บรรทัดแรกของ
+  `Package.swift` ไม่ใช่ comment แต่เป็น directive ที่ SwiftPM อ่าน — ลบแล้ว build พัง
+  ทันที (`using Swift tools version 3.1.0 which is no longer supported`) เขียนกันไว้ทั้ง
+  ใน CLAUDE.md และ skill แล้ว
+- [x] **Drive จริงก่อน commit ขึ้น main** (v0.23.361, ผ่าน `swift run AISecretaryApp`):
+  ตัวละครสี่ตัวขึ้นครบพร้อมชื่อ (idle = ชื่อเปล่า ไม่มี "- IDLE" → `isWorthAnnouncing`),
+  คลิกเปิดแชทได้, hint ตอนยังไม่มีข้อความถูกต้อง (สองท่อน ขึ้นบรรทัดเดียว),
+  หา Claude Code เจอ (2.1.239 → `resolveOffTheMainThread`), ส่งข้อความแล้วได้คำตอบครบเทิร์น
+  (header ขึ้น "- THINKING" แล้วกลับ idle), badge เปลี่ยนจาก Default → Fable 5
+  (`liveHalfFromThisCharactersOwnSession`), เปิด Settings แล้ว **ไม่ล้นหน้าต่าง**
+  (เห็น header ครบตามกฎใน charter), Esc ปิดแชทได้

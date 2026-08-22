@@ -131,15 +131,7 @@ extension OpenCodeProvider: VendorProvider {
         var updated = configuration
         updated.workingDirectory = workingDirectory
         configuration = updated
-        openCodeHasNoFlagForTheseSoAcceptingThemAndDoingNothingIsTheHonestReading(
-            additionalDirectories, allowedTools
-        )
     }
-
-    private func openCodeHasNoFlagForTheseSoAcceptingThemAndDoingNothingIsTheHonestReading(
-        _ additionalDirectories: [URL],
-        _ allowedTools: [String]?
-    ) {}
 
     public func resetConversation() { lock.withLock { _sessionID = nil } }
 
