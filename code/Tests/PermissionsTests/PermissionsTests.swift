@@ -4,16 +4,6 @@ import ProjectRegistry
 @testable import Permissions
 
 final class ActionClassTests: XCTestCase {
-    /// Reading and writing *inside a registered project* may be remembered;
-    /// nothing else may.
-    ///
-    /// `.localWrite` joined the list only when `.projectMemoryWrite` was split
-    /// out of it. The rule being pinned is not "writes are fine now" — it is
-    /// that a class may be kept exactly when the grant's key,
-    /// `(project, tool, class)`, describes the whole of what was agreed. While
-    /// the memory note shared this class, it did not: that write lands outside
-    /// every registered project. Widening this list again needs the same
-    /// argument made in the same place, not a case appended.
     func testOnlyWorkInsideARegisteredProjectMayBeRemembered() {
         XCTAssertTrue(mayBeRemembered(.readOnly))
         XCTAssertTrue(mayBeRemembered(.localWrite))
@@ -22,9 +12,6 @@ final class ActionClassTests: XCTestCase {
         }
     }
 
-    /// The note is the case this split exists for: it writes into the person's
-    /// own Claude Code memory directory, which their terminal reads, and which
-    /// no project-scoped grant can speak for.
     func testAMemoryNoteIsAskedEveryTime() {
         XCTAssertFalse(mayBeRemembered(.projectMemoryWrite))
         for answer in PermissionAnswer.allCases {
@@ -32,19 +19,11 @@ final class ActionClassTests: XCTestCase {
         }
     }
 
-    /// Every case is on one side or the other, so a case added later fails here
-    /// rather than defaulting into whichever arm the switch happens to have.
     func testEveryClassIsAccountedFor() {
         XCTAssertEqual(Set(ActionClass.allCases.filter(mayBeRemembered)), [.readOnly, .localWrite])
-        // 9 since `.directoryAccess` — opening a folder to Claude Code, which
-        // cannot be remembered because a grant is `(project, tool, class)` and
-        // none of those three says *which* folder.
         XCTAssertEqual(ActionClass.allCases.count, 9)
     }
 
-    /// The sentence on the card and the buttons under it are decided by one
-    /// value, so they cannot come apart the way they did when the widen card
-    /// promised "this session only" beside an Always button.
     func testTheScopeSentenceFollowsTheButtons() {
         XCTAssertTrue(
             permissionScopeSentence([.once, .always, .deny]).contains("Always"),
@@ -57,8 +36,6 @@ final class ActionClassTests: XCTestCase {
         XCTAssertTrue(permissionScopeSentence([.once, .deny]).contains("session only"))
     }
 }
-
-// MARK: - Shared fixtures
 
 private let allowed = Project(name: "Allowed", path: "/tmp/a", allowedTools: ["git.readOnly"])
 private let notAllowed = Project(name: "NotAllowed", path: "/tmp/b", allowedTools: [])
@@ -77,8 +54,6 @@ private func request(
         rationale: "check status"
     )
 }
-
-// MARK: - Grants are a value
 
 final class PermissionGrantsTests: XCTestCase {
     func testGrantingReturnsANewValueAndLeavesTheOriginalAlone() {
@@ -109,16 +84,12 @@ final class PermissionGrantsTests: XCTestCase {
     }
 }
 
-// MARK: - The rails, tested one at a time
-
 final class PermissionRailTests: XCTestCase {
     func testAllowlistRailLeavesAnAllowListedToolAlone() {
         let req = request(project: allowed)
         XCTAssertEqual(noteToolOutsideAllowlist(req), .right(req))
     }
 
-    /// The miss is carried, not fatal. What used to be a refusal the person
-    /// couldn't answer is now a mark on the request that forces a question.
     func testAllowlistRailMarksAMissInsteadOfRefusing() {
         XCTAssertEqual(
             noteToolOutsideAllowlist(request(project: notAllowed)),
@@ -137,12 +108,6 @@ final class PermissionRailTests: XCTestCase {
         XCTAssertEqual(requireApproval(grants)(req), .right(.allowed))
     }
 
-    /// The one assertion the whole change turns on.
-    ///
-    /// A grant is remembered per project and tool for read-only work. If the
-    /// allowlist mark were checked after the grants, a tool the list never
-    /// covered would run unattended on the strength of one earlier yes — the
-    /// hole that opens the moment an allowlist miss stops being fatal.
     func testAGrantCannotStandInForTheAllowlist() {
         let req = request(project: notAllowed).steppingOutsideAllowlist()
         XCTAssertEqual(req.actionClass, .readOnly, "the risky combination is the unattended one")
@@ -150,8 +115,6 @@ final class PermissionRailTests: XCTestCase {
         XCTAssertEqual(requireApproval(grants)(req), .right(.needsApproval(req)))
     }
 }
-
-// MARK: - The whole decision
 
 final class PermissionDecisionTests: XCTestCase {
     private func decision(
@@ -161,8 +124,6 @@ final class PermissionDecisionTests: XCTestCase {
         decidePermission(grants)(req)
     }
 
-    /// Nothing is refused outright any more: a tool the project never listed is
-    /// a question, and the request says so, so the card can too.
     func testToolMissingFromProjectAllowlistIsPromptedNotDenied() {
         let asked = decision(request(project: notAllowed))
         XCTAssertEqual(
@@ -172,9 +133,6 @@ final class PermissionDecisionTests: XCTestCase {
         XCTAssertFalse(asked.isLeft, "a refusal the person can't answer is what this replaced")
     }
 
-    /// And answering it doesn't quietly become a standing permission: the same
-    /// request a second time, with the read-only grant that a yes would record,
-    /// still asks.
     func testSayingYesOnceDoesNotSettleIt() {
         let grants = PermissionGrants().granting(projectID: notAllowed.id, toolID: "git.readOnly", actionClass: .readOnly)
         XCTAssertEqual(
@@ -209,10 +167,6 @@ final class PermissionDecisionTests: XCTestCase {
         XCTAssertEqual(decision(req, grants: grants), .right(.needsApproval(req)))
     }
 
-    /// A grant is keyed on the class as well as the tool, so agreeing to read a
-    /// file is not agreeing to send it — `file.readOnly` is the tool id of
-    /// both. Sprint 15 widened what may be remembered and this is the property
-    /// that had to survive it.
     func testAGrantForOneClassDoesNotCoverAnother() {
         let grants = PermissionGrants().granting(projectID: allowed.id, toolID: "git.readOnly", actionClass: .readOnly)
 
@@ -226,9 +180,6 @@ final class PermissionDecisionTests: XCTestCase {
         }
     }
 
-    /// The classes that leave this Mac, or that cannot be undone, ask every
-    /// time even with a grant of their own kind on file. This is the line
-    /// Sprint 15's Once and Always may not cross.
     func testWhatMayNotBeRememberedAsksEvenWithItsOwnGrant() {
         for klass in ActionClass.allCases where !mayBeRemembered(klass) {
             let grants = PermissionGrants()
@@ -242,9 +193,6 @@ final class PermissionDecisionTests: XCTestCase {
         }
     }
 
-    /// And the one that may: reading in a project stops asking once agreed,
-    /// which is what "let Claude Code work here" is and what was reported as
-    /// being asked on every new session.
     func testReadingInTheProjectStopsAskingOnceAgreed() {
         let grants = PermissionGrants()
             .granting(projectID: allowed.id, toolID: "git.readOnly", actionClass: .readOnly)

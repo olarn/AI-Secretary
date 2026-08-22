@@ -3327,3 +3327,13 @@ default) ซึ่งทำให้ cache หายไปด้วย — ค�
     `docs/design-notes/tool-adapters.md`
   - เหตุผลที่ `@unchecked Sendable` ของ Bow ปลอดภัย → `docs/design-notes/functional-core.md`
   - 1438 tests ผ่านหมด ไม่แตะ assertion สักบรรทัด
+- [x] `Permissions` — ไม่เหลือ comment (target ที่มีเหตุผลเชิงนโยบายหนาที่สุดใน repo)
+  - เงื่อนไขสามข้อที่ตัดสินว่าปุ่ม Always จะโผล่ไหม กลายเป็นตัวแปรที่มีชื่อจริงใน
+    `offeredAnswers` — `theGrantKeyWouldDescribeTheWholeOfWhatWasAgreed`,
+    `thereIsALastingProjectToHangTheGrantOn`, `policyWouldHonourTheGrantRatherThanReAsk`
+  - guard สองอันใน `requireApproval` รวมเป็นฟังก์ชันชื่อ `noGrantMaySkipThis` ซึ่ง
+    ทำให้ "ต้องเช็คก่อน grant ไม่ใช่หลัง" เป็นจริงโดยโครงสร้าง ไม่ใช่โดย comment เตือน
+  - กฎว่าทำไม class ไหนจำได้/จำไม่ได้ (key คือ `(project, tool, class)` เท่านั้น)
+    → `docs/design-notes/permissions.md` พร้อมบันทึกบั๊ก 2026-08-17 ที่ vault ถามซ้ำทุกคำสั่ง
+  - `SkillExampleTests.swift` ถอด comment แล้ว ชื่อ test รับข้อเท็จจริงเรื่อง Bow ไปแทน
+    (เช่น `zip` บน `Option` ใช้ไม่ได้ใน 0.8.0) — SKILL.md ต้องแก้ให้ตรงกันในรอบเดียวกัน

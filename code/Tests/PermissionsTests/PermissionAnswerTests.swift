@@ -24,8 +24,6 @@ final class PermissionAnswerTests: XCTestCase {
         )
     }
 
-    // MARK: - What the card offers
-
     func testReadingInARegisteredProjectIsOfferedAllThree() {
         XCTAssertEqual(
             offeredAnswers(for: request(.readOnly), projectIsRegistered: true),
@@ -33,9 +31,6 @@ final class PermissionAnswerTests: XCTestCase {
         )
     }
 
-    /// A folder dragged in from outside has no lasting identity to hang a grant
-    /// on — the throwaway project the app builds for it is a new one every
-    /// time, so Always would be a promise nothing could keep.
     func testAPathOutsideAnyProjectIsNeverOfferedAlways() {
         XCTAssertEqual(
             offeredAnswers(for: request(.readOnly), projectIsRegistered: false),
@@ -43,8 +38,6 @@ final class PermissionAnswerTests: XCTestCase {
         )
     }
 
-    /// `requireApproval` re-asks for anything outside the allowlist before it
-    /// looks at grants, so remembering one would be a permission policy ignores.
     func testAToolOutsideTheAllowlistIsNeverOfferedAlways() {
         XCTAssertEqual(
             offeredAnswers(for: request(.readOnly, outsideAllowlist: true), projectIsRegistered: true),
@@ -62,7 +55,6 @@ final class PermissionAnswerTests: XCTestCase {
         }
     }
 
-    /// Deny is on every card, and Once is on every card. Only Always moves.
     func testOnceAndDenyAreAlwaysThere() {
         for klass in ActionClass.allCases {
             for registered in [true, false] {
@@ -74,17 +66,12 @@ final class PermissionAnswerTests: XCTestCase {
         }
     }
 
-    // MARK: - What an answer keeps
-
     func testOnceKeepsTheSessionAndAlwaysKeepsTheFile() {
         XCTAssertEqual(PermissionAnswer.once.duration(for: .readOnly), .session)
         XCTAssertEqual(PermissionAnswer.always.duration(for: .readOnly), .always)
         XCTAssertNil(PermissionAnswer.deny.duration(for: .readOnly))
     }
 
-    /// The class overrules the answer. Even Always keeps nothing for the work
-    /// that must be asked about every time — otherwise the card would offer a
-    /// button that quietly did more than the list it came from allows.
     func testNothingIsKeptForAClassThatMayNotBeRemembered() {
         for klass in ActionClass.allCases where !mayBeRemembered(klass) {
             for answer in PermissionAnswer.allCases {
@@ -92,8 +79,6 @@ final class PermissionAnswerTests: XCTestCase {
             }
         }
     }
-
-    // MARK: - The two sets
 
     func testASessionGrantIsNeverWrittenOut() {
         let grants = PermissionGrants()
@@ -112,8 +97,6 @@ final class PermissionAnswerTests: XCTestCase {
         XCTAssertEqual(grants.remembered.first?.actionClass, .localWrite)
     }
 
-    /// What comes back from disk is in force, and replaces rather than merges:
-    /// a pair deleted from the file is a pair the person took back.
     func testAdoptingReplacesTheStandingHalfAndLeavesTheSessionAlone() {
         let session = PermissionGrants()
             .granting(projectID: project.id, toolID: "session.tool", actionClass: .readOnly)
@@ -143,9 +126,6 @@ final class PermissionAnswerTests: XCTestCase {
         XCTAssertEqual(grants.remembered.count, 1)
     }
 
-    /// The list is ordered, so the file it becomes does not change when nothing
-    /// did — a store that rewrites itself on every launch is a store nobody can
-    /// diff.
     func testWhatIsWrittenOutIsInAStableOrder() {
         let a = UUID(uuidString: "00000000-0000-0000-0000-0000000000AA")!
         let b = UUID(uuidString: "00000000-0000-0000-0000-0000000000BB")!
