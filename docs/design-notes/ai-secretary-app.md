@@ -2555,6 +2555,29 @@ Paints the answer and decides nothing — which of the three it is was
 settled by `vendorConnection`, in a target the tests can see.
 One hint for both rows, under the second of them, the way
 Personality and Picture carry theirs in the content column.
+The centre-aligned stack this marker sits in has a cost that was found by review
+and then measured, and it is not fixed yet. The enclosing `Grid` aligns on
+`leadingFirstTextBaseline`, so it asks the stack where its first baseline is;
+a centre-aligned stack answers from all of its children, and this marker is a
+child that comes and goes. Rendered off-screen at four times scale, the row's
+label moves when the ring appears: 2.75pt at font 7, 2.25pt at font 9, nothing
+at 19, 2.00pt at 29 — so the label's position depends on whether the app picked
+the model, which is not a thing the label should know about. The same shape
+applies to the Check button's stack in the AI row, whose height changes between
+the spinner and the tick.
+
+Do not fix it by putting the stack back to `firstTextBaseline`. That measures
+clean — 0.00pt at all four sizes — but it is the alignment this row had before
+0.23.363, and going back changes where the ring itself draws, which is the half
+of this the owner reported twice. Pinning the ring's own baseline to its bottom
+while keeping the stack centred was measured too and only half works: it clears
+the drift at font 29 but leaves 1.50pt at 7 and 0.75pt at 9. The remaining
+candidate is to keep the ring out of the stack's layout altogether, as an
+overlay rather than a sibling, and that has not been tried. Whatever is chosen
+has to be looked at on a real screen before it lands, because both halves of
+this — where the ring draws and where the label sits — are things only the eye
+settles.
+
 The inherited marker sits beside the menu, not inside it, on purpose: a `Menu` label built from several views
 renders as the chevron alone here, which is why these two rows used to
 show their title and no value at all. The value is the one thing the row
@@ -2578,6 +2601,25 @@ left, because the gap between the label column and the content column is
 `panelSpacing` — about 6pt at the default size — and pulling a box 6pt left sets
 it against "Personality". Neither number is font-derived: both are properties of
 the control style, so they stay constant while the panel scales.
+
+That last sentence was an assertion until a code review asked what happened at
+the ends of the font range, which runs 10 to 32 — a reasonable worry, since a
+rounded bezel's end caps are drawn at half its height, so an inset that tracked
+height would go ragged in the opposite direction at both extremes. It does not.
+`scripts/uidrive/insets.swift` measures the two AppKit cells under the styles
+these controls resolve to, at every font size the app offers: the field's text
+starts 8.00pt from its frame at every one of the twelve sizes while the field's
+own height grows from 18 to 42pt, and the borderless menu's label starts 8.00pt
+from its frame at all twelve as well. The height moves 24pt and neither inset
+moves at all, which is the mechanism refuted rather than merely doubted.
+
+Two things that measurement does not cover, so do not read it as more than it
+is. The absolute numbers there are 8 and 8 where this file's constants are 6 and
+4, because SwiftUI does not hand its `.roundedBorder` and `.borderlessButton`
+straight to those cells — what transfers is the invariance, not the value. And
+the panel has still not been photographed at 10 and at 32, which is what the
+charter asks for; the app's windows were on another Space on 2026-08-22 and
+taking the screen off someone to get the picture was the worse trade.
 A rule across both columns. `Divider()` on its own would sit inside the
 label column and draw a stub.
 MARK: - Actions

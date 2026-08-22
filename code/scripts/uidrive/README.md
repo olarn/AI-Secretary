@@ -146,6 +146,16 @@ figure behind the scroll fix in 0.10.199. Keep it as the shape to copy when a
 cost needs a number rather than an opinion: measure the real call, in a
 standalone process, before changing anything.
 
+`insets.swift` also takes no arguments. It prints, for every font size the app
+offers, where a rounded-bezel field puts its text and where a borderless menu
+puts its label — the two amounts the Profile panel's left column is aligned
+against. It was written when a review asked whether those two constants survive
+the 10-to-32 font range; they do, and the run is three seconds against no
+window, so it settles that class of question without taking the screen off
+whoever is using the machine. It is not a substitute for the picture: it
+measures AppKit's cells, and SwiftUI's styles resolve to different absolute
+numbers even where they scale the same way.
+
 ## Key codes
 
 The ones that come up: Return 36, Tab 48, Escape 53, Down 125, Up 126, Left
