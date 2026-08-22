@@ -3485,3 +3485,23 @@ CLI Path ต้องอยู่คอลัมน์เดียวกับ d
   ที่เขียนมือ)
 - [x] Drive แล้วทั้งสองตัวละคร: OpenCode (แถว Model/Effort ซ่อน) และ Claude Code
   (เห็นครบ Model/Effort พร้อมวงแหวนประ) แล้วสลับกลับ OpenCode ตามเดิม
+
+### ตรวจ diagram ให้ตรงกับโค้ดหลัง clean-code sweep (เอกสารล้วน ไม่ bump version)
+
+เจ้าของถามว่า `docs/diagrams/` สองไฟล์ยัง update อยู่ไหมหลัง refactor — ตรวจทุก
+identifier ในไดอะแกรมกับ `code/Sources` ทีละตัว (29 + 46 text element, 88 identifier)
+
+- [x] **เจอจุดเดียว**: `app-start.excalidraw` เขียน `Task.detached { detector.resolve() }`
+  ซึ่ง sweep เปลี่ยนชื่อเป็น `resolveOffTheMainThread()` ไปแล้ว → แก้ตามโค้ดจริง
+  (`AppDelegate.swift:352`) พร้อมปรับ `width` ตามอัตราส่วนตัวอักษรเดิมของ element นั้น
+  240.72 → 347.71 ขอบขวา 933.7 ซึ่งยังแคบกว่า label เดิมในไฟล์เดียวกันที่ยาวถึง 916 และ 1316
+- [x] อีก 87 identifier ตรงกับโค้ดหมด รวมทั้ง flow ของ `reply-hello.excalidraw` ทั้งเส้น
+  (submit → routeToTurn → startChat → streamReply → runTurn/takeWarm → handle(line:) →
+  ensureWorking → finishChat → announceFinished) — sweep ไม่ได้เปลี่ยนชื่อ method ในเส้นนี้เลย
+- **สามตัวที่ checker ขึ้น MISSING เป็น false positive** ตรวจด้วยมือแล้ว: `StatusBar` คือ
+  ชื่อเลนไม่ใช่ชื่อ type (ตัวจริงคือ `StatusBarController` ซึ่งมีอยู่), `DomainBridge` หมายถึง
+  `DomainBridge.swift` ที่ยังอยู่ (โน้ตบอกว่าเส้นนี้ *ไม่* ผ่านมัน), `Turn` มาจากหัวข้อ
+  "6. Turn completes"
+
+**ข้าม step 6 (package-app.sh) โดยตั้งใจ**: ไม่มีอะไรที่เข้าไปอยู่ใน bundle เปลี่ยน —
+diagram เป็นเอกสารล้วน `.app` เดิมจึงยังเป็น build ที่ถูกต้องของโค้ดที่ ship อยู่
