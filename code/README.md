@@ -9,8 +9,10 @@ how to test it, and how to drive it. For what the app does from the outside, rea
 read [`../PRODUCT_BACKLOG.md`](../PRODUCT_BACKLOG.md); for the rules a session has
 to follow, read [`../CLAUDE.md`](../CLAUDE.md).
 
-Version 0.23.364. SwiftPM only — there is no checked-in Xcode project, and the
-package opens in Xcode directly. `Package.swift` declares Swift tools 5.9.
+SwiftPM only — there is no checked-in Xcode project, and the package opens in
+Xcode directly. `Package.swift` declares Swift tools 5.9. The version is stated
+in the root README and nowhere else here, because a number written twice goes
+stale on one side.
 
 ## Requirements
 
@@ -156,6 +158,86 @@ Some things cannot be driven by script at all and are known to need real hands:
 `Shift+Return` (SwiftUI's `onKeyPress(.return)` does not see the shift modifier on
 a synthetic event) and the window shadow behind Liquid Glass (`screencapture`
 records the window's own layer, not the shadow the system draws).
+
+## How the process boundary is held
+
+Three separate mechanisms, often confused with each other.
+
+**The CLI's working directory** is the real boundary. A registered project *is*
+the session's working directory, and anything outside it needs `--add-dir`,
+which is a launch flag — so opening a new folder restarts the process. With no
+project registered, work runs in a neutral scratch directory under Application
+Support rather than wherever the app happened to launch from.
+
+**`--allowedTools` is a pre-approval list, not a restriction.** A tool left off
+it still exists; it just gets refused. That distinction cost a round: the model
+reached for `SendMessage` to talk to other CLI sessions and reported success,
+and no wording in a prompt makes a tool sitting in front of a model stop looking
+like the answer. Those tools are shut off with `--disallowedTools` instead. The
+default allowlist is read-only:
+
+```
+Read, Glob, Grep, WebSearch, WebFetch,
+Bash(git status *), Bash(git diff *), Bash(git log *), Bash(git branch *)
+```
+
+`WebSearch` and `WebFetch` are in that default. They do not touch the disk, but
+they do reach the network with whatever context the model includes — take them
+out of `ClaudeCodeProvider.readOnlyTools` if that is not the trade you want.
+
+**Widening is always try → refused → ask → try again.** Claude Code's
+`--permission-mode manual` does not consult the host app mid-turn, it simply
+refuses, so being refused *is* how the question reaches the person. Bash rules
+are narrowed to the command that was actually attempted, so approving one
+`npm test` does not hand over the shell.
+
+**MCP tools are not gated by the allowlist.** An `mcp__…` tool was observed
+running without a prompt; configuring a server in Claude Code is itself the
+grant. Servers are read from the person's own configuration, which is per
+directory, and both stdio and `127.0.0.1` servers work because the child is not
+sandboxed — the app passes neither `--bare` nor `--strict-mcp-config`. The child
+gets the **login shell's `PATH`**, resolved once in the background: without it a
+stdio server configured as `node …/index.js` fails to start from a
+Finder-launched app, because launchd's environment has no `PATH` and nvm and
+Homebrew are invisible.
+
+### The fallback adapters
+
+`ToolAdapters` is only reached when the chosen maker has no workspace tools of
+its own, but it is still the only place in the package that launches an external
+process, and it is constrained by construction rather than by checks:
+
+- `git` is launched by absolute path (`/usr/bin/git`), never resolved via `PATH`.
+- Arguments go to `Process` as an array, so no shell is involved and there is no
+  quoting or injection surface.
+- The argument vectors are hardcoded per operation. Typed text selects an
+  operation; it never becomes part of a command line.
+- The working directory comes only from a registered project, verified to exist
+  and to contain a `.git` entry — which in a worktree is a *file*, not a folder.
+- The subprocess gets a minimal environment
+  (`environmentWithNothingInheritedThatCouldRedirectGit`), a 15-second timeout
+  and a 128 KB output cap.
+
+The file adapter runs no process at all: it resolves the requested path against
+the project root, resolves symlinks, and refuses anything landing outside the
+root before reading.
+
+### One thread, and what stays in it
+
+Commands and conversation share a single thread, so asking a follow-up about
+something a command produced works. The provider sends only the latest user
+message and lets the CLI hold the thread with `--resume`; the app's own
+`conversation` array is its ledger, and anything the model needs to *see* has to
+travel with a turn. Three bugs of exactly that shape have been fixed, the
+plainest being a character answering "there's nothing to summarise yet" about
+answers printed in her own chat.
+
+A file read on the fallback path stays in the conversation and travels with
+every later message, which is what makes "what does this mean?" work; the
+approval prompt says so. The caps are all in bytes, declared together in
+`Secretary.swift`: 4,000 for command output and listings, 16,000 for file
+contents, 60,000 for a file sent to be understood, and the conversation itself
+trimmed oldest-first past 200,000.
 
 ## Where things are stored
 

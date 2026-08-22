@@ -3,7 +3,8 @@ import XCTest
 
 final class VersionInSyncTests: XCTestCase {
     private let documentsQuotingTheVersion: [(path: String, pattern: String)] = [
-        ("README.md", #"Version (\d+\.\d+\.\d+)"#)
+        ("README.md", #"Version (\d+\.\d+\.\d+)"#),
+        ("docs/FEATURES.md", #"State of the product at v(\d+\.\d+\.\d+)"#)
     ]
 
     private var repositoryRoot: URL {
