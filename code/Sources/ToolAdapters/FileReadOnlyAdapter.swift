@@ -4,19 +4,12 @@ import ProjectRegistry
 import Permissions
 import os
 
-/// A read-only view into an approved project's files. Deliberately a closed set
-/// of operations that carry a *relative* path — the path is resolved against the
-/// project root and verified to stay inside it, so chat text can never reach a
-/// file outside the registered directory.
 public enum FileOperation: Equatable, Sendable {
-    /// List the entries of a directory relative to the project root ("." = root).
     case listDirectory(relativePath: String)
-    /// Read the contents of a UTF-8 text file relative to the project root.
     case readFile(relativePath: String)
 
     public var actionClass: ActionClass { .readOnly }
 
-    /// The user-supplied path, always interpreted relative to the project root.
     public var relativePath: String {
         switch self {
         case .listDirectory(let path), .readFile(let path):
@@ -39,32 +32,13 @@ public enum FileOperation: Equatable, Sendable {
     }
 }
 
-/// Boundary the Secretary talks to, mirroring `CodeToolAdapter` so file work runs
-/// through the same approval pipeline and can be faked in tests.
 public protocol FileToolAdapter: AnyObject {
     var toolID: String { get }
     func summary(for operation: FileOperation) -> String
     func run(_ operation: FileOperation, in project: Project) -> Either<ToolError, ToolResult>
-    /// Where a relative path actually points, or a refusal if it leaves the
-    /// project.
-    ///
-    /// Exposed because watching a folder needs the same answer as reading one,
-    /// and the only alternative is a second copy of the escape check somewhere
-    /// else — which is how one of the two copies ends up subtly weaker.
     func resolve(_ relativePath: String, in project: Project) -> Either<ToolError, URL>
 }
 
-/// Reads directory listings and text files, constrained by construction:
-///
-/// - The target is resolved against the project root and its real (symlink- and
-///   `..`-resolved) path must remain inside the project's real root; anything
-///   escaping is rejected before any read happens.
-/// - Only regular files are read, only up to a byte cap, and only if they decode
-///   as UTF-8 — binary files are refused rather than dumped.
-/// - No process is launched and nothing is ever written.
-///
-/// Each of those guarantees is one rail below. They run in order and the first
-/// refusal short-circuits, so a read cannot happen unless every check passed.
 public final class FileReadOnlyAdapter: FileToolAdapter {
     public static let toolIdentifier = "file.readOnly"
 
@@ -80,7 +54,7 @@ public final class FileReadOnlyAdapter: FileToolAdapter {
     }
 
     public func summary(for operation: FileOperation) -> String {
-        let path = cleanedPath(operation.relativePath)
+        let path = pathOrProjectRoot(operation.relativePath)
         switch operation {
         case .listDirectory: return "list \(path)"
         case .readFile: return "read \(path)"
@@ -112,8 +86,6 @@ public final class FileReadOnlyAdapter: FileToolAdapter {
             return readFile(at: target, summary: summary)
         }
     }
-
-    // MARK: - Operations
 
     private func listDirectory(at url: URL, summary: String) -> Either<ToolError, ToolResult> {
         requireDirectory(at: url)
@@ -179,8 +151,6 @@ public final class FileReadOnlyAdapter: FileToolAdapter {
             )
     }
 
-    // MARK: - Safety rails
-
     private func requireProjectDirectory(_ project: Project) -> Either<ToolError, Project> {
         isDirectory(atPath: project.path)
             ? .right(project)
@@ -208,8 +178,6 @@ public final class FileReadOnlyAdapter: FileToolAdapter {
             : .right(url)
     }
 
-    /// Resolves a user-supplied relative path against the project root and refuses
-    /// anything that escapes it, after resolving symlinks and `..` components.
     public func resolve(
         _ relativePath: String,
         in project: Project
@@ -222,21 +190,27 @@ public final class FileReadOnlyAdapter: FileToolAdapter {
         in project: Project
     ) -> Either<ToolError, URL> {
         let root = project.url.resolvingSymlinksInPath().standardizedFileURL
-        let trimmed = cleanedPath(relativePath)
+        let trimmed = pathOrProjectRoot(relativePath)
 
-        // Reject absolute paths outright — the target must be inside the project.
-        guard !trimmed.hasPrefix("/") else { return .left(.pathEscapesProject(relativePath)) }
+        guard !isAbsolute(trimmed) else { return .left(.pathEscapesProject(relativePath)) }
 
-        // Resolve symlinks so a link inside the project can't point outside it.
-        let resolved = root
-            .appendingPathComponent(trimmed)
-            .standardizedFileURL
-            .resolvingSymlinksInPath()
-            .standardizedFileURL
+        let resolved = withSymlinksAndDotDotResolved(trimmed, under: root)
 
         return isContained(resolved, in: root)
             ? .right(resolved)
             : .left(.pathEscapesProject(relativePath))
+    }
+
+    private func isAbsolute(_ path: String) -> Bool {
+        path.hasPrefix("/")
+    }
+
+    private func withSymlinksAndDotDotResolved(_ relativePath: String, under root: URL) -> URL {
+        root
+            .appendingPathComponent(relativePath)
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
+            .standardizedFileURL
     }
 
     private func isContained(_ url: URL, in root: URL) -> Bool {
@@ -254,9 +228,7 @@ public final class FileReadOnlyAdapter: FileToolAdapter {
     }
 }
 
-/// Blank means "the project root". Free function because both the adapter and
-/// its summary need it and neither owns it.
-func cleanedPath(_ path: String) -> String {
+func pathOrProjectRoot(_ path: String) -> String {
     let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
     return trimmed.isEmpty ? "." : trimmed
 }

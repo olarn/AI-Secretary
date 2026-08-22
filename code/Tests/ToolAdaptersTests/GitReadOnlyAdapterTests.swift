@@ -3,8 +3,6 @@ import XCTest
 import ProjectRegistry
 @testable import ToolAdapters
 
-/// Exercises the adapter against a throwaway repository created per test.
-/// Nothing here touches the user's own checkouts.
 final class GitReadOnlyAdapterTests: XCTestCase {
     private var fixtureRoot: URL!
     private let adapter = GitReadOnlyAdapter()
@@ -129,9 +127,7 @@ final class GitReadOnlyAdapterTests: XCTestCase {
         }
     }
 
-    /// The allowlist is the argument table itself: every operation must map to
-    /// a read-only git subcommand, with no shell metacharacters anywhere.
-    func testEveryOperationMapsToAReadOnlyCommand() {
+    func testEveryOperationMapsToAReadOnlyGitSubcommandWithNoShellMetacharacters() {
         let readOnlySubcommands: Set<String> = ["status", "diff", "branch", "log"]
         let forbidden = CharacterSet(charactersIn: ";|&$`><\n")
 

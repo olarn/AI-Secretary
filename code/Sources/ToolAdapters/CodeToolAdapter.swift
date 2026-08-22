@@ -3,8 +3,6 @@ import Foundation
 import ProjectRegistry
 import Permissions
 
-/// What a tool was asked to do. Deliberately a closed enum rather than free
-/// text: user input selects a case, it never becomes part of a command line.
 public enum CodeToolOperation: String, Equatable, Sendable {
     case status
     case diffStat
@@ -44,7 +42,6 @@ public enum ToolError: Error, Equatable, Sendable, LocalizedError {
     case executableMissing(String)
     case timedOut(seconds: Int)
     case launchFailed(String)
-    // File adapter cases:
     case pathEscapesProject(String)
     case fileNotFound(String)
     case notADirectory(String)
@@ -82,12 +79,6 @@ public enum ToolError: Error, Equatable, Sendable, LocalizedError {
     }
 }
 
-/// Boundary the Secretary talks to, so orchestration can be tested without
-/// running any real process.
-///
-/// A refusal is a value on the left rail rather than a thrown error: the
-/// Secretary has to render every outcome into the conversation either way, and
-/// a `do`/`catch` around each call buys nothing.
 public protocol CodeToolAdapter: AnyObject {
     var toolID: String { get }
     func summary(for operation: CodeToolOperation) -> String

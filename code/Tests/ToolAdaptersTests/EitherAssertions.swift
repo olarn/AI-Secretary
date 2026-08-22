@@ -2,12 +2,6 @@ import FunctionalCore
 import XCTest
 import ToolAdapters
 
-// Adapters answer with `Either<ToolError, ToolResult>`, so a test either wants
-// the result or the refusal. These say which, and fail with the other rail's
-// contents when the answer is the wrong shape — a bare `XCTUnwrap` on an
-// `Option` would just say "nil" and lose the error that explains why.
-
-/// The result, failing the test if the adapter refused.
 func expectSuccess(
     _ outcome: Either<ToolError, ToolResult>,
     file: StaticString = #filePath,
@@ -21,7 +15,6 @@ func expectSuccess(
     )
 }
 
-/// The refusal, failing the test if the adapter actually succeeded.
 func expectRefusal(
     _ outcome: Either<ToolError, ToolResult>,
     file: StaticString = #filePath,

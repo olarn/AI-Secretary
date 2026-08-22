@@ -3,21 +3,6 @@ import Foundation
 import ProjectRegistry
 import os
 
-/// Runs a fixed, read-only set of Git commands inside an approved project
-/// directory.
-///
-/// Safety properties this type is responsible for:
-/// - `git` is launched by absolute path, never resolved through `PATH`.
-/// - Arguments are passed as an array to `Process`; no shell is involved, so
-///   there is no quoting or injection surface.
-/// - Argument vectors are hardcoded per operation. User text selects an
-///   operation; it never reaches the command line.
-/// - The working directory comes only from a registered `Project`, and is
-///   verified to exist and contain a `.git` entry before launching.
-/// - Output is capped and the process is killed if it exceeds a timeout.
-///
-/// The checks are rails: each returns the value the next one needs, so nothing
-/// launches unless every earlier check produced a right.
 public final class GitReadOnlyAdapter: CodeToolAdapter {
     public static let toolIdentifier = "git.readOnly"
 
@@ -38,8 +23,13 @@ public final class GitReadOnlyAdapter: CodeToolAdapter {
         self.maxOutputBytes = maxOutputBytes
     }
 
-    /// The complete allowlist. Anything not described here cannot be run.
-    private func arguments(for operation: CodeToolOperation) -> [String] {
+    private static let environmentWithNothingInheritedThatCouldRedirectGit = [
+        "PATH": "/usr/bin:/bin",
+        "GIT_TERMINAL_PROMPT": "0",
+        "GIT_OPTIONAL_LOCKS": "0"
+    ]
+
+    private func allowlistedArguments(for operation: CodeToolOperation) -> [String] {
         switch operation {
         case .status: return ["status", "--porcelain=v1", "--branch"]
         case .diffStat: return ["diff", "--stat"]
@@ -49,7 +39,7 @@ public final class GitReadOnlyAdapter: CodeToolAdapter {
     }
 
     public func summary(for operation: CodeToolOperation) -> String {
-        "git " + arguments(for: operation).joined(separator: " ")
+        "git " + allowlistedArguments(for: operation).joined(separator: " ")
     }
 
     public func run(
@@ -60,11 +50,9 @@ public final class GitReadOnlyAdapter: CodeToolAdapter {
 
         return requireGitRepository(project)
             .flatMap { _ in self.requireGitExecutable() }^
-            .flatMap { _ in self.launch(arguments: self.arguments(for: operation), in: project) }^
+            .flatMap { _ in self.launch(arguments: self.allowlistedArguments(for: operation), in: project) }^
             .flatMap { process in self.collect(from: process, summary: summary) }^
     }
-
-    // MARK: - Rails
 
     private func requireGitRepository(_ project: Project) -> Either<ToolError, Project> {
         var isDirectory: ObjCBool = false
@@ -73,9 +61,8 @@ public final class GitReadOnlyAdapter: CodeToolAdapter {
             return .left(.projectPathMissing(project.path))
         }
 
-        // A worktree stores .git as a file, so accept either kind of entry.
-        let gitEntry = project.url.appendingPathComponent(".git").path
-        return FileManager.default.fileExists(atPath: gitEntry)
+        let gitEntryFileInAWorktreeOrDirectoryOtherwise = project.url.appendingPathComponent(".git").path
+        return FileManager.default.fileExists(atPath: gitEntryFileInAWorktreeOrDirectoryOtherwise)
             ? .right(project)
             : .left(.notAGitRepository(project.path))
     }
@@ -86,8 +73,6 @@ public final class GitReadOnlyAdapter: CodeToolAdapter {
             : .left(.executableMissing(gitExecutable.path))
     }
 
-    /// The Foundation edge: `Process.run` throws, and that is the only throw in
-    /// this type. Everything after it is a value.
     private func launch(
         arguments: [String],
         in project: Project
@@ -96,12 +81,7 @@ public final class GitReadOnlyAdapter: CodeToolAdapter {
         process.executableURL = gitExecutable
         process.arguments = arguments
         process.currentDirectoryURL = project.url
-        // Minimal environment: no inherited config that could redirect git.
-        process.environment = [
-            "PATH": "/usr/bin:/bin",
-            "GIT_TERMINAL_PROMPT": "0",
-            "GIT_OPTIONAL_LOCKS": "0"
-        ]
+        process.environment = Self.environmentWithNothingInheritedThatCouldRedirectGit
 
         let pipe = Pipe()
         process.standardOutput = pipe
@@ -162,7 +142,6 @@ public final class GitReadOnlyAdapter: CodeToolAdapter {
     }
 }
 
-/// One value, so the launch rail can hand both to the collect rail.
 private struct RunningCommand {
     let process: Process
     let pipe: Pipe

@@ -1,7 +1,7 @@
 import Foundation
 
 public struct AppVersion: Equatable, Comparable, Sendable, CustomStringConvertible {
-    public static let current = AppVersion(major: 0, minor: 23, patch: 354)
+    public static let current = AppVersion(major: 0, minor: 23, patch: 355)
 
     public let major: Int
     public let minor: Int

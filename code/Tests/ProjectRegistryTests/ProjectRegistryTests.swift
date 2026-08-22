@@ -6,7 +6,6 @@ private let alpha = Project(name: "Alpha", path: "/tmp/alpha", allowedTools: ["g
 private let alphaBeta = Project(name: "AlphaBeta", path: "/tmp/alphabeta")
 private let gamma = Project(name: "Gamma", path: "/tmp/gamma")
 
-/// Resolution is a pure function, so these need no registry object at all.
 final class ResolveProjectTests: XCTestCase {
     private func resolve(_ projects: [Project], _ query: Option<String>) -> ProjectResolution {
         resolveProject(in: projects)(query)
@@ -55,7 +54,6 @@ final class ResolveProjectTests: XCTestCase {
     }
 }
 
-/// The other list questions, also pure.
 final class ProjectListFunctionTests: XCTestCase {
     func testProjectIDAtPathIgnoresATrailingSlash() {
         XCTAssertEqual(projectID(atPath: "/tmp/alpha/")([alpha]), .some(alpha.id))
@@ -130,9 +128,7 @@ final class ProjectRegistryTests: XCTestCase {
         XCTAssertEqual(registry.project(id: UUID()), Option.none())
     }
 
-    /// A store that cannot be written must not leave the in-memory list ahead
-    /// of the file — that is exactly the drift the value-typed design prevents.
-    func testAFailedWriteLeavesTheListUnchanged() {
+    func testAFailedWriteLeavesTheListUnchangedSoTheScreenNeverRunsAheadOfTheFile() {
         let registry = ProjectRegistry(store: FailingProjectStore())
         let result = registry.add(alpha)
 
@@ -161,9 +157,7 @@ final class ProjectPersistenceTests: XCTestCase {
         XCTAssertEqual(store.load(), .right([alpha, gamma]))
     }
 
-    /// The DTO keeps the `description` key, so files written before the domain
-    /// type split in two still load.
-    func testLegacyJSONWithDescriptionKeyStillLoads() throws {
+    func testTheDTOKeepsTheDescriptionKeySoFilesWrittenBeforeTheTypeSplitStillLoad() throws {
         let url = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("legacy-\(UUID().uuidString).json")
         let id = UUID()
@@ -199,7 +193,6 @@ final class ProjectPersistenceTests: XCTestCase {
     }
 }
 
-/// Always fails, to prove failures surface as values.
 private final class FailingProjectStore: ProjectStoring, @unchecked Sendable {
     private let error = ProjectStoreError.writeFailed(path: "/dev/null", message: "disk is on fire")
 

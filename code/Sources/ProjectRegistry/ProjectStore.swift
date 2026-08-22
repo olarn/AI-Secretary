@@ -1,8 +1,6 @@
 import FunctionalCore
 import Foundation
 
-/// Why reading or writing the registry failed. Per-module, so nothing outside
-/// `ProjectRegistry` has to know about `Codable` or file paths.
 public enum ProjectStoreError: Error, Equatable, Sendable {
     case readFailed(path: String, message: String)
     case decodeFailed(path: String, message: String)
@@ -22,41 +20,23 @@ extension ProjectStoreError {
     }
 }
 
-/// Persistence boundary for the registry, so tests can swap in an in-memory
-/// store instead of touching the user's real Application Support directory.
-///
-/// Failures come back as values rather than thrown errors: loading a registry
-/// at launch must not be able to unwind through an initialiser.
 public protocol ProjectStoring: AnyObject, Sendable {
     func load() -> Either<ProjectStoreError, [Project]>
     func save(_ projects: [Project]) -> Either<ProjectStoreError, Void>
 }
 
-/// Stores the registry as JSON under Application Support. Kept separate from
-/// chat history so project paths and permissions never mix with conversation
-/// content.
-///
-/// This is the Foundation edge: `FileManager` and `JSONDecoder` keep throwing,
-/// and every throw is converted to the left rail exactly once, here.
 public final class FileProjectStore: ProjectStoring, @unchecked Sendable {
     private let fileURL: URL
 
     public init(fileURL: URL? = nil) {
-        self.fileURL = fileURL ?? FileProjectStore.defaultURL
+        self.fileURL = fileURL ?? FileProjectStore.legacySharedFile
     }
 
-    /// Where the registry lived while every character shared one. Still read
-    /// once, to be adopted — see `adoptLegacyProjects`.
-    public static var defaultURL: URL {
+    public static var legacySharedFile: URL {
         supportDirectory.appendingPathComponent("projects.json")
     }
 
-    /// One file per character.
-    ///
-    /// A project row is not a bookmark: it carries `allowedTools`, so the file
-    /// is the character's allowlist. Sharing it means approving Claude Code for
-    /// one character approves it for all of them, which is the thing this
-    /// separation is for.
+
     public static func url(forCharacter id: UUID) -> URL {
         supportDirectory.appendingPathComponent("projects-\(id.uuidString).json")
     }
@@ -67,15 +47,12 @@ public final class FileProjectStore: ProjectStoring, @unchecked Sendable {
             .appendingPathComponent("AISecretary", isDirectory: true)
     }
 
-    /// Hands the shared registry to a character, once.
-    ///
-    /// Returns what it decided, so a caller can see whether anything moved.
     @discardableResult
     public static func adoptLegacyProjects(
         for id: UUID,
         fileManager: FileManager = .default
     ) -> Either<ProjectStoreError, FileMigration> {
-        let legacy = defaultURL
+        let legacy = legacySharedFile
         let mine = url(forCharacter: id)
         let decision = perCharacterFileMigration(
             legacy: legacy,
@@ -127,7 +104,6 @@ public final class FileProjectStore: ProjectStoring, @unchecked Sendable {
     }
 }
 
-/// In-memory store for tests.
 public final class InMemoryProjectStore: ProjectStoring, @unchecked Sendable {
     private let lock = NSLock()
     private var projects: [Project]

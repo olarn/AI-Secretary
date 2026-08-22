@@ -3,9 +3,6 @@ import XCTest
 import ProjectRegistry
 @testable import ToolAdapters
 
-/// Exercises the read-only file adapter against a throwaway directory tree.
-/// The key properties under test are the containment guarantees: no `..`,
-/// absolute path, or symlink may reach outside the registered project root.
 final class FileReadOnlyAdapterTests: XCTestCase {
     private var root: URL!
     private var outside: URL!

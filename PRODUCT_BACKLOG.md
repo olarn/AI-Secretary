@@ -3315,3 +3315,15 @@ default) ซึ่งทำให้ cache หายไปด้วย — ค�
   เฝ้าอยู่แล้วจริง (เช็กแล้ว ไม่ใช่เชื่อตาม CLAUDE.md)
   - `AppInfo.summary` → `AppInfo.statusMenuHeader` ชื่อบอกที่ใช้ จึงไม่ต้องอธิบายว่า
     ทำไมมีแค่ชื่อกับเวอร์ชัน
+- [x] `FunctionalCore`, `ProjectRegistry`, `ToolAdapters` — ไม่เหลือ comment
+  - `FileProjectStore.defaultURL` → `legacySharedFile` ชื่อบอกว่ามันคือไฟล์เก่าที่ทุกตัวละคร
+    เคยใช้ร่วมกัน ไม่ใช่ "ค่า default" ที่ควรใช้ต่อ (ชื่อเดิมทำให้อ่านผิดทาง)
+  - `cleanedPath` → `pathOrProjectRoot` เพราะ "ว่าง = project root" คือสิ่งที่ comment บอก
+  - `arguments(for:)` → `allowlistedArguments(for:)` และ environment ของ git ยกเป็น
+    `environmentWithNothingInheritedThatCouldRedirectGit`
+  - inline comment สองบรรทัดใน `resolveTarget` กลายเป็นฟังก์ชัน `isAbsolute` กับ
+    `withSymlinksAndDotDotResolved` — อ่านแล้วรู้ว่ากันอะไรอยู่
+  - `.git` เป็น *ไฟล์* ใน worktree (ไม่ใช่โฟลเดอร์) → ชื่อตัวแปรบอกไว้ พร้อมบันทึกใน
+    `docs/design-notes/tool-adapters.md`
+  - เหตุผลที่ `@unchecked Sendable` ของ Bow ปลอดภัย → `docs/design-notes/functional-core.md`
+  - 1438 tests ผ่านหมด ไม่แตะ assertion สักบรรทัด
