@@ -25,6 +25,7 @@ final class SpyWorkspaceProvider: ChatProvider, WorkspaceScopedProvider, SkillIn
     private(set) var resetCount = 0
     var hasWorkspaceTools = true
     var denialsForNextTurn: [DeniedTool] = []
+    var denialsForEveryTurn: [DeniedTool] = []
     var activityForNextTurn: [AgentActivity] = []
     var replyForNextTurn: String?
     var eventsForNextTurn: [ChatStreamEvent]?
@@ -61,7 +62,7 @@ final class SpyWorkspaceProvider: ChatProvider, WorkspaceScopedProvider, SkillIn
         lastMessages = messages
         lastSystem = system.toOptional()
         lastModel = model.toOptional()
-        let denials = denialsForNextTurn
+        let denials = denialsForEveryTurn.isEmpty ? denialsForNextTurn : denialsForEveryTurn
         denialsForNextTurn = []
         let steps = activityForNextTurn
         activityForNextTurn = []
@@ -665,7 +666,7 @@ final class AgentSessionTests: XCTestCase {
         )
     }
 
-    func testARuleAlreadyGrantedAndStillRefusedRaisesTheCardAgain() async {
+    func testASecondWriteInTheSameConversationIsNotAskedAgain() async {
         let allowed = project(grantingAgent: true)
         let secretary = makeSecretary(
             projects: [allowed],
@@ -683,12 +684,142 @@ final class AgentSessionTests: XCTestCase {
         XCTAssertEqual(secretary.pendingDecision, .none(), "the first one is silent")
 
         provider.denialsForNextTurn = [denyWrite()]
-        secretary.submit("create out.txt again")
+        secretary.submit("create another one")
         await waitUntilIdle()
 
-        guard case .approval = secretary.pendingDecision.toOptional() else {
-            return XCTFail("Expected the card back, got: \(String(describing: secretary.pendingDecision))")
+        XCTAssertEqual(
+            secretary.pendingDecision, .none(),
+            "The second write of a project answered Always for must not raise the card"
+        )
+        XCTAssertFalse(
+            secretary.transcript.contains { $0.text.contains("Shall I go ahead?") },
+            "Nor may it ask in prose. Got: \(secretary.transcript.map(\.text).joined(separator: " | "))"
+        )
+    }
+
+    func testWideningTwiceForTheSameRuleStopsAndSaysWhy() async {
+        let allowed = project(grantingAgent: true)
+        let secretary = makeSecretary(
+            projects: [allowed],
+            grantStore: InMemoryStandingGrantStore(grants: [
+                StandingGrant(
+                    projectID: allowed.id,
+                    toolID: Secretary.claudeCodeToolID,
+                    actionClass: .localWrite
+                )
+            ])
+        )
+        provider.denialsForEveryTurn = [denyWrite()]
+        secretary.submit("create out.txt")
+        await waitUntilIdle()
+        let callsOnceItHasGivenUp = provider.callCount
+
+        XCTAssertEqual(
+            secretary.pendingDecision, .none(),
+            "Re-asking for a rule we already widened would be asking for what we have"
+        )
+        XCTAssertTrue(
+            secretary.transcript.contains { $0.text.contains("isn't permission that's in the way") },
+            "It must say why it stopped. Got: \(secretary.transcript.map(\.text).joined(separator: " | "))"
+        )
+
+        await waitUntilIdle()
+        XCTAssertEqual(
+            provider.callCount, callsOnceItHasGivenUp,
+            "refused -> widen -> retry -> refused must not spin"
+        )
+    }
+
+    func testAnApprovedProjectStartsWithTheWriteToolsAllowed() async {
+        let allowed = project(grantingAgent: true)
+        let secretary = makeSecretary(
+            projects: [allowed],
+            grantStore: InMemoryStandingGrantStore(grants: [
+                StandingGrant(
+                    projectID: allowed.id,
+                    toolID: Secretary.claudeCodeToolID,
+                    actionClass: .localWrite
+                )
+            ])
+        )
+        secretary.submit("hello")
+        await waitUntilIdle()
+
+        guard let offered = provider.preparedTools.last ?? nil else {
+            return XCTFail("The workspace was never prepared")
         }
+        for tool in fileWritingTools {
+            XCTAssertTrue(
+                offered.contains(tool),
+                "\(tool) must be allowed before the first refusal, not after it. Got: \(offered)"
+            )
+        }
+    }
+
+    func testAProjectWithNoGrantDoesNotStartWithTheWriteToolsAllowed() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        secretary.submit("hello")
+        await waitUntilIdle()
+
+        guard let offered = provider.preparedTools.last ?? nil else {
+            return XCTFail("The workspace was never prepared")
+        }
+        XCTAssertFalse(offered.contains("Write"), "Nothing was agreed to yet. Got: \(offered)")
+    }
+
+    func testARefusalAndABlockedBlockInOneTurnRecoverOnce() async {
+        let allowed = project(grantingAgent: true)
+        let secretary = makeSecretary(
+            projects: [allowed],
+            grantStore: InMemoryStandingGrantStore(grants: [
+                StandingGrant(
+                    projectID: allowed.id,
+                    toolID: Secretary.claudeCodeToolID,
+                    actionClass: .localWrite
+                )
+            ])
+        )
+        provider.denialsForNextTurn = [denyWrite()]
+        provider.replyForNextTurn = """
+        I can't write it yet.
+
+        ```blocked
+        permission to write the daily note
+        ```
+        """
+        secretary.submit("write the daily note")
+        await waitUntilIdle()
+
+        XCTAssertFalse(
+            secretary.transcript.contains { $0.text.contains("Nobody is coming") },
+            "The refusal path owns this one; nudging as well is the second rescue that cancels the first"
+        )
+        XCTAssertTrue(
+            secretary.queuedMessages.isEmpty,
+            "Got: \(secretary.queuedMessages)"
+        )
+        XCTAssertFalse(
+            secretary.transcript.contains { $0.kind == .message && $0.speaker == .secretary && $0.text.isEmpty },
+            "An empty bubble is a stream that was started and then cancelled"
+        )
+    }
+
+    func testABlockedBlockWithNoRefusalStillNudges() async {
+        let secretary = makeSecretary(projects: [project(grantingAgent: true)])
+        provider.replyForNextTurn = """
+        I'll need permission first.
+
+        ```blocked
+        permission to write the daily note
+        ```
+        """
+        secretary.submit("write the daily note")
+        await waitUntilIdle()
+
+        XCTAssertTrue(
+            secretary.auditEntries.contains { $0.detail.contains("breaking a permission deadlock") },
+            "With nothing refused there is no card to draw, so the nudge is the only way out"
+        )
     }
 
     func testAnsweringAlwaysOnTheWidenCardIsWrittenDown() async {

@@ -10,6 +10,67 @@ sprint. It is stated once, in `CLAUDE.md` → Engineering expectations. A copy k
 here said **9** while the charter said **10**, so the copy is gone rather than
 corrected.
 
+## v0.23.365 — ขอ write permission ซ้ำๆ ทั้งที่กด Always ไปแล้ว และกดไม่ได้เพราะไม่มี box
+
+เจ้าของรายงานจาก project Second-Brain: Miku ขอสิทธิ์เขียนไฟล์ใหม่ทุกครั้งทั้งที่เคยตอบ
+Always ไปแล้ว และตอนถามก็ไม่มี card ขึ้นมาให้กด ได้แต่พูดว่ารออนุญาตอยู่ เรื่องนี้ถูก
+"แก้" มาแล้วอย่างน้อยสี่รอบ (`9195bfe`, `6cb1ab5`, `9fa4824`, `19cfac8`, `7c2b73f`)
+ทุกครั้งแก้ด้วยการสอนให้แอปรู้จักกำแพงอีกแบบหนึ่ง — แต่กำแพงไม่ใช่ปัญหา
+
+**Grant ไม่ได้หาย** `permissions-<miku>.json` มี `(901DA562, claude.code, localWrite)`
+และ `projects-<miku>.json` มี Second-Brain ใต้ id นั้นจริง มันตรงกันอยู่แล้ว
+เป็นบั๊กคนละตัวสองตัวที่ทับกันจนอ่านเป็นเรื่องเดียว
+
+**อาการที่ 1 — ถามทุกครั้ง** `isNew = !rules.allSatisfy(sessionAgentTools.contains)`
+กั้นการอ่าน grant ไว้ และ rule ของการเขียนไฟล์คือชื่อ tool เปล่าๆ (`"Write"`) การเขียน
+ครั้งแรกของบทสนทนาใส่ `Write` ลง `sessionAgentTools` ฉะนั้น**การเขียนครั้งที่สองเป็นต้นไป
+ข้ามการอ่าน grant ทั้งหมดแล้วขึ้น card ทันที** ทั้งที่มี Always อยู่ในมือ เห็นในบันทึกของ
+เจ้าของเอง: กด Always 16:43:32 แล้วไฟล์เดิมถูกถามซ้ำ 16:43:51 — 19 วินาทีถัดมา
+`AgentSessionTests:667` เขียนยืนยันพฤติกรรมนี้ว่าถูกต้อง ซึ่งเป็นเหตุผลที่สี่รอบที่ผ่านมา
+ไม่มีใครแตะมัน
+
+**อาการที่ 2 — ไม่มี box** ทางกู้สองทางวิ่งชนกัน `finishChat` เอา nudge ของ `BlockedBlock`
+ใส่คิวแล้ว drain คิวตอนออกจากฟังก์ชัน (`defer`) เทิร์นใหม่จึงเริ่มไปแล้วตอนที่ `complete`
+เรียก `offerToWiden`; transition ของ retry ถูกปฏิเสธ (`log show` บันทึกไว้ที่
+2026-08-22 20:37:38.273) แต่ `streamReply` ยังทำงานต่อ ใส่ bubble เปล่าแล้ว
+`streamingTask?.cancel()` ฆ่าเทิร์นที่ nudge เพิ่งเริ่ม ผลคือ bubble ว่างสองอัน ตัวละคร
+บอกว่ารออนุญาต และไม่มี card — สองอันนั้นคือ placeholder ของ stream ที่ถูกยกเลิก
+
+### ที่แก้
+
+- **`recoverFromRefusals` — ฟังก์ชันบริสุทธิ์ตัวเดียวที่ตัดสินใจ** ทางที่เคย `return`
+  เงียบๆ สามทางใน `offerToWiden` กลายเป็น `.cannotHelp(...)` ที่ผู้เรียก**ต้อง**พูดออกมา
+  การทำ card หายจึงเขียนออกมาไม่ได้อีก
+- **brake ผูกกับ retry chain ไม่ใช่ทั้งบทสนทนา** `widenedThisChain` เก็บเฉพาะ rule ที่
+  เพิ่งขยายให้ครั้งที่กำลัง retry อยู่ และล้างทันทีที่เทิร์นจบโดยไม่โดนปฏิเสธ — วงจร
+  refused→widen→retry→refused ยังหมุนไม่ได้ แต่การเขียนครั้งที่สองไม่ถูกถามอีก
+- **grant เป็น input ของ allowlist ไม่ใช่ตัวกู้หลังโดนปฏิเสธ** project ที่อนุมัติแล้วได้
+  `Write`/`Edit`/`NotebookEdit` ตั้งแต่ต้นเทิร์น บทสนทนาใหม่จึงไม่ต้องเสียรอบ
+  "โดนปฏิเสธก่อนแล้วค่อยขยาย" อีกเลย
+- **retry ไม่เริ่มทับเทิร์นที่ยังวิ่งอยู่** `pendingRetry` เป็นช่องเดียว drain หลัง stream
+  loop จบ ไม่ใช่คิวข้อความ (คิวนั้นวิ่งเข้า `beginTurn` ซึ่งเป็นทางของข้อความผู้ใช้)
+- **folder ที่อยู่ใน project ไม่ใช่ "ที่อื่น"** เดิม card ขอเปิด folder เด้งกับ sub-folder
+  ของ project ที่อนุมัติไปแล้ว ทำให้ Always หนึ่งครั้งกลายเป็น grant รายโฟลเดอร์
+  ตอนนี้ Always ครั้งเดียวครอบทั้ง project และทุก sub-folder ใต้มัน (เจ้าของเลือกข้อ 1)
+- **`classOf` — project grant ไม่ครอบสิ่งที่ charter สั่งให้ถาม** rule ของ shell ที่ถูก
+  ปฏิเสธเคยกลายเป็น `.localWrite` เสมอ `rm`/`shred`/`dd`/`sudo` จึงจะถูกขยายให้เงียบๆ
+  ใต้ grant ตอนนี้แยกเป็น `.destructive`, `.dependencyInstalling`, `.gitHistoryChanging`
+  ซึ่ง `mayBeRemembered` ปฏิเสธทั้งสามคลาส — ถามทุกครั้งแม้อยู่ใน project ที่ตอบ Always
+  แล้ว ส่วน `mkdir`/`mv` ยังเป็น `.localWrite` เพราะเป็นงานปกติของ vault
+- **`scratchProject` มี id คงที่** และ `GrantSubject` ทำให้ "ไม่มี project เปิดอยู่" เป็น
+  สถานะของตัวเอง — ไม่ไปอ่าน grant และไม่เสนอ Always แทนที่จะอ้างชื่อ project ปลอม
+
+`AgentSessionTests:667` ถูกเขียนใหม่ให้ยืนยันกฎที่ถูกต้อง (rule เดิมโดนปฏิเสธซ้ำ**ใน
+chain เดียวกัน**ยังต้องหยุดและบอกเหตุผล) — เป็น assertion เดียวที่แก้ ที่เหลือผ่านหมด
+ไม่แตะ 1466 tests, 0 failures
+
+### ที่ยังไม่ได้แก้ และรู้ตัว
+
+`rm` ที่ถูก sandbox ของ Claude Code ปฏิเสธ ยังไม่ผ่าน `isPermissionRefusal` — ข้อความ
+ปฏิเสธไม่ตรงวลีไหนเลย จึงไม่เกิด `DeniedTool` ไม่มีอะไรไปถึงชั้นตัดสินใจ และไม่มี card
+ตัวละครได้แต่บอกเป็นคำพูดว่ารออนุญาต ขับเจอตอน 2026-08-22 21:47 อาการเดียวกับที่
+รายงาน แต่คนละสาเหตุ และเป็นข้อที่ `6cb1ab5` บันทึกไว้แล้วว่ายังไม่เคยแก้
+
 ## Sprint 24: Support Codex
 - [ ] รองรับการทำงานกับ ChatGPT Codex
 - [ ] ใน Profile, เพิ่ม choice ให้เลือกค่าย AI (ตอนนี้จะมีแค่ Claude Coed, OpenCode, ChatGPT Codex) 

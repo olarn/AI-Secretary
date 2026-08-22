@@ -1,6 +1,6 @@
 # What the app does today
 
-**State of the product at v0.23.364** (`code/Sources/SecretaryCore/AppVersion.swift`),
+**State of the product at v0.23.365** (`code/Sources/SecretaryCore/AppVersion.swift`),
 2026-08-22, on `main` at `e1d4c95`.
 
 This is the standing answer to "what can it do, and what happens when I use it" —
@@ -155,6 +155,24 @@ not an `if` in a view. Only `Always` reaches disk, in
 `AISecretary/permissions-<profileID>.json`, one file per character; session grants
 cannot leak into it by construction.
 
+**`Always` covers the project, not a folder** (0.23.365). One yes on `Second-Brain`
+covers writing to the vault root and every folder under it, for ever — a refused
+folder that lies inside the approved project is not treated as another place to ask
+about. A folder genuinely outside the project still asks, every time. And the class
+is read from the command that was refused, not assumed: `rm`, `shred`, `dd`, `sudo`
+come back as `destructive`, package managers as `dependencyInstalling`,
+`git rebase`/`reset`/`push` as `gitHistoryChanging` — none of which a project grant
+can answer for, so they ask even inside a project answered `Always`. `mkdir` and
+`mv` stay `localWrite`, because renaming and creating folders is the ordinary work
+of a vault.
+
+**The grant is an input, not a rescue** (0.23.365). An approved project starts every
+turn with the file-writing tools already allowed, so a new conversation never pays
+the refused-then-widened round trip. Before this, the grant was only consulted
+*after* a refusal, and behind a brake keyed to the whole conversation — which meant
+the second and every later write of a conversation raised the card again with a
+matching `Always` in hand.
+
 **Every card leaves a trace.** Answering one writes a line into the conversation
 — `You chose "Always" — I'll keep this for X.` — and it is written *before* the work
 runs, not after (0.17.278).
@@ -165,6 +183,17 @@ different words. Both now raise their own card; a turn that hits both is asked a
 the folder first and about the tool on the retry (0.21.338, 0.21.340). A folder that
 has already been opened is never re-offered, and when there is nothing left to grant
 the app says so rather than stopping silently.
+
+**One rescue per refusal, and it never starts on top of a running turn** (0.23.365).
+The refused-tool path and the ` ```blocked ` nudge answer the same question, so the
+refusal path owns the turn whenever it parsed anything and the nudge fires only when
+nothing was refused. A retry waits in a single slot until the stream it came from has
+finished, rather than cancelling it — which is what used to leave two empty bubbles,
+a character insisting she was waiting for approval, and no card at all.
+
+**Known gap:** a `rm` refused by Claude Code's *sandbox* still matches none of the
+phrases the app reads as a refusal, so no card is raised for it and the character
+says in words that she is waiting. Driven and confirmed 2026-08-22.
 
 **Asking in words is a dead end, and the app breaks it.** There is nobody to petition
 — the only way a question reaches the person is a tool call that gets refused. A

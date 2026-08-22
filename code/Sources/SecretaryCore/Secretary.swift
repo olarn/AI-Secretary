@@ -722,7 +722,7 @@ public final class Secretary {
     }
 
     private func dispatchNextQueued() {
-        guard !queuePaused, !queue.isEmpty,
+        guard !queuePaused, !queue.isEmpty, !pendingRetry.isDefined,
               !stateMachine.state.isBusy, !pendingDecision.isDefined
         else { return }
         let next = queue.removeFirst()
@@ -1771,7 +1771,7 @@ public final class Secretary {
         )
     }
 
-    public static let claudeCodeToolID = "claude.code"
+    public static let claudeCodeToolID = agentToolID
 
     static var scratchDirectory: URL {
         let url = FileManager.default
@@ -1781,8 +1781,12 @@ public final class Secretary {
         return url
     }
 
+    static let idThatKeepsTheScratchProjectFromMintingANewOneEveryRead
+        = UUID(uuidString: "00000000-0000-4000-8000-000000000000") ?? UUID()
+
     static var scratchProject: Project {
         Project(
+            id: idThatKeepsTheScratchProjectFromMintingANewOneEveryRead,
             name: "no project",
             path: scratchDirectory.path,
             allowedTools: [claudeCodeToolID]
@@ -1826,56 +1830,109 @@ public final class Secretary {
         streamReply(messages: conversation, taskID: taskID)
     }
 
-    private func offerToWiden(_ denied: [DeniedTool], taskID: String) {
-        guard !denied.isEmpty else { return }
-        activeRequestText.fold({}) { prompt in offerToWiden(denied, prompt: prompt, taskID: taskID) }
+    var grantSubject: GrantSubject {
+        lastProject
+            .filter { remembered in self.registry.projects.contains { $0.id == remembered.id } }^
+            .fold({ .noProjectOpen(standingIn: Self.scratchProject) }, { .registered($0) })
     }
 
-    private func offerToWiden(_ denied: [DeniedTool], prompt: String, taskID: String) {
-        let project = lastProject.getOrElse(Self.scratchProject)
+    private func offerToWiden(_ denied: [DeniedTool], taskID: String) {
+        let subject = grantSubject
+        let recovery = recoverFromRefusals(
+            denied: denied,
+            subject: subject,
+            grants: grants,
+            widenedThisChain: widenedThisChain,
+            sessionDirectories: sessionAgentDirectories,
+            hasRequestToRetry: activeRequestText.isDefined
+        )
+        apply(recovery, denied: denied, subject: subject, taskID: taskID)
+    }
 
-        let folders = denied.compactMap { $0.directory.toOptional() }.reduced()
-        let unopened = folders.filter { !sessionAgentDirectories.contains(URL(fileURLWithPath: $0)) }
-        let thereIsAFolderTheyHaveNotAlreadyAgreedTo = !unopened.isEmpty
-        if thereIsAFolderTheyHaveNotAlreadyAgreedTo {
-            offerToOpen(folders: unopened, prompt: prompt, taskID: taskID, project: project)
+    private func apply(
+        _ recovery: PermissionRecovery,
+        denied: [DeniedTool],
+        subject: GrantSubject,
+        taskID: String
+    ) {
+        let prompt = activeRequestText.getOrElse("")
+        switch recovery {
+        case .nothingWasRefused:
             return
-        }
 
-        let rules = denied.flatMap(\.rules).reduced()
-        let neitherWallHasAnythingLeftToOpen = rules.isEmpty
-        guard !neitherWallHasAnythingLeftToOpen else {
-            if !folders.isEmpty {
-                say(.secretary, """
-                    I still can't reach \(folders.joined(separator: ", ")) — you've already \
-                    let me work there, so something else is stopping it, and agreeing again \
-                    wouldn't change that.
-                    """)
-            }
-            return
-        }
+        case .cannotHelp(let obstacle):
+            say(.secretary, sentenceFor(obstacle))
 
-        let inBrowser = denied.contains { BrowserTools.changesState($0.name) }
+        case .openFolders(let folders):
+            offerToOpen(folders: folders, prompt: prompt, taskID: taskID, project: subject.project)
 
-        let isNew = !rules.allSatisfy(sessionAgentTools.contains)
-        if isNew, !inBrowser, grants.has(
-            projectID: project.id,
-            toolID: Self.claudeCodeToolID,
-            actionClass: .localWrite
-        ) {
+        case .widenSilently(let rules):
             audit.record(AuditEntry(
                 taskID: taskID,
                 kind: .approvalGranted,
-                detail: "standing write grant for \(project.name): \(rules.joined(separator: ", "))"
+                detail: "standing write grant for \(subject.project.name): \(rules.joined(separator: ", "))"
             ))
-            widenAndRetry(rules: rules, prompt: prompt, in: project)
-            return
-        }
+            widenAndRetry(rules: rules, prompt: prompt, in: subject.project)
 
+        case .askToWiden(let rules, let asked):
+            askToWiden(
+                rules: rules,
+                actionClass: asked,
+                denied: denied,
+                subject: subject,
+                prompt: prompt,
+                taskID: taskID
+            )
+        }
+    }
+
+    private func whereThatWas(_ subject: GrantSubject) -> String {
+        subject.isRegistered
+            ? "in \(subject.project.name)"
+            : "while no project of yours was open, so I can only ask for this once"
+    }
+
+    private func sentenceFor(_ obstacle: RecoveryObstacle) -> String {
+        switch obstacle {
+        case .noRequestToRetry:
+            return """
+                I was blocked partway and there's nothing left of the request to try again — \
+                say what you'd like once more and I'll ask you properly this time.
+                """
+        case .foldersAlreadyOpen(let folders):
+            return """
+                I still can't reach \(folders.joined(separator: ", ")) — you've already \
+                let me work there, so something else is stopping it, and agreeing again \
+                wouldn't change that.
+                """
+        case .nothingLeftToOpen:
+            return """
+                I was blocked and I can't tell what would unblock me, so there's nothing \
+                useful for me to ask you for. Tell me what you'd like and I'll try another way.
+                """
+        case .wideningDidNotHelp(let rules):
+            return """
+                I already have \(rules.joined(separator: ", ")) allowed and it was refused \
+                anyway, so it isn't permission that's in the way — asking you again \
+                wouldn't change it.
+                """
+        }
+    }
+
+    private func askToWiden(
+        rules: [String],
+        actionClass: ActionClass,
+        denied: [DeniedTool],
+        subject: GrantSubject,
+        prompt: String,
+        taskID: String
+    ) {
+        let project = subject.project
+        let inBrowser = actionClass == .browserAction
         let request = ApprovalRequest(
             taskID: taskID,
             toolID: Self.claudeCodeToolID,
-            actionClass: inBrowser ? .browserAction : .localWrite,
+            actionClass: actionClass,
             project: project,
             commandSummary: denied.map { tool in
                 BrowserTools.humanDescription(for: tool.name)^
@@ -1888,7 +1945,7 @@ public final class Secretary {
         let howLong = permissionScopeSentence(
             offeredAnswers(
                 for: request,
-                projectIsRegistered: registry.projects.contains { $0.id == project.id }
+                projectIsRegistered: subject.isRegistered
             )
         )
 
@@ -1906,7 +1963,7 @@ public final class Secretary {
             request,
             operation: .widenAgentTools(rules: rules, prompt: prompt),
             saying: """
-            I was blocked from doing this in \(project.name):
+            I was blocked from doing this \(whereThatWas(subject)):
 
             \(what)
 
@@ -2097,6 +2154,12 @@ public final class Secretary {
     static let languagePrompt = SecretaryPrompt.language
 
     private func openDirectoriesAndRetry(paths: [String], prompt: String, in project: Project) {
+        let aTurnIsStillRunning = streamingTask != nil || stateMachine.state.isBusy
+        guard !aTurnIsStillRunning else {
+            pendingRetry = .some(.widenAgentDirectories(paths: paths, prompt: prompt))
+            return
+        }
+
         let taskID = activeTaskID.getOrElse("-")
         sessionAgentDirectories.formUnion(paths.map { URL(fileURLWithPath: $0) })
         audit.record(AuditEntry(
@@ -2116,8 +2179,15 @@ public final class Secretary {
     }
 
     private func widenAndRetry(rules: [String], prompt: String, in project: Project) {
+        let aTurnIsStillRunning = streamingTask != nil || stateMachine.state.isBusy
+        guard !aTurnIsStillRunning else {
+            pendingRetry = .some(.widenAgentTools(rules: rules, prompt: prompt))
+            return
+        }
+
         let taskID = activeTaskID.getOrElse("-")
         sessionAgentTools.formUnion(rules)
+        widenedThisChain.formUnion(rules)
         audit.record(AuditEntry(
             taskID: taskID,
             kind: .approvalGranted,
@@ -2146,6 +2216,10 @@ public final class Secretary {
 
     private var sessionAgentDirectories: Set<URL> = []
 
+    @ObservationIgnored private var widenedThisChain: Set<String> = []
+
+    @ObservationIgnored private var pendingRetry: Option<PlannedOperation> = .none()
+
     private func prepareWorkspace(primary: Option<Project>, on scoped: WorkspaceScopedProvider) {
         lastProject = primary
         let primaryID = primary.map(\.id)^
@@ -2165,9 +2239,13 @@ public final class Secretary {
     }
 
     private var agentAllowlist: [String] {
-        var tools = ClaudeCodeProvider.readOnlyTools
-        if browserEnabled { tools += BrowserTools.readOnlyRules }
-        return tools + sessionAgentTools.sorted()
+        agentToolSurface(
+            baseline: ClaudeCodeProvider.readOnlyTools,
+            browser: browserEnabled ? BrowserTools.readOnlyRules : [],
+            subject: grantSubject,
+            grants: grants,
+            sessionTools: sessionAgentTools
+        )
     }
 
     private func requestAgentAccess(to project: Project, prompt: String, taskID: String) {
@@ -2254,6 +2332,21 @@ public final class Secretary {
                 if isDone { break }
             }
             self?.streamingTask = nil
+            self?.dispatchPendingRetry()
+        }
+    }
+
+    private func dispatchPendingRetry() {
+        guard let operation = pendingRetry.toOptional() else { return }
+        pendingRetry = .none()
+        let project = grantSubject.project
+        switch operation {
+        case .widenAgentTools(let rules, let prompt):
+            widenAndRetry(rules: rules, prompt: prompt, in: project)
+        case .widenAgentDirectories(let paths, let prompt):
+            openDirectoriesAndRetry(paths: paths, prompt: prompt, in: project)
+        default:
+            return
         }
     }
 
@@ -2372,11 +2465,13 @@ public final class Secretary {
 
         conversation.append(ChatMessage(role: .assistant, content: run.reply))
         trimConversation()
+        let nothingWasRefusedSoTheChainIsOver = run.denied.isEmpty
+        if nothingWasRefusedSoTheChainIsOver { widenedThisChain = [] }
         finishChat(
             entryID: run.segmentID, taskID: run.taskID, success: true,
-            displayText: run.segmentText, fullText: run.reply, bubbles: run.bubbles
+            displayText: run.segmentText, fullText: run.reply, bubbles: run.bubbles,
+            denied: run.denied
         )
-        offerToWiden(run.denied, taskID: run.taskID)
     }
 
     private func failReply(_ error: ChatError?, _ handed: ReplyRun) {
@@ -2395,7 +2490,8 @@ public final class Secretary {
         success: Bool,
         displayText: String,
         fullText: String,
-        bubbles: [String]
+        bubbles: [String],
+        denied: [DeniedTool] = []
     ) {
         let finalText = fullText
         streamingEntryID = .none()
@@ -2421,10 +2517,11 @@ public final class Secretary {
             ? SaveFileBlock.parse(keeping.body)
             : SaveFileBlock(body: keeping.body, names: [])
         offerToSave(offering.names)
+        let theRefusalPathOwnsThisOne = !denied.isEmpty
         if let missing = blocked.missing,
            let request = conversation.last(where: { $0.role == .user })?.content {
             outstanding = OutstandingRequest(request: request, missing: missing)
-            breakPermissionDeadlock(missing: missing)
+            if !theRefusalPathOwnsThisOne { breakPermissionDeadlock(missing: missing) }
         } else if success {
             outstanding = nil
             permissionNudged = false
@@ -2453,6 +2550,7 @@ public final class Secretary {
 
         if let request = parsed.request { applyLoopRequest(request) }
         watchFollowUpInFlight = false
+        offerToWiden(denied, taskID: taskID)
         defer { dispatchNextQueued() }
         for pane in pinned.requests { onPinWindow?(pane) }
 
