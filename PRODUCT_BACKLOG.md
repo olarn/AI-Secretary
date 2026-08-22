@@ -3370,3 +3370,14 @@ default) ซึ่งทำให้ cache หายไปด้วย — ค�
     `docs/design-notes/secretary-core.md` (3,824 บรรทัด) เรียงตามไฟล์ — บันทึกบั๊ก,
     ตัวเลขที่วัดมา, และเหตุผลที่เจ้าของตัดสินใจแบบนั้น ยังอ่านได้ครบ
   - 1438 tests ผ่านหมด
+- [x] `Secretary.swift` (4,853 บรรทัด / comment 1,486 บรรทัด — ไฟล์ที่หนักที่สุดใน repo)
+  - เงื่อนไขที่เคยมี comment กำกับ กลายเป็นชื่อ ทำให้ `submit` อ่านเป็นภาษาคนได้ทั้งเมธอด:
+    `aDraggedInFileIsACompleteRequestOnItsOwn`,
+    `isALocalCommandThatMustNeverReachTheNetworkOrTheStateMachine`,
+    `passingItOnIsNotWorkForThisOneSoThereIsNothingToWaitFor`
+  - `checkingNowWouldTalkOverAReplyOrOverItself` ใน `tick` — เงื่อนไขสามส่วนที่เคยต้อง
+    อ่าน comment ถึงจะรู้ว่ากันอะไรอยู่ และ `5` กลายเป็น `secondsToWaitForTheNextLook`
+  - `neitherWallHasAnythingLeftToOpen`, `thereIsAFolderTheyHaveNotAlreadyAgreedTo`
+    ใน `offerToWiden` — กำแพงสองแบบของ Claude Code แยกกันชัดในโค้ดแล้ว
+  - comment ทั้ง 1,486 บรรทัดย้ายเข้า `docs/design-notes/secretary-orchestrator.md` ครบ
+  - 1438 tests ผ่านหมด — ทั้ง target `SecretaryCore` ไม่เหลือ comment แล้ว
