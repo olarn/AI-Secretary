@@ -1,24 +1,5 @@
 import Foundation
 
-/// The status bar menu, as a value.
-///
-/// `AISecretaryApp` is never linked into the test bundle, so a menu built by
-/// hand out of `NSMenuItem`s is a hundred-odd lines that no test has ever
-/// executed — and Sprint 13 turns those hundred lines into a tree three levels
-/// deep with a branch per character. The rule the charter draws for exactly
-/// this case is that the app applies answers rather than computing them, so
-/// the shape lives here, where it can be asserted row by row, and
-/// `StatusBarController` becomes a renderer.
-///
-/// Plain Swift, no Bow: this crosses into the app target, which cannot import
-/// `FunctionalCore` without Bow's `State` shadowing SwiftUI's — the same reason
-/// `ConversationMenuRow` next door is plain.
-
-// MARK: - What the menu is built from
-
-/// One pinned pane, reduced to what a menu row needs. `InfoWindowSpec` carries
-/// its body and timestamp too, and a menu that receives those invites itself to
-/// start deciding things about them.
 public struct PinnedMenuRow: Identifiable, Equatable, Sendable {
     public let id: UUID
     public let title: String
@@ -29,7 +10,6 @@ public struct PinnedMenuRow: Identifiable, Equatable, Sendable {
     }
 }
 
-/// Everything the menu needs to know about one character.
 public struct CharacterMenuState: Identifiable, Equatable, Sendable {
     public let id: UUID
     public let name: String
@@ -52,13 +32,8 @@ public struct CharacterMenuState: Identifiable, Equatable, Sendable {
     }
 }
 
-// MARK: - What the menu is
-
-/// What a row does when it is clicked. A closed set, so the renderer cannot
-/// invent an action and the tests can name every one that exists.
 public enum StatusMenuAction: Equatable, Sendable {
     case toggleCharacter(character: UUID)
-    /// Everyone off the desktop, or everyone back on.
     case toggleAllCharacters
     case newChat(character: UUID)
     case resumeConversation(character: UUID, conversation: UUID)
@@ -67,16 +42,12 @@ public enum StatusMenuAction: Equatable, Sendable {
     case showAllPinned(character: UUID)
     case clearPinned(character: UUID)
     case newCharacter
-    /// The command window on or off screen — hidden, not torn down, so the
-    /// sessions it started keep running.
     case toggleCommandWindow
     case showTokenUsage
     case showAbout
     case quit
 }
 
-/// A keystroke the row advertises. Command-only, because every shortcut this
-/// menu has ever carried is.
 public enum StatusMenuShortcut: String, Equatable, Sendable {
     case commandH = "h"
     case commandU = "u"
@@ -85,11 +56,8 @@ public enum StatusMenuShortcut: String, Equatable, Sendable {
 
 public struct StatusMenuItem: Equatable, Sendable {
     public let title: String
-    /// Absent for a label or a submenu parent — rows that are not clicked.
     public let action: StatusMenuAction?
     public let shortcut: StatusMenuShortcut?
-    /// Drawn with a tick. Marks the conversation you are already in; without it
-    /// reopening it is an invisible no-op that reads as the menu being broken.
     public let isChecked: Bool
     public let isEnabled: Bool
     public let submenu: [StatusMenuEntry]?
@@ -116,42 +84,17 @@ public enum StatusMenuEntry: Equatable, Sendable {
     case item(StatusMenuItem)
 }
 
-// MARK: - The menu
-
-/// The whole tree, from `menu.pdf`.
-///
-/// ```text
-/// AI Secretary 0.13.x
-/// ├ Miku ▸ ──────── Show/Hide Character
-/// ├ Anya ▸          New chat
-/// ├ New Character…  Chat History ▸
-/// ├ Token Usage     ─────────
-/// ├ About           Pinned Messages ▸
-/// └ Quit
-/// ```
-///
-/// Everything about a conversation hangs off the character it belongs to; only
-/// the three rows that are about the app stay at the root.
-///
-/// The characters used to sit one level further in, under a "Characters" row.
-/// That row held nothing of its own — it existed to be hovered past — so the
-/// owner asked for it gone and the characters moved up into its place.
 public func statusBarMenu(
     summary: String,
     characters: [CharacterMenuState],
     isCommandWindowVisible: Bool = false
 ) -> [StatusMenuEntry] {
     [
-        // A label, not a row to click: it answers "which version am I running"
-        // without opening anything.
         .item(StatusMenuItem(title: summary, isEnabled: false)),
         .separator,
     ]
     + charactersSubmenu(characters)
     + [
-        // Asked for between New Character and Token Usage, with a line on each
-        // side: commanding everyone at once is neither one character's business
-        // nor the app's bookkeeping, so it stands alone.
         .separator,
         .item(StatusMenuItem(
             title: commandWindowMenuTitle(isVisible: isCommandWindowVisible),
@@ -169,25 +112,12 @@ private func charactersSubmenu(_ characters: [CharacterMenuState]) -> [StatusMen
     characters.map { character in
         .item(StatusMenuItem(
             title: character.name,
-            // Clicking her name shows or hides her, which is the thing anyone
-            // wants from a character row often enough to be worth a click
-            // rather than a hover and a second click. Her submenu is still
-            // there for everything else.
             action: .toggleCharacter(character: character.id),
             submenu: characterSubmenu(character)
         ))
     }
     + (characters.isEmpty ? [] : [
-        // The rule above it is "one row per character"; this one is about all
-        // of them at once, so it is not another name in that list and the line
-        // says so. It goes inside the same condition, because a separator with
-        // nothing under it is a line drawn for no reason.
         .separator,
-        // ⌘H is advertised here because this is what it does: the whole desktop,
-        // since Sprint 13-2. It used to be advertised on each character's own
-        // row, which was true before that and quietly false after — and stayed
-        // false long enough that ⌘H really did hide one character again, for a
-        // different reason (see `handlesHideLocally`).
         .item(StatusMenuItem(
             title: allCharactersTitle(characters),
             action: .toggleAllCharacters,
@@ -195,28 +125,16 @@ private func charactersSubmenu(_ characters: [CharacterMenuState]) -> [StatusMen
         )),
     ])
     + [
-        // Always after them, so its position doesn't move as characters come
-        // and go.
         .item(StatusMenuItem(title: "New Character…", action: .newCharacter)),
     ]
 }
 
-/// One row for both directions, and which one it is comes from the desktop
-/// rather than from a remembered state.
-///
-/// **Anyone still on screen means the row hides.** A count — "most of them are
-/// away, so this is Show" — would leave a visible character behind on a row
-/// that said Hide, and the one you can see is the one you wanted gone. Only
-/// when there is nobody left does it turn around and offer to bring them back.
 public func allCharactersTitle(_ characters: [CharacterMenuState]) -> String {
     characters.contains(where: \.isVisible) ? "Hide All" : "Show All"
 }
 
 private func characterSubmenu(_ character: CharacterMenuState) -> [StatusMenuEntry] {
     [
-        // No shortcut on this row: ⌘H takes the whole desktop, and it is
-        // advertised on the row that does that. Hiding one character is a click,
-        // here or on her name.
         .item(StatusMenuItem(
             title: character.isVisible ? "Hide Character" : "Show Character",
             action: .toggleCharacter(character: character.id)
@@ -227,8 +145,6 @@ private func characterSubmenu(_ character: CharacterMenuState) -> [StatusMenuEnt
             isEnabled: !character.history.isEmpty,
             submenu: historySubmenu(character)
         )),
-        // Everything above is the conversation; below is what was pulled out
-        // of one. The line is where that changes.
         .separator,
         .item(StatusMenuItem(
             title: "Pinned Messages",
@@ -254,10 +170,6 @@ private func historySubmenu(_ character: CharacterMenuState) -> [StatusMenuEntry
     ]
 }
 
-/// Clicking a pane brings it forward. Deleting one lives on its own close
-/// button and on Clear All: a row whose whole job is "show me this" should not
-/// need a submenu in front of it, and a Delete one pixel from Show is a
-/// mis-click waiting to throw away the thing you meant to look at.
 private func pinnedSubmenu(_ character: CharacterMenuState) -> [StatusMenuEntry] {
     guard !character.pinned.isEmpty else {
         return [.item(StatusMenuItem(title: "Nothing pinned yet", isEnabled: false))]
@@ -268,8 +180,6 @@ private func pinnedSubmenu(_ character: CharacterMenuState) -> [StatusMenuEntry]
             action: .showPinned(character: character.id, window: row.id)
         ))
     } + [
-        // Always last, in this order, so their positions don't move as panes
-        // come and go.
         .separator,
         .item(StatusMenuItem(title: "Show All", action: .showAllPinned(character: character.id))),
         .item(StatusMenuItem(title: "Clear All", action: .clearPinned(character: character.id))),

@@ -1,29 +1,12 @@
 import FunctionalCore
 import Foundation
 
-/// One character as her neighbours are allowed to see her.
-///
-/// The type is the permission boundary, which is why it is worth having at all
-/// rather than passing `SecretaryProfile` around. Sprint 14.2 asks that a
-/// character know *which project* another has open and still have no access to
-/// it — so this card carries the project's **name** and no path, no grant, no
-/// tool id and no session id. A value cannot leak what it does not hold, and a
-/// later field added here has to be argued for against that sentence.
 public struct CharacterCard: Equatable, Sendable, Identifiable {
     public let id: UUID
     public let name: String
-    /// As the app words it elsewhere — "Opus 5", "Default" — not a model id.
     public let model: String
     public let effort: String
-    /// The name of the project she has open, if any. Never its location.
     public let projectName: Option<String>
-    /// Whether she was mid-turn when this snapshot was taken.
-    ///
-    /// True only *as of that moment*. It is rendered into a prompt that a model
-    /// may still be reading a minute later, so `directoryPrompt` says when it
-    /// was true rather than stating it as a standing fact — a model told she is
-    /// free, acting on it after she has started something, is a wrong-answer
-    /// generator.
     public let isBusy: Bool
 
     public init(
@@ -43,53 +26,11 @@ public struct CharacterCard: Equatable, Sendable, Identifiable {
     }
 }
 
-/// Everyone except the character being prompted, in a stable order.
-///
-/// Sorted by name rather than left in roster order so the prompt text for an
-/// unchanged desktop is byte-identical from turn to turn: a system prompt that
-/// reshuffles itself is a prompt cache that never hits, and a test that has to
-/// sort before comparing.
 public func characterDirectory(_ all: [CharacterCard], excluding me: UUID) -> [CharacterCard] {
     all.filter { $0.id != me }
         .sorted { ($0.name.lowercased(), $0.id.uuidString) < ($1.name.lowercased(), $1.id.uuidString) }
 }
 
-/// How the roster is put to the model, or nothing when she is alone.
-///
-/// `.none()` rather than an empty string: a character by herself should have no
-/// paragraph about her colleagues at all, and "there is nobody else" is a
-/// sentence that invites the model to bring the subject up.
-///
-/// This paragraph alone answers Sprint 14.1's first item — knowing the others
-/// exist and which model each is running needs no message sent and no round
-/// trip, because the answer is already in front of her.
-/// The standing rules about the others: that they exist, what may be seen of
-/// them, and how to send one of them something.
-///
-/// **Nothing here may change between turns, and nothing about what a character
-/// is doing may be added to it.**
-///
-/// This text goes into `--append-system-prompt`, which is a *launch* flag: it
-/// is fixed when the `claude` process starts, so it is part of
-/// `WarmProcessKey`, and a process whose key no longer matches is terminated
-/// and started again. A value that moves therefore costs a whole cold start —
-/// the repo's own measurement, 5.47s to first text against 1.15s warm, plus the
-/// transcript read back with a cold prompt cache.
-///
-/// It used to carry a row per character with their model, effort, project and
-/// whether they were busy. With one character on the desktop this block is
-/// absent entirely and nothing was ever noticed; with four it moved constantly
-/// — first the busy flag, then, once that was removed, the project name, as
-/// each character opened the shared folder in turn. Measured on 2026-08-20
-/// while four answered one broadcast: three of the four warm processes were
-/// killed and respawned between two consecutive turns, and the diagnostic named
-/// the difference as `- Ditto — Default, effort medium, no project open` giving
-/// way to `working in “ai-team-work”`. That is the whole of "four characters
-/// answer much slower than one".
-///
-/// Who they are and what they are doing is not lost — it moved to
-/// `directoryStatus`, which rides on the turn itself, where it costs nothing
-/// and is fresher than it ever was here.
 public func directoryPrompt(_ others: [CharacterCard]) -> Option<String> {
     guard !others.isEmpty else { return .none() }
     return .some("""
@@ -127,31 +68,10 @@ public func directoryPrompt(_ others: [CharacterCard]) -> Option<String> {
         """)
 }
 
-/// Who the interruption card may offer the work to: everyone who is free.
-///
-/// An empty result *is* the requirement "nobody free, no delegate choice" — the
-/// card draws one button per candidate, so an empty list means no buttons, and
-/// there is no second branch that could disagree with this one.
-///
-/// The directory it reads is a snapshot taken as the card is drawn, so it can be
-/// seconds stale by the time a button is pressed. That is exactly why pressing
-/// one re-checks against live state (`delegationDeliverable`) instead of
-/// trusting what the card was drawn from.
 public func delegationCandidates(_ directory: [CharacterCard]) -> [CharacterCard] {
     directory.filter { !$0.isBusy }
 }
 
-/// Who the others are and what each is doing, right now.
-///
-/// The half of the neighbours block that moves. It rides on the turn — the
-/// message, not the launch flag — which is why it may be as fresh as it likes:
-/// see `directoryPrompt` for what carrying it in the system prompt cost, which
-/// was a whole `claude` restart for every character every time any of them
-/// opened a project or started working.
-///
-/// Being on the turn also makes it *more* accurate than it was. The busy flag
-/// is back, and it no longer needs the old apology about having been true when
-/// the process started: this is read at the moment the turn begins.
 public func directoryStatus(_ others: [CharacterCard]) -> Option<String> {
     guard !others.isEmpty else { return .none() }
     let rows = others.map { card in

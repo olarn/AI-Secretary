@@ -1,7 +1,6 @@
 import FunctionalCore
 import Foundation
 
-/// A pipe table found in a reply.
 public struct MarkdownTable: Equatable, Sendable {
     public let header: [String]
     public let rows: [[String]]
@@ -14,10 +13,7 @@ public struct MarkdownTable: Equatable, Sendable {
     public var columnCount: Int { header.count }
 }
 
-/// A fenced block of code, or something the model handed over verbatim.
 public struct CodeBlock: Equatable, Sendable {
-    /// What the fence was labelled with — `swift`, `json`, and so on. Absent
-    /// when the fence carried no label.
     public let language: String?
     public let code: String
 
@@ -27,24 +23,12 @@ public struct CodeBlock: Equatable, Sendable {
     }
 }
 
-/// One run of a message: prose, a table to lay out, or code to show verbatim.
 public enum TranscriptSegment: Equatable, Sendable {
     case text(String)
     case table(MarkdownTable)
     case code(CodeBlock)
 }
 
-/// Splits a reply into prose and tables.
-///
-/// SwiftUI's `Text` understands inline markdown but not tables, so a table
-/// arrives as a wall of pipes and dashes. Pulling them out here lets the view
-/// lay each one out properly — and, because a table is often wider than the
-/// chat bubble, scroll it sideways on its own without the whole conversation
-/// scrolling with it.
-///
-/// Deliberately forgiving: anything that isn't clearly a table stays prose. A
-/// message is a model's output, not a document we control, and mangling normal
-/// text that happens to contain a pipe would be worse than not styling a table.
 public enum MarkdownTableParser {
     public static func segments(of text: String) -> [TranscriptSegment] {
         let lines = text.components(separatedBy: .newlines)
@@ -53,7 +37,6 @@ public enum MarkdownTableParser {
         var index = 0
 
         func flushProse() {
-            // Trailing blank lines around a table are separators, not content.
             while prose.last?.trimmingCharacters(in: .whitespaces).isEmpty == true { prose.removeLast() }
             guard !prose.isEmpty else { return }
             segments.append(.text(prose.joined(separator: "\n")))
@@ -61,9 +44,6 @@ public enum MarkdownTableParser {
         }
 
         while index < lines.count {
-            // Code first. A fenced block can contain pipes, dashes, anything —
-            // it is verbatim by definition — so looking for tables inside one
-            // would tear it apart.
             if let block = codeBlock(at: index, in: lines) {
                 flushProse()
                 segments.append(.code(block.value))
@@ -76,7 +56,6 @@ public enum MarkdownTableParser {
                 flushProse()
                 segments.append(.table(table.value))
                 index = table.nextIndex
-                // A blank line straight after a table is spacing, not prose.
                 if index < lines.count,
                    lines[index].trimmingCharacters(in: .whitespaces).isEmpty {
                     index += 1
@@ -90,9 +69,6 @@ public enum MarkdownTableParser {
         return segments
     }
 
-    /// A table is a row of cells followed by a dashes-and-colons row with the
-    /// same number of cells. Requiring both is what keeps ordinary prose
-    /// containing a `|` from being swallowed.
     private static func table(at start: Int, in lines: [String]) -> Option<(value: MarkdownTable, nextIndex: Int)> {
         guard start + 1 < lines.count,
               isRow(lines[start]),
@@ -116,7 +92,6 @@ public enum MarkdownTableParser {
         return trimmed.contains("|") && !trimmed.isEmpty
     }
 
-    /// `---`, `:---`, `---:`, `:---:` — one per column.
     private static func isSeparator(_ line: String) -> Bool {
         let parts = cells(of: line)
         guard !parts.isEmpty else { return false }
@@ -127,8 +102,6 @@ public enum MarkdownTableParser {
         }
     }
 
-    /// Splits on pipes, ignoring the optional outer ones. Escaped pipes inside a
-    /// cell (`\|`) are honoured so a cell can contain one.
     private static func cells(of line: String) -> [String] {
         var trimmed = line.trimmingCharacters(in: .whitespaces)
         if trimmed.hasPrefix("|") { trimmed.removeFirst() }
@@ -154,24 +127,13 @@ public enum MarkdownTableParser {
         return parts
     }
 
-    /// A fenced block starting at `index`, if there is one.
-    ///
-    /// Fences have to be pulled out before anything else touches the message.
-    /// The inline markdown renderer is given `.inlineOnlyPreservingWhitespace`
-    /// so a stray character can't restructure a reply — but that also means it
-    /// swallows the fence and reflows the contents, which is how a JSON sample
-    /// arrived in the chat as `json { "iso": ... }` on one line.
-    ///
-    /// An unclosed fence still yields its block: replies stream in, and the
-    /// closing line may not have arrived yet.
     static func codeBlock(at index: Int, in lines: [String]) -> (value: CodeBlock, nextIndex: Int)? {
         let opening = lines[index].trimmingCharacters(in: .whitespaces)
         guard opening.hasPrefix("```") else { return nil }
 
         let label = opening.dropFirst(3).trimmingCharacters(in: .whitespaces)
-        // ```choices is the app's own marker for a question, handled elsewhere
-        // and already removed before rendering. Never draw it as code.
-        guard label.lowercased() != "choices" else { return nil }
+        let isTheAppsOwnChoicesMarkerStrippedBeforeRendering = label.lowercased() == "choices"
+        guard !isTheAppsOwnChoicesMarkerStrippedBeforeRendering else { return nil }
 
         var code: [String] = []
         var cursor = index + 1
@@ -184,8 +146,9 @@ public enum MarkdownTableParser {
             cursor += 1
         }
 
-        // A fence with nothing in it is punctuation, not code.
-        guard code.contains(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }) else {
+        let aFenceWithNothingInItIsPunctuationNotCode =
+            !code.contains { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        guard !aFenceWithNothingInItIsPunctuationNotCode else {
             return nil
         }
 
@@ -205,8 +168,6 @@ public enum MarkdownTableParser {
         return trimmed
     }
 
-    /// Ragged rows are common in generated markdown; pad or trim so the grid
-    /// stays rectangular rather than dropping cells on the floor.
     private static func fit(_ row: [String], to count: Int) -> [String] {
         if row.count == count { return row }
         if row.count > count { return Array(row.prefix(count)) }

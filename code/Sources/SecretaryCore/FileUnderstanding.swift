@@ -1,17 +1,7 @@
 import Foundation
 import Permissions
 
-/// Reading a file *and asking the model about it*.
-///
-/// This is deliberately a separate concept from `FileOperation.readFile`, which
-/// only shows you the bytes locally. Understanding a file sends its contents to
-/// the Anthropic API, so it is classed `.externalNetwork`, not `.readOnly` — it
-/// can never run unattended, and the user is asked every single time, with the
-/// destination named in the prompt. Approving "read files in this project" must
-/// not silently become permission to upload them.
 public struct FileUnderstanding: Equatable, Sendable {
-    /// What to ask about the file. A closed set, like every other operation the
-    /// Secretary can plan — the user's words never become a free-form command.
     public enum Task: String, Equatable, Sendable, CaseIterable {
         case summarize
         case explain
@@ -19,7 +9,6 @@ public struct FileUnderstanding: Equatable, Sendable {
         case review
         case describe
 
-        /// The instruction appended after the file contents.
         var instruction: String {
             switch self {
             case .summarize:
@@ -44,7 +33,6 @@ public struct FileUnderstanding: Equatable, Sendable {
         self.task = task
     }
 
-    /// Never `.readOnly`: the file leaves the machine.
     public var actionClass: ActionClass { .externalNetwork }
 
     public var humanDescription: String {

@@ -1,11 +1,6 @@
 import FunctionalCore
 import Foundation
 
-/// The saved profile list plus which one is active.
-///
-/// Not `Codable` — `Option` cannot be. `ProfileSelectionDTO` is the on-disk
-/// shape and keeps the same JSON keys, so existing `profiles.json` files load
-/// unchanged.
 public struct ProfileSelection: Equatable, Sendable {
     public var profiles: [SecretaryProfile]
     public var activeID: Option<UUID>
@@ -15,8 +10,6 @@ public struct ProfileSelection: Equatable, Sendable {
         self.activeID = activeID
     }
 }
-
-// MARK: - Persistence edge
 
 public struct ProfileSelectionDTO: Codable, Equatable, Sendable {
     public var profiles: [SecretaryProfile]
@@ -33,7 +26,6 @@ extension ProfileSelection {
     }
 }
 
-/// Why the profile list could not be read or written.
 public enum ProfileStoreError: Error, Equatable, Sendable {
     case readFailed(path: String, message: String)
     case decodeFailed(path: String, message: String)
@@ -51,15 +43,11 @@ public enum ProfileStoreError: Error, Equatable, Sendable {
     }
 }
 
-/// Persistence boundary, so tests never touch the user's real Application
-/// Support directory.
 public protocol ProfileStoring: AnyObject, Sendable {
     func load() -> Either<ProfileStoreError, ProfileSelection>
     func save(_ selection: ProfileSelection) -> Either<ProfileStoreError, Void>
 }
 
-/// Stores profiles as JSON beside the project registry. Pictures are not in
-/// here — they live as files under `ProfileArtwork`, keyed by profile id.
 public final class FileProfileStore: ProfileStoring, @unchecked Sendable {
     private let fileURL: URL
 

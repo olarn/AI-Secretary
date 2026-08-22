@@ -3354,3 +3354,19 @@ default) ซึ่งทำให้ cache หายไปด้วย — ค�
   - ตัวเลขที่วัดมาทั้งหมด (5.47s→1.15s warm process, ตาราง prefill ของ opencode,
     2.1.220 ที่พิสูจน์ว่า session ไม่ผูกกับ directory) → `docs/design-notes/llm-provider.md`
   - 1438 tests ผ่านหมด
+- [x] `SecretaryCore` 76 ไฟล์ (ยังเหลือ `Secretary.swift` ไฟล์เดียว) — ไม่เหลือ comment
+  - comment ที่อยู่ **ในตัวฟังก์ชัน** คือกลุ่มที่มีค่าที่สุด เพราะมันกำลังตั้งชื่อให้บล็อกโค้ด
+    ทุกอันกลายเป็นตัวแปร/ฟังก์ชันที่มีชื่อจริง เช่น
+    `aVisiblePickerWithNothingTypedOwnsThemAsEscapeDoes` (ArrowKeyOwner),
+    `anyClosingFenceEndsTheBlock` (MessageChoices),
+    `everyCellIsEmptySoItIsPunctuationThatLinesUpNotData` (DelimitedTable),
+    `isTheAppsOwnChoicesMarkerStrippedBeforeRendering` (MarkdownTable)
+  - ตัวเลข magic ใน `claudeProjectSlug` (0x41/0x5A/…) กลายเป็น `isUppercaseLetter`,
+    `isLowercaseLetter`, `isDigit`, `isKeptInAClaudeProjectSlug` — trailing comment
+    สี่บรรทัดหายไปโดยไม่เสียความหมาย
+  - รูปแบบ "รับ label แล้วตัดทิ้ง" ที่ซ้ำใน WatchBlock/HandOffBlock/LoopBlock รวมเป็น
+    `droppingTheLabelThatReadsBetterInAPrompt` ที่เดียว
+  - **ความรู้ไม่หายสักบรรทัด**: comment ทั้งหมดของ 76 ไฟล์ถูกย้ายเข้า
+    `docs/design-notes/secretary-core.md` (3,824 บรรทัด) เรียงตามไฟล์ — บันทึกบั๊ก,
+    ตัวเลขที่วัดมา, และเหตุผลที่เจ้าของตัดสินใจแบบนั้น ยังอ่านได้ครบ
+  - 1438 tests ผ่านหมด

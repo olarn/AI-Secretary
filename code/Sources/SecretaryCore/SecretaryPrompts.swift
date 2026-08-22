@@ -1,27 +1,6 @@
 import FunctionalCore
 
-/// The words the assistant is given, out of `Secretary` and into functions of
-/// their inputs.
-///
-/// `Secretary` remains the one place that knows *which* state feeds each
-/// prompt — its computed properties gather the state and call these. What
-/// moved here is everything below that line: the text itself, and the rules
-/// for assembling it, which take plain values and can be checked without
-/// constructing a `Secretary` at all.
 enum SecretaryPrompt {
-    /// What language to answer in.
-    ///
-    /// It was one clause in the middle of a paragraph, on one of the two prompt
-    /// paths, and replies to Thai kept coming back part English. Three things
-    /// were wrong and all three are addressed here: the rule was missing
-    /// entirely from the chat-only prompt; the profile said a personality
-    /// written in another language "still describes you when you answer in
-    /// English", which is an instruction to answer in English; and the rule
-    /// never said what it wanted, so "answer in Thai" read as "translate
-    /// everything", which nobody wants for `git rebase` or a stack trace.
-    ///
-    /// Short lines are called out because that is where it actually slips — the
-    /// answer comes back in Thai and the "Done —" in front of it doesn't.
     static let language = """
     Answer in the language the person wrote to you in: they write Thai, you \
     answer Thai; they write English, you answer English. This holds for the \
@@ -41,14 +20,6 @@ enum SecretaryPrompt {
     whichever it is mostly written in.
     """
 
-    /// What to do when the person supplies the thing that was missing.
-    ///
-    /// From a real conversation: asked for a ratebook and to pin it, the
-    /// assistant said the folder was empty; told "from the project's MCP", it
-    /// tried the server, found it worked, and reported a search for a different
-    /// car in a different year — never answering the question or pinning
-    /// anything. It had read the second message as a fresh instruction rather
-    /// than as the missing piece of the first.
     static let resume = """
     If you cannot finish what was asked — a folder you can't reach, a tool you \
     don't have, a file that isn't there, something you need to be told — say so \
@@ -77,9 +48,6 @@ enum SecretaryPrompt {
     complete.
     """
 
-    /// How the assistant is asked to pull something out of the chat. A marker
-    /// again, and for the same reason: replies are full of tables and lists, and
-    /// guessing which of them to pin would open windows nobody asked for.
     static let window = """
     The app can keep a piece of your answer on screen in its own small floating \
     window, so it stays visible while the conversation moves on. When the user \
@@ -96,9 +64,6 @@ enum SecretaryPrompt {
     Use it only when asked for; a table in an ordinary answer belongs in the chat.
     """
 
-    /// How the assistant asks for the timer. Written as a block rather than
-    /// left to inference, because "keep an eye on this" in the middle of a
-    /// conversation must not be able to start something that talks on its own.
     static let loop = """
     You have no clock and you are not running between messages, so you cannot \
     notice time passing by yourself. What you can do is ask the app to come back \
@@ -120,11 +85,6 @@ enum SecretaryPrompt {
     block on its own. Do not claim to be tracking anything unless you set this up.
     """
 
-    /// Watching is the app's job, but noticing that they asked for it is the
-    /// assistant's. It used to only be able to point at the command: asked to
-    /// keep an eye on a folder it replied "พิมพ์คำสั่งนี้เองนะคะ: /watch ." —
-    /// having understood the request completely. Telling someone to type what
-    /// you already understood is the opposite of a secretary.
     static let watch = """
     You are not running between messages, so you cannot notice a file changing \
     by yourself. The app can, and you can ask it to. When the person wants to be \
@@ -147,9 +107,6 @@ enum SecretaryPrompt {
     keep an eye on something unless you put the block in.
     """
 
-    /// Same reasoning as `watch`, and safe for the same reason the typed
-    /// command is: this only reaches the confirmation card, where the person
-    /// reads every step before anything runs.
     static let run = """
     When the person wants a file of instructions carried out — a checklist, a \
     runbook, "do what's in deploy.md" — end your message with a block like \
@@ -166,15 +123,6 @@ enum SecretaryPrompt {
     in this turn.
     """
 
-    /// How the assistant asks for a file instead of asking the person to type
-    /// out what's in it.
-    ///
-    /// The button matters more than it looks. The alternative is "paste the
-    /// rows here", which is the work the person came to hand over, and "give me
-    /// the path", which nobody knows off the top of their head and which a
-    /// sandboxed build could not open anyway.
-    /// Only in the agent prompt: without Claude Code there is nothing to install
-    /// into, and nothing that would use the skill afterwards.
     static let installSkill = """
     If a job needs a Claude Code skill you haven't got, you can ask for it. End \
     your message with a block like this, and nothing after it:
@@ -193,13 +141,6 @@ enum SecretaryPrompt {
     guessing a name.
     """
 
-    /// How the assistant hands over a file she has just made.
-    ///
-    /// Only in the agent prompt: chat on its own cannot write a file, so
-    /// offering one there could only ever be an offer of something that isn't
-    /// there. (The charter records the opposite mistake — a block described in
-    /// one prompt while the backend in use read the other, so the feature was
-    /// silently missing the whole time. This one is genuinely agent-only.)
     static let saveFile = """
     When you have made a file the person is meant to keep — a spreadsheet, a \
     document, an export — end your message with a block naming it, and nothing \
@@ -258,8 +199,6 @@ enum SecretaryPrompt {
     \(window)
     """
 
-    /// The half that is true whichever backend answered — every slash command
-    /// is handled here in the app, before anything is sent anywhere.
     static let helpSlashCommands = """
     Slash commands:
     • /model <id|opus|sonnet|default> — switch the model
@@ -279,11 +218,6 @@ enum SecretaryPrompt {
     timer up myself.
     """
 
-    /// The typed commands, which exist only on the fallback path.
-    ///
-    /// A bare chat model cannot open a folder, so there it really does matter
-    /// that the person knows to type "list files in …". Shown nowhere else —
-    /// see `helpText(workspaceTools:)`.
     static let helpTypedCommands = """
     I can chat with you, and run these read-only Git commands in a registered project:
     • status — working tree status
@@ -304,16 +238,6 @@ enum SecretaryPrompt {
     Anything else I treat as a conversation.
     """
 
-    /// What the assistant tells you it can do — which now depends on which
-    /// backend answered.
-    ///
-    /// Two texts because there are two behaviours. Sprint 16 sends every
-    /// message straight to the agent when the backend has its own tools, so on
-    /// that path "type status in AI-Secretary" describes a keyword rule that no
-    /// longer runs: the words go to the model, which looks for itself. Help
-    /// that teaches a command whose behaviour does not match the teaching is
-    /// worse than no help, because the person believes the phrasing matters and
-    /// blames themselves when it doesn't.
     static func helpText(workspaceTools: Bool) -> String {
         let opening = workspaceTools
             ? """
@@ -327,14 +251,6 @@ enum SecretaryPrompt {
     }
 }
 
-/// What the assistant can and can't see of the web, and — when it can't —
-/// the thing to offer instead.
-///
-/// The off case is the point. `WebFetch` succeeds on a login-walled page
-/// and returns the sign-in form, so without being told, the model reads
-/// that and reports it as the content. It has to know the difference
-/// between "I couldn't load this" and "I loaded the wrong thing", and that
-/// there is a way out the user can switch on.
 func browserPromptNote(enabled: Bool) -> String {
     guard enabled else {
         return """
@@ -368,25 +284,6 @@ func browserPromptNote(enabled: Bool) -> String {
     """
 }
 
-/// Kept in step with the allowlist actually passed to the backend. Telling
-/// the model it is read-only after the user widened permissions would stop
-/// it retrying the very thing they just approved.
-///
-/// **It must never tell the model to give up instead of trying.** This note
-/// used to end "writing or running commands will be refused", and the model did
-/// the obedient thing: it stopped before the tool call and answered "I don't
-/// have write permission". No tool call means no refusal, no refusal means
-/// `offerToWiden` has nothing to offer, and no card is ever put in front of
-/// anybody — so the work simply stopped, for ever, with a polite sentence.
-/// That is the owner's Sprint 21.2 report, driven and reproduced on 2026-08-20:
-/// commanded to write a file, every character said it had no permission, and
-/// the ones that eventually succeeded were the ones standing in a project with
-/// a write grant already on record, where the refusal happens for real and is
-/// widened silently.
-///
-/// The refusal *is* the mechanism. Claude Code has no mid-turn approval, so the
-/// only way the person is ever asked is: attempt, be refused, show the card,
-/// retry. A note that stops the attempt removes the only step that can start it.
 func agentPermissionNote(sessionTools: Set<String>) -> String {
     let allowed = sessionTools.isEmpty
         ? "Right now you can read, search and browse."
@@ -414,14 +311,6 @@ func agentPermissionNote(sessionTools: Set<String>) -> String {
     """
 }
 
-/// For a backend that has its own file tools and is already running inside
-/// the project directory.
-///
-/// The chat-only prompt below must never be used here. It tells the model it
-/// "cannot run commands yourself" and should tell the user what to type —
-/// true of a bare API call, catastrophic for an agent holding Read and Grep.
-/// It produced exactly that: asked to summarise a project, the assistant
-/// asked the user to paste the contents and to type `list files in <name>`.
 func agentSystemPrompt(
     profileDescription: String,
     projectName: Option<String>,
@@ -433,7 +322,6 @@ func agentSystemPrompt(
 ) -> String {
     let location = projectName.map { "the project “\($0)”" }^.getOrElse("a scratch folder")
     let alsoOpen = otherProjectNames.isEmpty ? "" : """
-
 
     You can also read these other folders the user has approved, at the paths         listed by your tools: \(otherProjectNames.map { "“\($0)”" }.joined(separator: ", ")).         If a question spans more than one of them, look at each — don't ask the         user to switch projects.
     """
@@ -496,10 +384,6 @@ func agentSystemPrompt(
     """ + alsoOpen + skillsPrompt(for: selectedSkills)
 }
 
-/// The static instructions plus whatever the user has actually registered.
-/// Without the project list the model denies knowing about a project the
-/// user can plainly see in the UI. Names only — paths, tool allowlists and
-/// approval state stay out of chat history.
 func chatOnlySystemPrompt(profileDescription: String, projectNames: [String]) -> String {
     let base = profileDescription + "\n\n" + SecretaryPrompt.capability
     guard !projectNames.isEmpty else {
@@ -507,7 +391,6 @@ func chatOnlySystemPrompt(profileDescription: String, projectNames: [String]) ->
     }
     let list = projectNames.map { "- \($0)" }.joined(separator: "\n")
     return base + """
-
 
     Projects the user has registered, and that you can therefore work in:
     \(list)

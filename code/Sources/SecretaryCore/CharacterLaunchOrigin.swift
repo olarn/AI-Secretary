@@ -1,32 +1,12 @@
 import CoreGraphics
 
-/// Where the character stands the first time it appears.
-///
-/// A rule the app has to decide, so it lives here rather than in the delegate:
-/// `AISecretaryApp` is never linked into the test bundle, and a launch position
-/// can only be checked by launching.
 public enum CharacterLaunch {
-    /// Distance in from the right edge of the usable area.
     public static let insetFromRight: Double = 160
 
-    /// How high the character used to stand above the bottom of the usable area.
     public static let restingHeight: Double = 120
 
-    /// Taken off that, as a fraction of the usable height — the character was
-    /// asked to stand lower. Expressed against the screen rather than as a fixed
-    /// number of points because "how high up the screen it looks" is what
-    /// changes with the display, and a constant that reads right on one screen
-    /// reads wrong on the next.
     public static let lowering: Double = 0.10
 
-    /// - Parameters:
-    ///   - characterSize: the panel's size, so the clamp keeps all of it visible.
-    ///   - visibleFrame: the area left over by the Dock and the menu bar, which
-    ///     is what the resting position is measured from.
-    ///   - screenFrame: the whole display. The clamp uses this, not the visible
-    ///     frame, so that launch agrees with `keepCharacterOnScreen`: standing
-    ///     on the Dock is a normal place for a desktop character, and the only
-    ///     rule is that it must not end up off the screen.
     public static func origin(
         characterSize: CGSize,
         visibleFrame: CGRect,
@@ -40,25 +20,8 @@ public enum CharacterLaunch {
         )
     }
 
-    /// How far left each further character stands from the one before, as a
-    /// fraction of its own width. A share rather than a fixed gap, for the same
-    /// reason `lowering` is: the character is drawn at three sizes, and a
-    /// spacing that looks right at S has them overlapping at L.
     public static let spacingFraction: Double = 1.4
 
-    /// Where character number `existing.count + 1` stands.
-    ///
-    /// The resting spot is taken, so she stands to the left of whoever is
-    /// already there — landing a new character exactly on top of an existing one
-    /// looks like nothing happened, which is the worst possible answer to
-    /// "New Character…".
-    ///
-    /// Measured from the resting position rather than from the leftmost
-    /// character on screen: characters are draggable, so following them would
-    /// mean a new one appearing wherever the last one was dropped, including
-    /// off in a corner. Counting instead keeps the row predictable, and once it
-    /// would run off the left edge the clamp stacks them at the edge rather
-    /// than putting one where it cannot be clicked.
     public static func origin(
         ordinal: Int,
         characterSize: CGSize,
@@ -77,8 +40,6 @@ public enum CharacterLaunch {
         )
     }
 
-    /// Low wins if the two cross — a character taller than the screen is pinned
-    /// to the bottom rather than to a negative height above it.
     private static func clamp(_ value: Double, low: Double, high: Double) -> Double {
         min(max(value, low), max(low, high))
     }

@@ -1,21 +1,12 @@
 import FunctionalCore
 import Foundation
 
-/// Who the assistant is: the name shown in the conversation, and the character
-/// the model is asked to write as.
-///
-/// The user can have several of these and switch between them, so it carries an
-/// `id` and is `Codable` — the pictures live on disk beside it, keyed by the
-/// same id (see `ProfileStore`).
 public struct SecretaryProfile: Identifiable, Equatable, Sendable, Codable {
 
-    /// Male and female are offered as buttons because they're the common case;
-    /// anything else is free text rather than a short list nobody fits.
     public enum Gender: Equatable, Sendable, Codable {
         case female, male
         case other(String)
 
-        /// What the user sees in the picker.
         public var label: String {
             switch self {
             case .female: return "Female"
@@ -27,8 +18,6 @@ public struct SecretaryProfile: Identifiable, Equatable, Sendable, Codable {
         }
     }
 
-    /// Either a life stage or an exact age — the charter allows both, and an
-    /// exact age still implies a stage, so one derives from the other.
     public enum Age: Equatable, Sendable, Codable {
         case child, teenager, adult
         case years(Int)
@@ -36,7 +25,6 @@ public struct SecretaryProfile: Identifiable, Equatable, Sendable, Codable {
         public enum Band: Sendable {
             case child, teenager, adult
 
-            /// Used when the gender doesn't supply a noun of its own.
             var noun: String {
                 switch self {
                 case .child: return "a child"
@@ -46,8 +34,6 @@ public struct SecretaryProfile: Identifiable, Equatable, Sendable, Codable {
             }
         }
 
-        /// An exact age is bucketed rather than described on its own, so the
-        /// prompt reads the same whichever way it was entered.
         public var band: Band {
             switch self {
             case .child: return .child
@@ -60,7 +46,6 @@ public struct SecretaryProfile: Identifiable, Equatable, Sendable, Codable {
             }
         }
 
-        /// Only present when the user gave a number; the prompt mentions it then.
         public var years: Option<Int> {
             if case .years(let years) = self { return .some(years) }
             return .none()
@@ -76,20 +61,12 @@ public struct SecretaryProfile: Identifiable, Equatable, Sendable, Codable {
         }
     }
 
-    /// What an unset or unusable personality falls back to, as specified.
     public static let defaultPersonality = "professional"
 
     public let id: UUID
     public var name: String
     public var age: Age
     public var gender: Gender
-    /// Free text — "professional", "ขี้เล่น ร่าเริง", anything. Blank means the
-    /// default; it is never interpreted here, only passed to the model as the
-    /// character to write as, which the prompt then bounds.
-    ///
-    /// Called `style` until 0.6.126, when it was widened from a register hint to
-    /// an actual character and the name stopped matching the job. Old profile
-    /// files still say `style`; see `init(from:)`.
     public var personality: String
 
     public init(
@@ -106,23 +83,11 @@ public struct SecretaryProfile: Identifiable, Equatable, Sendable, Codable {
         self.personality = personality
     }
 
-    // MARK: - Codable
-
     private enum CodingKeys: String, CodingKey {
         case id, name, age, gender, personality
-        /// What the field was called on disk before the rename.
         case style
     }
 
-    /// Reads either spelling, so renaming the property does not throw away every
-    /// profile the user has.
-    ///
-    /// This matters more than it looks: `ProfileStore.load()` returns an empty
-    /// selection on any decode failure, and `ProfileLibrary` treats empty as a
-    /// first launch and seeds Miku. A missing key would therefore not surface as
-    /// an error — it would silently replace the user's profiles with the
-    /// built-in one. New files are written with `personality`; old ones keep
-    /// working until they are next saved.
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
@@ -143,9 +108,6 @@ public struct SecretaryProfile: Identifiable, Equatable, Sendable, Codable {
         try container.encode(personality, forKey: .personality)
     }
 
-    /// The character shipped with the app, matching the placeholder artwork.
-    /// A fixed id so the built-in profile stays the same object across launches
-    /// rather than multiplying every time the app starts.
     public static let miku = SecretaryProfile(
         id: UUID(uuidString: "5B1E2A00-0000-4000-8000-000000000001")!,
         name: "Miku",
@@ -154,21 +116,16 @@ public struct SecretaryProfile: Identifiable, Equatable, Sendable, Codable {
         personality: SecretaryProfile.defaultPersonality
     )
 
-    /// The personality actually used: whitespace-only text is treated as unset.
     public var effectivePersonality: String {
         let trimmed = personality.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? Self.defaultPersonality : trimmed
     }
 
-    /// Name with the blank case handled, so an empty field never renders an
-    /// anonymous speaker label in the transcript.
     public var displayName: String {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? "Secretary" : trimmed
     }
 
-    /// "a teenage girl", "a man", "a teenager, nonbinary" — the phrase that
-    /// follows the name in the prompt.
     private var descriptor: String {
         switch gender {
         case .female:
@@ -189,18 +146,6 @@ public struct SecretaryProfile: Identifiable, Equatable, Sendable, Codable {
         }
     }
 
-    /// How who she is has to show up in languages that inflect for it.
-    ///
-    /// The descriptor above says "a teenage girl" — in English, where nothing
-    /// downstream of that changes. Thai marks the speaker's gender in every
-    /// polite sentence, and the model was left to infer the connection: Miku,
-    /// set female, closed her replies with **ครับ** for weeks while อาเนีย, also
-    /// female, said **ค่ะ**. Nothing was choosing; ครับ is simply where a model
-    /// lands when no one says otherwise.
-    ///
-    /// So the consequence is spelled out rather than implied. Age is in here
-    /// too, because Thai first-person pronouns are not only gendered — a small
-    /// child says หนู, and a six-year-old saying ดิฉัน reads as a costume.
     var genderedSpeechRule: String {
         let common = "This is about the form of the words, never about what you say or how much you do."
         switch gender {
@@ -229,26 +174,6 @@ public struct SecretaryProfile: Identifiable, Equatable, Sendable, Codable {
         }
     }
 
-    /// Character notes for the system prompt.
-    ///
-    /// The personality is the user's own words and is granted as *character*,
-    /// not as a register dial. It used to be clamped — "take that as register
-    /// only — how formal or casual to sound", followed by "keep all of this in
-    /// the tone, not in extra words" — and the result was that every profile
-    /// sounded identical: "ขี้เล่น ร่าเริง ซึนเดเระ" and "professional" both
-    /// produced the same flat two-line answer, which is what the owner
-    /// reported. A description nobody can hear is the same as no description,
-    /// so the grant is now wide enough to be audible in a one-sentence reply.
-    ///
-    /// Two things still bound it, and both are fixed text that outranks
-    /// whatever the user typed:
-    ///
-    /// - Usefulness. Character changes *how* something is said, never whether
-    ///   it is true or how much work gets done. Lead with the answer stays.
-    /// - The romantic/sexual prohibition. It lives here rather than in a filter
-    ///   over the text box because a keyword blocklist over free Thai and
-    ///   English would both miss the real cases and reject innocent ones,
-    ///   whereas the prompt is where the personality takes effect at all.
     public var promptDescription: String {
         let identity = "You are \(displayName)"
             + age.years.fold({ "" }, { ", \($0)" })

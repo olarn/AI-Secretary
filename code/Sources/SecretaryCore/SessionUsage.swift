@@ -1,28 +1,13 @@
 import Foundation
 
-/// What one turn cost, and what the session has cost so far.
-///
-/// The four token counts are kept apart rather than summed into one number,
-/// because they are priced differently and behave differently: a cache read is
-/// most of the traffic on a long conversation and a fraction of the price, while
-/// a cache write is the expensive one. Reporting only `input + output` — which
-/// is what this app did until now — understates a real turn by orders of
-/// magnitude: measured at 2 in / 5 out against 11,768 written and 24,436 read.
 public struct SessionUsage: Equatable, Sendable {
     public let turns: Int
     public let inputTokens: Int
     public let outputTokens: Int
-    /// Tokens written into the prompt cache. Charged at a premium.
     public let cacheWriteTokens: Int
-    /// Tokens served from the prompt cache. Charged at a discount.
     public let cacheReadTokens: Int
-    /// What the same traffic would cost on the API. Not money charged to a
-    /// subscription — see `costNote`.
     public let costUSD: Double
-    /// The model's context window, when the backend reported one.
     public let contextWindow: Int?
-    /// Tokens the *last* turn put into the context window, which is what decides
-    /// how much room is left — unlike the totals, this one does not accumulate.
     public let lastTurnContextTokens: Int
 
     public static let empty = SessionUsage(
@@ -51,23 +36,15 @@ public struct SessionUsage: Equatable, Sendable {
         self.lastTurnContextTokens = lastTurnContextTokens
     }
 
-    /// Everything that crossed the wire, in both directions.
     public var totalTokens: Int {
         inputTokens + outputTokens + cacheWriteTokens + cacheReadTokens
     }
 
-    /// How full the model's context window was on the last turn, 0…1.
-    ///
-    /// Everything the model had to read counts — fresh input plus whatever came
-    /// from the cache — since the cache is a billing arrangement, not a smaller
-    /// prompt.
     public var contextFraction: Double? {
         guard let contextWindow, contextWindow > 0 else { return nil }
         return min(1, Double(lastTurnContextTokens) / Double(contextWindow))
     }
 
-    /// A new total including this turn. The window is carried forward from
-    /// whichever turn last reported one, so a turn that omits it doesn't erase it.
     public func adding(
         inputTokens newInput: Int,
         outputTokens newOutput: Int,
@@ -89,11 +66,7 @@ public struct SessionUsage: Equatable, Sendable {
     }
 }
 
-/// Formatting, kept next to the numbers so the chat command and the panel can
-/// never disagree about what a figure means.
 public enum UsageFormat {
-    /// Thousands separators, because six-digit token counts are unreadable
-    /// without them.
     public static func tokens(_ value: Int) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
@@ -109,15 +82,9 @@ public enum UsageFormat {
         "\(Int((fraction * 100).rounded()))%"
     }
 
-    /// The line that must always accompany a dollar figure here. Claude Code
-    /// reports `total_cost_usd` whether or not anyone is paying per token, so on
-    /// a subscription the number is a comparison, not a charge — and a bare
-    /// dollar amount in a chat window reads as a bill.
     public static let costNote =
         "Cost is what this traffic would bill on the API — a subscription is not charged per token."
 
-    /// "18 min", "3 hr", "2 days" — the gap to a reset, in one unit. Rounded up,
-    /// so a window with 30 seconds left says "1 min" rather than "0 min".
     public static func duration(until date: Date, from now: Date) -> String {
         let seconds = max(0, date.timeIntervalSince(now))
         if seconds < 3600 { return "\(Int((seconds / 60).rounded(.up))) min" }
@@ -126,7 +93,6 @@ public enum UsageFormat {
         return "\(days) day\(days == 1 ? "" : "s")"
     }
 
-    /// "just now", "3 min ago" — how old a reading is, for the line under it.
     public static func age(of date: Date, now: Date = Date()) -> String {
         let seconds = max(0, now.timeIntervalSince(date))
         if seconds < 60 { return "just now" }
@@ -134,7 +100,6 @@ public enum UsageFormat {
         return "\(Int(seconds / 3600)) hr ago"
     }
 
-    /// The whole summary, as shown by `/usage`.
     public static func summary(_ usage: SessionUsage) -> String {
         guard usage.turns > 0 else {
             return "No tokens used yet this session — ask me something first."
@@ -161,21 +126,6 @@ public enum UsageFormat {
     }
 }
 
-/// Everybody's usage added up, for the one Token Usage window the app has.
-///
-/// The window is at the root of the menu because the figures are the machine's
-/// bill, not one character's — but each character keeps her own session, so the
-/// total has to be made rather than read.
-///
-/// Two fields deliberately do not sum:
-///
-/// - **`contextWindow`** is a property of the model, not a quantity. Adding two
-///   200k windows to get 400k would say the context is twice as big as any
-///   character actually has. The largest reported one is kept, so "how full is
-///   the context" is still answered against a real window.
-/// - **`lastTurnContextTokens`** is how full one session's context is right
-///   now, and the fullest is the one worth knowing about — summing would report
-///   a session nobody is in.
 public func totalUsage(_ parts: [SessionUsage]) -> SessionUsage {
     parts.reduce(.empty) { running, part in
         SessionUsage(

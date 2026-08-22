@@ -1,11 +1,8 @@
 import Foundation
 
-/// A pane of content the assistant was asked to put somewhere it will stay.
 public struct InfoWindowSpec: Equatable, Identifiable, Sendable {
     public let id: UUID
     public let title: String
-    /// Markdown, rendered with the same parser the chat uses, so a table asked
-    /// for in the chat looks the same once it is pulled out of it.
     public let body: String
     public let createdAt: Date
 
@@ -17,20 +14,8 @@ public struct InfoWindowSpec: Equatable, Identifiable, Sendable {
     }
 }
 
-/// Reading a ` ```window ` block out of a reply.
-///
-/// Marker-based for the same reason as ` ```choices ` and ` ```loop `: the model
-/// produces tables and lists constantly, and guessing which of them the user
-/// wanted kept would open windows nobody asked for. Only an explicit block
-/// counts, and the block never survives into what is shown — otherwise the
-/// content appears twice, once in the chat and once in the window.
 public struct InfoWindowBlock: Equatable, Sendable {
-    /// The message with every block taken out.
     public let body: String
-    /// What to open, in the order the blocks appeared. Several are allowed:
-    /// "pin these two side by side" is one request, and merging them into a
-    /// single pane — which an earlier version did silently — answers a question
-    /// nobody asked.
     public let requests: [InfoWindowSpec]
 
     public static let fence = "```window"
@@ -65,9 +50,6 @@ public struct InfoWindowBlock: Equatable, Sendable {
                 continue
             }
             if inside {
-                // The first `title:` line names the window; everything after it
-                // is content, including any later line that happens to start
-                // with "title:".
                 if title == nil, let named = Self.title(of: trimmed) {
                     title = named
                 } else {
@@ -77,10 +59,9 @@ public struct InfoWindowBlock: Equatable, Sendable {
                 kept.append(line)
             }
         }
-        // An unterminated block still counts; the stream ended, not the intent.
-        if inside { finishBlock() }
+        let anUnterminatedBlockStillCountsBecauseTheStreamEndedNotTheIntent = inside
+        if anUnterminatedBlockStillCountsBecauseTheStreamEndedNotTheIntent { finishBlock() }
 
-        // Nothing usable: leave the message whole rather than half-swallowed.
         guard !found.isEmpty else { return InfoWindowBlock(body: text, requests: []) }
 
         return InfoWindowBlock(
@@ -104,16 +85,9 @@ public struct InfoWindowBlock: Equatable, Sendable {
     }
 }
 
-/// The set of panes currently kept open, oldest first.
-///
-/// A value rather than a mutable list so the menu, the windows and the tests all
-/// read the same thing, and so "remove one" and "clear all" are single
-/// expressions instead of index arithmetic.
 public struct InfoWindowSet: Equatable, Sendable {
     public private(set) var windows: [InfoWindowSpec]
 
-    /// Enough to be useful, few enough that a runaway loop of window blocks
-    /// cannot bury the screen. The oldest goes when the limit is reached.
     public static let limit = 10
 
     public static let empty = InfoWindowSet(windows: [])
@@ -141,15 +115,6 @@ public struct InfoWindowSet: Equatable, Sendable {
         windows.first { $0.id == id }
     }
 
-    /// A pane already showing exactly this, if there is one.
-    ///
-    /// Pinning the same box twice should hand back the window you already have,
-    /// not a second copy of it. That is what a reader means by "pin this", and
-    /// it also absorbs a duplicated click: a non-activating panel can deliver
-    /// the press that activates the app *and* the press itself, which turned one
-    /// press of the pin button into two identical panes cascaded across the
-    /// screen. Matching on what the pane holds rather than on timing means the
-    /// answer doesn't depend on how fast the second one arrived.
     public func matching(title: String, body: String) -> InfoWindowSpec? {
         windows.first { $0.title == title && $0.body == body }
     }

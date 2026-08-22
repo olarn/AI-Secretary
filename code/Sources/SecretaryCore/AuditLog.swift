@@ -1,7 +1,6 @@
 import Foundation
 import os
 
-/// One recorded step in a task's life, correlated by `taskID`.
 public struct AuditEntry: Equatable, Sendable {
     public enum Kind: String, Sendable {
         case requestReceived
@@ -33,8 +32,6 @@ public protocol AuditLogging: AnyObject {
     var entries: [AuditEntry] { get }
 }
 
-/// Keeps the trail in memory and mirrors it to the unified log. Command text
-/// and paths are logged; message content beyond the classified intent is not.
 public final class AuditLog: AuditLogging {
     public private(set) var entries: [AuditEntry] = []
     private let logger = Logger(subsystem: "com.aisecretary.app", category: "Audit")

@@ -19,29 +19,11 @@ public enum GrantStoreError: Error, Equatable, Sendable {
     }
 }
 
-/// Where the grants that outlive a conversation are kept.
-///
-/// Failures come back as values rather than thrown errors, for the same reason
-/// the project registry's do: loading happens in an initialiser, and an
-/// initialiser is no place to unwind from.
 public protocol StandingGrantStoring: AnyObject, Sendable {
     func load() -> Either<GrantStoreError, [StandingGrant]>
     func save(_ grants: [StandingGrant]) -> Either<GrantStoreError, Void>
 }
 
-/// The app's own file, under Application Support, one per character.
-///
-/// **Deliberately not the project's Claude Code memory** (owner's decision,
-/// 2026-08-17), which the backlog item could have been read as asking for.
-/// That directory is loaded into the model's context on every turn and is read
-/// by the person's own terminal `claude` — so a grant written there would be
-/// instruction-shaped text the model can see, and a permission this app gave
-/// itself would silently apply outside this app. Here it is the app's own
-/// record: invisible to the model, and deletable by deleting the file.
-///
-/// Per character for the same reason the project registry is: a grant is one
-/// character's answer about one of her projects, and sharing the file would
-/// mean approving something for Miku approves it for everyone.
 public final class FileStandingGrantStore: StandingGrantStoring, @unchecked Sendable {
     private let fileURL: URL
 
@@ -86,7 +68,6 @@ public final class FileStandingGrantStore: StandingGrantStoring, @unchecked Send
     }
 }
 
-/// Nowhere, for tests and for a character whose store hasn't been built yet.
 public final class InMemoryStandingGrantStore: StandingGrantStoring, @unchecked Sendable {
     private let lock = NSLock()
     private var grants: [StandingGrant]
@@ -106,8 +87,6 @@ public final class InMemoryStandingGrantStore: StandingGrantStoring, @unchecked 
         return .right(())
     }
 }
-
-// MARK: - Persistence edge
 
 struct StandingGrantDTO: Codable, Equatable, Sendable {
     var projectID: UUID
